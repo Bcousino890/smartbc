@@ -141,6 +141,9 @@ export type ParticularesFilters = {
   gestion?: "unmanaged" | "contacted" | "assigned" | "mine" | "";
   currentUserId?: string;
   advertiser?: "particular" | "professional" | "unknown" | "";
+  /** Portal de origen (`portal`: "idealista", "fotocasa", "pisos"…). Es una
+   *  columna base, así que no necesita degradación por migración. */
+  portal?: string;
   sort?: ParticularesSort;
   /** €/m² — detecta el sobrevalorado (no alquila → propietario receptivo en
    *  unas semanas) y el chollo. Columna `price_per_m2` (migración 0158). */
@@ -262,6 +265,8 @@ function applyParticularesFilters(
   if (f.advertiser === "unknown") q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
   else if (f.advertiser) q = q.eq("advertiser_type", f.advertiser);
 
+  if (f.portal) q = q.eq("portal", f.portal);
+
   // "contacted" se queda sin tocar aquí (ver el comentario del tipo): el
   // resto de gestión sí son columnas planas.
   if (f.gestion === "assigned") q = q.not("assigned_to", "is", null);
@@ -381,9 +386,11 @@ export async function getParticularesPage(opts?: {
       // "0 anuncios" es mejor que tumbar /admin/particulares entero por
       // dibujar una zona grande.
       console.error("[particulares] getParticularesPage: fallaron todas las variantes de columnas", lastError);
-      return finishEnrichment(supabase, [], 0);
+      // `failed` deja que la lista pinte un estado de error con "Reintentar"
+      // en vez de un "0 anuncios" que parecería un resultado legítimo.
+      return { ...(await finishEnrichment(supabase, [], 0)), failed: true as const };
     }
-    return finishEnrichment(supabase, rows, total);
+    return { ...(await finishEnrichment(supabase, rows, total)), failed: false as const };
   }
 
   for (const cols of attempts) {
@@ -418,7 +425,7 @@ export async function getParticularesPage(opts?: {
     break;
   }
   if (lastError) throw new Error(lastError.message);
-  return finishEnrichment(supabase, rows, total);
+  return { ...(await finishEnrichment(supabase, rows, total)), failed: false as const };
 }
 
 // Segunda mitad, compartida por las dos formas de traer `rows` (paginación
@@ -532,53 +539,64 @@ export async function getStaffOptions(
 }
 
 export type ParticularesStats = {
-  /** Activos, SIN los filtros de la UI — así el header y la pestaña
-   *  "Activos (N)" siempre muestran el total real, no el de la búsqueda en
-   *  curso (igual que antes, cuando salían de `allRows` sin `filtered`). */
+  /** PARTICULARES activos (no agencias) y sin copias enlazadas: exactamente lo
+   *  que lista la pantalla por defecto. Antes contaba TODOS los anuncios
+   *  activos (≈44k, con ≈34k de agencias) y el rótulo "Total particulares"
+   *  mentía. Sigue sin depender de los filtros de la UI. */
   total: number;
+  /** Particulares retirados (pestaña "Retirados"). */
   retiredTotal: number;
   rent: number;
   sale: number;
+  /** Particulares activos detectados en las últimas 24 h. */
   last24h: number;
-  /** Activos con teléfono — total real, no solo el de la página visible. */
+  /** Particulares activos con teléfono — total real, no solo el de la página visible. */
   withPhone: number;
 };
 
 /**
- * Cabecera del panel: 5 COUNT-only (`head: true`, sin traer filas) contra el
- * índice `(is_active, created_at desc)` de la migración 0111. Sustituye a
- * derivar estos 5 números en JS sobre las ~10.7k filas enriquecidas que
- * antes traía la página entera.
+ * Cabecera del panel: 6 COUNT-only (`head: true`, sin traer filas), SOLO de
+ * particulares (`advertiser_type = 'particular'`) y sin las copias enlazadas
+ * (`duplicate_of is null`, migración 0176) — el mismo universo que muestra la
+ * lista por defecto, para que cabecera y listado no se contradigan.
+ *
+ * Degrada como getParticularesPage(): si el VPS aún no tiene la columna
+ * `duplicate_of` (0176) o `advertiser_type` (0012), reintenta sin ese filtro
+ * en vez de devolver ceros.
  */
 export async function getParticularesStats(): Promise<ParticularesStats> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const [total, retiredTotal, rent, sale, last24h, withPhone] = await Promise.all([
-    supabase.from("particulares").select("*", { count: "exact", head: true }).eq("is_active", true),
-    supabase.from("particulares").select("*", { count: "exact", head: true }).eq("is_active", false),
-    supabase
-      .from("particulares")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true)
-      .eq("operation", "rent"),
-    supabase
-      .from("particulares")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true)
-      .eq("operation", "sale"),
-    supabase
-      .from("particulares")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true)
-      .gte("created_at", since),
-    supabase
-      .from("particulares")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true)
-      .not("phone", "is", null),
-  ]);
+  const variants = [
+    { advertiser: true, links: true },
+    { advertiser: true, links: false },
+    { advertiser: false, links: false },
+  ];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type CountRes = { count: number | null; error: unknown };
+  let last: CountRes[] = [];
+  for (const v of variants) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const count = (build: (q: any) => any): PromiseLike<CountRes> => {
+      let q = supabase.from("particulares").select("*", { count: "exact", head: true });
+      if (v.advertiser) q = q.eq("advertiser_type", "particular");
+      if (v.links) q = q.is("duplicate_of", null);
+      return build(q);
+    };
+    last = await Promise.all([
+      count((q) => q.eq("is_active", true)),
+      count((q) => q.eq("is_active", false)),
+      count((q) => q.eq("is_active", true).eq("operation", "rent")),
+      count((q) => q.eq("is_active", true).eq("operation", "sale")),
+      count((q) => q.eq("is_active", true).gte("created_at", since)),
+      count((q) => q.eq("is_active", true).not("phone", "is", null)),
+    ]);
+    if (!last.some((r) => r.error)) break;
+  }
+  const [total, retiredTotal, rent, sale, last24h, withPhone] = last;
 
   return {
     total: total.count ?? 0,
@@ -653,13 +671,29 @@ function buildPortalCounts(rows: Array<{ portal: string; is_active: boolean }>):
  */
 export async function getParticularesZoneCounts(
   showRetired: boolean,
+  /** Acota el recuento a un tipo de anunciante (por defecto la lista solo
+   *  enseña particulares, y el desplegable de zonas debe contar lo mismo; ver
+   *  getParticularesStats). "" = todos, como antes. */
+  advertiser: "particular" | "professional" | "unknown" | "" = "",
 ): Promise<{ zoneGroups: ZoneFilterGroup[]; portalCounts: Record<string, number> }> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = createAdminClient() as any;
-    const { rows, error } = await fetchAllRows((from, to) =>
-      supabase.from("particulares").select("zone, is_active, phone, portal").range(from, to),
-    );
+    // Filtrar en SQL (indexado) además de ser exacto evita recorrer los ≈88k
+    // anuncios cuando solo se ven los ≈21k de particulares.
+    const run = (withAdvertiser: boolean) =>
+      fetchAllRows((from, to) => {
+        let q = supabase.from("particulares").select("zone, is_active, phone, portal");
+        if (withAdvertiser && advertiser === "unknown") {
+          q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
+        } else if (withAdvertiser && advertiser) {
+          q = q.eq("advertiser_type", advertiser);
+        }
+        return q.range(from, to);
+      });
+    let { rows, error } = await run(true);
+    // Sin la columna advertiser_type (migración 0012) → como antes, sin filtrar.
+    if (error && advertiser) ({ rows, error } = await run(false));
     if (error) {
       console.error("[particulares] getParticularesZoneCounts: error de BD", error);
       return { zoneGroups: [], portalCounts: {} };

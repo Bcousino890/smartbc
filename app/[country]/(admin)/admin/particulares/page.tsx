@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation";
-import { UserSearch, Home, Tag, Clock } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { PageFooter } from "@/components/ui/page-footer";
-import { StatCard } from "@/components/ui/stat-card";
 import {
   getParticularesIdsInPolygons,
   getParticularesPage,
@@ -15,7 +12,6 @@ import { decodeZonePolygons } from "@/lib/zone-polygon";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
-import { ParticularesScraperSection } from "./scraper-section";
 import { ANUNCIOS_POR_PAGINA } from "./constants";
 import { getIdealistaScraperConfig } from "@/lib/api/v1/idealista/config";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -66,10 +62,25 @@ export default async function AdminParticularesPage({
   const drawnPolygons = decodeZonePolygons(one(sp.zonePoly));
   const page = Math.max(1, Number(one(sp.page)) || 1);
 
+  // Anunciante: sin parámetro, la lista enseña SOLO particulares (es la
+  // herramienta de captación; las agencias eran ≈78 % de lo que se veía y
+  // tapaban lo que interesa). "all" es el valor EXPLÍCITO para verlo todo;
+  // "professional" = agencias, "unknown" = sin clasificar. Ver el mismo
+  // criterio en use-particulares-filters.ts (ahí vive el default en cliente).
+  const advertiserScope =
+    pick(one(sp.advertiser), ["all", "particular", "professional", "unknown"] as const) || "particular";
+  const advertiserFilter = advertiserScope === "all" ? "" : advertiserScope;
+  // Portal de origen: solo ids "seguros" (letras, cifras, punto/guion). El
+  // valor llega a un .eq() parametrizado, pero un id raro no aporta nada.
+  const portalParam = one(sp.portal);
+  const portal = portalParam && /^[a-z0-9_.-]{1,30}$/i.test(portalParam) ? portalParam.toLowerCase() : undefined;
+
   // Arrancan ya, en paralelo — solo la query principal necesita esperar a
   // zoneCounts (para resolver "d:<distrito>", ver abajo) e idsInZone (para
   // resolver la zona dibujada), el resto no depende de nada de esto.
-  const zoneCountsPromise = getParticularesZoneCounts(showRetired);
+  // El desplegable de zonas cuenta lo mismo que enseña la lista (mismo tipo de
+  // anunciante), si no, "Chamberí (900)" prometería agencias que no se ven.
+  const zoneCountsPromise = getParticularesZoneCounts(showRetired, advertiserFilter);
   const statsPromise = getParticularesStats();
   const staffOptionsPromise = getStaffOptions().catch(() => []);
   const scraperConfigPromise = getIdealistaScraperConfig();
@@ -121,7 +132,8 @@ export default async function AdminParticularesPage({
     phoneFilter: pick(one(sp.phone), ["no_phone", "with_phone"] as const),
     gestion: pick(one(sp.gestion), ["unmanaged", "contacted", "assigned", "mine"] as const),
     currentUserId: currentProfile?.id,
-    advertiser: pick(one(sp.advertiser), ["particular", "professional", "unknown"] as const),
+    advertiser: advertiserFilter,
+    portal,
     sort: pick(one(sp.sort), ["oldest", "price_desc", "price_asc", "area_desc", "area_asc"] as const),
     pricePerM2Min: numOrUndef(one(sp.m2Min)),
     pricePerM2Max: numOrUndef(one(sp.m2Max)),
@@ -138,7 +150,7 @@ export default async function AdminParticularesPage({
   // `floorMin`/`amueblado` NO entran aquí a propósito — ver el comentario de
   // ParticularesFilters en lib/db/queries/particulares.ts.
 
-  const [{ rows: enrichedRows, total }, stats, staffOptions, scraperConfig] = await Promise.all([
+  const [{ rows: enrichedRows, total, failed }, stats, staffOptions, scraperConfig] = await Promise.all([
     getParticularesPage({
       offset: (page - 1) * ANUNCIOS_POR_PAGINA,
       pageSize: ANUNCIOS_POR_PAGINA,
@@ -153,50 +165,13 @@ export default async function AdminParticularesPage({
   const rows = enrichedRows as unknown as ParticularRow[];
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
+    // Sin `min-h-screen` ni pie: tras la paginación solo queda el margen
+    // inferior. El layout del CRM ya da la altura mínima de la página.
+    <div className="mx-auto max-w-[1400px] px-4 pb-8 sm:px-6 lg:px-10">
       <AdminPageHeader
         titleKey="adminParticulares.title"
         subtitleKey="adminParticulares.subtitle"
       />
-
-      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={<UserSearch size={20} strokeWidth={1.75} />}
-          labelKey="adminParticulares.stats.total"
-          helpKey="adminParticulares.stats.help"
-          value={stats.total}
-          footer={
-            Object.keys(zoneCounts.portalCounts).length > 0 ? (
-              <p className="text-xs text-ink/50">
-                {Object.entries(zoneCounts.portalCounts)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([portal, count]) => `${portal}: ${count}`)
-                  .join(" · ")}
-              </p>
-            ) : undefined
-          }
-        />
-        <StatCard
-          icon={<Home size={20} strokeWidth={1.75} />}
-          labelKey="adminParticulares.stats.rent"
-          helpKey="adminParticulares.stats.help"
-          value={stats.rent}
-        />
-        <StatCard
-          icon={<Tag size={19} strokeWidth={1.75} />}
-          labelKey="adminParticulares.stats.sale"
-          helpKey="adminParticulares.stats.help"
-          value={stats.sale}
-        />
-        <StatCard
-          icon={<Clock size={19} strokeWidth={1.75} />}
-          labelKey="adminParticulares.stats.last24h"
-          helpKey="adminParticulares.stats.help"
-          value={stats.last24h}
-        />
-      </div>
-
-      <ParticularesScraperSection config={scraperConfig} />
 
       <ParticularesClient
         rows={rows}
@@ -205,13 +180,15 @@ export default async function AdminParticularesPage({
         activeTotal={stats.total}
         retiredTotal={stats.retiredTotal}
         withPhoneTotal={stats.withPhone}
+        stats={stats}
+        portalCounts={zoneCounts.portalCounts}
+        loadFailed={failed}
+        scraperConfig={scraperConfig}
         zoneGroups={zoneCounts.zoneGroups}
         currentRole={currentProfile?.role}
         currentUserId={currentProfile?.id}
         staffOptions={staffOptions}
       />
-
-      <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>
   );
 }

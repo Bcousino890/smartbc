@@ -1,12 +1,17 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 export type OperationFilter = "" | "rent" | "sale";
 export type PhoneFilterValue = "" | "no_phone" | "with_phone";
 export type GestionFilter = "" | "unmanaged" | "contacted" | "assigned" | "mine";
-export type AdvertiserFilter = "" | "particular" | "professional" | "unknown";
+// "particular" es el valor POR DEFECTO (la lista es una herramienta de captación:
+// sin parámetro solo se ven particulares) y no viaja en la URL; "all" es el
+// valor explícito para ver todos los anunciantes. Ver page.tsx para el espejo
+// en servidor.
+export type AdvertiserFilter = "all" | "particular" | "professional" | "unknown";
+export const DEFAULT_ADVERTISER: AdvertiserFilter = "particular";
 export type FurnishedFilter = "" | "yes" | "no";
 // Debe seguir a ParticularesSort en lib/db/queries/particulares.ts (ese
 // módulo es server-only, no se puede importar desde este "use client").
@@ -17,7 +22,7 @@ export type ConditionFilter = "" | "good" | "to_reform" | "renovated";
 const OPERATION_VALUES = new Set(["rent", "sale"]);
 const PHONE_VALUES = new Set(["no_phone", "with_phone"]);
 const GESTION_VALUES = new Set(["unmanaged", "contacted", "assigned", "mine"]);
-const ADVERTISER_VALUES = new Set(["particular", "professional", "unknown"]);
+const ADVERTISER_VALUES = new Set(["all", "particular", "professional", "unknown"]);
 const FURNISHED_VALUES = new Set(["yes", "no"]);
 const SORT_VALUES = new Set(["oldest", "price_desc", "price_asc", "area_desc", "area_asc"]);
 const LIFT_VALUES = new Set(["yes", "no"]);
@@ -29,6 +34,13 @@ function readEnum<T extends string>(
 ): T | "" {
   return value && allowed.has(value) ? (value as T) : "";
 }
+
+// Valores que NO se escriben en la URL porque son lo que se asume sin
+// parámetro (el servidor aplica el mismo default). Todo lo demás que esté
+// "" o false tampoco se escribe.
+const URL_DEFAULTS: Partial<Record<keyof FilterValues, string>> = {
+  advertiser: DEFAULT_ADVERTISER,
+};
 
 // Nombre de cada filtro en la URL (cortos, para que el link compartido no
 // sea kilométrico) y si su escritura a la URL se debounced. Los campos de
@@ -56,6 +68,8 @@ type FilterValues = {
   phoneFilter: PhoneFilterValue;
   gestion: GestionFilter;
   advertiser: AdvertiserFilter;
+  /** Portal de origen ("idealista", "fotocasa", "pisos"…) o "". */
+  portal: string;
   furnished: FurnishedFilter;
   sort: SortFilter;
   pricePerM2Min: string;
@@ -86,6 +100,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   phoneFilter: "phone",
   gestion: "gestion",
   advertiser: "advertiser",
+  portal: "portal",
   furnished: "amueblado",
   sort: "sort",
   pricePerM2Min: "m2Min",
@@ -125,6 +140,10 @@ export function useParticularesFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // La navegación a la URL nueva va en una transición: `pending` es true
+  // mientras el servidor resuelve la consulta, para que la lista pueda enseñar
+  // esqueletos en vez de seguir mostrando datos que ya no corresponden.
+  const [pending, startTransition] = useTransition();
 
   const [query, setQuery] = useState(() => searchParams.get(PARAM_KEYS.query) ?? "");
   const [operation, setOperation] = useState<OperationFilter>(() =>
@@ -145,9 +164,10 @@ export function useParticularesFilters() {
   const [gestion, setGestion] = useState<GestionFilter>(() =>
     readEnum<GestionFilter>(searchParams.get(PARAM_KEYS.gestion), GESTION_VALUES),
   );
-  const [advertiser, setAdvertiser] = useState<AdvertiserFilter>(() =>
-    readEnum<AdvertiserFilter>(searchParams.get(PARAM_KEYS.advertiser), ADVERTISER_VALUES),
+  const [advertiser, setAdvertiser] = useState<AdvertiserFilter>(
+    () => readEnum<AdvertiserFilter>(searchParams.get(PARAM_KEYS.advertiser), ADVERTISER_VALUES) || DEFAULT_ADVERTISER,
   );
+  const [portal, setPortal] = useState(() => searchParams.get(PARAM_KEYS.portal) ?? "");
   const [furnished, setFurnished] = useState<FurnishedFilter>(() =>
     readEnum<FurnishedFilter>(searchParams.get(PARAM_KEYS.furnished), FURNISHED_VALUES),
   );
@@ -196,6 +216,7 @@ export function useParticularesFilters() {
     phoneFilter,
     gestion,
     advertiser,
+    portal,
     furnished,
     sort,
     pricePerM2Min,
@@ -227,10 +248,11 @@ export function useParticularesFilters() {
       for (const key of Object.keys(PARAM_KEYS) as (keyof FilterValues)[]) {
         const v = values[key];
         if (v === "" || v === false) continue;
+        if (URL_DEFAULTS[key] !== undefined && v === URL_DEFAULTS[key]) continue;
         params.set(PARAM_KEYS[key], v === true ? "1" : String(v));
       }
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
     }
 
     const needsImmediate = changedKeys.some((k) => !DEBOUNCED_FIELDS.has(k));
@@ -255,6 +277,7 @@ export function useParticularesFilters() {
     phoneFilter,
     gestion,
     advertiser,
+    portal,
     furnished,
     sort,
     pricePerM2Min,
@@ -274,7 +297,39 @@ export function useParticularesFilters() {
     };
   }, []);
 
+  // "Limpiar todo": deja los filtros como al entrar (anunciante = particulares)
+  // pero conserva la pestaña Activos/Retirados y el orden, que no son filtros
+  // sino la vista que el usuario ha elegido.
+  const clearAll = useCallback(() => {
+    setQuery("");
+    setOperation("");
+    setZoneRaw("");
+    setDrawnZoneRaw("");
+    setPriceMin("");
+    setPriceMax("");
+    setBedrooms("");
+    setFloorMin("");
+    setAreaMin("");
+    setLast24h(false);
+    setShowLinked(false);
+    setPhoneFilter("");
+    setGestion("");
+    setAdvertiser(DEFAULT_ADVERTISER);
+    setPortal("");
+    setFurnished("");
+    setPricePerM2Min("");
+    setPricePerM2Max("");
+    setPriceDrop("");
+    setDaysListed("");
+    setLift("");
+    setCondition("");
+    setYearMin("");
+    setYearMax("");
+  }, []);
+
   return {
+    pending,
+    clearAll,
     query,
     setQuery,
     operation,
@@ -303,6 +358,8 @@ export function useParticularesFilters() {
     setGestion,
     advertiser,
     setAdvertiser,
+    portal,
+    setPortal,
     furnished,
     setFurnished,
     sort,
@@ -327,3 +384,6 @@ export function useParticularesFilters() {
     setShowRetired,
   };
 }
+
+/** Lo que devuelve el hook: se pasa tal cual a la barra, el panel y los chips. */
+export type ParticularesFiltersApi = ReturnType<typeof useParticularesFilters>;
