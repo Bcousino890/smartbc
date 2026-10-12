@@ -40,6 +40,8 @@ export type LinkRow = {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** 'exact' = pin del portal con la dirección; 'approximate' = pin de zona/calle (puede estar a cientos de metros). */
+  location_precision?: string | null;
   phone: string | null;
   phone2: string | null;
   owner_name: string | null;
@@ -243,6 +245,9 @@ type Feats = {
   streetBoth: boolean; // los dos tienen calle y número reconocibles
   S: boolean; // misma calle y número
   dist: number | null;
+  /** Hay coordenadas pero una es aproximada: no sirven para enlazar, solo para vetar si están MUY lejos. */
+  distWeak: boolean;
+  far: boolean;
   M: boolean; // m² ±3 %
   m2Known: boolean;
   Mw: boolean; // m² ±8 %
@@ -279,7 +284,12 @@ function pairFeats(x: Norm, y: Norm): Feats {
   const phonesDiffer = x.phones.size > 0 && y.phones.size > 0 && !T;
   const streetBoth = !!(x.number && y.number && x.tokens.size && y.tokens.size);
   const S = streetBoth && x.number === y.number && jaccard(x.tokens, y.tokens) >= 0.6;
-  const dist = haversineM([a.latitude, a.longitude], [b.latitude, b.longitude]);
+  const rawDist = haversineM([a.latitude, a.longitude], [b.latitude, b.longitude]);
+  // Un pin «aproximado» (dirección oculta en Idealista) puede caer a 100-400 m del piso real: con
+  // él ni «a ≤100 m» ni «a ≤150 m» significan nada, así que no cuenta para enlazar y el veto de
+  // distancia se relaja. Solo cuentan las coordenadas cuando las DOS son exactas (o no dicen nada).
+  const distWeak = rawDist != null && (a.location_precision === "approximate" || b.location_precision === "approximate");
+  const dist = distWeak ? null : rawDist;
   const am = a.square_meters;
   const bm = b.square_meters;
   const m2known = !!(am && bm);
@@ -302,6 +312,8 @@ function pairFeats(x: Norm, y: Norm): Feats {
     streetBoth,
     S,
     dist,
+    distWeak,
+    far: rawDist != null && rawDist > (distWeak ? 1500 : 800),
     M: m2known && diff <= Math.max(1, 0.03 * mx),
     m2Known: m2known,
     Mw,
@@ -333,7 +345,7 @@ const hardConflict = (f: Feats): boolean =>
 type Classified = { relation: LinkRelation; level: LinkLevel; rule: string } | null;
 
 function classify(f: Feats): Classified {
-  const far = f.dist != null && f.dist > 800;
+  const far = f.far;
   const streetDiffers = f.streetBoth && !f.S;
   const veto = hardConflict(f) || far;
   const priceOk = !f.sameOp || f.P15;
@@ -626,7 +638,7 @@ export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): L
           const yr = byId.get(y)!.row;
           // Misma operación en el mismo portal en un grupo = anuncios distintos del mismo
           // piso solo si comparten contacto; si no, se contradice.
-          if (hardConflict(f) || (f.dist != null && f.dist > 800) || (f.streetBoth && !f.S && !f.T) ||
+          if (hardConflict(f) || f.far || (f.streetBoth && !f.S && !f.T) ||
               (xr.portal === yr.portal && xr.operation === yr.operation && !f.T)) {
             conflict = true;
             break outer;

@@ -264,6 +264,24 @@ console.log("── coordenadas: «cierto» solo con < 60 m + metros + habitacio
   check("22 m pero planta distinta (4.ª vs 2.ª): ningún enlace", computeLinks([a, e]).links.length === 0);
 }
 
+console.log("── pin aproximado: no cuenta como coordenada para enlazar ──");
+{
+  const base = { latitude: 40.4500, longitude: -3.7000, square_meters: 95, bedrooms: 3, bathrooms: 2, price: 600000, address: null as string | null, floor: "4ª planta exterior" };
+  const exact = row({ ...base, location_precision: "exact" });
+  const near = row({ ...base, portal: "fotocasa", latitude: 40.45020, location_precision: "exact" });
+  check("dos pines exactos a 22 m: cierto (R3, como siempre)", computeLinks([exact, near]).groups.length === 1);
+  const nearApprox = row({ ...base, portal: "fotocasa", latitude: 40.45020, location_precision: "approximate" });
+  const r1 = computeLinks([exact, nearApprox]);
+  check("a 22 m pero uno aproximado: no enlaza por coordenadas", r1.groups.length === 0 && r1.links.length === 0, r1.links);
+  const farApprox = row({ ...base, portal: "fotocasa", latitude: 40.4560, location_precision: "approximate" }); // ~670 m
+  check("aproximado a ~670 m: tampoco se veta (el pin puede estar así de desplazado)", computeLinks([exact, farApprox]).links.length === 0);
+  const veryFar = row({ ...base, portal: "fotocasa", latitude: 40.48, location_precision: "approximate" }); // ~3,3 km
+  check("aproximado a >1,5 km: sigue sin enlazar", computeLinks([exact, veryFar]).links.length === 0);
+  const phoneA = row({ ...base, phone: "+34688111222", location_precision: "exact" });
+  const phoneB = row({ ...base, portal: "fotocasa", phone: "+34688111222", latitude: 40.4560, location_precision: "approximate", address: null });
+  check("mismo teléfono + mismas características, pin aproximado a ~670 m: el teléfono sigue enlazando", computeLinks([phoneA, phoneB]).links.some((l) => l.relation === "mismo_inmueble"));
+}
+
 console.log("── planta en inglés vs español (misma publicación de Idealista en dos idiomas) ──");
 {
   const mk = (floor: string, addr: string) => row({ phone: "+34670000001", floor, address: addr, square_meters: 60, bedrooms: 2, bathrooms: 1, price: 1500, operation: "rent" });
