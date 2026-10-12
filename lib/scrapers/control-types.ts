@@ -175,65 +175,27 @@ export function keyHint(key: string): string {
 
 // ── Coste estimado por zona (créditos de Crawio al mes) ─────────────────────
 //
-// Fuente: /opt/idealista-dev/research/Uso-Crawio-proyecciones-2026-10-12.xlsx,
-// hoja «Zonas», columna «B créditos/mes» (diseño propuesto, 2 créditos por
-// petición a Idealista) y hoja «Fotocasa» (1 crédito por petición). Son
-// estimaciones por anuncio, no mediciones: la interfaz las rotula «aprox.».
+// Regla honesta y proporcional: créditos/mes ≈ nº de anuncios de la zona × 0,7.
+// De dónde sale el 0,7: ≈ 2 créditos por página de listado (Idealista) ÷ 30
+// anuncios por página × ~10 barridos al mes ≈ 0,67 → se redondea a 0,7.
+// (Es una orientación para comparar zonas, no una factura.) Si la zona aún no
+// tiene `listings_*` NO se inventa nada: la interfaz dice «sin datos aún».
+// Para cambiar la regla basta con tocar esta constante.
+export const CREDITS_PER_LISTING = 0.7;
 
-export const IDEALISTA_ZONE_CREDITS: Record<string, number> = {
-  "madrid/centro": 29861,
-  "madrid/salamanca": 20354,
-  "madrid/chamberi": 16928,
-  "madrid/tetuan": 15535,
-  "madrid/chamartin": 10943,
-  "madrid/ciudad-lineal": 10305,
-  "madrid/arganzuela": 9572,
-  "madrid/carabanchel": 8935,
-  "madrid/retiro": 8822,
-  "madrid/fuencarral-el-pardo": 8346,
-  "madrid/hortaleza": 8180,
-  "madrid/moncloa-aravaca": 7863,
-  "madrid/puente-de-vallecas": 7802,
-  "madrid/latina": 7169,
-  "madrid/san-blas-canillejas": 5546,
-  "madrid/usera": 4924,
-  "madrid/villaverde": 4616,
-  "madrid/villa-de-vallecas": 3862,
-  "madrid/vicalvaro": 2758,
-  "madrid/moratalaz": 2035,
-  "madrid/barajas": 1719,
-};
-
-/** «Resto de la Comunidad» sale en el Excel como una sola zona; se reparte a partes iguales. */
-const IDEALISTA_PROVINCIA_TOTAL = 63682;
-const IDEALISTA_PROVINCIA_ZONES = 6;
-/** Fotocasa: ≈3 páginas × venta/alquiler cada 6 h = 720 créditos/mes por zona. */
-const FOTOCASA_ZONE_CREDITS = 720;
-
-/** Créditos/mes que cuesta una zona en prioridad «Normal». */
-export function baseZoneCredits(portal: ScraperPortal, zoneKey: string, scope: ZoneScope): number {
-  if (portal === "fotocasa") return FOTOCASA_ZONE_CREDITS;
-  // Las zonas las publica el crawler con la ruta real de Idealista: algunas difieren del
-  // slug del Excel (barrio-de-salamanca = Salamanca). Los barrios (3 tramos) no tienen estimación propia.
-  const parts = zoneKey.split("/");
-  if (parts.length > 2) return 0;
-  const slug = ZONE_ALIAS[zoneKey] ?? zoneKey;
-  const known = IDEALISTA_ZONE_CREDITS[slug];
-  if (known != null) return known;
-  return scope === "provincia" ? Math.round(IDEALISTA_PROVINCIA_TOTAL / IDEALISTA_PROVINCIA_ZONES) : 0;
+/** Anuncios conocidos de la zona (venta + alquiler); null si el crawler aún no los ha contado. */
+export function zoneListings(z: Pick<ScraperZone, "listings_sale" | "listings_rent">): number | null {
+  if (z.listings_sale == null && z.listings_rent == null) return null;
+  return (z.listings_sale ?? 0) + (z.listings_rent ?? 0);
 }
 
-const ZONE_ALIAS: Record<string, string> = {
-  "madrid/barrio-de-salamanca": "madrid/salamanca",
-  "madrid/san-blas": "madrid/san-blas-canillejas",
-};
-
-/** Hay estimación para esta zona (si no, la interfaz no inventa un coste). */
-export function hasZoneEstimate(portal: ScraperPortal, zoneKey: string, scope: ZoneScope): boolean {
-  return baseZoneCredits(portal, zoneKey, scope) > 0;
+/** Créditos/mes de una zona en prioridad «Marcada»; null = sin datos. */
+export function zoneBaseCredits(z: Pick<ScraperZone, "listings_sale" | "listings_rent">): number | null {
+  const n = zoneListings(z);
+  return n == null ? null : Math.round(n * CREDITS_PER_LISTING);
 }
 
-/** Normal = coste base; Alta = como mucho el doble (se revisa el doble de seguido); No escanear = 0. */
+/** Marcada = coste base; Alta = como mucho el doble (se revisa el doble de seguido); Sin marcar = 0. */
 export function zoneCredits(base: number, priority: ZonePriority): number {
   return priority === "off" ? 0 : priority === "alta" ? base * 2 : base;
 }

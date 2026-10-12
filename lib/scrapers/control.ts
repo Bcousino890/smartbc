@@ -211,6 +211,23 @@ function buildHealth(
   };
 }
 
+/** PostgREST devuelve como mucho 1.000 filas por petición y hay más zonas que eso: se lee por páginas. */
+async function readAllZones(db: Db, columns: string): Promise<{ data: unknown[]; error: { code?: string; message?: string } | null }> {
+  const out: unknown[] = [];
+  for (let page = 0; page < 20; page++) {
+    const { data, error } = await db
+      .from("scraper_zones")
+      .select(columns)
+      .order("portal", { ascending: true })
+      .order("zone_key", { ascending: true })
+      .range(page * 1000, page * 1000 + 999);
+    if (error) return { data: out, error };
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: out, error: null };
+}
+
 /** Lee todo lo que necesita el diálogo. Nunca incluye la clave de Crawio. */
 export async function loadControl(canEdit: boolean): Promise<ScraperControlPayload> {
   const db = createAdminClient() as Db;
@@ -218,10 +235,7 @@ export async function loadControl(canEdit: boolean): Promise<ScraperControlPaylo
 
   const [settingsRes, zonesRes, workersRes] = await Promise.all([
     db.from("scraper_settings").select("key,value"),
-    db
-      .from("scraper_zones")
-      .select("portal,zone_key,label,scope,parent_key,priority,sale_active,rent_active,listings_sale,listings_rent,listings_private")
-      .order("label", { ascending: true }),
+    readAllZones(db, "portal,zone_key,label,scope,parent_key,priority,sale_active,rent_active,listings_sale,listings_rent,listings_private"),
     db
       .from("idealista_scraper_workers")
       .select("worker_id,status,last_heartbeat_at,current_run_type,message,metadata")
@@ -381,7 +395,7 @@ export async function applyUpdate(body: unknown, profileId: string): Promise<voi
   const zoneGroups = new Map<string, string[]>(); // "portal|priority" → zone_keys
   if (upd.zones !== undefined) {
     if (!Array.isArray(upd.zones) || upd.zones.length > MAX_ZONE_UPDATES) throw new ControlInputError("Lista de zonas no válida.");
-    const existing = await db.from("scraper_zones").select("portal,zone_key");
+    const existing = await readAllZones(db, "portal,zone_key");
     if (existing.error) {
       if (isMissingTable(existing.error)) throw new ControlInputError("Las zonas aún no están instaladas en el servidor (falta aplicar la migración 0181).");
       throw new Error("No se pudieron leer las zonas");
@@ -413,14 +427,17 @@ export async function applyUpdate(body: unknown, profileId: string): Promise<voi
   }
   for (const [gk, keys] of zoneGroups) {
     const [portal, priority] = gk.split("|");
-    const { error } = await db
-      .from("scraper_zones")
-      .update({ priority, updated_at: nowIso, updated_by: profileId })
-      .eq("portal", portal)
-      .in("zone_key", keys);
-    if (error) {
-      console.error("[scraper-control] error guardando zonas:", error.message);
-      throw new Error("No se pudieron guardar las zonas");
+    // En trozos: cientos de claves en una sola URL pasarían el límite de tamaño de la API.
+    for (let i = 0; i < keys.length; i += 60) {
+      const { error } = await db
+        .from("scraper_zones")
+        .update({ priority, updated_at: nowIso, updated_by: profileId })
+        .eq("portal", portal)
+        .in("zone_key", keys.slice(i, i + 60));
+      if (error) {
+        console.error("[scraper-control] error guardando zonas:", error.message);
+        throw new Error("No se pudieron guardar las zonas");
+      }
     }
   }
 }

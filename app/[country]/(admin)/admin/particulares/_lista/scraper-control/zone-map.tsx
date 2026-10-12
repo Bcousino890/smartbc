@@ -1,0 +1,557 @@
+"use client";
+
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Minus, Plus, Maximize2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { PORTAL_LABEL, type ScraperPortal, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
+import { FOCUS_RING } from "../controls";
+import { PrioritySelect, ZoneInfo } from "./priority-select";
+import { BTN_SECONDARY, fmt } from "./shared";
+import { family, normalize, type TreeNode } from "./zones-tree";
+
+/**
+ * Mapa de zonas: contornos reales (OpenStreetMap, simplificados y guardados en el repo; ver
+ * scripts/zonas-mapa/generar.mjs) dibujados en SVG propio, sin claves ni servicios externos.
+ * Cada zona de scraper_zones se asocia a un contorno (zone-match.json). Lo que no tiene
+ * contorno propio se pinta como marcador (mediana de sus anuncios) o se lista aparte
+ * como «sin posición»: ninguna zona se oculta. El estado se comparte con la lista.
+ */
+
+type GeoFeature = { id: string; n: string; k: "d" | "b" | "m"; p?: string; c: [number, number]; r: number[][] };
+type Geo = { attribution: string; generated: string; features: GeoFeature[] };
+type Match = { generated: string; zones: Record<ScraperPortal, Record<string, { p?: string; pt?: [number, number] }>> };
+
+type Poly = { f: GeoFeature; d: string; box: [number, number, number, number]; cx: number; cy: number };
+
+// Proyección plana (equirrectangular con corrección de latitud): suficiente a escala de provincia.
+const LON0 = -3.7;
+const LAT0 = 40.45;
+const COS = Math.cos((LAT0 * Math.PI) / 180);
+const S = 1000; // unidades de mapa por grado
+const px = (lonE4: number) => ((lonE4 / 1e4 - LON0) * COS * S);
+const py = (latE4: number) => (-(latE4 / 1e4 - LAT0) * S);
+
+const FILL: Record<ZonePriority, string> = { off: "#e6dfd0", normal: "#3a7d68", alta: "#c9a96e" };
+const NEUTRAL_FILL = "#f6f3ec";
+
+type Placement = { poly?: string; pt?: [number, number] };
+
+const stripParen = (label: string) => label.replace(/\s*\(.*\)\s*$/, "");
+
+/** Estado que pinta un contorno con varias zonas: Alta > Marcada > Sin marcar. */
+function stateOf(zs: ScraperZone[]): ZonePriority {
+  if (zs.some((z) => z.priority === "alta")) return "alta";
+  if (zs.some((z) => z.priority === "normal")) return "normal";
+  return "off";
+}
+
+const PolyLayer = memo(function PolyLayer({
+  polys,
+  zonesByPoly,
+  showBarrios,
+  selectedPoly,
+  onPick,
+}: {
+  polys: Poly[];
+  zonesByPoly: Map<string, ScraperZone[]>;
+  showBarrios: boolean;
+  selectedPoly: string | null;
+  onPick: (polyId: string) => void;
+}) {
+  // Orden de pintado: municipios, distritos, barrios (los barrios encima).
+  return (
+    <g>
+      {polys.map(({ f, d }) => {
+        const zs = zonesByPoly.get(f.id);
+        const isBarrio = f.k === "b";
+        if (isBarrio && !showBarrios) return null;
+        // Con barrios visibles, el distrito queda como simple contorno (no se pulsa).
+        const outlineOnly = f.k === "d" && showBarrios;
+        const interactive = !!zs && !outlineOnly;
+        const st = zs ? stateOf(zs) : null;
+        const sel = selectedPoly === f.id;
+        return (
+          <path
+            key={f.id}
+            d={d}
+            fill={outlineOnly ? "none" : st ? FILL[st] : NEUTRAL_FILL}
+            stroke={sel ? "#0a0a0a" : outlineOnly ? "#6b6355" : st ? "#ffffff" : "#d6cfbe"}
+            strokeWidth={sel ? 2.5 : outlineOnly ? 1.4 : 0.8}
+            vectorEffect="non-scaling-stroke"
+            strokeLinejoin="round"
+            pointerEvents={interactive ? "auto" : "none"}
+            style={{ cursor: interactive ? "pointer" : "default" }}
+            role={interactive ? "button" : undefined}
+            aria-label={interactive ? `${f.n}: ${st === "off" ? "sin marcar" : st === "alta" ? "prioridad alta" : "marcada"}` : undefined}
+            onClick={interactive ? () => onPick(f.id) : undefined}
+          />
+        );
+      })}
+    </g>
+  );
+});
+
+const LabelLayer = memo(function LabelLayer({ polys, k, kCap, showBarrios, zonesByPoly }: { polys: Poly[]; k: number; kCap: number; showBarrios: boolean; zonesByPoly: Map<string, ScraperZone[]> }) {
+  const size = 12 / k;
+  return (
+    <g pointerEvents="none" fontFamily="Lato, sans-serif" fontSize={size} textAnchor="middle">
+      {polys.map(({ f, box, cx, cy }) => {
+        if (f.k === "b" && !showBarrios) return null;
+        if (f.k === "d" && showBarrios) return null;
+        const wPx = (box[2] - box[0]) * k;
+        const hPx = (box[3] - box[1]) * k;
+        // Solo etiquetas que caben: contorno ancho en pantalla (≈ 6,5 px por letra).
+        if (wPx < f.n.length * 6.5 * 0.8 || hPx < 18) return null;
+        if (!zonesByPoly.has(f.id) && k < kCap * 3) return null;
+        return (
+          <text key={f.id} x={cx} y={cy} fill="#0a0a0a" stroke="#ffffff" strokeWidth={3 / k} paintOrder="stroke" strokeLinejoin="round" dominantBaseline="middle">
+            {f.n}
+          </text>
+        );
+      })}
+    </g>
+  );
+});
+
+export function ZoneMap({
+  portal,
+  zones,
+  disabled,
+  onSet,
+  onFamily,
+}: {
+  portal: ScraperPortal;
+  zones: ScraperZone[];
+  disabled: boolean;
+  onSet: (z: ScraperZone, p: ZonePriority) => void;
+  onFamily: (all: ScraperZone[], mark: boolean) => void;
+}) {
+  const [geo, setGeo] = useState<Geo | null>(null);
+  const [match, setMatch] = useState<Match | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null); // zone_key
+  const [more, setMore] = useState(40);
+
+  useEffect(() => {
+    let off = false;
+    Promise.all([import("@/lib/scrapers/zone-map/geo.json"), import("@/lib/scrapers/zone-map/zone-match.json")])
+      .then(([g, m]) => {
+        if (off) return;
+        setGeo(g.default as unknown as Geo);
+        setMatch(m.default as unknown as Match);
+      })
+      .catch(() => !off && setLoadErr(true));
+    return () => {
+      off = true;
+    };
+  }, []);
+
+  // Contornos ya proyectados (una sola vez).
+  const polys = useMemo<Poly[]>(() => {
+    if (!geo) return [];
+    const order = { m: 0, d: 1, b: 2 } as const;
+    return geo.features
+      .slice()
+      .sort((a, b) => order[a.k] - order[b.k])
+      .map((f) => {
+        let x0 = Infinity;
+        let y0 = Infinity;
+        let x1 = -Infinity;
+        let y1 = -Infinity;
+        const d = f.r
+          .map((ring) => {
+            let s = "";
+            for (let i = 0; i < ring.length; i += 2) {
+              const x = px(ring[i]);
+              const y = py(ring[i + 1]);
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+              s += (i ? "L" : "M") + x.toFixed(2) + " " + y.toFixed(2);
+            }
+            return s + "Z";
+          })
+          .join("");
+        return { f, d, box: [x0, y0, x1, y1] as [number, number, number, number], cx: px(f.c[0]), cy: py(f.c[1]) };
+      });
+  }, [geo]);
+  const polyById = useMemo(() => new Map(polys.map((p) => [p.f.id, p])), [polys]);
+
+  // Dónde va cada zona: contorno (zone-match.json), marcador, o nada («sin posición»).
+  const placement = useMemo(() => {
+    const out = new Map<string, Placement>();
+    if (!geo || !match) return out;
+    const names = new Map<string, string>();
+    for (const f of geo.features) if (!names.has(normalize(f.n))) names.set(normalize(f.n), f.id);
+    const table = match.zones[portal] ?? {};
+    for (const z of zones) {
+      const m = table[z.zone_key];
+      if (m?.p && polyById.has(m.p)) out.set(z.zone_key, { poly: m.p });
+      else if (m?.pt) out.set(z.zone_key, { pt: m.pt });
+      else if (!m) {
+        // Zona nueva que aún no está en el casado: último recurso, nombre exacto. Se regenera con el script.
+        const id = names.get(normalize(stripParen(z.label)));
+        if (id && /^(madrid|madrid-capital)\//.test(z.zone_key) && z.zone_key.split("/").length <= 3) out.set(z.zone_key, { poly: id });
+      }
+    }
+    return out;
+  }, [geo, match, portal, zones, polyById]);
+
+  const zoneByKey = useMemo(() => new Map(zones.map((z) => [z.zone_key, z])), [zones]);
+  const zonesByPoly = useMemo(() => {
+    const m = new Map<string, ScraperZone[]>();
+    for (const z of zones) {
+      const pl = placement.get(z.zone_key);
+      if (pl?.poly) m.set(pl.poly, [...(m.get(pl.poly) ?? []), z]);
+    }
+    return m;
+  }, [zones, placement]);
+  const markers = useMemo(() => zones.filter((z) => placement.get(z.zone_key)?.pt), [zones, placement]);
+  const unplaced = useMemo(
+    () => zones.filter((z) => !placement.get(z.zone_key)).sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base", numeric: true })),
+    [zones, placement],
+  );
+
+  // ── Vista (zoom y arrastre) ───────────────────────────────────────────────
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 640, h: 440 });
+  const [view, setView] = useState({ k: 1, x: 0, y: 0 });
+  const fitted = useRef(false);
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientWidth < 520 ? 380 : 460 }));
+    ro.observe(el);
+    setSize({ w: el.clientWidth, h: el.clientWidth < 520 ? 380 : 460 });
+    return () => ro.disconnect();
+  }, []);
+
+  const bounds = useMemo(() => {
+    const box = (list: Poly[]) => list.reduce<[number, number, number, number]>((b, p) => [Math.min(b[0], p.box[0]), Math.min(b[1], p.box[1]), Math.max(b[2], p.box[2]), Math.max(b[3], p.box[3])], [Infinity, Infinity, -Infinity, -Infinity]);
+    return { capital: box(polys.filter((p) => p.f.k === "d")), all: box(polys.filter((p) => p.f.k !== "b")) };
+  }, [polys]);
+
+  const fit = useCallback(
+    (b: [number, number, number, number]) => {
+      if (!isFinite(b[0])) return;
+      const w = b[2] - b[0];
+      const h = b[3] - b[1];
+      const k = Math.min(size.w / w, size.h / h) * 0.94;
+      setView({ k, x: (size.w - w * k) / 2 - b[0] * k, y: (size.h - h * k) / 2 - b[1] * k });
+    },
+    [size.w, size.h],
+  );
+  const kCap = useMemo(() => {
+    const b = bounds.capital;
+    return isFinite(b[0]) ? Math.min(size.w / (b[2] - b[0]), size.h / (b[3] - b[1])) * 0.94 : 1;
+  }, [bounds, size.w, size.h]);
+  const kAll = useMemo(() => {
+    const b = bounds.all;
+    return isFinite(b[0]) ? Math.min(size.w / (b[2] - b[0]), size.h / (b[3] - b[1])) * 0.94 : 1;
+  }, [bounds, size.w, size.h]);
+
+  // Se encuadra Madrid capital al abrir y cada vez que cambia el tamaño, hasta que la persona toca el mapa.
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!touched.current && polys.length && size.w > 0) {
+      fitted.current = true;
+      fit(bounds.capital);
+    }
+  }, [polys.length, bounds, fit, size.w, size.h]);
+
+  const clampK = useCallback((k: number) => Math.min(Math.max(k, kAll * 0.85), kCap * 30), [kAll, kCap]);
+  const zoomAt = useCallback(
+    (factor: number, cx: number, cy: number) => {
+      touched.current = true;
+      setView((v) => {
+        const k = clampK(v.k * factor);
+        const r = k / v.k;
+        return { k, x: cx - (cx - v.x) * r, y: cy - (cy - v.y) * r };
+      });
+    },
+    [clampK],
+  );
+
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const moved = useRef(0);
+  const pinch = useRef(0);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const onDown = (e: React.PointerEvent) => {
+    touched.current = true;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved.current = 0;
+    pinch.current = 0;
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const p = ptrs.current.get(e.pointerId);
+    if (!p) return;
+    const n = { x: e.clientX, y: e.clientY };
+    if (ptrs.current.size === 1) {
+      const dx = n.x - p.x;
+      const dy = n.y - p.y;
+      moved.current += Math.abs(dx) + Math.abs(dy);
+      setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+    } else if (ptrs.current.size === 2) {
+      ptrs.current.set(e.pointerId, n);
+      const [a, b] = [...ptrs.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch.current > 0 && dist > 0) {
+        const rect = svgRef.current!.getBoundingClientRect();
+        zoomAt(dist / pinch.current, (a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top);
+      }
+      pinch.current = dist;
+      moved.current += 10;
+    }
+    ptrs.current.set(e.pointerId, n);
+  };
+  const onUp = (e: React.PointerEvent) => {
+    ptrs.current.delete(e.pointerId);
+    pinch.current = 0;
+  };
+
+  // Ctrl/⌘ + rueda (y el pellizco del trackpad) hacen zoom; la rueda sola sigue desplazando el diálogo.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const h = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      zoomAt(Math.exp(-e.deltaY * 0.01), e.clientX - rect.left, e.clientY - rect.top);
+    };
+    el.addEventListener("wheel", h, { passive: false });
+    return () => el.removeEventListener("wheel", h);
+  }, [zoomAt, polys.length]);
+
+  const pick = useCallback(
+    (polyId: string) => {
+      if (moved.current > 6) return; // fue un arrastre, no un toque
+      const zs = zonesByPoly.get(polyId);
+      if (!zs?.length) return;
+      // Dentro de un contorno con varias zonas, primero la más general (ruta más corta).
+      const first = zs.slice().sort((a, b) => a.zone_key.split("/").length - b.zone_key.split("/").length)[0];
+      setSelected(first.zone_key);
+    },
+    [zonesByPoly],
+  );
+
+  const pickMarker = (z: ScraperZone) => {
+    if (moved.current > 6) return;
+    setSelected(z.zone_key);
+  };
+
+  // ── Teclado: flechas recorren las zonas con posición; +/− zoom ─────────────
+  const navigable = useMemo(
+    () => zones.filter((z) => placement.get(z.zone_key)).sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" })),
+    [zones, placement],
+  );
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "+" || e.key === "=") zoomAt(1.4, size.w / 2, size.h / 2);
+    else if (e.key === "-") zoomAt(1 / 1.4, size.w / 2, size.h / 2);
+    else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && navigable.length) {
+      e.preventDefault();
+      const i = navigable.findIndex((z) => z.zone_key === selected);
+      const n = (i + (e.key === "ArrowRight" ? 1 : -1) + navigable.length) % navigable.length;
+      setSelected(navigable[n].zone_key);
+    }
+  };
+
+  // ── Panel de la zona elegida ───────────────────────────────────────────────
+  const sel = selected ? zoneByKey.get(selected) ?? null : null;
+  const tree = useMemo(() => {
+    // nodo del árbol de la zona elegida (sus descendientes), solo desde las filas con parent_key
+    const kids = new Map<string, ScraperZone[]>();
+    for (const z of zones) if (z.parent_key) kids.set(z.parent_key, [...(kids.get(z.parent_key) ?? []), z]);
+    const build = (z: ScraperZone, depth = 0): TreeNode => ({ z, children: depth > 8 ? [] : (kids.get(z.zone_key) ?? []).map((c) => build(c, depth + 1)) });
+    return build;
+  }, [zones]);
+  const selNode = sel ? tree(sel) : null;
+  const selFamily = selNode ? family(selNode) : [];
+  const parent = sel?.parent_key ? zoneByKey.get(sel.parent_key) ?? null : null;
+  const parentFamily = parent ? family(tree(parent)) : [];
+  const selPlace = sel ? placement.get(sel.zone_key) : undefined;
+  const shared = selPlace?.poly ? (zonesByPoly.get(selPlace.poly) ?? []).filter((z) => z.zone_key !== sel?.zone_key) : [];
+  const selectedPoly = selPlace?.poly ?? null;
+  const trail: string[] = [];
+  for (let z: ScraperZone | null | undefined = parent, i = 0; z && i < 6; z = z.parent_key ? zoneByKey.get(z.parent_key) : null, i++) trail.unshift(z.label);
+
+  const marked = zones.filter((z) => z.priority !== "off").length;
+  const showBarrios = view.k >= kCap * 2;
+
+  if (loadErr) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">No se pudieron cargar los contornos del mapa. La lista funciona igual.</p>;
+  if (!geo || !match) return <p role="status" className="rounded-xl border border-ink/10 bg-white p-6 text-sm text-ink/70">Cargando contornos…</p>;
+
+  return (
+    <div>
+      <div
+        ref={boxRef}
+        tabIndex={0}
+        role="group"
+        aria-label={`Mapa de zonas de ${PORTAL_LABEL[portal]}. Flechas izquierda y derecha para recorrer las zonas, más y menos para el zoom. También puedes usar la vista Lista.`}
+        onKeyDown={onKey}
+        className={cn("relative overflow-hidden rounded-xl border border-ink/15 bg-[#fbf9f4]", FOCUS_RING)}
+        style={{ height: size.h, touchAction: "none" }}
+      >
+        <svg
+          ref={svgRef}
+          width="100%"
+          height={size.h}
+          className="block select-none"
+          style={{ touchAction: "none", cursor: "grab" }}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+          onPointerLeave={onUp}
+        >
+          <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+            <PolyLayer polys={polys} zonesByPoly={zonesByPoly} showBarrios={showBarrios} selectedPoly={selectedPoly} onPick={pick} />
+            <LabelLayer polys={polys} k={view.k} kCap={kCap} showBarrios={showBarrios} zonesByPoly={zonesByPoly} />
+            {/* Marcadores de zonas sin contorno propio: en la mediana de sus anuncios */}
+            <g>
+              {markers.map((z) => {
+                const pt = placement.get(z.zone_key)!.pt!;
+                const r = (view.k < kCap * 1.5 ? 4.5 : 8) / view.k;
+                const isSel = z.zone_key === selected;
+                return (
+                  <g key={z.zone_key} transform={`translate(${px(pt[0])} ${py(pt[1])})`} onClick={() => pickMarker(z)} style={{ cursor: "pointer" }} role="button" aria-label={`${z.label}: ${z.priority === "off" ? "sin marcar" : z.priority === "alta" ? "prioridad alta" : "marcada"}`}>
+                    <circle r={r * 2.2} fill="transparent" />
+                    <circle r={r} fill={FILL[z.priority]} stroke={isSel ? "#0a0a0a" : "#ffffff"} strokeWidth={isSel ? 2.5 : 1.5} vectorEffect="non-scaling-stroke" />
+                    {z.priority !== "off" ? null : <circle r={r * 0.35} fill="#8a8170" />}
+                  </g>
+                );
+              })}
+            </g>
+          </g>
+        </svg>
+
+        <div className="absolute right-2 top-2 flex flex-col gap-1.5">
+          <button type="button" aria-label="Acercar" onClick={() => zoomAt(1.5, size.w / 2, size.h / 2)} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border border-ink/15 bg-white shadow-sm hover:bg-cream-50", FOCUS_RING)}>
+            <Plus size={18} aria-hidden="true" />
+          </button>
+          <button type="button" aria-label="Alejar" onClick={() => zoomAt(1 / 1.5, size.w / 2, size.h / 2)} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border border-ink/15 bg-white shadow-sm hover:bg-cream-50", FOCUS_RING)}>
+            <Minus size={18} aria-hidden="true" />
+          </button>
+          <button type="button" aria-label="Ver toda la Comunidad de Madrid" title="Toda la Comunidad" onClick={() => { touched.current = true; fit(bounds.all); }} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border border-ink/15 bg-white shadow-sm hover:bg-cream-50", FOCUS_RING)}>
+            <Maximize2 size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <button type="button" onClick={() => { touched.current = true; fit(bounds.capital); }} className={cn("absolute bottom-2 left-2 h-11 rounded-xl border border-ink/15 bg-white px-3 text-sm font-semibold shadow-sm hover:bg-cream-50", FOCUS_RING)}>
+          Madrid capital
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink/80" aria-label="Leyenda">
+        {(["normal", "alta", "off"] as const).map((p) => (
+          <span key={p} className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className="inline-block h-3.5 w-3.5 rounded-sm border border-ink/20" style={{ background: FILL[p] }} />
+            {p === "normal" ? "Marcada" : p === "alta" ? "Alta" : "Sin marcar"}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className="inline-block h-3.5 w-3.5 rounded-sm border border-ink/20" style={{ background: NEUTRAL_FILL }} />
+          Sin zona del crawler
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className="inline-block h-3 w-3 rounded-full border border-white bg-ink/60 ring-1 ring-ink/30" />
+          Marcador (subzona sin contorno)
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-ink/80" aria-live="polite">
+        <strong>
+          {marked} de {zones.length} zonas marcadas
+        </strong>
+        {unplaced.length > 0 && <> · {unplaced.length} sin posición en el mapa (más abajo)</>}
+        {markers.length > 0 && <> · {markers.length} marcadores</>}
+      </p>
+      <p className="text-xs text-ink/65">
+        Toca una zona para cambiarla. Arrastra para mover, pellizca o usa los botones para el zoom (Ctrl + rueda en el ordenador). Acerca el mapa para ver los barrios.
+      </p>
+
+      {sel ? (
+        <div className="mt-3 rounded-xl border border-ink/15 bg-white p-4" role="region" aria-label={`Zona elegida: ${sel.label}`}>
+          {trail.length > 0 && <p className="text-sm text-ink/65">{trail.join(" › ")}</p>}
+          <div className="flex items-start justify-between gap-3">
+            <h4 className="break-words text-base font-bold text-ink">{sel.label}</h4>
+            <button type="button" onClick={() => setSelected(null)} className={cn("h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-ink/70 hover:bg-ink/5", FOCUS_RING)}>
+              Cerrar
+            </button>
+          </div>
+          <ZoneInfo z={sel} hasKids={selFamily.length > 1} />
+          {selFamily.length > 1 && (
+            <p className="mt-1 text-sm text-ink/75">
+              {selFamily.filter((z) => z.priority !== "off").length} de {selFamily.length} marcadas contando sus barrios o subzonas.
+            </p>
+          )}
+          {selPlace?.pt && <p className="mt-1 text-sm text-ink/65">Esta zona no tiene contorno oficial: el marcador está en el centro de sus anuncios.</p>}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <PrioritySelect value={sel.priority} onChange={(p) => onSet(sel, p)} label={`Estado de ${sel.label}`} disabled={disabled} />
+          </div>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {selFamily.length > 1 && (
+              <>
+                <button type="button" disabled={disabled} onClick={() => onFamily(selFamily, true)} className={cn(BTN_SECONDARY, FOCUS_RING)}>
+                  Marcar {sel.label} con todos sus barrios ({selFamily.length})
+                </button>
+                <button type="button" disabled={disabled} onClick={() => onFamily(selFamily, false)} className={cn(BTN_SECONDARY, FOCUS_RING)}>
+                  Desmarcar todo
+                </button>
+              </>
+            )}
+            {parent && parentFamily.length > 1 && (
+              <button type="button" disabled={disabled} onClick={() => onFamily(parentFamily, true)} className={cn(BTN_SECONDARY, FOCUS_RING)}>
+                Marcar todo {stripParen(parent.label)} ({parentFamily.length})
+              </button>
+            )}
+          </div>
+          {shared.length > 0 && (
+            <p className="mt-3 text-sm text-ink/75">
+              Este contorno también corresponde a:{" "}
+              {shared.map((z, i) => (
+                <span key={z.zone_key}>
+                  {i > 0 && ", "}
+                  <button type="button" className={cn("rounded font-semibold underline", FOCUS_RING)} onClick={() => setSelected(z.zone_key)}>
+                    {z.label}
+                  </button>
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-xl border border-dashed border-ink/20 bg-cream-50/60 p-4 text-sm text-ink/70">Toca una zona del mapa para ver sus datos y marcarla o desmarcarla.</p>
+      )}
+
+      {unplaced.length > 0 && (
+        <details className="mt-4 rounded-xl border border-ink/10 bg-white p-3">
+          <summary className={cn("cursor-pointer text-sm font-bold text-ink", FOCUS_RING)}>Sin posición en el mapa ({unplaced.length})</summary>
+          <p className="mt-2 text-sm text-ink/70">
+            Zonas que no tienen contorno oficial ni anuncios suficientes para colocarlas. Se pueden marcar igual desde aquí o desde la lista.
+          </p>
+          <ul className="mt-2">
+            {unplaced.slice(0, more).map((z) => (
+              <li key={z.zone_key} className="flex flex-col gap-1.5 border-t border-ink/10 py-2 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <div className="min-w-0 break-words">
+                  <p className="text-sm font-medium text-ink">{z.label}</p>
+                  {z.parent_key && zoneByKey.get(z.parent_key) && <p className="text-sm text-ink/65">en {zoneByKey.get(z.parent_key)!.label}</p>}
+                  <p className="text-sm text-ink/65">{(z.listings_sale ?? 0) + (z.listings_rent ?? 0) > 0 ? `${fmt((z.listings_sale ?? 0) + (z.listings_rent ?? 0))} anuncios` : "Anuncios: aún sin contar"}</p>
+                </div>
+                <PrioritySelect value={z.priority} onChange={(p) => onSet(z, p)} label={`Estado de ${z.label}`} disabled={disabled} />
+              </li>
+            ))}
+          </ul>
+          {unplaced.length > more && (
+            <button type="button" onClick={() => setMore((m) => m + 60)} className={cn(BTN_SECONDARY, "mt-2 w-full", FOCUS_RING)}>
+              Mostrar más ({unplaced.length - more} restantes)
+            </button>
+          )}
+        </details>
+      )}
+
+      <p className="mt-3 text-xs text-ink/60">{geo.attribution}. Datos del {geo.generated}.</p>
+    </div>
+  );
+}
