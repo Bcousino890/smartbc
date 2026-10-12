@@ -35,6 +35,9 @@ const MEDIA_COLUMNS_0036 =
 // elegante, como las de 0034/0035/0036).
 const LINK_COLUMNS_0176 = "duplicate_of, link_summary, link_ops";
 
+// Columnas de la migración 0158 (ficha técnica): bajada de precio para el badge «Bajó %».
+const DROP_COLUMNS_0158 = "price_drop_pct, previous_price";
+
 export type EnrichedParticularRow = Record<string, unknown> & {
   id: string;
   assigned_to: string | null;
@@ -326,6 +329,7 @@ export async function getParticularesPage(opts?: {
   // 0036 (plano/vídeo) → 0035 (address, phone_confidence) → 0034 (assigned_*)
   // → 0024 (particular_reference) → 0012 (advertiser_type) → base.
   const attempts = [
+    `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}, ${LINK_COLUMNS_0176}, ${DROP_COLUMNS_0158}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}, ${LINK_COLUMNS_0176}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at`,
