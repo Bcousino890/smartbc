@@ -78,6 +78,7 @@ function TreeRow({
   disabled,
   onSet,
   onFamily,
+  onShowOnMap,
 }: {
   node: TreeNode;
   depth: number;
@@ -85,6 +86,7 @@ function TreeRow({
   disabled: boolean;
   onSet: (z: ScraperZone, p: ZonePriority) => void;
   onFamily: (all: ScraperZone[], mark: boolean) => void;
+  onShowOnMap: (z: ScraperZone) => void;
 }) {
   const [open, setOpen] = useState(false);
   const hasKids = node.children.length > 0;
@@ -120,6 +122,9 @@ function TreeRow({
               )}
             </p>
             <ZoneInfo z={node.z} hasKids={hasKids} />
+            <button type="button" onClick={() => onShowOnMap(node.z)} className={cn("-ml-2 mt-0.5 inline-flex min-h-[44px] items-center rounded-lg px-2 text-sm font-medium text-ink/70 underline-offset-2 hover:text-ink hover:underline", FOCUS_RING)}>
+              Ver en el mapa
+            </button>
           </div>
         </div>
         <div>
@@ -129,7 +134,7 @@ function TreeRow({
       {expanded && hasKids && (
         <ul>
           {kids.map((c) => (
-            <TreeRow key={c.z.zone_key} node={c} depth={depth + 1} q={q} disabled={disabled} onSet={onSet} onFamily={onFamily} />
+            <TreeRow key={c.z.zone_key} node={c} depth={depth + 1} q={q} disabled={disabled} onSet={onSet} onFamily={onFamily} onShowOnMap={onShowOnMap} />
           ))}
         </ul>
       )}
@@ -142,6 +147,7 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
   const [portal, setPortal] = useState<ScraperPortal>("idealista");
   const [view, setView] = useState<"lista" | "mapa">("lista");
   const [q, setQ] = useState("");
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const disabled = !data.canEdit || !data.tablesReady;
   const all = data.zones[portal];
@@ -177,6 +183,12 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
     );
   const onFamily = (zs: ScraperZone[], mark: boolean) =>
     setMany(zs, mark ? "normal" : "off", mark ? markedMsg(zs, "Zona y barrios marcados.") : "Zona y barrios desmarcados. Sus anuncios se quedan como están.");
+
+  /** Desde la lista: abre el mapa encuadrado en esa zona. */
+  const showOnMap = (z: ScraperZone) => {
+    setView("mapa");
+    setFocusKey(z.zone_key);
+  };
 
   const onTabKey = (e: React.KeyboardEvent, i: number) => {
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -296,7 +308,7 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
 
             {view === "mapa" ? (
               <div className="mt-4">
-                <ZoneMap portal={portal} zones={all} disabled={disabled} onSet={onSet} onFamily={onFamily} />
+                <ZoneMap portal={portal} zones={all} disabled={disabled} onSet={onSet} onFamily={onFamily} focusKey={focusKey} onFocusDone={() => setFocusKey(null)} />
               </div>
             ) : (
               <>
@@ -309,7 +321,7 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
                     {g.help && <p className="text-sm text-ink/65">{g.help}</p>}
                     <ul className="mt-1">
                       {g.nodes.map((n) => (
-                        <TreeRow key={n.z.zone_key} node={n} depth={0} q={nq} disabled={disabled} onSet={onSet} onFamily={onFamily} />
+                        <TreeRow key={n.z.zone_key} node={n} depth={0} q={nq} disabled={disabled} onSet={onSet} onFamily={onFamily} onShowOnMap={showOnMap} />
                       ))}
                     </ul>
                   </div>
