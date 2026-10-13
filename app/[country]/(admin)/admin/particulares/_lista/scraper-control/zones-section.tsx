@@ -7,7 +7,9 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import {
   PORTAL_LABEL,
-  ZONE_PORTALS,
+  SCRAPER_PORTALS,
+  hasZoneMap,
+  isEstimatedPortal,
   type ScraperControlPayload,
   type ScraperControlUpdate,
   type ScraperPortal,
@@ -88,7 +90,7 @@ function TreeRow({
   disabled: boolean;
   onSet: (z: ScraperZone, p: ZonePriority) => void;
   onFamily: (all: ScraperZone[], mark: boolean) => void;
-  onShowOnMap: (z: ScraperZone) => void;
+  onShowOnMap?: (z: ScraperZone) => void;
 }) {
   const [open, setOpen] = useState(false);
   const hasKids = node.children.length > 0;
@@ -124,9 +126,11 @@ function TreeRow({
               )}
             </p>
             <ZoneInfo z={node.z} hasKids={hasKids} />
-            <button type="button" onClick={() => onShowOnMap(node.z)} className={cn("-ml-2 mt-0.5 inline-flex min-h-[44px] items-center rounded-lg px-2 text-sm font-medium text-ink/70 underline-offset-2 hover:text-ink hover:underline", FOCUS_RING)}>
-              Ver en el mapa
-            </button>
+            {onShowOnMap && (
+              <button type="button" onClick={() => onShowOnMap(node.z)} className={cn("-ml-2 mt-0.5 inline-flex min-h-[44px] items-center rounded-lg px-2 text-sm font-medium text-ink/70 underline-offset-2 hover:text-ink hover:underline", FOCUS_RING)}>
+                Ver en el mapa
+              </button>
+            )}
           </div>
         </div>
         <div>
@@ -153,6 +157,8 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const disabled = !data.canEdit || !data.tablesReady;
   const all = data.zones[portal];
+  const mapAvailable = hasZoneMap(portal);
+  const portalEnabled = { idealista: data.settings.idealistaEnabled, fotocasa: data.settings.fotocasaEnabled, pisos: data.settings.pisosEnabled, habitaclia: data.settings.habitacliaEnabled }[portal];
   const nq = normalize(q.trim());
 
   const roots = useMemo(() => buildTree(all), [all]);
@@ -199,8 +205,8 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (!dir) return;
     e.preventDefault();
-    const n = (i + dir + ZONE_PORTALS.length) % ZONE_PORTALS.length;
-    setPortal(ZONE_PORTALS[n]);
+    const n = (i + dir + SCRAPER_PORTALS.length) % SCRAPER_PORTALS.length;
+    setPortal(SCRAPER_PORTALS[n]);
     tabRefs.current[n]?.focus();
   };
 
@@ -231,7 +237,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
 
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Portal" className="inline-flex h-11 rounded-xl border border-ink/10 bg-white p-0.5">
-          {ZONE_PORTALS.map((p, i) => (
+          {SCRAPER_PORTALS.map((p, i) => (
             <button
               key={p}
               ref={(el) => {
@@ -251,7 +257,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
             </button>
           ))}
         </div>
-        <Segmented
+        {mapAvailable && <Segmented
           value={view}
           onChange={setView}
           ariaLabel="Forma de ver las zonas"
@@ -259,7 +265,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
             { value: "lista", label: "Lista" },
             { value: "mapa", label: "Mapa" },
           ]}
-        />
+        />}
       </div>
 
       <div id="zonas-panel" role="tabpanel" aria-labelledby={`zonas-tab-${portal}`} className="mt-4">
@@ -270,7 +276,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
         ) : (
           <>
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              {view === "lista" && (
+              {(view === "lista" || !mapAvailable) && (
                 <div className="relative flex-1">
                   <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/50" />
                   <input
@@ -315,17 +321,23 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
               <span className="block text-xs text-ink/65">
                 {measured
                   ? "Es lo que el crawler ha medido de verdad en créditos: listado, fichas de anuncios nuevos, comprobación de bajas, refresco, reactivaciones y reintentos (los 404 también se cobran). El reparto por componente está en «Coste real de los créditos». Cada zona enseña su gasto medido; las que aún no tienen datos usan la cota baja de solo listado."
-                  : `Todavía no hay gasto medido: el crawler lo publicará tras su próxima ejecución con el libro de gasto instalado. Mientras, cada zona enseña una cota baja que solo cuenta las páginas de listado (${portal === "idealista" ? "Idealista cobra 2 créditos por petición, ≈ 0,7 créditos al mes por anuncio" : "Fotocasa cobra 1 crédito por petición, ≈ 0,3 créditos al mes por anuncio"}); el gasto real es bastante mayor porque faltan fichas nuevas, comprobación de bajas y refresco.`}{" "}
+                  : isEstimatedPortal(portal)
+                    ? `Todavía no hay gasto medido. Cada zona enseña una ESTIMACIÓN del modelo (${portal === "habitaclia" ? "Habitaclia: 2 barridos al día, una página de 29 anuncios por zona y operación ≈ 60 créditos al mes" : "Pisos.com: ≈ 30 créditos al mes por zona y operación, una cota alta"}); ${PORTAL_LABEL[portal]} cobra 1 crédito por petición.`
+                    : `Todavía no hay gasto medido: el crawler lo publicará tras su próxima ejecución con el libro de gasto instalado. Mientras, cada zona enseña una cota baja que solo cuenta las páginas de listado (${portal === "idealista" ? "Idealista cobra 2 créditos por petición, ≈ 0,7 créditos al mes por anuncio" : "Fotocasa cobra 1 crédito por petición, ≈ 0,3 créditos al mes por anuncio"}); el gasto real es bastante mayor porque faltan fichas nuevas, comprobación de bajas y refresco.`}{" "}
                 {totals.unknown > 0 && `${fmt(totals.unknown)} zonas sin anuncios contados no entran en la cota. `}No es una factura.
               </span>
             </p>
             {marked === 0 && (
               <div className="mt-3">
-                <Notice tone="warn">No hay ninguna zona marcada en {PORTAL_LABEL[portal]}: ahora mismo no se escanea nada de este portal.</Notice>
+                <Notice tone="warn">
+                  {isEstimatedPortal(portal) && portalEnabled
+                    ? "Sin zonas marcadas: no se extrae nada. Marca al menos una zona para que el crawler trabaje."
+                    : `No hay ninguna zona marcada en ${PORTAL_LABEL[portal]}: ahora mismo no se escanea nada de este portal.`}
+                </Notice>
               </div>
             )}
 
-            {view === "mapa" ? (
+            {view === "mapa" && mapAvailable ? (
               <div className="mt-4">
                 <ZoneMap portal={portal} zones={all} disabled={disabled} onSet={onSet} onFamily={onFamily} focusKey={focusKey} onFocusDone={() => setFocusKey(null)} />
               </div>
@@ -340,7 +352,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
                     {g.help && <p className="text-sm text-ink/65">{g.help}</p>}
                     <ul className="mt-1">
                       {g.nodes.map((n) => (
-                        <TreeRow key={n.z.zone_key} node={n} depth={0} q={nq} disabled={disabled} onSet={onSet} onFamily={onFamily} onShowOnMap={showOnMap} />
+                        <TreeRow key={n.z.zone_key} node={n} depth={0} q={nq} disabled={disabled} onSet={onSet} onFamily={onFamily} onShowOnMap={mapAvailable ? showOnMap : undefined} />
                       ))}
                     </ul>
                   </div>

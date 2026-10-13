@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
-import { zoneCredits, zoneListings, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
+import { isEstimatedPortal, zoneCredits, zoneListings, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
 import { COMPONENT_LABEL, COST_COMPONENTS, listingOnlyEstimate } from "@/lib/scrapers/cost-model";
 import { FOCUS_RING } from "../controls";
 import { fmt } from "./shared";
@@ -80,9 +80,10 @@ export function ZoneInfo({ z, hasKids = false }: { z: ScraperZone; hasKids?: boo
   const zc = useZoneCost(z);
   const low = listingOnlyEstimate(z);
   const kids = hasKids ? <span> (con sus barrios)</span> : null;
+  const estimated = isEstimatedPortal(z.portal);
   const lowLabel = (v: number) => (
     <span className="text-ink/60">
-      cota baja: ≈ {fmt(v)} créditos/mes, solo listado
+      {estimated ? <>estimación: ≈ {fmt(v)} créditos/mes</> : <>cota baja: ≈ {fmt(v)} créditos/mes, solo listado</>}
     </span>
   );
   let cost: React.ReactNode;
@@ -124,7 +125,7 @@ export function ZoneInfo({ z, hasKids = false }: { z: ScraperZone; hasKids?: boo
         "Coste: sin datos aún"
       ) : z.priority === "off" ? (
         <>
-          No gasta nada · <span className="font-semibold text-emerald-800">ahorras al menos {fmt(low)} créditos/mes</span> <span className="text-ink/60">(solo listado, cota baja)</span>
+          No gasta nada · <span className="font-semibold text-emerald-800">{estimated ? "ahorras" : "ahorras al menos"} {fmt(low)} créditos/mes</span> <span className="text-ink/60">{estimated ? "(estimación)" : "(solo listado, cota baja)"}</span>
           {kids}
         </>
       ) : (

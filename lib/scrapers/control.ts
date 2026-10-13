@@ -285,6 +285,19 @@ export async function loadControl(canEdit: boolean): Promise<ScraperControlPaylo
     SCRAPER_PORTALS.map((p) => [p, buildHealth(p, enabledBy[p], workerBy.get(WORKER_ID[p]), runBy[p], now.getTime())]),
   ) as Record<ScraperPortal, ScraperHealth>;
 
+  // Pisos.com y Habitaclia solo trabajan en las zonas marcadas: encendidos y sin ninguna, el crawler se salta la ejecución.
+  if (tablesReady) {
+    for (const p of ["pisos", "habitaclia"] as const) {
+      if (enabledBy[p] && !zones[p].some((z) => z.priority !== "off")) {
+        health[p].alarms.push("Sin zonas marcadas: no se extrae nada.");
+        if (health[p].light === "verde") {
+          health[p].light = "ambar";
+          health[p].headline = "Sin zonas marcadas";
+        }
+      }
+    }
+  }
+
   // Créditos del periodo: el crawler escribe el consumo total de la cuenta de Crawio en su latido.
   // Se toma el dato del latido más reciente que lo traiga.
   const withCredits = SCRAPER_PORTALS.map((p) => health[p])

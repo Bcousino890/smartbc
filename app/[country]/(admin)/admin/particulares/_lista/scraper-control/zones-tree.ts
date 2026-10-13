@@ -1,4 +1,4 @@
-import { creditsPerListing, zoneBaseCredits, zoneCredits, zoneListings, type ScraperPortal, type ScraperZone } from "@/lib/scrapers/control-types";
+import { creditsPerListing, zoneBaseCredits, zoneEstimateCredits, zoneCredits, zoneListings, type ScraperPortal, type ScraperZone } from "@/lib/scrapers/control-types";
 
 /**
  * Árbol de zonas a partir de `parent_key` (lo publica el crawler). Funciones
@@ -124,7 +124,9 @@ export function costTotals(zones: ScraperZone[]): { now: number; all: number; un
   let unknown = 0;
   for (const z of zones) {
     if (zoneBaseCredits(z) == null) unknown++;
-    const base = Math.round((excl.get(z.zone_key) ?? 0) * creditsPerListing(z.portal));
+    // Pisos.com / Habitaclia: estimación por zona (no depende de anuncios contados ni se resta lo de las hijas).
+    const est = zoneEstimateCredits(z);
+    const base = est ?? Math.round((excl.get(z.zone_key) ?? 0) * creditsPerListing(z.portal));
     all += base;
     now += zoneCredits(base, z.priority);
   }

@@ -11,7 +11,7 @@
  *   proyección = créditos medidos / días completos medidos × 30
  * («reactivación» es puntual: no se extrapola).
  */
-import { creditsPerListing, zoneListings, type ScraperPortal, type ScraperZone } from "./control-types";
+import { creditsPerListing, zoneEstimateCredits, zoneListings, type ScraperPortal, type ScraperZone } from "./control-types";
 
 export const COST_COMPONENTS = ["listado", "fichas", "verificacion", "refresco", "reactivacion", "otros"] as const;
 export type CostComponent = (typeof COST_COMPONENTS)[number];
@@ -139,7 +139,12 @@ export function rollupZoneCosts(zones: ScraperZone[], pc: PortalCosts | null, pr
 }
 
 /** Cota baja anterior: solo páginas de listado (Idealista ≈ 0,67 créditos/mes por anuncio, Fotocasa ≈ 0,33). */
-export function listingOnlyEstimate(z: Pick<ScraperZone, "portal" | "listings_sale" | "listings_rent">): number | null {
+export function listingOnlyEstimate(
+  z: Pick<ScraperZone, "portal" | "listings_sale" | "listings_rent" | "listings_private" | "sale_active" | "rent_active">,
+): number | null {
+  // Pisos.com / Habitaclia: estimación del modelo (no hace falta tener anuncios contados).
+  const est = zoneEstimateCredits(z);
+  if (est != null) return est;
   const n = zoneListings(z);
   return n == null ? null : Math.round(n * creditsPerListing(z.portal));
 }

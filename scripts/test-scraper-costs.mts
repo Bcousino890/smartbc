@@ -25,7 +25,10 @@ import {
   SUGGESTED_KEY_LIMIT,
   TASKS,
   WORKER_ID,
-  ZONE_PORTALS,
+  MAP_PORTALS,
+  hasZoneMap,
+  zoneBaseCredits,
+  zoneEstimateCredits,
   runPortal,
   type ScraperZone,
 } from "../lib/scrapers/control-types.ts";
@@ -136,7 +139,9 @@ test("el gasto sin zona no entra en ninguna zona", () => {
 
 test("portales nuevos: pisos y habitaclia", () => {
   assert.deepEqual([...SCRAPER_PORTALS], ["idealista", "fotocasa", "pisos", "habitaclia"]);
-  assert.deepEqual([...ZONE_PORTALS], ["idealista", "fotocasa"]);
+  assert.deepEqual([...MAP_PORTALS], ["idealista", "fotocasa"]);
+  assert.equal(hasZoneMap("pisos"), false);
+  assert.equal(hasZoneMap("fotocasa"), true);
   assert.equal(PORTAL_LABEL.pisos, "Pisos.com");
   assert.equal(WORKER_ID.pisos, "vps-pisos");
   assert.equal(WORKER_ID.habitaclia, "vps-habitaclia");
@@ -160,6 +165,26 @@ test("las ejecuciones se reparten por portal según el run_type", () => {
   assert.equal(runPortal("habitaclia-verify"), "habitaclia");
   // Cada tarea declarada pertenece a su portal.
   for (const p of SCRAPER_PORTALS) for (const t of TASKS[p]) assert.equal(runPortal(t.type), p);
+});
+
+test("estimación por zona de Habitaclia y Pisos.com", () => {
+  const hz = (extra: Partial<ScraperZone> = {}) => zone("madrid-capital/chamberi", "madrid-capital", { portal: "habitaclia", ...extra });
+  const pz = (extra: Partial<ScraperZone> = {}) => zone("chamberi_distrito", null, { portal: "pisos", ...extra });
+  // Habitaclia: ≈ 60 créditos por operación marcada con ≤ 29 particulares (también si listings_private es null).
+  assert.equal(zoneEstimateCredits(hz({ listings_private: 12 })), 120);
+  assert.equal(zoneEstimateCredits(hz({ listings_private: null })), 120);
+  assert.equal(zoneEstimateCredits(hz({ listings_private: 29 })), 120);
+  assert.equal(zoneEstimateCredits(hz({ listings_private: 30 })), 240); // 2 páginas
+  assert.equal(zoneEstimateCredits(hz({ rent_active: false })), 60);
+  // Pisos.com: ≈ 30 por zona, mes y operación.
+  assert.equal(zoneEstimateCredits(pz()), 60);
+  assert.equal(zoneEstimateCredits(pz({ sale_active: false })), 30);
+  assert.equal(zoneEstimateCredits(pz({ sale_active: false, rent_active: false })), 0);
+  // Idealista/Fotocasa siguen con el modelo de anuncios.
+  assert.equal(zoneEstimateCredits(zone("a", null)), null);
+  assert.equal(zoneBaseCredits(zone("a", null, { listings_sale: 300 })), 201);
+  assert.equal(zoneBaseCredits(zone("a", null)), null);
+  assert.equal(zoneBaseCredits(pz()), 60);
 });
 
 console.log(`${n} pruebas OK`);

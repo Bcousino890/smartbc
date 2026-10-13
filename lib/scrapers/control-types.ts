@@ -9,10 +9,9 @@
 export type ScraperPortal = "idealista" | "fotocasa" | "pisos" | "habitaclia";
 export const SCRAPER_PORTALS: readonly ScraperPortal[] = ["idealista", "fotocasa", "pisos", "habitaclia"];
 export const PORTAL_LABEL: Record<ScraperPortal, string> = { idealista: "Idealista", fotocasa: "Fotocasa", pisos: "Pisos.com", habitaclia: "Habitaclia" };
-/** Portales con árbol de zonas (y mapa) en el panel. Pisos.com y Habitaclia se controlan por portal entero, sin zonas. */
-export const ZONE_PORTALS: readonly ScraperPortal[] = ["idealista", "fotocasa"];
-/** Portales nuevos, solo de particulares y sin zonas: `pisos` y `habitaclia`. */
-export const isZonePortal = (p: ScraperPortal): boolean => ZONE_PORTALS.includes(p);
+/** Portales con mapa de zonas (polígonos OSM): solo Idealista y Fotocasa. Pisos.com y Habitaclia tienen zonas, pero solo en lista. */
+export const MAP_PORTALS: readonly ScraperPortal[] = ["idealista", "fotocasa"];
+export const hasZoneMap = (p: ScraperPortal): boolean => MAP_PORTALS.includes(p);
 
 /** Identificador con el que cada crawler firma su latido en `idealista_scraper_workers`. */
 export const WORKER_ID: Record<ScraperPortal, string> = {
@@ -232,8 +231,38 @@ export function zoneListings(z: Pick<ScraperZone, "listings_sale" | "listings_re
   return (z.listings_sale ?? 0) + (z.listings_rent ?? 0);
 }
 
+/**
+ * Portales cuyo coste por zona es una ESTIMACIÓN del modelo (no un cálculo por anuncios de listado):
+ *  - Habitaclia: 2 barridos al día y una página de 29 anuncios cubre una zona → ≈ 60 créditos por operación y mes
+ *    (más páginas si la zona tiene más de 29 particulares).
+ *  - Pisos.com: ≈ 30 créditos por zona, mes y operación (adaptativo, ~3 pasadas diarias de ~1 página; es una cota alta).
+ */
+export const ESTIMATED_ZONE_PORTALS: readonly ScraperPortal[] = ["pisos", "habitaclia"];
+export const isEstimatedPortal = (p: ScraperPortal): boolean => ESTIMATED_ZONE_PORTALS.includes(p);
+const HABITACLIA_PAGE = 29;
+const HABITACLIA_CREDITS_PER_PAGE_OP = 60;
+const PISOS_CREDITS_PER_ZONE_OP = 30;
+
+/** Estimación mensual (prioridad «Marcada») de una zona de Pisos.com / Habitaclia; null si el portal no usa este modelo. */
+export function zoneEstimateCredits(
+  z: Pick<ScraperZone, "portal" | "listings_private" | "sale_active" | "rent_active">,
+): number | null {
+  const ops = (z.sale_active ? 1 : 0) + (z.rent_active ? 1 : 0);
+  if (z.portal === "pisos") return PISOS_CREDITS_PER_ZONE_OP * ops;
+  if (z.portal === "habitaclia") {
+    // `listings_private` puede venir null: una página (≤ 29 particulares).
+    const pages = Math.max(1, Math.ceil((z.listings_private ?? 0) / HABITACLIA_PAGE));
+    return HABITACLIA_CREDITS_PER_PAGE_OP * pages * ops;
+  }
+  return null;
+}
+
 /** Créditos/mes de una zona en prioridad «Marcada»; null = sin datos. */
-export function zoneBaseCredits(z: Pick<ScraperZone, "portal" | "listings_sale" | "listings_rent">): number | null {
+export function zoneBaseCredits(
+  z: Pick<ScraperZone, "portal" | "listings_sale" | "listings_rent" | "listings_private" | "sale_active" | "rent_active">,
+): number | null {
+  const est = zoneEstimateCredits(z);
+  if (est != null) return est;
   const n = zoneListings(z);
   return n == null ? null : Math.round(n * creditsPerListing(z.portal));
 }
