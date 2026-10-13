@@ -123,3 +123,37 @@ Ninguna de producto. Quedan puertas de evidencia: G1 (muestras), G2 (viabilidad 
 - Especificación v3 con los tres ajustes: Fabricio, 2026-10-13: «Sí, aprobar la especificación y preparar maquetas».
 - D17: Fabricio eligió «C · Boutique».
 - Plan corregido (identidad + E1–E7): aprobado por Fabricio el 2026-10-13, con autorización de la fase 1 (T1–T5 hasta PR-1 y CI, sin merge).
+
+## Ampliación (2026-10-13)
+
+Especificación: [ampliacion-spec.md](ampliacion-spec.md), aprobada por Fabricio el 2026-10-13 junto con la dirección visual de las maquetas (fuera del repositorio, en `outputs/BCP-01-maquetas-ampliacion/`).
+
+| Decisión | Contenido |
+| --- | --- |
+| D18 | Logo oficial en la portada y el cierre del lector; se arrastra al PDF de la fase 4 |
+| D19 | Contacto público por catálogo: nombre, teléfono y «asesor»/«asesora». Solo cambia lo que se muestra; la HOME sigue siendo solo de Fabricio. La regla #297 no cambia fuera de los catálogos |
+| D20 | Cierre «Hablemos»: marca, tarjeta del asesor y una sola acción (Llamar). Sin canales ni envíos automáticos |
+| D21 | Varias zonas (distrito, barrio o nombre libre), precio mínimo y máximo opcionales separando venta (€) y alquiler (€/mes). Modo manual con filtros y modo automático por criterios, sin modelo híbrido. Cambio de modo reversible y con vista previa |
+| D22 | Anuncios de Idealista de origen asociados a catálogos (muchos a muchos), solo internos. Sin cambios en Fichas guardadas |
+| D23 | Recorrido editorial: apertura (entrada y ≤ 3 destacados verificados), recorrido en dobles páginas en escritorio y hoja continua en móvil, y detalle con todos los datos y la descripción limpia completa |
+
+**P1–P9**
+- P1: asesor/asesora por catálogo.
+- P2: precio mínimo y máximo opcionales.
+- P3: equivalencias solo para catálogos: Chueca → Justicia, Malasaña → Universidad, Huertas → Cortes.
+- P4: al menos una foto en automático.
+- P5: 12 viviendas por defecto; máximo configurable de 1 a 24 (**aprobado** por Fabricio al aprobar el plan); orden por precio ascendente.
+- P6: no se toca Fichas guardadas.
+- P7: no se generan historias desde el catálogo; solo un enlace a la cola existente.
+- P8: solo dos ediciones por catálogo y vivienda: la entrada y los destacados elegidos entre candidatos verificados.
+- P9: dobles páginas adicionales en escritorio y hoja continua en móvil.
+
+**Condiciones de la aprobación**
+1. La barra de navegación móvil no puede tapar contenido; se comprueba con los destacados, los controles y la ficha en pantallas estrechas.
+2. El resultado automático siempre es correcto: filtro completo, orden estable y después el máximo. Nunca se limitan las candidatas por rendimiento.
+3. Se miden la base y la propuesta en el mismo entorno aislado, documentando tamaños, lectores, tamaño de la instantánea y tiempos. Los 50 ms son un presupuesto provisional; el requisito es D13 ≤ 2 s.
+4. Las ediciones de una vivienda automática no la fijan, no la duplican y no crean un modo híbrido.
+
+**Notas**
+- Las correcciones de título e introducción que hizo Fabricio son datos guardados.
+- La medición en vivo de 2 s y la QA en vivo de la fase 2 siguen sin acreditar.
