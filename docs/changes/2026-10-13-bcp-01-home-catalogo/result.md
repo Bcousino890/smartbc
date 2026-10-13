@@ -423,6 +423,14 @@ Postgres 16 temporal en este Mac, datos sintéticos (`scripts/sql/perf-catalogs.
 - Toda la QA en vivo, incluida la medición de 2 s (de esta entrega y de las anteriores).
 - PR-C empieza tras tu merge y la QA de B.
 
+## PR, CI y merge (PR-B)
+
+- **PR-B:** [#313](https://github.com/Bcousino890/smartbc/pull/313), `fabri/bcp-01-amp-b` → `main`.
+- **`origin/main` antes del push:** `f7bca42…`; `0195` libre en `main` y en los 28 PR abiertos.
+- **CI del último commit:** se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio **después de la decisión de rendimiento**. Puede desplegar y aplicar `0195`; el rollback del build no deshace el esquema.
+- Se conservan el worktree y la rama.
+
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
