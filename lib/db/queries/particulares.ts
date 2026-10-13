@@ -844,7 +844,29 @@ const getZoneCountRows = unstable_cache(
   async (advertiser: string): Promise<ZoneCountRow[]> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = createAdminClient() as any;
-    const rpc = await supabase.rpc("particulares_zone_counts", { p_advertiser: advertiser });
+    // PostgREST corta CUALQUIER respuesta a 1.000 filas (db-max-rows) y esta función devuelve ≈2k grupos
+    // (zona × municipio × activo × portal): sin paginar, los chips por portal y el desplegable de zonas
+    // sumaban solo una parte (Idealista 18.731 en vez de 42.994). Se lee por páginas con un orden total
+    // (el grupo es único por esas cuatro columnas), y si una página falla se cae al recorrido antiguo.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rpcRows: any[] = [];
+    let rpcError: unknown = null;
+    for (let page = 0; page < 50; page++) {
+      const res = await supabase
+        .rpc("particulares_zone_counts", { p_advertiser: advertiser })
+        .order("portal", { ascending: true })
+        .order("zone", { ascending: true })
+        .order("municipality", { ascending: true })
+        .order("is_active", { ascending: true })
+        .range(page * 1000, page * 1000 + 999);
+      if (res.error || !Array.isArray(res.data)) {
+        rpcError = res.error ?? new Error("rpc sin datos");
+        break;
+      }
+      rpcRows.push(...res.data);
+      if (res.data.length < 1000) break;
+    }
+    const rpc = { error: rpcError, data: rpcRows };
     if (!rpc.error && Array.isArray(rpc.data)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (rpc.data as any[]).map((r) => ({
