@@ -525,3 +525,87 @@ La insignia redonda «N» es la de desarrollo de Next y no existe en producción
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# Ampliación · C1 «Ajustes del automático, explicación y portada» (Y0–Y5)
+
+## Base y commits
+
+Rama `fabri/bcp-01-c1`, base `57a13bd29c43a18bda2c637acabc301a7667cfd0` (merge de #314), comprobada en remoto al preparar el worktree y antes del push. Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-c1`. `0196` libre en `main` y en los PR abiertos. Plan y decisiones: [`ampliacion-c-enmienda.md`](ampliacion-c-enmienda.md).
+
+| Commit | Tarea |
+| --- | --- |
+| `1dc7522` | Y0 · enmienda de C, decisiones aprobadas, recuento de producción y plan C1/C2 |
+| `8b8f09c` | Y1 · `0196_catalog_adjustments.sql`, pruebas SQL y `rollback-0196.sql` |
+| `1efb0a2` | Y2 · referencia TS con ajustes, paridad TS ↔ SQL y explicación privada |
+| `a2e7c46` | Y3–Y4 · gestión de ajustes, explicación y portada elegida (real y `/dev-fixtures`) |
+| siguiente | Y5 · medición B frente a C1 (`perf-c1.sh`, `perf-c1-adjust.sql`), corrección de la instantánea (`OFFSET 0`) y este resultado |
+
+## Qué hay
+
+- **Ajustes del automático** (`catalog_adjustments`, un ajuste por vivienda):
+  - **Excluir:** sale antes del máximo y su plaza la ocupa la siguiente coincidencia; la exclusión se conserva aunque la vivienda deje de coincidir.
+  - **Incluir:** plaza asegurada, **mezclada en el orden de los criterios**. Se permite fuera de zona o de precio, **sin foto** (con aviso) y de **otra operación** (con aviso; grupo posterior ordenado por su propio importe, nunca comparado con precios de venta). No se pueden incluir vendidas, archivadas ni de fuera de España.
+  - **Máximo 1–24:** se bloquea incluir o bajar el máximo cuando las inclusiones disponibles lo superarían («Sube el máximo o quita una inclusión»). Si una inclusión vendida vuelve a estar disponible y ya no cabe, entran las primeras del orden y la gestión lo avisa.
+  - **Quitar el ajuste** devuelve la vivienda a los criterios. Los ajustes se conservan en manual y al «Convertir», y vuelven a aplicarse en automático. «Convertir» copia la lista efectiva con las mismas claves.
+- **Explicación (solo gestión):** cada vivienda dice por qué está (zona, operación, precio) o que está incluida a mano y qué no cumple; avisos de sin foto, otra operación y no disponible; «Excluidas a mano» con «Volver a permitir»; «Inclusiones que hoy no aparecen»; el buscador (también «Todas las viviendas») dice por qué no entra cada una; aviso de zonas redundantes («Castellana ya está dentro de Salamanca»). Recuentos: «N de M coinciden» sin inclusiones; con ellas, «N en el catálogo · M coinciden · k incluidas a mano · e excluidas».
+- **Portada elegida:** vivienda de la lista efectiva y una de sus fotos, independiente del orden. Respaldo: foto elegida → foto de portada de esa vivienda → primera vivienda con foto → sin foto. Avisos en gestión. La HOME toma la portada (y el recuento automático) de la **misma instantánea** que el lector.
+- **Privacidad:** la instantánea solo gana `cover` (clave pública de la vivienda y el identificador opaco de la foto, el mismo `u` de las fotos) cuando hay elección; ni ajustes, ni explicación, ni criterios, ni anuncios, ni ids o URL de almacenamiento llegan al contrato público (test).
+
+## Verificaciones (locales, datos sintéticos, E7)
+
+| Comprobación | Resultado |
+| --- | --- |
+| SQL 0192–0196 (`scripts/sql/test-catalogs-core.sh`) | Todos los escenarios en verde, **549 comprobaciones**. Nuevos: <br>• **2f**: los tests de 0195 pasan sin cambios con 0196 aplicada dos veces; <br>• **2g** (80): huella de un manual y de un automático creados antes de 0196 sin cambios; exclusión y relleno; inclusión fuera de zona, sin foto y de otra operación en su sitio; bloqueos del máximo; vendida/archivada/Chile/inexistente rechazadas; una sola vez si ya coincide; quitar ajuste; excluir una incluida; inclusión vendida que libera su plaza y conserva el ajuste; inclusiones > máximo; claves estables y opacas; instantánea sin datos de ajustes ni UUID; vistas previas, búsqueda y recuentos; restore/convert/vuelta con los ajustes; portada (fuera de la lista, foto de otra vivienda, foto borrada, vivienda que sale y vuelve, manual, catálogo vacío); permisos (staff, actor nulo, `anon`, `authenticated`, RLS sin políticas, SECURITY INVOKER y search_path); `rollback-0196.sql` comprobado y 0196 reaplicada |
+| Paridad TS ↔ SQL (generada) | 300 textos de zona y 40 criterios × 504 propiedades **con ajustes aleatorios**: lista, total, coincidencias y `via` idénticos (33 juegos con inclusiones, 24 con inclusiones fuera de criterios, 7 con más inclusiones que el máximo, 11 con otra operación en la lista) |
+| `npm run test:catalogs-public` (en CI) | **159 en verde**: los 133 anteriores y 26 nuevos (selección con ajustes, explicación, zonas redundantes, portada y privacidad del contrato) |
+| `test:catalogs`, `tsc`, 8 regresiones, lint de migraciones | En verde |
+| `test:typography` | Las mismas 15 infracciones que la base |
+| C1 en el navegador (Playwright, 1440 y 362 px, `/dev-fixtures`) | **30 en verde**: automático con explicación; excluir y volver a permitir; incluir fuera de zona (mezclada por precio), sin foto y de otra operación (al final); recuentos; bloqueo al bajar el máximo y al incluir una cuarta con máximo 3; quitar inclusión frente a excluir; el buscador se pone al día al actuar desde la lista; zona redundante; ajustes guardados en manual y aplicados al volver; portada elegida con foto concreta, respaldo al excluir su vivienda, vuelta y portada automática; 0 desbordes a 1440 y 362 px; sin errores de JS; el lector no recibe explicación, ajustes, criterios ni anuncios |
+| Medición sintética 20 × 2 con las acciones nuevas | **PASA**: 20/20, 40/40, máximo 0,34 s; 12 ensayos por el camino del vigilante y 1 sin cambio público (no cuenta). **Local y sintético** |
+| Lector (fase 2), enlace, medición 20 × 2, PR-A, PR-B e índice | 52, 10, 6, 54, 40 y 186 en verde. Una comprobación de PR-B que exigía «sin buscador en automático» (la regla «sin modelo híbrido») se adaptó a la regla aprobada en C1: en automático sigue sin campo de referencia, flechas ni «Quitar», y ahora tiene el buscador de incluir/excluir |
+
+Capturas en `capturas-c1/` (inclusiones con su explicación, excluida, portada elegida, 362 px y medición). La insignia «N» es la de desarrollo de Next.
+
+## Rendimiento (Y5)
+
+Postgres 16 temporal en este Mac, datos sintéticos (`scripts/sql/perf-c1.sh`, 10 vueltas de calentamiento; p50/p95/máx. en ms). Tres fases sobre **los mismos datos**: **B** (0195), **C1** (0196 sin ajustes ni portada) y **C1+aj** (2 exclusiones, 2 inclusiones y portada elegida en cada uno de los 20 automáticos). El tamaño 1.000 tiene unas 840 candidatas, cerca de las **818** de producción. Tabla completa: `medidas/perf-c1-2026-10-14.tsv`. **No es producción** (otra máquina, otra carga) y **no demuestra D13**.
+
+| Propiedades | Automática · instantánea (p50) B → C1 → C1+aj | Pasada del vigilante, 5 enlaces auto (p50, p95) | 20 enlaces auto (p50, p95) | Manual ×20 |
+| --- | --- | --- | --- | --- |
+| 1.000 | 3,6–6,3 → 4,3–6,8 → 4,5–7,0 | 28 (30) → 30 (32) → 31 (32) | 109 (116) → 120 (127) → 122 (141) | 15 → 15 → 15 |
+| 2.000 | 5,2–7,2 → 6,1–7,9 → 6,3–8,1 | 35 (38) → 39 (43) → 47 (69) | 139 (142) → 162 (195) → 153 (162) | 15 → 15 → 15 |
+| 10.000 | 20–24 → 17–22 → 15–22 | 123 (179) → 111 (356) → 99 (130) | 418 (509) → 513 (1.329) → 396 (419) | 18 → 16 → 15 |
+
+- **Sobrecoste de C1 con 1.000–2.000:** del orden del **7–15 %** en las pasadas automáticas (una unión con las inclusiones y una ventana más en `catalog_select`); los catálogos manuales no cambian.
+- **Referencias de evaluación** (no puertas automáticas): con 1.000 y 2.000, 5 enlaces automáticos quedan **por debajo de 50 ms** (30–47 ms de p50) y 20 enlaces **por debajo de 300 ms** (120–162 ms). Con 10.000, igual que en PR-B, 20 enlaces automáticos superan los 300 ms; ahí las tres fases quedan en el mismo orden y el ruido del equipo es mayor que la diferencia (p95 de 1,3 s en C1 frente a 0,4 s en C1+aj sobre los mismos datos), así que no se saca conclusión de C1 a ese tamaño.
+- **Hallazgo y corrección durante la medición:** con portada elegida, la instantánea calculaba la lista **dos veces** (el planificador copiaba la subconsulta en cada uso). Medido: instantánea automática de 6,5 → 12,8 ms con 1.000. Se corrigió en `0196` con `OFFSET 0` (barrera de optimización): vuelve a 6–8 ms. La suite SQL completa (549) y las huellas siguen iguales.
+- Sin índices globales ni disparadores. D13 (≤ 2 s) en vivo sigue **pendiente**.
+
+## Compatibilidad del despliegue y recuperación
+
+- **Tras tu merge:** el despliegue compila, aplica `0196` y cambia de versión. Mientras tanto el build anterior funciona con la base nueva: `catalog_select`, `catalog_auto_preview` y `catalog_property_search` devuelven columnas de más que el código anterior ignora; sin ajustes ni portada, las instantáneas y huellas son idénticas a las de 0195 (probado).
+- **Si se vuelve al build anterior**, el esquema no se revierte solo. La base sigue aplicando los ajustes y la portada que ya existan (el lector las ve); la gestión antigua no puede editarlos (y sigue rechazando añadir/quitar a mano en automático).
+- **Revertir de verdad:** `git revert` del merge + `rollback-0196.sql` (lo ejecuta una persona; lleva al principio una consulta de copia). **Se pierden** los ajustes y la portada elegida; los automáticos vuelven a ser solo criterios; la lista manual no se toca. Después, quitar la fila de `schema_migrations`. Probado en el Postgres temporal.
+
+## QA en vivo de Fabricio (tras el merge)
+
+1. En un catálogo de QA en automático con enlace abierto en otra ventana: **excluye** una vivienda. Sale en el lector y entra la siguiente; el recuento dice «… · 1 excluida» y aparece en «Excluidas a mano». «Volver a permitir» la devuelve.
+2. Con el buscador en «Todas las viviendas», **incluye** una fuera de zona o de precio: entra en su sitio por precio, con «Incluida a mano · fuera de criterios» y el motivo. En el lector no lleva ninguna marca.
+3. Incluye una **sin foto** (aviso) y una de **otra operación** (aviso; va al final).
+4. Intenta **bajar el máximo** por debajo de las inclusiones y **añadir** una inclusión de más: aviso «Sube el máximo o quita una inclusión» y no se guarda.
+5. «**Quitar inclusión**» frente a «**Excluir**»: la primera devuelve la vivienda a los criterios; la segunda la deja fuera.
+6. Pasa a manual («Volver a mi lista anterior») y vuelve a automático: los ajustes siguen. Prueba también «Convertir».
+7. **Portada:** elige una vivienda que no sea la primera y una foto suya. El lector y la HOME muestran esa foto; cambia el orden (precio descendente) y no se mueve. Excluye esa vivienda: aviso y respaldo; vuelve a permitirla y vuelve la elegida. «Volver a la portada automática».
+8. **Explicaciones:** comprueba con tu catálogo de 64 coincidencias que los motivos te ayudan a validar el recuento y la selección.
+9. **Privacidad:** en el lector no aparecen motivos, criterios, ajustes ni anuncios.
+10. **D13:** 20 ensayos × 2 lectores con `?medir=1`, incluidos ajustes y cambios de portada (algunos «Sin aviso inmediato»). Sigue pendiente también la medición en vivo de las entregas anteriores.
+11. Al terminar, revoca el enlace de QA.
+
+## Pendiente o no demostrado
+
+- La QA en vivo de arriba, incluido D13 (≤ 2 s) en el VPS: las mediciones de aquí son locales y sintéticas.
+- C2 (descripciones y recorrido editorial) empieza tras tu merge y la QA de C1.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.

@@ -164,7 +164,8 @@ AS $$
 $$;
 
 -- ── Instantánea: 0195 + portada elegida (una sola sentencia) ────────────────
--- La lista se calcula UNA vez; la portada se resuelve contra esa misma lista.
+-- La lista se calcula UNA vez (OFFSET 0 abajo); la portada se resuelve contra
+-- esa misma lista.
 CREATE OR REPLACE FUNCTION catalog_internal_snapshot(p_catalog uuid)
 RETURNS jsonb
 LANGUAGE sql
@@ -212,6 +213,10 @@ AS $$
            AND p.status::text NOT IN ('sold', 'archived')
       ), '[]'::jsonb)
     END AS items
+    -- OFFSET 0: sin esto el planificador «aplana» la subconsulta y copia la
+    -- expresión en cada uso de it.items, así que con portada elegida la lista
+    -- se calculaba DOS veces (medido en Y5: el doble de tiempo).
+    OFFSET 0
   ) it
   WHERE c.id = p_catalog
 $$;
