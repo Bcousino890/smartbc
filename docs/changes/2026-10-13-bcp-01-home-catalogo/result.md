@@ -14,7 +14,9 @@ Enlaces: [spec.md](spec.md) · [plan.md](plan.md)
 | `f1a3f8d` | T5 · portada Boutique y formato (se adelantó a T3 porque la estantería la usa) |
 | `977b15d` | T3 · HOME «Mi espacio», menú solo para el dueño, datos de prueba locales |
 | `e681aa0` | T4 · gestión de catálogos con propiedades existentes |
-| siguientes | paso de CI `test:catalogs`, este resultado y el registro del PR |
+| `3e597ca` | Paso de CI `test:catalogs` |
+| `f7e5ef1` | Resultado de la fase 1 |
+| siguiente | Registro del PR y la CI |
 
 Número de migración: en la base ya existían `0188`–`0191` (de otras tareas), así que la fase 1 usa `0192`. Se vuelve a comprobar antes del push.
 
@@ -35,7 +37,7 @@ Todas en el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01` con Node 22.23.3 (ke
 | Revisión visual local (E7) | `scripts/dev-fixtures.sh` (sin `.env`, Supabase en `127.0.0.1:9`) + Chrome headless sin red externa | HOME y gestión con datos sintéticos a 1440 px y en un marco real de 362 px: Fraunces, Karla y Lato cargadas; 0 desbordes tras las correcciones (portadas que escalan con su contenedor, filas que se adaptan a móvil sin ocultar el precio). La HOME real sin sesión redirige a `/login` (307). |
 | Interacción del gestor (local) | Script con la librería `playwright` del proyecto sobre `/dev-fixtures` | 12 comprobaciones en verde: bajar, subir desactivado en el primero, quitar, URL de portal → aviso de fase 3, referencia no reconocida → aviso, BC válida → se añade, archivar desactiva añadir, la portada refleja el título. |
 | Sin escrituras fuera del catálogo | Revisión de código: `grep` de `.insert/.update/.delete/.upsert` en el código de BCP-01; solo `rpc("catalog_*")` | Ninguna escritura directa; `properties` solo se lee. El flujo de importar por enlace no se ha tocado. |
-| Build de Next | CI del PR | Pendiente de la CI (en local haría llamadas a servicios externos reales durante el prerender, así que no se ejecuta). |
+| Build de Next | CI del PR | En verde en la CI (no se ejecuta en local porque haría llamadas a servicios externos reales durante el prerender). |
 
 ## Criterios de aceptación
 
@@ -47,7 +49,7 @@ Todas en el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01` con Node 22.23.3 (ke
 | AC4a propiedades existentes | Demostrado en local; **pendiente en vivo** | Tests de referencias, prueba de interacción y funciones SQL. |
 | AC4b portal | No es de esta fase | T16b (fase 3, tras G3). |
 | AC12 aspecto visual | Dirección aprobada (D17); **aprobación final pendiente** | Capturas locales; la aprobación final se hace sobre lo implementado. |
-| AC13 regresiones y CI | Regresiones locales en verde; **CI pendiente** | Ver «PR, CI y merge». |
+| AC13 regresiones y CI | Regresiones locales y CI en verde; **repaso en vivo pendiente** | Ver «PR, CI y merge». |
 | AC14 sin efectos en clientes ni en la disponibilidad | Demostrado por revisión de código; **pendiente en vivo** | La fase 1 solo escribe en tablas del catálogo. |
 | AC5–AC11 | Fases 2–4 | — |
 
@@ -75,4 +77,9 @@ Revisión adicional de Codex: no solicitada por Fabricio para la fase 1.
 
 ## PR, CI y merge
 
-<Se completa al abrir el PR.>
+- **PR-1:** [#310](https://github.com/Bcousino890/smartbc/pull/310), `fabri/bcp-01-fase1` → `main`, 47 archivos, marcado como fusionable.
+- **`origin/main` antes del push:** seguía en `ffcdc7e…` y `0192` seguía libre (comprobado con `git fetch` y `git ls-remote`).
+- **CI en `f7e5ef1`:** en verde ([run 38417305124](https://github.com/Bcousino890/smartbc/actions/runs/38417305124), 3 min). Pasaron todos los pasos: TypeScript, particulares, Idealista, unificación de leads, Zinto v2, **Catálogos (nuevo)**, **build de Next.js** y lint de migraciones.
+- **CI del último commit** (este registro): se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Puede disparar el despliegue y aplicar `0192` en producción según el script versionado.
+- Se conservan el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01` y la rama.
