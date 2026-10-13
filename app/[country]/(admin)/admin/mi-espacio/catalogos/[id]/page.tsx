@@ -5,7 +5,16 @@ import { getCatalogShare } from "@/lib/catalogs/public-data";
 import { getCatalogDetail, listOwnerCatalogs } from "@/lib/catalogs/queries";
 import { isUuid } from "@/lib/catalogs/validate";
 import {
+  addCatalogAdAction,
+  addPropertyByIdAction,
   addPropertyToCatalogAction,
+  previewAutoSelectionAction,
+  previewModeAction,
+  removeCatalogAdAction,
+  searchCatalogPropertiesAction,
+  searchSavedListingsAction,
+  setCatalogCriteriaAction,
+  setCatalogModeAction,
   createShareAction,
   renewShareAction,
   revokeShareAction,
@@ -56,6 +65,19 @@ export default async function CatalogPage({
           reorder: reorderCatalogAction,
           setStatus: setCatalogStatusAction,
           setContact: setCatalogContactAction,
+          addPropertyById: addPropertyByIdAction,
+          search: searchCatalogPropertiesAction,
+          selection: {
+            setCriteria: setCatalogCriteriaAction,
+            previewAuto: previewAutoSelectionAction,
+            previewMode: previewModeAction,
+            setMode: setCatalogModeAction,
+          },
+          ads: {
+            add: addCatalogAdAction,
+            remove: removeCatalogAdAction,
+            searchListings: searchSavedListingsAction,
+          },
         }}
       />
     </div>

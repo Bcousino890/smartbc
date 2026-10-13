@@ -14,6 +14,10 @@ import { join } from "node:path";
 import { FORBIDDEN_PUBLIC_KEYS, UUID_RE } from "../lib/catalogs/public-contract.ts";
 import { isValidContactName, validateCatalogContact } from "../lib/catalogs/contact.ts";
 import { contactPhoneHref, contactRoleLabel, formatContactPhone } from "../lib/catalogs/contact-format.ts";
+import { CATALOG_ZONE_ALIASES, catalogBarrios, catalogDistricts, catalogZoneMatch, catalogZoneTermsSql } from "../lib/catalogs/zones.ts";
+import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
+import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
+import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import {
   clientDescriptionSrc,
   findForbiddenKeys,
@@ -219,6 +223,56 @@ class FakeEs implements EventSourceLike {
 }
 
 async function liveTests() {
+  section("Ampliación X4 · zonas de los catálogos");
+  {
+    const mig = readFileSync("supabase/migrations/0195_catalog_selection.sql", "utf8");
+    const block = mig.slice(mig.indexOf("INSERT INTO catalog_zone_terms (term, district, barrio) VALUES\n") + "INSERT INTO catalog_zone_terms (term, district, barrio) VALUES\n".length, mig.indexOf("\nON CONFLICT (term)"));
+    check("la tabla de la migración es exactamente la que genera el TS (sin deriva)", block === catalogZoneTermsSql());
+    const globalBefore = JSON.stringify(MADRID_DISTRICTS);
+    check("Chueca → Justicia, Malasaña → Universidad, Huertas → Cortes",
+      catalogZoneMatch("Chueca")?.barrio === "Justicia" && catalogZoneMatch("malasaña, Madrid")?.barrio === "Universidad" && catalogZoneMatch("HUERTAS")?.barrio === "Cortes");
+    check("la taxonomía global NO cambia (normalizeZone sigue igual)",
+      normalizeZone("Chueca").barrio === "Chueca" && JSON.stringify(MADRID_DISTRICTS) === globalBefore && MADRID_DISTRICTS.Centro.includes("Chueca"));
+    check("mismas reglas que normalizeZone para lo demás", ["Goya, Madrid", "barrio de Salamanca", "Retiro - Ibiza", "Las Águilas", "Fuencarral-El Pardo"].every((t) => {
+      const a = catalogZoneMatch(t); const b = normalizeZone(t);
+      return a !== null && a.district === b.district && a.barrio === b.barrio;
+    }));
+    check("zona desconocida → null (no se inventa)", catalogZoneMatch("Pozuelo de Alarcón") === null && catalogZoneMatch("") === null && catalogZoneMatch(null) === null);
+    check("los selectores no ofrecen los nombres populares", !catalogBarrios("Centro").some((b) => b in CATALOG_ZONE_ALIASES) && catalogBarrios("Centro").includes("Justicia"));
+    check("21 distritos", catalogDistricts().length === 21);
+  }
+
+  section("Ampliación X5 · criterios y selección (referencia TS)");
+  {
+    const d = normalizeCriteria({});
+    check("por defecto: ambas, 12, precio ascendente", d.ok && d.criteria.max === 12 && d.criteria.sort === "price_asc" && d.criteria.operation === "any");
+    const bad = [{ max: 0 }, { max: 25 }, { max: 2.5 }, { price_max: 100 }, { operation: "sale", price_min: 5, price_max: 4 },
+      { operation: "sale", price_min: -1 }, { zones: [{ kind: "district", name: "Gotham" }] }, { zones: [{ kind: "barrio", name: "Chueca" }] },
+      { zones: Array.from({ length: 31 }, (_, i) => ({ kind: "free", name: `Zona ${i}` })) }, { operation: "x" }, { sort: "x" }];
+    check("criterios inválidos (mismas reglas que SQL)", bad.every((b) => !normalizeCriteria(b).ok));
+    const s = normalizeCriteria({ operation: "sale", zones: [{ kind: "district", name: "Salamanca" }, { kind: "barrio", name: "Justicia" }], price_min: "900.000", price_max: 1500000 });
+    check("resumen con unidades (venta €)", s.ok && criteriaSummary(s.criteria) === "Salamanca · Justicia · Venta · 900.000–1.500.000 €", s.ok ? criteriaSummary(s.criteria) : "");
+    const r = normalizeCriteria({ operation: "rent", price_max: 4000 });
+    check("resumen alquiler €/mes", r.ok && criteriaSummary(r.criteria) === "Alquiler · hasta 4.000 €/mes");
+    const P = (o: Partial<CandidateProperty> & { id: string }): CandidateProperty => ({
+      country: "es", archived_at: null, status: "available", operation: "sale", operations: ["sale"], price: 1000, rent_price: null,
+      zone: "Salamanca", subzone: null, created_at: "2026-01-01T00:00:00Z", photo_count: 1, ...o,
+    });
+    const props = [
+      P({ id: "a", price: 900 }), P({ id: "b", price: 900, created_at: "2026-02-01T00:00:00Z" }), P({ id: "c", price: 0 }),
+      P({ id: "d", photo_count: 0 }), P({ id: "e", status: "sold" }), P({ id: "f", zone: "Chueca", price: 800 }),
+      P({ id: "g", operation: "rent", operations: ["rent"], price: 3000 }), P({ id: "h", operations: ["sale", "rent"], price: 2000, rent_price: 4000 }),
+    ];
+    const c1 = normalizeCriteria({ operation: "sale", zones: [{ kind: "district", name: "Salamanca" }, { kind: "barrio", name: "Justicia" }], max: 3 });
+    const res = c1.ok ? autoSelect(props, c1.criteria) : { ids: [], total: 0 };
+    check("orden completo y estable, después el máximo (total completo)", JSON.stringify(res) === JSON.stringify({ ids: ["f", "b", "a"], total: 5 }), JSON.stringify(res));
+    const c2 = normalizeCriteria({ operation: "rent" });
+    check("alquiler: la dual compara su precio de alquiler", c2.ok && JSON.stringify(autoSelect(props, c2.criteria).ids) === JSON.stringify(["g", "h"]));
+    const c3 = normalizeCriteria({ operation: "sale", price_min: 1 });
+    check("con rango, sin precio no entra; sin rango sí (al final)", c3.ok && !autoSelect(props, c3.criteria).ids.includes("c") && d.ok && autoSelect(props, { ...d.criteria, operation: "sale" }).ids.at(-1) === "c");
+    check("búsqueda manual: sin foto obligatoria", d.ok && candidates(props, d.criteria, { requirePhoto: false }).some((x) => x.id === "d") && !candidates(props, d.criteria, { requirePhoto: true }).some((x) => x.id === "d"));
+  }
+
   section("Ampliación X2 · contacto del catálogo");
   {
     const ok = validateCatalogContact({ name: "  Laura Méndez ", phone: "600 111 222", role: "asesora" });
@@ -602,6 +656,13 @@ async function liveTests() {
     const s = home.summary();
     check("resumen: fallo contado, no aprueba", s.failures === 1 && s.pass === false && s.results === 5 && s.maxMs === 650);
     check("CSV con una fila por lector y ensayo", home.csv().split("\n").length === 1 + 6 && /fallo: sin respuesta/.test(home.csv()));
+    // Ampliación X9: un guardado sin cambio público se anota aparte y no cuenta.
+    const before = home.summary();
+    const none = home.saved({ trial: "e4", label: "anuncio", fingerprint: "D", tStart: 9000, tSaved: 9100, changed: false });
+    const after = home.summary();
+    check("sin cambio público: no se publica ensayo ni se espera a los lectores", none === null && !home.busy());
+    check("sin cambio público: no cuenta como acierto ni como fallo", after.trials === before.trials && after.failures === before.failures && after.results === before.results && after.unchanged === 1);
+    check("CSV marca «sin cambio público (no cuenta)»", /sin cambio público \(no cuenta\)/.test(home.csv()));
   }
   {
     const home = new HomeMeter("tok");
@@ -615,6 +676,13 @@ async function liveTests() {
     }
     const s = home.summary();
     check("20 ensayos × 2 lectores ≤ 2 s → aprueba", s.pass && s.results === 40 && s.maxMs === 800, JSON.stringify(s));
+    // Camino del vigilante («sin aviso inmediato») se cuenta igual y se marca.
+    const hw = new HomeMeter("tok");
+    readers.forEach((r) => hw.onPresence(r.presence(), 300_000));
+    const tw = hw.saved({ trial: "w1", label: "orden", fingerprint: "W1", tStart: 300_000, tSaved: 300_050, watcherPath: true });
+    readers.forEach((r, j) => [...r.onTrial(tw!), ...r.onPaint("W1", 300_400 + j * 50)].forEach((m) => hw.onResult(m)));
+    const sw = hw.summary();
+    check("camino del vigilante: cuenta como ensayo y se marca", sw.trials === 1 && sw.watcherTrials === 1 && sw.results === 2 && /,vigilante,/.test(hw.csv()));
     const home2 = new HomeMeter("tok");
     home2.onPresence(readers[0].presence(), 0);
     home2.saved({ trial: "x", label: "x", fingerprint: "Z", tStart: 0, tSaved: 1 });

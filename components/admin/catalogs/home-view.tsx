@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { BookOpen, ClipboardList, Home, Users } from "lucide-react";
-import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { CatalogSummary } from "@/lib/catalogs/types";
 import { NewCatalogForm } from "./new-catalog-form";
+import { CatalogShelf } from "./catalog-shelf";
 
 // HOME de Fabricio (BCP-01 T3). Interfaz del admin en Lato (clases crm-*); el
 // estilo Boutique solo aparece en las portadas en miniatura de la estantería.
@@ -12,13 +12,6 @@ const SHORTCUTS = [
   { href: "/es/admin/propiedades", label: "Propiedades", icon: Home },
   { href: "/es/admin/solicitudes", label: "Solicitudes", icon: ClipboardList },
 ];
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 export function HomeView({
   catalogs,
@@ -96,38 +89,7 @@ export function HomeView({
             Crea tu primer catálogo y añade propiedades existentes por su referencia BC.
           </div>
         ) : (
-          <ul className="mt-6 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {catalogs.map((c) => (
-              <li key={c.id} className={c.status === "archived" ? "opacity-60" : undefined}>
-                <Link href={`${basePath}/catalogos/${c.id}`} className="group block">
-                  <div
-                    className="aspect-[150/212] w-full overflow-hidden rounded-sm shadow-[0_10px_24px_-14px_rgba(60,40,20,0.45)] transition group-hover:-translate-y-0.5"
-                    data-check-overflow="cover"
-                  >
-                    <CatalogCover
-                      data={{
-                        title: c.title,
-                        subtitle: c.intro,
-                        numberLabel: c.numberLabel,
-                        edition: c.edition,
-                        photoUrl: c.coverPhotoUrl,
-                        preparedBy: c.contactName,
-                      }}
-                    />
-                  </div>
-                  <p className="crm-body-strong mt-3 line-clamp-2 text-ink">{c.title}</p>
-                  <p className="text-xs text-ink/55">
-                    {c.status === "archived" ? "Archivado" : "Activo"} · {c.itemCount} propiedad
-                    {c.itemCount === 1 ? "" : "es"}
-                  </p>
-                  <p className="text-xs text-ink/45">Actualizado el {formatDate(c.updatedAt)}</p>
-                  <span className="mt-1 inline-block text-xs text-gold underline-offset-2 group-hover:underline">
-                    Gestionar
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <CatalogShelf catalogs={catalogs} basePath={basePath} />
         )}
       </section>
     </div>

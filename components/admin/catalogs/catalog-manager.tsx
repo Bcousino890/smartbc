@@ -11,21 +11,35 @@ import { formatContactPhone, type ContactRole } from "@/lib/catalogs/contact-for
 import { ContactFields } from "./contact-fields";
 import { MeasurePanel, useHomeMeasure } from "./measure-panel";
 import { SharePanel, type ShareActions, type ShareView } from "./share-panel";
+import { SelectionPanel, type SelectionActions } from "./selection-panel";
+import { PropertySearch, type SearchAction } from "./property-search";
+import { AdsPanel, type AdActions } from "./ads-panel";
+import type { CatalogCriteria } from "@/lib/catalogs/criteria";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
 // llegan inyectadas: en la página real son las acciones de servidor (con la
 // guarda del dueño y las funciones SQL de 0192/0193); en la prueba local,
 // falsas. Fase 2: enlace para compartir y, con ?medir=1, el modo medición.
+// Ampliación PR-B: zonas, precio y modo manual/automático, búsqueda para
+// añadir y anuncios de origen. En automático la lista es de solo lectura
+// (sin fijar ni excluir: no hay modelo híbrido).
 
-type Res = ActionResult<{ version: number; fingerprint?: string | null }>;
+type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
+/** Solo con ?medir=1 y «sin aviso inmediato». */
+type M = { skipNotify?: boolean };
 
 export interface CatalogManagerActions {
-  updateMeta: (i: { catalogId: string; title: string; intro?: string | null }) => Promise<Res>;
-  addProperty: (i: { catalogId: string; reference: string }) => Promise<Res>;
-  removeProperty: (i: { catalogId: string; propertyId: string }) => Promise<Res>;
-  reorder: (i: { catalogId: string; propertyIds: string[] }) => Promise<Res>;
-  setStatus: (i: { catalogId: string; status: "active" | "archived" }) => Promise<Res>;
-  setContact: (i: { catalogId: string; name: string; phone: string; role: string }) => Promise<Res>;
+  updateMeta: (i: { catalogId: string; title: string; intro?: string | null } & M) => Promise<Res>;
+  addProperty: (i: { catalogId: string; reference: string } & M) => Promise<Res>;
+  removeProperty: (i: { catalogId: string; propertyId: string } & M) => Promise<Res>;
+  reorder: (i: { catalogId: string; propertyIds: string[] } & M) => Promise<Res>;
+  setStatus: (i: { catalogId: string; status: "active" | "archived" } & M) => Promise<Res>;
+  setContact: (i: { catalogId: string; name: string; phone: string; role: string } & M) => Promise<Res>;
+  /** Ampliación PR-B */
+  addPropertyById: (i: { catalogId: string; propertyId: string } & M) => Promise<Res>;
+  search: SearchAction;
+  selection: SelectionActions;
+  ads: AdActions;
 }
 
 const STATUS_LABEL: Record<CatalogItemView["status"], string | null> = {
@@ -78,6 +92,9 @@ export function CatalogManager({
   const [pending, start] = useTransition();
   const [currentShare, setCurrentShare] = useState<ShareView | null>(share);
   const measure = useHomeMeasure(measureMode, currentShare && !currentShare.expired ? currentShare.token : null);
+  const mo: M = measure.skipNotify ? { skipNotify: true } : {};
+  const auto = catalog.mode === "auto";
+  const [draftCriteria, setDraftCriteria] = useState<CatalogCriteria>(catalog.criteria);
 
   useEffect(() => setItems(catalog.items), [catalog.items]);
   useEffect(() => setStatus(catalog.status), [catalog.status]);
@@ -102,7 +119,7 @@ export function CatalogManager({
         setMessage({ kind: "error", text: res.error });
         return;
       }
-      if (trial) measure.complete(trial, label, res.fingerprint);
+      if (trial) measure.complete(trial, label, res.fingerprint, res.publicChange !== false);
       onOk?.();
       setMessage({ kind: "ok", text: ok });
       if (!onLocalAdd) router.refresh();
@@ -117,7 +134,7 @@ export function CatalogManager({
     [next[index], next[j]] = [next[j], next[index]];
     setItems(next);
     run(
-      () => actions.reorder({ catalogId: catalog.id, propertyIds: next.map((i) => i.propertyId) }),
+      () => actions.reorder({ catalogId: catalog.id, propertyIds: next.map((i) => i.propertyId) , ...mo }),
       "Orden guardado.",
       undefined,
       () => setItems(before),
@@ -130,7 +147,7 @@ export function CatalogManager({
     const before = items;
     setItems(items.filter((x) => x.propertyId !== it.propertyId));
     run(
-      () => actions.removeProperty({ catalogId: catalog.id, propertyId: it.propertyId }),
+      () => actions.removeProperty({ catalogId: catalog.id, propertyId: it.propertyId , ...mo }),
       "Propiedad quitada del catálogo.",
       undefined,
       () => setItems(before),
@@ -142,7 +159,7 @@ export function CatalogManager({
     e.preventDefault();
     const ref = reference;
     run(
-      () => actions.addProperty({ catalogId: catalog.id, reference: ref }),
+      () => actions.addProperty({ catalogId: catalog.id, reference: ref , ...mo }),
       "Propiedad añadida.",
       () => {
         setReference("");
@@ -156,13 +173,13 @@ export function CatalogManager({
 
   function saveMeta(e: React.FormEvent) {
     e.preventDefault();
-    run(() => actions.updateMeta({ catalogId: catalog.id, title, intro }), "Datos guardados.", undefined, undefined, "edición");
+    run(() => actions.updateMeta({ catalogId: catalog.id, title, intro , ...mo }), "Datos guardados.", undefined, undefined, "edición");
   }
 
   function saveContact(e: React.FormEvent) {
     e.preventDefault();
     run(
-      () => actions.setContact({ catalogId: catalog.id, name: contactName, phone: contactPhone, role: contactRole }),
+      () => actions.setContact({ catalogId: catalog.id, name: contactName, phone: contactPhone, role: contactRole , ...mo }),
       "Contacto guardado. Quien tenga el enlace abierto lo verá al momento.",
       undefined,
       undefined,
@@ -172,7 +189,7 @@ export function CatalogManager({
 
   function toggleStatus() {
     const next = status === "active" ? "archived" : "active";
-    run(() => actions.setStatus({ catalogId: catalog.id, status: next }), next === "archived" ? "Catálogo archivado." : "Catálogo reactivado.", () => setStatus(next));
+    run(() => actions.setStatus({ catalogId: catalog.id, status: next , ...mo }), next === "archived" ? "Catálogo archivado." : "Catálogo reactivado.", () => setStatus(next));
   }
 
   const archived = status === "archived";
@@ -213,11 +230,54 @@ export function CatalogManager({
             <h2 id="cm-props" className="crm-section-title text-ink">
               Propiedades
             </h2>
-            <span className="text-sm text-ink/55">
-              {items.length} en el catálogo
+            <span className="text-sm text-ink/55" data-testid="items-count">
+              {auto ? `${items.length} de ${catalog.autoTotal ?? items.length} coinciden` : `${items.length} en el catálogo`}
             </span>
           </div>
 
+          <SelectionPanel
+            catalogId={catalog.id}
+            mode={catalog.mode}
+            criteria={catalog.criteria}
+            manualCount={catalog.manualCount}
+            actions={{
+              ...actions.selection,
+              setCriteria: (i) => actions.selection.setCriteria({ ...i, ...mo }),
+              setMode: (i) => actions.selection.setMode({ ...i, ...mo }),
+            }}
+            run={run}
+            pending={pending}
+            onCriteriaChange={setDraftCriteria}
+          />
+
+          {auto ? (
+            <p className="rounded-xl border border-gold/20 bg-gold/10 px-3 py-2 text-xs text-ink/70" data-testid="auto-note">
+              Lista automática: sale de los criterios y se actualiza sola. Para elegir u ordenar a mano, pásalo a manual.
+            </p>
+          ) : (
+            <PropertySearch
+              catalogId={catalog.id}
+              criteria={draftCriteria}
+              search={actions.search}
+              disabled={archived || pending}
+              onAdd={(it) =>
+                new Promise<boolean>((resolve) => {
+                  run(
+                    () => actions.addPropertyById({ catalogId: catalog.id, propertyId: it.propertyId, ...mo }),
+                    "Propiedad añadida.",
+                    () => {
+                      if (onLocalAdd) setItems((xs) => [...xs, it]);
+                      resolve(true);
+                    },
+                    () => resolve(false),
+                    "alta",
+                  );
+                })
+              }
+            />
+          )}
+
+          {auto ? null : (
           <form onSubmit={add} className="flex flex-col gap-2 rounded-xl border border-gold/20 bg-white/60 p-3 sm:flex-row sm:items-center">
             <label className="sr-only" htmlFor="cm-ref">
               Referencia BC, slug o URL de la ficha
@@ -238,13 +298,16 @@ export function CatalogManager({
               Añadir
             </button>
           </form>
+          )}
+          {auto ? null : (
           <p className="text-xs text-ink/50">
             Solo propiedades que ya están en el CRM. Importar desde portales o PDF llega en la fase 3.
           </p>
+          )}
 
           {items.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-10 text-center text-sm text-ink/55">
-              Este catálogo todavía no tiene propiedades.
+              {auto ? "Ninguna vivienda encaja ahora con los criterios (o les falta foto)." : "Este catálogo todavía no tiene propiedades."}
             </div>
           ) : (
             <ol className="space-y-2">
@@ -280,6 +343,7 @@ export function CatalogManager({
                     {badge ? (
                       <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">{badge}</span>
                     ) : null}
+                    {auto ? null : (
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       <button
                         type="button"
@@ -308,6 +372,7 @@ export function CatalogManager({
                         Quitar
                       </button>
                     </div>
+                    )}
                   </li>
                 );
               })}
@@ -384,6 +449,7 @@ export function CatalogManager({
               onChange={setCurrentShare}
             />
           ) : null}
+          <AdsPanel catalogId={catalog.id} ads={catalog.ads} actions={actions.ads} />
           {measureMode ? <MeasurePanel measure={measure} hasShare={!!currentShare && !currentShare.expired} /> : null}
         </aside>
       </div>

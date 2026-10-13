@@ -296,3 +296,141 @@ Rama `fabri/bcp-01-amp-a`, base `f770e544360c350e5821701a83f857d4136decf0` (merg
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# Ampliación · PR-B «Zonas, precio, modo automático y anuncios» (X4–X9)
+
+## Base y commits
+
+Rama `fabri/bcp-01-amp-b`, base `f7bca42932aa51780cc0829ec7e31a67c65f98a7` (merge de #312, PR-A), comprobada **en remoto** con `git ls-remote` al preparar el worktree y otra vez antes del push. Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-amp-b`. PR-A presente en la base (`0194_catalog_contact.sql`, contacto, logo y cierre).
+
+| Commit | Tarea |
+| --- | --- |
+| `60d0199` | X4–X5 · `0195_catalog_selection.sql`: zonas de catálogo, criterios, selección automática, modo, búsqueda y anuncios; referencia TS, paridad TS ↔ SQL, pruebas SQL y `rollback-0195.sql` |
+| `911663e` | X6 · medición de rendimiento base frente a 0195 (`scripts/sql/perf-catalogs.*`, `medidas/perf-pr-b-2026-10-13.tsv`) |
+| `58c8363` | X7–X9 · gestión (zonas, precio, modo, buscador), anuncios, filtros de la HOME y medición con «sin cambio público» y camino del vigilante |
+| siguiente | Este resultado |
+
+## Qué hay
+
+- **Zonas de catálogo (X4).** Taxonomía propia del catálogo (`lib/catalogs/zones.ts` = tabla `catalog_zone_terms`, 167 términos; un test exige que el bloque de la migración sea idéntico al que genera el código).
+  - Chueca cuenta como Justicia, Malasaña como Universidad y Huertas como Cortes (alias solo del catálogo).
+  - La taxonomía global (`lib/madrid-zones.ts`) y los textos de zona de las propiedades **no cambian** (probado).
+  - El selector de barrio no ofrece los nombres populares, para no duplicar; el panel explica la equivalencia.
+- **Criterios y selección automática (X5).** Varias zonas (distrito, barrio o texto libre), operación, precio mínimo/máximo, orden y máximo de 1 a 24 (12 por defecto).
+  - Entra: España, sin archivar, disponible o reservada, **con al menos una foto**.
+  - Venta compara `price`; alquiler compara `price` de un alquiler o `rent_price` de una dual; «venta y alquiler» no admite rango y pone primero la venta.
+  - Precio 0 o vacío = desconocido: fuera si hay rango, al final si no.
+  - Orden estable: grupo → precio (desconocidos al final) → más reciente → id. **Se filtra todo, se ordena y después se corta**; también se devuelve el total («4 de 5 coinciden»). Sin precorte de candidatos ni aproximaciones.
+  - Claves públicas opacas y estables: la de la fila manual si la hay, si no `md5(key_salt‖id)` de 16 caracteres.
+  - La lista manual **no se toca** al pasar a automático. Al volver: «Volver a mi lista anterior» (solo cambia el modo) o «Convertir la selección actual en lista manual» (sustituye la lista conservando claves y orden).
+  - En automático **no hay** añadir, quitar ni reordenar: las acciones de lista devuelven `catalog_auto` (sin modelo híbrido).
+  - La instantánea de un catálogo manual es **idéntica** a la de 0194 (misma huella; probado con un catálogo creado antes de 0195).
+- **Gestión (X7).** Panel «Zonas, precio y modo»: operación, chips de zonas, precio en € o €/mes, orden, máximo, «Guardar criterios», «Ver qué entraría» y cambio de modo con vista previa de qué entra y qué sale. Buscador manual con los mismos filtros (aquí sin exigir foto), total real, «Añadir» / «Ya está» y «Ver más».
+- **Anuncios de origen (X8).** Tabla `catalog_ads`: un catálogo puede tener varios anuncios y un anuncio varios catálogos.
+  - Se asocian desde **Fichas guardadas (solo lectura)** o pegando el enlace/código de Idealista. El enlace **se analiza, nunca se abre** (`lib/catalogs/ads.ts`).
+  - Nota interna opcional (≤ 200). Sin escrituras en `properties` ni en `idealista_listings`; «Fichas guardadas» no cambia.
+  - Todo pasa por acciones con `withHomeAccess` y por funciones SQL con `catalog_require_owner`; la tabla no tiene permisos para `anon`/`authenticated`.
+  - **El lector público no recibe nada de anuncios** (ni la instantánea ni el contrato los incluyen).
+- **HOME (X8).** Filtros por texto (título o código de anuncio), anuncio de origen, zona, operación, modo y estado (por defecto «Activos»), con recuento «N de M». Cada tarjeta dice el modo, el resumen de criterios y cuántos anuncios tiene.
+- **Medición (X9).**
+  - Un guardado que no cambia lo público (misma huella) se apunta como «sin cambio público», **no cuenta** como ensayo y no espera lectores.
+  - «Sin aviso inmediato» guarda sin avisar al vigilante: mide el camino de un cambio hecho desde la ficha (filas «(vigilante)»).
+  - Se mantienen los casos de la fase 2: render antes del acuse, correlación por versión y huella, lector que falta = fallo. El CSV añade la columna «camino».
+
+## Verificaciones (locales, datos sintéticos, E7)
+
+| Comprobación | Resultado |
+| --- | --- |
+| SQL 0192–0195 (`scripts/sql/test-catalogs-core.sh`, Postgres 16 temporal) | Todos los escenarios en verde, **365 comprobaciones**. Detalle de 0195: <br>• catálogo manual creado antes de 0195: misma huella después; <br>• zonas y alias; criterios inválidos → `invalid_criteria`; <br>• casos de selección: foto, reservada, vendida, archivada, otro país, precio desconocido, duales, «venta y alquiler», desempates; <br>• máximo 24 de 30 candidatas con total 30; <br>• entra y sale sola una vivienda (huella y versión); claves estables; <br>• modo: vista previa, `restore`, `convert`, `mode_unchanged`, acciones de lista → `catalog_auto`; <br>• búsqueda con total y «ya está»; <br>• anuncios: alta por ficha y por código, duplicados, código o nota inválidos, ficha inexistente, quitar; <br>• otro staff, cliente o actor nulo → `forbidden`; `anon`/`authenticated` sin permiso; <br>• 0195 aplicada dos veces, revertida (comprobado lo revertido) y vuelta a aplicar. |
+| Paridad TS ↔ SQL (generada, determinista) | 300 textos de zona y 40 juegos de criterios × 504 propiedades: lista ordenada y total **idénticos** (39 de 40 con resultado, totales hasta 275) |
+| Lint de migraciones | OK |
+| `npm run test:catalogs-public` (en CI) | **130 en verde**: los 111 de PR-A y 19 nuevos (taxonomía y alias, deriva migración ↔ código, criterios, selección, medición «sin cambio público» y «vigilante») |
+| `npm run test:catalogs`, `tsc --noEmit` | En verde |
+| Regresiones (`viewing-collections`, `client-shortlist`, `portal-links`, `smartlink`, `particulares`, `idealista`, `lead-merge`, `zinto-v2`) | Todas en verde |
+| `test:typography` | Las mismas 15 infracciones que en la base, ninguna nueva (fuera de CI) |
+| `/v`, `/s`, `/c`, `/compartir`, `/p`, `lib/mailbox`, `lib/viewing-collections`, `app/seleccion`, `app/api/seleccion`, contrato público | Sin cambios (`git diff`); del lado del lector solo cambia la medición compartida (`lib/catalogs/measurement.ts`, activa únicamente con `?medir=1`) |
+| PR-B en el navegador (Playwright, 1440 y 362 px, `/dev-fixtures`) | **40 en verde**: <br>• HOME: activos por defecto, filtros por modo, anuncio (uno en dos catálogos), código, zona, alquiler, archivados; resumen de criterios en la tarjeta; <br>• gestión: barrio Justicia sin «Chueca» en el selector, € y €/mes, mínimo > máximo y máximo 25 → aviso sin guardar; «Ver qué entraría» = 5 de 5 (Chueca entra por Justicia; fuera la sin foto, la vendida y la sin precio); <br>• buscador: 6 de 6 (incluye la sin foto), «Añadir» → «Ya está» y entra en la lista; <br>• paso a automático con vista previa → «4 de 5 coinciden», sin añadir, flechas ni quitar; «Volver a mi lista anterior» recupera la lista con lo añadido; «Convertir» deja como manual la selección automática en su orden; <br>• anuncios: ficha ya asociada desactivada, asociar con nota, URL ajena → aviso, enlace de Idealista → solo el número, quitar; <br>• 0 desbordes a 1440 y 362 px; sin errores de JS. |
+| Medición sintética 20 × 2 con X9 | **PASA**: 20/20 ensayos, 40/40 resultados, máximo 0,26 s; **5 por el camino del vigilante** y **2 «sin cambio público» apuntados aparte** (no cuentan). **Local y sintético.** |
+| Lector (fase 2), enlace y PR-A en el navegador | 52, 10 y 54 en verde con el código nuevo (dos selectores de prueba ajustados porque el panel nuevo añade otro campo numérico y botones «Quitar …» en los chips de zona) |
+
+No se midió el reparto SSE con 2/10/50 lectores: en `/dev-fixtures` no hay base de datos y el resultado solo mediría el bucle de Node.
+
+## Rendimiento (X6) · ⚠️ decisión pendiente antes del merge
+
+Postgres 16 temporal en este Mac, datos sintéticos (`scripts/sql/perf-catalogs.sh`, 10 vueltas de calentamiento, p50/p95/máx. en ms). Tabla completa en `medidas/perf-pr-b-2026-10-13.tsv`; planes con `EXPLAIN ANALYZE` revisados. **No es producción**: otra máquina, otra carga y otro reparto de zonas.
+
+| Propiedades | Manual: instantánea | Auto: instantánea (p50) | `get_catalog_states` auto ×5 | auto ×20 | mixto 5 + 5 |
+| --- | --- | --- | --- | --- | --- |
+| 2.000 | 0,8 ms (base 0,7) | 5–7 ms | 36 ms (p95 40) | 137 ms (p95 143) | 39 ms |
+| 10.000 | 0,8 ms (base 0,7) | 17–24 ms | 109 ms (p95 151) | 434 ms (p95 774) | 105 ms |
+| 40.000 | 0,9 ms (base 0,8) | 48–86 ms | 374 ms (p95 437) | 1.514 ms (p95 1.697) | 370 ms |
+
+- **Catálogos manuales:** sin cambio medible frente a la base (×20 enlaces: 15–16 ms frente a 12–13 ms).
+- **Catálogos automáticos:** el coste crece con las propiedades **candidatas** (España, sin archivar, disponible o reservada) y con el número de **enlaces automáticos abiertos a la vez**.
+  - Una pasada del vigilante consulta todos los enlaces abiertos, y `poke()` tras un guardado también lanza una pasada completa: el coste afecta a los dos caminos.
+  - El presupuesto provisional de 50 ms (≤ 5 enlaces) **solo se cumple con unas 2.000 propiedades**.
+  - Con 10.000 y 20 enlaces automáticos abiertos, cada pasada (~0,43 s) supera los 300 ms: las pasadas van una detrás de otra y la base trabaja sin pausa mientras haya lectores.
+  - Con 40.000 y 20 enlaces, la pasada (~1,5 s) pone en riesgo D13 (2 s; el peor caso ronda 2 pasadas ≈ 3 s) y roza la ventana de 1,5 s del latido «verificado».
+- Optimización ya aplicada (sin cambiar la semántica, con la paridad en verde tras cada paso): zonas por texto distinto y no por fila, lista de textos válidos en vez de unión por fila, CTE `MATERIALIZED` y foto al final.
+- **No se ha añadido ningún índice global en `properties`** (no aprobado) y no parece que ayudara: casi todas las candidatas cumplen los filtros baratos.
+- **Lo que hace falta de Fabricio:**
+  1. Cuántas propiedades candidatas hay en producción (España, sin archivar, disponible o reservada). Si son del orden de 2.000, el plan sigue como está.
+  2. Si son bastantes más, elegir antes del merge entre: (a) aceptar el coste con pocos enlaces automáticos abiertos a la vez; (b) un plan aparte con una señal fiable de cambio (p. ej. disparadores en `properties`/`property_photos` que marquen los catálogos automáticos afectados), que necesita aprobación. Bajar la frecuencia de comprobación de los automáticos cambiaría D13 y también requiere aprobación.
+
+## Criterios
+
+| Criterio | Estado |
+| --- | --- |
+| Zonas de catálogo con alias y paridad TS/SQL | Demostrado (SQL, paridad, unidades) |
+| Selección automática: filtro completo → orden → máximo, total, entrada y salida | Demostrado en SQL y en local; **pendiente en vivo** |
+| Cambio de modo reversible con vista previa | Demostrado en SQL y en local; **pendiente en vivo** |
+| Anuncios reutilizables y filtros de la HOME | Demostrado en SQL y en local; **pendiente en vivo** |
+| X9 medición con «sin cambio público» y camino del vigilante | Demostrado en local (sintético); **medición en vivo pendiente** |
+| Rendimiento | Medido en local; **decisión pendiente** (ver arriba) |
+
+## Compatibilidad del despliegue y recuperación
+
+- **Tras tu merge:** el despliegue compila, aplica `0195` y después cambia de versión. Mientras tanto, el build anterior funciona con la base nueva:
+  - todos los catálogos siguen en `manual` (valor por defecto), así que añadir, quitar y reordenar funcionan igual;
+  - la instantánea manual conserva todas las claves y la huella de 0194;
+  - las firmas de 0192–0194 no cambian.
+- **Si el despliegue vuelve al build anterior**, **el esquema no se revierte solo**. `0195` queda aplicada, lo que es compatible mientras ningún catálogo esté en automático. Si ya hay alguno en automático:
+  - su lector sigue mostrando la selección automática, porque la calcula SQL;
+  - la gestión del build anterior enseña la lista manual guardada y, al intentar editarla, da un error genérico (`catalog_auto`).
+  - Para volver a manual, usa el build nuevo o el rollback.
+- **Revertir de verdad:**
+  - otro PR con `git revert` del merge;
+  - `rollback-0195.sql`, que ejecuta una persona y que **borra criterios, modo y anuncios asociados**. Los catálogos automáticos vuelven a su lista manual (la anterior, o la convertida si se convirtió);
+  - después, quitar la fila de `schema_migrations`.
+  - Probado en el Postgres temporal.
+
+## QA en vivo de Fabricio (tras el merge y la decisión de rendimiento)
+
+1. **HOME:** por defecto solo activos. Prueba cada filtro (texto, anuncio, zona, operación, modo, estado) y que el recuento «N de M» cuadra.
+2. **Filtros en manual:** en un catálogo de QA, elige Salamanca + Justicia, venta, un rango de precio, y pulsa «Ver qué entraría». Comprueba que un piso de Chueca entra por Justicia y que no entran los sin foto, vendidos o sin precio.
+3. **Buscador:** con los mismos filtros, añade una vivienda; pasa a «Ya está» y aparece en la lista.
+4. **Avisos:** mínimo mayor que máximo, o máximo 25 → aviso y no se guarda.
+5. **Paso a automático:** «Pasar a automático…» muestra qué entra y qué sale; confirma. La lista muestra «N de M coinciden» y no se puede añadir, quitar ni reordenar.
+6. **Entrada y salida solas:** con el lector abierto, cambia desde la ficha de una propiedad algo que la haga entrar (p. ej. el precio o la primera foto) y otra que la haga salir (vendida). El lector se actualiza solo.
+7. **Vuelta a manual:** prueba «Volver a mi lista anterior» (vuelve tu lista) y, en otro momento, «Convertir la selección actual en lista manual» (queda la selección en su orden).
+8. **Anuncios:** asocia una ficha de «Fichas guardadas» con nota, pega un enlace de Idealista, intenta un enlace de otra web (aviso) y quita uno. El mismo anuncio puede ir en dos catálogos y la HOME los encuentra por él. Comprueba que el cliente no ve nada de anuncios en el lector.
+9. **D13:** 20 ensayos × 2 lectores con `?medir=1`, incluidos algunos con «Sin aviso inmediato» (camino del vigilante). Guardar criterios en manual debe aparecer como «sin cambio público» y no contar.
+10. Al terminar, revoca el enlace de QA.
+
+## Pendiente o no demostrado
+
+- La decisión de rendimiento de arriba (cifra de producción y, si hace falta, una opción aprobada).
+- Toda la QA en vivo, incluida la medición de 2 s (de esta entrega y de las anteriores).
+- PR-C empieza tras tu merge y la QA de B.
+
+## PR, CI y merge (PR-B)
+
+- **PR-B:** [#313](https://github.com/Bcousino890/smartbc/pull/313), `fabri/bcp-01-amp-b` → `main`.
+- **`origin/main` antes del push:** `f7bca42…`; `0195` libre en `main` y en los 28 PR abiertos.
+- **CI del último commit:** se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio **después de la decisión de rendimiento**. Puede desplegar y aplicar `0195`; el rollback del build no deshace el esquema.
+- Se conservan el worktree y la rama.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.

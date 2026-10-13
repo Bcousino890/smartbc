@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   HomeMeter,
   MEASURE_CHANNEL,
@@ -20,8 +20,17 @@ export interface HomeMeasure {
   enabled: boolean;
   busy: boolean;
   begin: () => { trial: string; tStart: number } | null;
-  complete: (t: { trial: string; tStart: number }, label: string, fingerprint: string | null | undefined) => void;
+  complete: (
+    t: { trial: string; tStart: number },
+    label: string,
+    fingerprint: string | null | undefined,
+    publicChange?: boolean,
+  ) => void;
   meter: HomeMeter | null;
+  /** «Sin aviso inmediato»: los guardados no avisan al vigilante y el cambio
+   *  llega por su pasada (camino de los cambios hechos desde otras pantallas). */
+  skipNotify: boolean;
+  setSkipNotify: (v: boolean) => void;
 }
 
 function randomId(): string {
@@ -32,6 +41,9 @@ export function useHomeMeasure(enabled: boolean, catalogKey: string | null): Hom
   const meterRef = useRef<HomeMeter | null>(null);
   const chanRef = useRef<BroadcastChannel | null>(null);
   const [, force] = useReducer((x: number) => x + 1, 0);
+  const [skipNotify, setSkipNotify] = useState(false);
+  const skipRef = useRef(false);
+  skipRef.current = skipNotify;
 
   useEffect(() => {
     if (!enabled || !catalogKey || typeof BroadcastChannel === "undefined") return;
@@ -64,12 +76,21 @@ export function useHomeMeasure(enabled: boolean, catalogKey: string | null): Hom
   }, []);
 
   const complete = useCallback(
-    (t: { trial: string; tStart: number }, label: string, fingerprint: string | null | undefined) => {
+    (t: { trial: string; tStart: number }, label: string, fingerprint: string | null | undefined, publicChange = true) => {
       const tSaved = sharedClock();
       const meter = meterRef.current;
       if (!meter || !fingerprint) return;
-      const msg = meter.saved({ trial: t.trial, label, fingerprint, tStart: t.tStart, tSaved });
-      chanRef.current?.postMessage(msg);
+      const watcherPath = skipRef.current;
+      const msg = meter.saved({
+        trial: t.trial,
+        label: watcherPath ? `${label} (vigilante)` : label,
+        fingerprint,
+        tStart: t.tStart,
+        tSaved,
+        changed: publicChange,
+        watcherPath,
+      });
+      if (msg) chanRef.current?.postMessage(msg);
       force();
     },
     [],
@@ -81,6 +102,8 @@ export function useHomeMeasure(enabled: boolean, catalogKey: string | null): Hom
     begin,
     complete,
     meter: meterRef.current,
+    skipNotify: enabled && skipNotify,
+    setSkipNotify,
   };
 }
 
@@ -121,9 +144,19 @@ export function MeasurePanel({ measure, hasShare }: { measure: HomeMeasure; hasS
         Lectores abiertos con ?medir=1: <strong>{readers.length}</strong> (hacen falta {REQUIRED_READERS})
         {measure.busy ? " · esperando a los lectores…" : ""}
       </p>
+      <label className="flex items-center gap-2 text-xs text-amber-900">
+        <input
+          type="checkbox"
+          checked={measure.skipNotify}
+          onChange={(e) => measure.setSkipNotify(e.target.checked)}
+          data-testid="measure-skip-notify"
+        />
+        Sin aviso inmediato (mide el camino del vigilante, como un cambio hecho desde la ficha)
+      </label>
       <p className="text-xs" data-testid="measure-summary">
         Ensayos {s.trials}/{REQUIRED_TRIALS} · resultados {s.results}/{REQUIRED_TRIALS * REQUIRED_READERS} · fallos{" "}
-        {s.failures} · máximo {s.maxMs === null ? "—" : formatLatency(s.maxMs)} ·{" "}
+        {s.failures} · máximo {s.maxMs === null ? "—" : formatLatency(s.maxMs)} · sin cambio público {s.unchanged}{" "}
+        (no cuentan) · por el vigilante {s.watcherTrials} ·{" "}
         <strong className={s.pass ? "text-emerald-700" : s.complete ? "text-red-700" : ""}>
           {s.pass ? "PASA" : s.complete ? "NO PASA" : "en curso"}
         </strong>
@@ -147,7 +180,11 @@ export function MeasurePanel({ measure, hasShare }: { measure: HomeMeasure; hasS
                 <tr key={row.trial} className="border-t border-amber-100">
                   <td className="px-2 py-1">{rows.length - i}</td>
                   <td className="px-2 py-1">{row.label}</td>
-                  {[0, 1].map((j) => {
+                  {row.noChange ? (
+                    <td colSpan={2} className="px-2 py-1 text-amber-900/70">
+                      sin cambio público (no cuenta)
+                    </td>
+                  ) : [0, 1].map((j) => {
                     const r = row.expected[j];
                     const v = r ? row.results[r] : undefined;
                     const text = !r ? "falta lector" : v === undefined ? "…" : v === "missing" ? "sin respuesta" : formatLatency(v.latencyMs);

@@ -6,7 +6,17 @@
 // isCatalogFixtureMode().
 // ============================================================================
 
+import { DEFAULT_CRITERIA, type CatalogCriteria } from "./criteria";
 import type { CatalogDetail, CatalogSummary } from "./types";
+
+const SAL_JUS: CatalogCriteria = {
+  operation: "sale",
+  zones: [{ kind: "district", name: "Salamanca" }, { kind: "barrio", name: "Justicia" }],
+  price_min: 700000,
+  price_max: 1500000,
+  sort: "price_asc",
+  max: 12,
+};
 
 /** Imagen sintética (edificio esquemático) como data URI SVG. */
 export function syntheticPhoto(hue: number, w = 600, h = 800, label = "Foto de prueba"): string {
@@ -26,24 +36,24 @@ export const fixtureCatalogs: CatalogSummary[] = [
   {
     id: "f0000000-0000-0000-0000-000000000001", title: "Salamanca y Chamberí", intro: "Cuatro viviendas elegidas para una búsqueda concreta.",
     status: "active", version: 9, createdAt: "2026-10-01T09:00:00Z", updatedAt: now, itemCount: 4,
-    numberLabel: "nº 01", edition: "Otoño 2026", coverPhotoUrl: syntheticPhoto(28, 600, 800, "Vertical"), contactName: "Fabricio Andree",
+    numberLabel: "nº 01", edition: "Otoño 2026", coverPhotoUrl: syntheticPhoto(28, 600, 800, "Vertical"), contactName: "Fabricio Andree", mode: "manual", criteria: { ...DEFAULT_CRITERIA, operation: "sale", zones: [{ kind: "district", name: "Salamanca" }] }, ads: [{ id: "e3000000-0000-0000-0000-000000000001", reference: "BC-1501", title: "Ático con terraza en Goya", code: "108123456", note: "Clientes de Londres" }],
   },
   {
     id: "f0000000-0000-0000-0000-000000000002",
     title: "Áticos con terraza para una familia que se traslada desde Londres en primavera",
     intro: "Título largo a propósito: comprueba que la portada recorta sin desbordar.",
     status: "active", version: 3, createdAt: "2026-10-05T09:00:00Z", updatedAt: "2026-10-12T17:00:00Z", itemCount: 12,
-    numberLabel: "nº 02", edition: "Otoño 2026", coverPhotoUrl: syntheticPhoto(205, 900, 600, "Horizontal"), contactName: "Laura Méndez",
+    numberLabel: "nº 02", edition: "Otoño 2026", coverPhotoUrl: syntheticPhoto(205, 900, 600, "Horizontal"), contactName: "Laura Méndez", mode: "auto", criteria: SAL_JUS, ads: [{ id: "e3000000-0000-0000-0000-000000000002", reference: null, title: null, code: "108999111", note: null }, { id: "e3000000-0000-0000-0000-000000000003", reference: "BC-1501", title: "Ático con terraza en Goya", code: "108123456", note: null }],
   },
   {
     id: "f0000000-0000-0000-0000-000000000003", title: "Inversores · Chamberí", intro: null,
     status: "active", version: 1, createdAt: "2026-10-12T09:00:00Z", updatedAt: "2026-10-12T09:00:00Z", itemCount: 0,
-    numberLabel: "nº 03", edition: "Otoño 2026", coverPhotoUrl: null, contactName: "Fabricio Andree",
+    numberLabel: "nº 03", edition: "Otoño 2026", coverPhotoUrl: null, contactName: "Fabricio Andree", mode: "manual", criteria: { ...DEFAULT_CRITERIA, operation: "rent", price_max: 4000 }, ads: [],
   },
   {
     id: "f0000000-0000-0000-0000-000000000004", title: "QA — no compartir", intro: "Catálogo de prueba.",
     status: "archived", version: 6, createdAt: "2026-09-20T09:00:00Z", updatedAt: "2026-10-02T09:00:00Z", itemCount: 3,
-    numberLabel: "nº 04", edition: "Otoño 2026", coverPhotoUrl: syntheticPhoto(145, 600, 800, "Vertical"), contactName: "Fabricio Andree",
+    numberLabel: "nº 04", edition: "Otoño 2026", coverPhotoUrl: syntheticPhoto(145, 600, 800, "Vertical"), contactName: "Fabricio Andree", mode: "manual", criteria: { ...DEFAULT_CRITERIA }, ads: [],
   },
 ];
 
@@ -57,6 +67,11 @@ export const fixtureCatalogDetail: CatalogDetail = {
   updatedAt: now,
   edition: "Otoño 2026",
   contact: { name: "Fabricio Andree", phone: "+34641457123", role: "asesor" },
+  mode: "manual",
+  criteria: { ...DEFAULT_CRITERIA, operation: "sale", zones: [{ kind: "district", name: "Salamanca" }] },
+  autoTotal: null,
+  manualCount: 4,
+  ads: [{ id: "e3000000-0000-0000-0000-000000000001", reference: "BC-1501", title: "Ático con terraza en Goya", code: "108123456", note: "Clientes de Londres" }],
   items: [
     { propertyId: "e0000000-0000-0000-0000-000000000001", position: 100, slug: "atico-demo", bcReference: "BC-9001", title: "Ático con terraza sobre los tejados de Jerónimos", zone: "Jerónimos, Madrid", status: "available", operation: "Venta", price: "1.450.000 €", bedrooms: 3, bathrooms: 2, squareMeters: 142, photoUrl: syntheticPhoto(28, 320, 240, "1") },
     { propertyId: "e0000000-0000-0000-0000-000000000002", position: 200, slug: "piso-demo", bcReference: "BC-9002", title: "Piso señorial con galería acristalada, molduras originales y suelos de madera restaurados en la calle Almagro", zone: "Almagro, Madrid", status: "available", operation: "Venta y alquiler", price: "Venta 2.100.000 € · Alquiler 6.800 €/mes", bedrooms: 4, bathrooms: 3, squareMeters: 186, photoUrl: syntheticPhoto(205, 240, 320, "2") },

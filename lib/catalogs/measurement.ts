@@ -146,10 +146,20 @@ export interface TrialRow {
   expected: string[];
   results: Record<string, { latencyMs: number; tPainted: number } | "missing">;
   done: boolean;
+  /** El guardado no cambió nada de lo que ve el lector (misma huella antes y
+   *  después): se anota aparte y NO cuenta como acierto ni como fallo. */
+  noChange?: boolean;
+  /** Medido sin aviso inmediato: el cambio llegó por el vigilante (≤ 300 ms),
+   *  el mismo camino que un cambio hecho desde otra pantalla. */
+  watcherPath?: boolean;
 }
 
 export interface MeterSummary {
   trials: number;
+  /** Guardados sin cambio público (no cuentan). */
+  unchanged: number;
+  /** Ensayos medidos por el camino del vigilante («sin aviso inmediato»). */
+  watcherTrials: number;
   results: number;
   failures: number;
   maxMs: number | null;
@@ -185,10 +195,26 @@ export class HomeMeter {
   }
 
   /** Registra un guardado confirmado y devuelve el mensaje a publicar. */
-  saved(input: { trial: string; label: string; fingerprint: string; tStart: number; tSaved: number }): TrialMsg {
+  saved(input: {
+    trial: string;
+    label: string;
+    fingerprint: string;
+    tStart: number;
+    tSaved: number;
+    /** false = misma huella antes y después (sin cambio público). */
+    changed?: boolean;
+    watcherPath?: boolean;
+  }): TrialMsg | null {
+    const { changed = true, watcherPath = false, ...base } = input;
+    if (!changed) {
+      // Nada que medir: el lector no tiene nada nuevo que pintar. Se anota
+      // para que se vea, sin esperar resultados y sin contarlo.
+      this.rows.push({ ...base, expected: [], results: {}, done: true, noChange: true, watcherPath });
+      return null;
+    }
     const expected = this.readers(input.tSaved);
-    this.rows.push({ ...input, expected, results: {}, done: expected.length === 0 });
-    return { type: "trial", catalog: this.catalog, ...input };
+    this.rows.push({ ...base, expected, results: {}, done: expected.length === 0, watcherPath });
+    return { type: "trial", catalog: this.catalog, ...base };
   }
 
   onResult(msg: ResultMsg): boolean {
@@ -222,7 +248,8 @@ export class HomeMeter {
     let results = 0;
     let failures = 0;
     let maxMs: number | null = null;
-    for (const row of this.rows) {
+    const counted = this.rows.filter((r) => !r.noChange);
+    for (const row of counted) {
       if (row.expected.length < REQUIRED_READERS) failures += REQUIRED_READERS - row.expected.length;
       for (const r of row.expected) {
         const v = row.results[r];
@@ -236,9 +263,11 @@ export class HomeMeter {
         if (v.latencyMs > TARGET_MS) failures++;
       }
     }
-    const complete = this.rows.filter((r) => r.done).length >= REQUIRED_TRIALS;
+    const complete = counted.filter((r) => r.done).length >= REQUIRED_TRIALS;
     return {
-      trials: this.rows.length,
+      trials: counted.length,
+      unchanged: this.rows.length - counted.length,
+      watcherTrials: counted.filter((r) => r.watcherPath).length,
       results,
       failures,
       maxMs,
@@ -248,8 +277,12 @@ export class HomeMeter {
   }
 
   csv(): string {
-    const lines = ["ensayo,etiqueta,huella,lector,t_guardado_ms,t_pintado_ms,latencia_ms,resultado"];
+    const lines = ["ensayo,etiqueta,huella,camino,lector,t_guardado_ms,t_pintado_ms,latencia_ms,resultado"];
     for (const row of this.rows) {
+      if (row.noChange) {
+        lines.push([row.trial, JSON.stringify(row.label), row.fingerprint, row.watcherPath ? "vigilante" : "aviso", "", row.tSaved.toFixed(1), "", "", "sin cambio público (no cuenta)"].join(","));
+        continue;
+      }
       const readers = row.expected.length ? row.expected : ["(sin lectores)"];
       for (const r of readers) {
         const v = row.results[r];
@@ -259,6 +292,7 @@ export class HomeMeter {
             row.trial,
             JSON.stringify(row.label),
             row.fingerprint,
+            row.watcherPath ? "vigilante" : "aviso",
             r,
             row.tSaved.toFixed(1),
             ok ? v.tPainted.toFixed(1) : "",
