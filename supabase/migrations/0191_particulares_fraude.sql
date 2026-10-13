@@ -53,9 +53,13 @@ CREATE TABLE IF NOT EXISTS fraud_contacts (
 ALTER TABLE fraud_contacts ENABLE ROW LEVEL SECURITY;      -- sin políticas: solo el service role
 
 -- ---------------------------------------------------------------- helpers puros
--- Minúsculas y arroba normal: la camuflada (﹫ U+FE6B, ＠ U+FF20) es justo lo que usa el estafador.
+-- Minúsculas y arroba/punto normales: el estafador camufla la arroba (﹫ U+FE6B, ＠ U+FF20) o la escribe
+-- con palabras («usuario (arroba) hotmail (punto) com», «usuario [at] …»).
 CREATE OR REPLACE FUNCTION fraud_norm_text(t text) RETURNS text LANGUAGE sql IMMUTABLE AS
-$$ SELECT lower(translate(coalesce(t, ''), '﹫＠', '@@')) $$;
+$$ SELECT regexp_replace(
+            regexp_replace(lower(translate(coalesce(t, ''), '﹫＠', '@@')),
+              '([a-z0-9._%+-]{2,})\s*(?:[\(\[\{]\s*(?:arroba|at)\s*[\)\]\}]|\s+arroba\s+)\s*', '\1@', 'g'),
+            '\s*(?:[\(\[\{]\s*punto\s*[\)\]\}]|\s+punto\s+)\s*', '.', 'g') $$;
 
 -- Correos de un texto, también los escritos «usuario ﹫ hotmail. com» o «usuario@hotmail com».
 CREATE OR REPLACE FUNCTION fraud_emails(t text) RETURNS text[] LANGUAGE sql IMMUTABLE AS
@@ -106,8 +110,11 @@ BEGIN
       reasons := array_append(reasons, 'telefono_marcado'); st := 'suspect';
     END IF;
     IF NEW.contact_emails IS NOT NULL AND EXISTS (SELECT 1 FROM fraud_contacts c
-          WHERE c.kind = 'email' AND c.value = ANY (NEW.contact_emails) AND c.status IN ('confirmed', 'suspect')) THEN
-      reasons := array_append(reasons, 'correo_marcado'); st := 'suspect';
+          WHERE c.kind = 'email' AND c.value = ANY (NEW.contact_emails) AND c.status = 'confirmed') THEN
+      reasons := array_append(reasons, 'correo_marcado'); st := 'confirmed';     -- el correo es del estafador
+    ELSIF NEW.contact_emails IS NOT NULL AND EXISTS (SELECT 1 FROM fraud_contacts c
+          WHERE c.kind = 'email' AND c.value = ANY (NEW.contact_emails) AND c.status = 'suspect') THEN
+      reasons := array_append(reasons, 'correo_marcado'); st := coalesce(st, 'suspect');
     END IF;
     -- pruebas propias
     IF NEW.contact_emails IS NOT NULL AND EXISTS (SELECT 1 FROM particulares o
@@ -181,10 +188,13 @@ BEGIN
     WHERE p.phone = NEW.value AND p.fraud_status IS NULL AND coalesce(p.fraud_manual, '') <> 'ok'
       AND coalesce(p.advertiser_type, 'unknown') <> 'professional';
   ELSE
-    UPDATE particulares p SET fraud_status = 'suspect', fraud_flagged_at = now(),
-           fraud_reasons = array_append(coalesce(p.fraud_reasons, '{}'), 'correo_marcado')
-    WHERE p.contact_emails @> ARRAY[NEW.value] AND p.fraud_status IS NULL AND coalesce(p.fraud_manual, '') <> 'ok'
-      AND coalesce(p.advertiser_type, 'unknown') <> 'professional';
+    UPDATE particulares p SET fraud_status = CASE WHEN NEW.status = 'confirmed' THEN 'confirmed' ELSE 'suspect' END,
+           fraud_flagged_at = coalesce(p.fraud_flagged_at, now()),
+           fraud_reasons = CASE WHEN 'correo_marcado' = ANY (coalesce(p.fraud_reasons, '{}')) THEN p.fraud_reasons
+                                ELSE array_append(coalesce(p.fraud_reasons, '{}'), 'correo_marcado') END
+    WHERE p.contact_emails @> ARRAY[NEW.value]
+      AND (p.fraud_status IS NULL OR (NEW.status = 'confirmed' AND p.fraud_status = 'suspect'))
+      AND coalesce(p.fraud_manual, '') <> 'ok' AND coalesce(p.advertiser_type, 'unknown') <> 'professional';
   END IF;
   UPDATE fraud_contacts c SET listings_count = (
       SELECT count(*) FROM particulares p WHERE (NEW.kind = 'phone' AND p.phone = NEW.value)
@@ -218,8 +228,8 @@ BEGIN
    WHERE (kind = 'phone' AND value = r.phone) OR (kind = 'email' AND value = ANY (coalesce(r.contact_emails, '{}')));
   -- los anuncios que solo estaban marcados por contagio de esos contactos se liberan
   UPDATE particulares p SET fraud_status = NULL, fraud_reasons = NULL, fraud_flagged_at = NULL
-   WHERE p.fraud_status = 'suspect' AND p.fraud_reasons <@ ARRAY['telefono_marcado', 'correo_marcado']
-     AND coalesce(p.fraud_manual, '') <> 'fraud'
+   WHERE p.fraud_status IN ('suspect', 'confirmed') AND p.fraud_reasons <@ ARRAY['telefono_marcado', 'correo_marcado']
+     AND p.fraud_removed_at IS NULL AND coalesce(p.fraud_manual, '') <> 'fraud'
      AND ((p.phone = r.phone AND r.phone IS NOT NULL) OR p.contact_emails && coalesce(r.contact_emails, '{}'));
 END $$;
 
@@ -232,6 +242,13 @@ BEGIN
    WHERE coalesce(advertiser_type, 'unknown') <> 'professional';
   RETURN (SELECT count(*) FROM particulares WHERE fraud_status IS NOT NULL);
 END $$;
+
+-- Correos que el equipo ya conoce como estafa (se siembran antes del análisis inicial): todos los
+-- anuncios que los usen quedan confirmados, en cualquier portal, con cualquier variante de escritura.
+INSERT INTO fraud_contacts (kind, value, status, reason) VALUES
+  ('email', 'rodrimarob@hotmail.com',   'confirmed', 'marcado_a_mano'),
+  ('email', 'isabeltoro88@hotmail.com', 'confirmed', 'marcado_a_mano')
+ON CONFLICT (kind, value) DO NOTHING;
 
 -- Análisis inicial de lo que ya hay.
 SELECT particulares_fraud_rescan();
