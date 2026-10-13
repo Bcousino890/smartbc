@@ -37,12 +37,20 @@ import { SyncHub, HUB_CHECK_MS, HUB_HEARTBEAT_MS, type HubEvent, type TokenState
 import { SyncClient, type EventSourceLike, type FetchStateResult } from "../lib/catalogs/sync-client.ts";
 import {
   applyUpdate,
+  goTo,
+  itemParts,
+  journeyGroups,
+  journeyTruncated,
+  openingFolio,
+  pageIndex,
+  setLayout,
   initialState,
   openGallery,
   pagesOf,
   step,
   updateDelay,
   PAGE_TURN_MS,
+  REMOVED_LAST_NOTICE,
   REMOVED_NOTICE,
 } from "../lib/catalogs/reader-state.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
@@ -171,6 +179,9 @@ function pubCatalog(keys: string[], title = "Catálogo"): PublicCatalog {
       floor: "Planta · sin dato",
       description: null,
       features: [],
+      lead: null,
+      highlights: [],
+      sections: [],
       photos: [{ src: `/p/${key}/0.webp`, width: null, height: null, orientation: "unknown" as const }, { src: `/p/${key}/1.webp`, width: null, height: null, orientation: "unknown" as const }],
       coverIndex: 0,
     })),
@@ -828,19 +839,19 @@ async function liveTests() {
 
   section("T8 · estado del lector (D12)");
   {
-    const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b" });
+    const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b", part: "open" });
     check("páginas: portada, índice, 3 viviendas, cierre", pagesOf(s0.catalog).length === 6);
     const s1 = applyUpdate(s0, pubState("B", ["a", "c"]));
     check("se quita la que leo → pasa a la siguiente", s1.page.kind === "item" && s1.page.key === "c" && s1.notice === REMOVED_NOTICE);
-    const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c" }), pubState("B", ["a", "b"]));
+    const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c", part: "open" }), pubState("B", ["a", "b"]));
     check("se quita la última → vuelve al índice", s2.page.kind === "index" && !!s2.notice);
-    const s3 = applyUpdate(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a" }), pubState("B", []));
+    const s3 = applyUpdate(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a", part: "open" }), pubState("B", []));
     check("no queda ninguna → índice vacío", s3.page.kind === "index" && s3.catalog.items.length === 0);
-    const s4 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "a" }), pubState("B", ["c", "b", "a"]));
+    const s4 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "a", part: "open" }), pubState("B", ["c", "b", "a"]));
     check("reordenar no me mueve de la vivienda", s4.page.kind === "item" && s4.page.key === "a" && s4.notice === null);
-    const s5 = applyUpdate(initialState(pubState("A", ["a", "b", "c", "d"]), { kind: "item", key: "b" }), pubState("B", ["a", "d"]));
+    const s5 = applyUpdate(initialState(pubState("A", ["a", "b", "c", "d"]), { kind: "item", key: "b", part: "open" }), pubState("B", ["a", "d"]));
     check("se quitan la actual y la siguiente → la siguiente que queda", s5.page.kind === "item" && s5.page.key === "d");
-    const g0 = openGallery(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a" }), "a", 1);
+    const g0 = openGallery(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a", part: "open" }), "a", 1);
     const g1 = applyUpdate(g0, pubState("B", ["a", "b"].concat("z")));
     check("galería abierta: cambio aplicado al momento y conserva la foto", g1.gallery?.key === "a" && g1.gallery.photo === 1 && g1.fingerprint === "B");
     const g2 = applyUpdate(g0, pubState("C", ["b"]));
@@ -848,6 +859,61 @@ async function liveTests() {
     const same = applyUpdate(s0, pubState("A", ["a", "b", "c"], "2100-01-01T00:00:00Z"));
     check("misma huella con nueva caducidad → solo cambia la caducidad", same.page === s0.page && same.expiresAt.startsWith("2100"));
     check("paso de página en el borde no se sale", step(initialState(pubState("A", ["a"])), -1).page.kind === "cover");
+  }
+
+  section("Z6 · lector por partes (doble página) y D12 desde cualquier parte");
+  {
+    const sec = (n: number) => Array.from({ length: n }, (_, i) => ({ heading: null, text: `Sección ${i + 1}.`, photo: i % 2 ? null : 1 }));
+    const withParts = (fp: string, spec: Array<[string, number, boolean]>): PublicCatalogState => {
+      const st = pubState(fp, spec.map(([k]) => k));
+      st.catalog.items = st.catalog.items.map((it, i) => ({
+        ...it,
+        sections: sec(spec[i][1]),
+        description: spec[i][2] ? "Texto completo." : null,
+      }));
+      return st;
+    };
+    const items = (st: PublicCatalogState) => st.catalog.items;
+    const A = withParts("A", [["a", 2, true], ["b", 5, true], ["c", 0, false]]);
+    check("partes: a = apertura + 2 recorridos + detalle", itemParts(items(A)[0], "spread").join() === "open,j1,j2,detail");
+    check("partes: 5 secciones → 3 dobles páginas de dos (máx. 3)", journeyGroups(items(A)[1]).map((g) => g.length).join() === "2,2,1" && itemParts(items(A)[1], "spread").length === 5);
+    const many = { ...items(A)[1], sections: sec(9) };
+    check("9 secciones → 3 dobles páginas y el resto en la descripción", journeyGroups(many).length === 3 && journeyTruncated(many));
+    check("solo datos sin descripción ni características → solo apertura", itemParts(items(A)[2], "spread").join() === "open");
+    check("una página → una hoja por vivienda", itemParts(items(A)[1], "single").join() === "open" && pagesOf(A.catalog, "single").length === 6);
+    check("folios: portada 1, índice 2, a abre en 3, b en 7, c en 12, cierre 13",
+      openingFolio(A.catalog, "a", "spread") === 3 && openingFolio(A.catalog, "b", "spread") === 7 && openingFolio(A.catalog, "c", "spread") === 12 && pagesOf(A.catalog, "spread").length === 13);
+    check("folios en una página: a 3, b 4, c 5", [openingFolio(A.catalog, "a", "single"), openingFolio(A.catalog, "b", "single"), openingFolio(A.catalog, "c", "single")].join() === "3,4,5");
+
+    let s = initialState(A, { kind: "item", key: "a", part: "open" }, "spread");
+    s = step(s, 1);
+    check("→ desde la apertura va al primer recorrido", s.page.kind === "item" && s.page.part === "j1");
+    s = step(step(s, 1), 1);
+    check("→ recorre hasta el detalle", s.page.kind === "item" && s.page.key === "a" && s.page.part === "detail");
+    s = step(s, 1);
+    check("→ desde el detalle abre la siguiente vivienda", s.page.kind === "item" && s.page.key === "b" && s.page.part === "open");
+
+    for (const part of ["open", "j1", "j2", "detail"] as const) {
+      const r = applyUpdate(initialState(A, { kind: "item", key: "a", part }, "spread"), withParts("B", [["b", 5, true], ["c", 0, false]]));
+      check(`D12 desde «${part}» → apertura de la siguiente con aviso`, r.page.kind === "item" && r.page.key === "b" && r.page.part === "open" && r.notice === REMOVED_NOTICE);
+    }
+    const lastGone = applyUpdate(initialState(A, { kind: "item", key: "c", part: "open" }, "spread"), withParts("B", [["a", 2, true], ["b", 5, true]]));
+    check("D12 desde la última → índice", lastGone.page.kind === "index" && lastGone.notice === REMOVED_LAST_NOTICE);
+    const fromJourney = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", []));
+    check("D12 sin viviendas desde un recorrido → índice vacío", fromJourney.page.kind === "index" && fromJourney.catalog.items.length === 0);
+
+    const shorter = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", [["a", 2, true], ["b", 1, true], ["c", 0, false]]));
+    check("el recorrido se acorta → se queda en la última parte que existe antes", shorter.page.kind === "item" && shorter.page.key === "b" && shorter.page.part === "j1" && shorter.notice === null);
+    const noDetail = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withParts("B", [["a", 0, false], ["b", 5, true], ["c", 0, false]]));
+    check("desaparece el detalle → apertura de la misma vivienda", noDetail.page.kind === "item" && noDetail.page.key === "a" && noDetail.page.part === "open");
+    const moved = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), withParts("B", [["c", 0, false], ["b", 5, true], ["a", 2, true]]));
+    check("reordenar mantiene vivienda y parte", moved.page.kind === "item" && moved.page.key === "b" && moved.page.part === "j2" && moved.notice === null);
+    check("reordenar cambia el folio de la parte", pageIndex(moved.catalog, moved.page, "spread") + 1 === 6);
+
+    const turned = setLayout(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), "single");
+    check("pasar a una página conserva la vivienda (su hoja)", turned.page.kind === "item" && turned.page.key === "b" && turned.page.part === "open");
+    const jump = goTo(initialState(A, { kind: "cover" }, "spread"), { kind: "item", key: "c", part: "detail" });
+    check("ir a una parte que no existe → la anterior que existe", jump.page.kind === "item" && jump.page.part === "open");
   }
   {
     const d1 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });

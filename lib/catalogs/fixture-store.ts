@@ -22,6 +22,9 @@ export const FIXTURE_TOKENS = {
   max: "fixtureMaxToken0000000000006",
   // C2: recorrido editorial (texto del catálogo, historia vigente y solo datos).
   journey: "fixtureJourneyToken000000007",
+  // C2: 12 y 24 viviendas con los cuatro niveles mezclados y textos largos.
+  journey12: "fixtureJourney12Token0000008",
+  journey24: "fixtureJourney24Token0000009",
 } as const;
 
 // Títulos como los de las fichas reales: varios ocupan dos líneas en el índice.
@@ -168,7 +171,10 @@ async function seed(): Promise<Map<string, Share>> {
     "El principal tiene vestidor y baño en suite con ducha de obra y doble lavabo.",
     "La finca, de principios del siglo pasado, tiene portería, ascensor y una escalera de madera restaurada.",
     "El barrio reúne mercado, colegios y comercio de toda la vida a pocos minutos a pie.",
-  ].join(" ").repeat(2).trim();
+  ].join(" ");
+  // Texto largo (tres párrafos): el recorrido llena sus tres dobles páginas y
+  // lo que no cabe sigue íntegro en la descripción completa.
+  const JOURNEY_LONG = [JOURNEY_TEXT, JOURNEY_TEXT, JOURNEY_TEXT].join("\n\n");
   const jStoryItem = item({
     key: "fxJourney00002", slug: "fx-journey-2", title: "Ático con terraza y vistas sobre el parque",
     subzone: "Retiro", price: 1890000, bedrooms: 3, bathrooms: 2, square_meters: 168,
@@ -204,12 +210,39 @@ async function seed(): Promise<Map<string, Share>> {
         "Piso señorial en Almagro. Texto del portal que no se usa porque manda el texto del catálogo.",
         ["Ascensor", "Portero físico", "Calefacción central"],
       )),
-      text: { b: JOURNEY_TEXT, l: "Luz por tres fachadas y una finca de principios de siglo, a un paso de Alonso Martínez.", h: ["Ascensor", "Portero físico"] },
+      text: { b: JOURNEY_LONG, l: "Luz por tres fachadas y una finca de principios de siglo, a un paso de Alonso Martínez.", h: ["Ascensor", "Portero físico"] },
     },
     jStory,
     item({ key: "fxJourney00003", slug: "fx-journey-3", title: "Estudio sin descripción", subzone: "Lavapiés", price: 320000, bedrooms: 1, bathrooms: 1, square_meters: 42, photos: photos(300, 2, "h") }),
   ];
+  // 12/24: texto del catálogo al máximo (6000), historia, limpia larga y solo datos.
+  const MAX_TEXT = (() => {
+    let t = "";
+    while (t.length + JOURNEY_TEXT.length + 2 <= 6000) t += (t ? "\n\n" : "") + JOURNEY_TEXT;
+    return t;
+  })();
+  const journeySeries = async (n: number, prefix: string): Promise<InternalItem[]> => {
+    const out: InternalItem[] = [];
+    for (let i = 0; i < n; i++) {
+      const kind = i % 4;
+      const base = item({
+        key: `${prefix}${String(i).padStart(6, "0")}`, slug: `fx-${prefix}-${i}`,
+        title: n === 24 && i === n - 1 ? LONG_TITLE : `${["Piso con texto propio", "Ático con historia", "Piso con descripción", "Estudio solo con datos"][kind]} en ${STREETS[i % STREETS.length]}`,
+        subzone: i % 3 ? "Salamanca" : "Goya", price: 900000 + i * 15000, status: i === 5 ? "reserved" : "available",
+        bedrooms: (i % 4) + 1, bathrooms: (i % 3) + 1, square_meters: 70 + i * 6, photos: photos(40 + i * 11, (i % 5) + 2, i % 2 ? "mix" : "h"),
+      });
+      if (kind === 0) out.push({ ...(await withClean(base, DESC, ["Ascensor", "Portero físico"])), text: { b: MAX_TEXT, l: null, h: ["Ascensor"] } });
+      else if (kind === 1) out.push({ ...jStory, key: base.key, slug: base.slug, title: base.title, subzone: base.subzone, status: base.status });
+      else if (kind === 2) out.push(await withClean(base, longText(3000), ["Terraza", "Calefacción central", "Trastero"]));
+      else out.push(base);
+    }
+    return out;
+  };
+  const journey12 = await journeySeries(12, "fxJ12");
+  const journey24 = await journeySeries(24, "fxJ24");
   return new Map<string, Share>([
+    [FIXTURE_TOKENS.journey12, { snapshot: snap("Doce recorridos", "Doce viviendas con textos largos, historias, descripciones y solo datos.", journey12), expiresAt: far, revoked: false, archived: false }],
+    [FIXTURE_TOKENS.journey24, { snapshot: snap("Veinticuatro recorridos", "El máximo de un catálogo automático, con textos largos.", journey24), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.main, { snapshot: snap("Salamanca y Chamberí", "Cuatro viviendas elegidas para una búsqueda concreta: luz, silencio y buena comunicación.", base), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.long, { snapshot: snap("Áticos con terraza para una familia que se traslada desde Londres en primavera", null, longItems), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.empty, { snapshot: snap("Inversores · Chamberí", null, []), expiresAt: far, revoked: false, archived: false }],

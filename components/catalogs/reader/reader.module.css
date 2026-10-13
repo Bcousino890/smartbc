@@ -740,6 +740,157 @@
   padding: var(--s1);
 }
 
+/* ── Recorrido editorial (C2): entrada, puntos, secciones y detalle ────── */
+
+.leadText {
+  font: italic 400 1.18em/1.5 var(--display);
+  max-width: 22em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.highlights {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s6) 0 0;
+  padding: 0;
+  list-style: none;
+  max-width: 24em;
+}
+
+.highlights li {
+  font: 500 0.78em/1.4 var(--text);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.highlights li::before {
+  content: "✦";
+  color: var(--accent);
+  margin-right: 0.6em;
+  letter-spacing: 0;
+}
+
+.journeyPage .runner {
+  margin-bottom: var(--s6);
+}
+
+.section {
+  max-width: 25em;
+  text-align: left;
+  width: 100%;
+}
+
+.section + .section {
+  margin-top: var(--s8);
+}
+
+.sectionHeading {
+  font: italic 400 var(--t-xl) / 1.2 var(--display);
+  color: var(--accent);
+  margin: 0 0 var(--s3);
+  text-align: center;
+}
+
+.sectionText {
+  font: 400 0.98em/1.75 var(--text);
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.detailTitle {
+  font: 400 var(--t-xl) / 1.2 var(--display);
+  margin: var(--s2) 0 var(--s4);
+  max-width: 16em;
+  overflow-wrap: anywhere;
+}
+
+.factList {
+  width: 100%;
+  max-width: 24em;
+  margin: 0;
+  text-align: left;
+  font-size: 0.9em;
+}
+
+.factList > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.55em 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.factList dt {
+  color: var(--muted);
+}
+
+.factList dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* Una página: la hoja continua alterna foto y texto. */
+.sheetSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--s8);
+}
+
+.sheetPhoto {
+  width: 100%;
+  margin-bottom: var(--s6);
+}
+
+.fold {
+  width: 100%;
+  max-width: 25em;
+  margin-top: var(--s6);
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+
+.fold summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font: 500 0.72em var(--text);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  list-style: none;
+}
+
+.fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold summary::after {
+  content: "+";
+  font: 400 1.4em var(--display);
+  letter-spacing: 0;
+}
+
+.fold[open] summary::after {
+  content: "−";
+}
+
+.fold .desc,
+.fold .factList {
+  margin-bottom: var(--s4);
+}
+
 /* ── Cierre y estados ──────────────────────────────────────────────────── */
 
 .closingPage,
