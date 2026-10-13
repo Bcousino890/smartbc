@@ -162,3 +162,12 @@ Correcciones hechas durante la revisión local: índice que desbordaba con títu
 ## Revisión
 
 Revisión adicional de Codex: no solicitada para la fase 2.
+
+## PR, CI y merge (fase 2)
+
+- **PR-2:** [#311](https://github.com/Bcousino890/smartbc/pull/311), `fabri/bcp-01-fase2` → `main`.
+- **`origin/main` antes del push:** seguía en `0af5070…` y `0193` seguía libre (`git fetch` + `git ls-remote`).
+- **CI en `694696d`:** en verde ([run 38428360720](https://github.com/Bcousino890/smartbc/actions/runs/38428360720)): TypeScript, particulares, Idealista, leads, Zinto v2, Catálogos (fase 1), **Catálogos (contrato público, sincronización y medición)**, **build de Next.js** y lint de migraciones.
+- **CI del último commit** (este registro, solo documentación): se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0193` en producción con el script versionado. Después, QA en vivo y la medición de D13 (instrucciones en el PR).
+- Se conservan el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-fase2` y la rama.
