@@ -25,6 +25,7 @@ import {
 } from "../lib/catalogs/format.ts";
 import { isCatalogFixtureMode } from "../lib/catalogs/fixture-mode.ts";
 import { isUuid, isValidOrder, normalizeIntro, normalizeTitle } from "../lib/catalogs/validate.ts";
+import { parsePropertyRef, refErrorMessage } from "../lib/catalogs/ref.ts";
 
 let failures = 0;
 
@@ -167,6 +168,29 @@ async function main() {
   check("orden válido", isValidOrder(["f0000000-0000-0000-0000-000000000001", "f0000000-0000-0000-0000-000000000002"]));
   check("orden con repetidos → no", !isValidOrder(["f0000000-0000-0000-0000-000000000001", "F0000000-0000-0000-0000-000000000001"]));
   check("orden con basura → no", !isValidOrder(["f0000000-0000-0000-0000-000000000001", "x"]) && !isValidOrder("no"));
+
+  section("Referencias para añadir propiedades existentes (T4)");
+  const eq = (input: string, expected: unknown) => JSON.stringify(parsePropertyRef(input)) === JSON.stringify(expected);
+  check("BC-1234", eq("BC-1234", { kind: "bc", reference: "BC-1234" }));
+  check("bc 42 → BC-0042", eq("bc 42", { kind: "bc", reference: "BC-0042" }));
+  check("BC0042 → BC-0042", eq("BC0042", { kind: "bc", reference: "BC-0042" }));
+  check("BC-12345 (5 cifras)", eq(" BC-12345 ", { kind: "bc", reference: "BC-12345" }));
+  check("slug suelto", eq("Atico-Con-Terraza-3291", { kind: "slug", slug: "atico-con-terraza-3291" }));
+  check("URL /compartir/<slug>", eq("https://portal.bcousinoprop.com/compartir/atico-3291", { kind: "slug", slug: "atico-3291" }));
+  check("URL admin /es/admin/propiedades/<slug>", eq("https://portal.bcousinoprop.com/es/admin/propiedades/piso-almagro-12", { kind: "slug", slug: "piso-almagro-12" }));
+  check("URL relativa /admin/propiedades/<slug>/", eq("/admin/propiedades/duplex-olavide/", { kind: "slug", slug: "duplex-olavide" }));
+  check("URL web pública www", eq("https://www.bcousinoprop.com/propiedades/estudio-recoletos?utm=x", { kind: "slug", slug: "estudio-recoletos" }));
+  check("URL /web/propiedades", eq("/web/propiedades/estudio-recoletos", { kind: "slug", slug: "estudio-recoletos" }));
+  check("URL sin esquema del dominio propio", eq("portal.bcousinoprop.com/compartir/atico-3291", { kind: "slug", slug: "atico-3291" }));
+  check("Idealista → portal (fase 3)", eq("https://www.idealista.com/inmueble/12345678/", { kind: "invalid", reason: "portal" }));
+  check("Fotocasa → portal", eq("https://www.fotocasa.es/es/comprar/vivienda/madrid/x/123", { kind: "invalid", reason: "portal" }));
+  check("otro dominio → foreign_host", eq("https://ejemplo.com/compartir/atico", { kind: "invalid", reason: "foreign_host" }));
+  check("dominio parecido no cuela", eq("https://bcousinoprop.com.evil.io/compartir/atico", { kind: "invalid", reason: "foreign_host" }));
+  check("ruta propia no reconocida", eq("https://portal.bcousinoprop.com/es/admin/clientes/123", { kind: "invalid", reason: "unrecognized" }));
+  check("slug con caracteres raros", eq("/compartir/%3Cscript%3E", { kind: "invalid", reason: "unrecognized" }));
+  check("vacío", eq("   ", { kind: "invalid", reason: "empty" }));
+  check("una palabra sola no es slug", eq("atico", { kind: "invalid", reason: "unrecognized" }));
+  check("mensaje de portal explica la fase 3", /fase 3/.test(refErrorMessage("portal")));
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
   if (failures > 0) process.exit(1);
