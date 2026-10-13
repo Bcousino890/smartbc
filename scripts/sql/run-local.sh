@@ -64,6 +64,17 @@ case "$cmd" in
       "$PGBIN/psql" -q -tA -v ON_ERROR_STOP=1 -X -f "$f"
     done
     ;;
+  sqlv)
+    # sqlv VAR=valor ... -- archivo.sql  (variables de psql; mismas barreras)
+    guard
+    VARS=""
+    while [ $# -gt 0 ] && [ "$1" != "--" ]; do VARS="$VARS -v $1"; shift; done
+    [ "${1:-}" = "--" ] && shift
+    for f in "$@"; do
+      # shellcheck disable=SC2086
+      "$PGBIN/psql" -q -tA -v ON_ERROR_STOP=1 -X $VARS -f "$f"
+    done
+    ;;
   stop)
     [ -d "$DIR" ] && "$PGBIN/pg_ctl" -D "$DIR" -m fast stop >/dev/null 2>&1 || true
     ;;

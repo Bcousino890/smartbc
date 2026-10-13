@@ -1,0 +1,45 @@
+2000	base	manual 12 · instantánea	200	0.73	0.86	1.46	18599	12	
+2000	base	manual · get_catalog_states ×1	200	0.81	0.91	1.09			
+2000	base	manual · get_catalog_states ×20	100	12.74	19.68	92.40			
+2000	base	manual · get_catalog_states ×5	200	3.19	3.60	8.10			
+2000	propuesta	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	7.07	7.66	8.90	38137	24	106
+2000	propuesta	auto amplio (toda venta, 24) · instantánea	200	5.24	5.64	10.28	38096	24	1048
+2000	propuesta	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	7.32	8.09	9.32	19198	12	268
+2000	propuesta	auto · get_catalog_states ×1	200	5.33	6.49	32.12			
+2000	propuesta	auto · get_catalog_states ×20	30	136.59	143.22	146.12			
+2000	propuesta	auto · get_catalog_states ×5	100	35.98	39.60	112.99			
+2000	propuesta	manual 12 · instantánea	200	0.84	1.11	2.22	18599	12	
+2000	propuesta	manual · get_catalog_states ×1	200	0.92	1.03	1.27			
+2000	propuesta	manual · get_catalog_states ×20	100	14.81	16.14	16.64			
+2000	propuesta	manual · get_catalog_states ×5	200	3.94	4.42	7.53			
+2000	propuesta	mixto · get_catalog_states 5 manual + 5 auto	100	38.52	44.00	59.67			
+10000	base	manual 12 · instantánea	200	0.72	0.92	1.88	18599	12	
+10000	base	manual · get_catalog_states ×1	200	0.86	1.01	1.26			
+10000	base	manual · get_catalog_states ×20	100	12.24	12.91	13.50			
+10000	base	manual · get_catalog_states ×5	200	3.24	3.52	4.40			
+10000	propuesta	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	17.42	22.87	171.27	38151	24	528
+10000	propuesta	auto amplio (toda venta, 24) · instantánea	200	23.93	31.21	39.72	38096	24	5237
+10000	propuesta	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	20.04	24.36	87.99	19206	12	1338
+10000	propuesta	auto · get_catalog_states ×1	200	22.05	24.17	26.26			
+10000	propuesta	auto · get_catalog_states ×20	30	433.77	773.98	897.31			
+10000	propuesta	auto · get_catalog_states ×5	100	108.91	151.14	291.93			
+10000	propuesta	manual 12 · instantánea	200	0.81	0.92	1.86	18599	12	
+10000	propuesta	manual · get_catalog_states ×1	200	0.91	1.04	1.37			
+10000	propuesta	manual · get_catalog_states ×20	100	15.18	16.39	17.06			
+10000	propuesta	manual · get_catalog_states ×5	200	3.86	4.07	4.28			
+10000	propuesta	mixto · get_catalog_states 5 manual + 5 auto	100	105.41	120.53	219.48			
+40000	base	manual 12 · instantánea	200	0.78	1.46	2.32	19222	12	
+40000	base	manual · get_catalog_states ×1	200	0.83	0.89	0.94			
+40000	base	manual · get_catalog_states ×20	100	12.43	13.57	14.92			
+40000	base	manual · get_catalog_states ×5	200	3.24	3.54	4.16			
+40000	propuesta	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	48.24	53.65	157.26	38190	24	2114
+40000	propuesta	auto amplio (toda venta, 24) · instantánea	200	86.30	99.69	149.02	38149	24	20945
+40000	propuesta	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	68.66	75.60	150.63	19226	12	5356
+40000	propuesta	auto · get_catalog_states ×1	200	87.38	135.09	499.96			
+40000	propuesta	auto · get_catalog_states ×20	30	1514.11	1696.57	1779.37			
+40000	propuesta	auto · get_catalog_states ×5	100	373.69	436.61	489.77			
+40000	propuesta	manual 12 · instantánea	200	0.87	0.97	1.22	19222	12	
+40000	propuesta	manual · get_catalog_states ×1	200	0.98	1.17	1.44			
+40000	propuesta	manual · get_catalog_states ×20	100	16.35	20.81	41.96			
+40000	propuesta	manual · get_catalog_states ×5	200	4.23	5.55	9.78			
+40000	propuesta	mixto · get_catalog_states 5 manual + 5 auto	100	370.18	422.31	459.26			
