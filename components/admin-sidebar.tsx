@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  BookOpen,
   Building2,
   Calendar,
   ClipboardList,
@@ -47,9 +48,13 @@ type NavItem = {
   permissionResource?: string;
   /** Si se define, el item solo se muestra para ese país (ej: "cl" o "es") */
   onlyCountry?: string;
+  /** Solo para el dueño de la HOME (BCP-01). Ocultarlo NO protege la página:
+   *  la protege requireHomeOwnerPage() en el servidor. */
+  ownerOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/admin/mi-espacio",         labelKey: "admin.nav.mi_espacio",         icon: BookOpen,      onlyCountry: "es", ownerOnly: true },
   { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
   { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "agencias",     onlyCountry: "es" },
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
@@ -103,9 +108,11 @@ interface AdminSidebarProps {
   country?: string;
   /** Si el usuario puede cambiar de país (selector de banderas) */
   canSwitchCountry?: boolean;
+  /** Si el perfil es dueño de la HOME (calculado en el servidor). */
+  isHomeOwner?: boolean;
 }
 
-export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, unreadNotifications = 0, onOpenChange, country = "es", canSwitchCountry = false }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, unreadNotifications = 0, onOpenChange, country = "es", canSwitchCountry = false, isHomeOwner = false }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -130,7 +137,8 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
   // Filtrar items de nav según permisos y país. Si llegan los permisos efectivos
   // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
-  const visibleItems = navItems.filter(({ permissionResource, onlyCountry }) => {
+  const visibleItems = navItems.filter(({ permissionResource, onlyCountry, ownerOnly }) => {
+    if (ownerOnly && !isHomeOwner) return false;
     if (onlyCountry && onlyCountry !== country) return false;
     if (!permissionResource) return true;
     if (permissions) {

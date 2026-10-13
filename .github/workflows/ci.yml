@@ -47,6 +47,11 @@ jobs:
       - name: Zinto v2 (Integration ID UUID, offline)
         run: npm run test:zinto-v2
 
+      # HOME de Fabricio y catálogos (BCP-01): acceso solo del dueño, formato
+      # de precios/planta y referencias para añadir propiedades. Puro, sin BD.
+      - name: Catálogos (acceso y formato, offline)
+        run: npm run test:catalogs
+
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
         env:

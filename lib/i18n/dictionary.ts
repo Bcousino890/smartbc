@@ -10,6 +10,9 @@ export const LANGUAGES: { code: Lang; label: string }[] = [
 type Strings = Record<string, string>;
 
 const es: Strings = {
+  "admin.nav.mi_espacio": "Mi espacio",
+  "miEspacio.title": "Mi espacio",
+  "miEspacio.subtitle": "Tu espacio para trabajar con el CRM e ir mejorándolo módulo a módulo. Primer módulo: catálogos.",
   // Common
   "common.any": "Cualquiera",
   "common.applyFilters": "Aplicar filtros",
@@ -1517,6 +1520,9 @@ const es: Strings = {
 };
 
 const en: Strings = {
+  "admin.nav.mi_espacio": "My space",
+  "miEspacio.title": "My space",
+  "miEspacio.subtitle": "Your space to work with the CRM and improve it module by module. First module: catalogues.",
   "common.any": "Any",
   "common.applyFilters": "Apply filters",
   "common.priceUnit": "/month",
@@ -2988,6 +2994,9 @@ const en: Strings = {
 };
 
 const fr: Strings = {
+  "admin.nav.mi_espacio": "Mon espace",
+  "miEspacio.title": "Mon espace",
+  "miEspacio.subtitle": "Votre espace pour travailler avec le CRM et l’améliorer module par module. Premier module : catalogues.",
   "common.any": "Indifférent",
   "common.applyFilters": "Appliquer les filtres",
   "common.priceUnit": "/mois",
@@ -4449,6 +4458,9 @@ const fr: Strings = {
 };
 
 const de: Strings = {
+  "admin.nav.mi_espacio": "Mein Bereich",
+  "miEspacio.title": "Mein Bereich",
+  "miEspacio.subtitle": "Ihr Bereich, um mit dem CRM zu arbeiten und es Modul für Modul zu verbessern. Erstes Modul: Kataloge.",
   "common.any": "Beliebig",
   "common.applyFilters": "Filter anwenden",
   "common.priceUnit": "/Monat",
