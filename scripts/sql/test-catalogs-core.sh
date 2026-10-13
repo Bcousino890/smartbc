@@ -33,6 +33,21 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $S/test
 $R sql $RB4 $S/test-rollback-0194.sql $M4 $S/test-catalog-public.sql
 echo "   0194 se vuelve a aplicar tras su reversión y los tests de 0193 siguen en verde"
 
+echo "== 2d. 0195: zonas, criterios, modo automático y anuncios (catálogo previo + aplicada dos veces)"
+M5=supabase/migrations/0195_catalog_selection.sql
+RB5=docs/changes/2026-10-13-bcp-01-home-catalogo/rollback-0195.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $S/test-catalog-auto-pre.sql $M5 $M5 $S/test-catalog-auto.sql
+$R sql $RB5 $S/test-rollback-0195.sql $M5 $S/test-catalog-contact-pre.sql
+echo "   0195 se vuelve a aplicar tras su reversión"
+
+echo "== 2e. paridad TS ↔ SQL de zonas y selección (datos sintéticos deterministas)"
+PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")
+node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-catalog-parity.mts > "$PAR" 2>/dev/null
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 "$PAR"
+rm -f "$PAR"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

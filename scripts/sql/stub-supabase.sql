@@ -101,3 +101,20 @@ CREATE TABLE IF NOT EXISTS property_client_descriptions (
   PRIMARY KEY (property_id, language)
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON property_client_descriptions TO service_role;
+
+-- ── BCP-01 ampliación PR-B (0195): columnas y tablas que lee la selección ──
+-- Solo pruebas locales. En producción ya existen (0001 y 0017+).
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+CREATE TABLE IF NOT EXISTS idealista_listings (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id           uuid REFERENCES properties(id) ON DELETE CASCADE,
+  reference_code        text UNIQUE,
+  inspo_title           text,
+  is_inspo              boolean DEFAULT false,
+  idealista_property_id text,
+  idealista_state       text DEFAULT 'draft',
+  price                 integer,
+  created_at            timestamptz NOT NULL DEFAULT now()
+);
+REVOKE ALL ON idealista_listings FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON idealista_listings TO service_role;
