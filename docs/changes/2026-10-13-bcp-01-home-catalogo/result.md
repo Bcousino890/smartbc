@@ -284,6 +284,15 @@ Rama `fabri/bcp-01-amp-a`, base `f770e544360c350e5821701a83f857d4136decf0` (merg
 - Toda la QA en vivo de arriba, incluida la medición de 2 s (de esta entrega y de la fase 2).
 - PR-B y PR-C empiezan tras tu merge y la QA de A.
 
+## PR, CI y merge (PR-A)
+
+- **PR-A:** [#312](https://github.com/Bcousino890/smartbc/pull/312), `fabri/bcp-01-amp-a` → `main`, marcado como fusionable.
+- **`origin/main` antes del push:** `f770e54…`; `0194` libre.
+- **CI en `d3b8f70`:** en verde ([run 38442435986](https://github.com/Bcousino890/smartbc/actions/runs/38442435986)). Pasaron TypeScript, las suites offline (incluidas las dos de catálogos), el **build de Next.js** y el lint de migraciones.
+- **CI del último commit** (este registro, solo documentación): se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0194`; el rollback del build no deshace el esquema.
+- Se conservan el worktree y la rama.
+
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
