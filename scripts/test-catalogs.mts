@@ -16,6 +16,13 @@ import {
   type HomeAccessDeps,
 } from "../lib/catalogs/access.ts";
 import { catalogErrorMessage, GENERIC_ERROR } from "../lib/catalogs/errors.ts";
+import {
+  catalogNumberLabel,
+  editionLabel,
+  floorLabel,
+  operationLabel,
+  priceLabel,
+} from "../lib/catalogs/format.ts";
 
 let failures = 0;
 
@@ -115,6 +122,30 @@ async function main() {
   check("CHECK de la intro", /introducción/.test(catalogErrorMessage({ code: "23514", message: 'violates check constraint "catalogs_intro_len"' })));
   check("desconocido → genérico (no filtra el texto técnico)", catalogErrorMessage({ message: "relation xyz does not exist" }) === GENERIC_ERROR);
   check("código propio", /sesión/.test(catalogErrorMessage("unauthenticated")));
+
+  section("Formato (T5)");
+  check("edición: octubre → Otoño", editionLabel(new Date(2026, 9, 13)) === "Otoño 2026");
+  check("edición: marzo → Primavera", editionLabel(new Date(2027, 2, 1)) === "Primavera 2027");
+  check("edición: diciembre cuenta como invierno del año siguiente", editionLabel(new Date(2026, 11, 20)) === "Invierno 2027");
+  check("edición: enero → Invierno del mismo año", editionLabel(new Date(2027, 0, 5)) === "Invierno 2027");
+  check("número: 3 → nº 03", catalogNumberLabel(3) === "nº 03");
+  check("número: 12 → nº 12", catalogNumberLabel(12) === "nº 12");
+  check("número: vacío o inválido → null", catalogNumberLabel(0) === null && catalogNumberLabel(null) === null && catalogNumberLabel(Number.NaN) === null);
+  check("precio venta", priceLabel({ operation: "sale", price: 1450000, currency: "eur" }) === "1.450.000 €");
+  check("precio alquiler", priceLabel({ operation: "rent", price: 4800 }) === "4.800 €/mes");
+  check("precio dual", priceLabel({ operation: "sale", operations: ["sale", "rent"], price: 980000, rentPrice: 3200 }) === "Venta 980.000 € · Alquiler 3.200 €/mes");
+  check("precio 0 → sin dato (nunca «0 €»)", priceLabel({ operation: "sale", price: 0 }) === "Precio · sin dato");
+  check("precio nulo → sin dato", priceLabel({ operation: "rent", price: null }) === "Precio · sin dato");
+  check("precio en texto numérico", priceLabel({ operation: "sale", price: "350000.00" }) === "350.000 €");
+  check("otra divisa", priceLabel({ operation: "sale", price: 5000, currency: "uf" }) === "UF 5.000");
+  check("operación dual", operationLabel("sale", ["sale", "rent"]) === "Venta y alquiler");
+  check("operación desconocida", operationLabel(null) === "Operación · sin dato");
+  check("planta 7 sin ordinal", floorLabel(7) === "Planta 7");
+  check("planta 0 → Planta baja", floorLabel(0) === "Planta baja");
+  check("planta −1 → Sótano", floorLabel(-1) === "Sótano");
+  check("ático", floorLabel(9, true) === "Ático");
+  check("planta desconocida", floorLabel(null) === "Planta · sin dato");
+  check("ningún formato usa ordinales «ª/º»", ![floorLabel(1), floorLabel(7), floorLabel(0)].some((s) => /[ªº]/.test(s)));
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
   if (failures > 0) process.exit(1);
