@@ -17,7 +17,21 @@ export const FIXTURE_TOKENS = {
   long: "fixtureLongToken000000000002",
   empty: "fixtureEmptyToken00000000003",
   one: "fixtureOneToken0000000000004",
+  // Índices largos (QA de PR-B: el índice se recortaba en la doble página).
+  twenty: "fixtureTwentyToken0000000005",
+  max: "fixtureMaxToken0000000000006",
 } as const;
+
+// Títulos como los de las fichas reales: varios ocupan dos líneas en el índice.
+const STREETS = [
+  "Calle de Goya, Barrio de Salamanca", "Calle José Ortega y Gasset", "Calle Alcalá", "Calle de Ayala, Goya",
+  "Calle Padilla", "Calle Espartinas", "Calle Conde de Peñalver", "Calle General Díaz Porlier",
+  "Paseo de la Castellana, junto a la plaza de Emilio Castelar", "Calle del Príncipe de Vergara s/n",
+  "Calle de Velázquez", "Calle de Lagasca, Recoletos", "Calle de Claudio Coello", "Calle de Hermosilla",
+  "Calle de Juan Bravo", "Calle de Don Ramón de la Cruz", "Calle de Jorge Juan", "Calle de Villanueva",
+  "Calle de Serrano, frente al Museo Arqueológico Nacional", "Calle de Núñez de Balboa", "Calle de Castelló",
+  "Calle de Lista", "Calle de Maldonado", "Calle de Montesa",
+];
 
 interface Share {
   snapshot: InternalSnapshot;
@@ -130,11 +144,24 @@ async function seed(): Promise<Map<string, Share>> {
       photos: photos(20 + i * 25, (i % 5) + 1, i % 2 ? "v" : "h"),
     }),
   );
+  const series = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) =>
+      item({
+        key: `${prefix}${String(i).padStart(6, "0")}`, slug: `fx-${prefix}-${i}`,
+        // La última del máximo lleva el título de 120 caracteres (V5).
+        title: n === 24 && i === n - 1 ? LONG_TITLE : `${i % 6 === 5 ? "Ático" : "Piso"} en venta en ${STREETS[i % STREETS.length]}`,
+        subzone: i % 3 ? "Salamanca" : "Goya", price: 1000000 + i * 8000,
+        status: i === 7 ? "reserved" : "available", bedrooms: (i % 4) + 1, bathrooms: (i % 3) + 1,
+        square_meters: 80 + i * 7, photos: photos(15 + i * 13, (i % 3) + 1, i % 2 ? "v" : "h"),
+      }),
+    );
   return new Map<string, Share>([
     [FIXTURE_TOKENS.main, { snapshot: snap("Salamanca y Chamberí", "Cuatro viviendas elegidas para una búsqueda concreta: luz, silencio y buena comunicación.", base), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.long, { snapshot: snap("Áticos con terraza para una familia que se traslada desde Londres en primavera", null, longItems), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.empty, { snapshot: snap("Inversores · Chamberí", null, []), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.one, { snapshot: snap("Una sola vivienda", "Catálogo de una propiedad.", [base[0]]), expiresAt: far, revoked: false, archived: false }],
+    [FIXTURE_TOKENS.twenty, { snapshot: snap("Barrio de Salamanca", "Exclusivos pisos en la zona más exclusiva de todo Madrid.", series(20, "fxVeinte")), expiresAt: far, revoked: false, archived: false }],
+    [FIXTURE_TOKENS.max, { snapshot: snap("Salamanca · selección máxima", "Veinticuatro viviendas, el máximo de un catálogo automático.", series(24, "fxMax")), expiresAt: far, revoked: false, archived: false }],
   ]);
 }
 

@@ -223,6 +223,21 @@ class FakeEs implements EventSourceLike {
 }
 
 async function liveTests() {
+  section("QA de PR-B · índice sin recortes en la doble página");
+  {
+    // En la doble página la hoja tiene altura fija y overflow oculto: el
+    // índice tiene que ir dentro de una zona que se desplaza (la del texto
+    // largo), o las últimas entradas quedan fuera de alcance. La prueba en el
+    // navegador (12/20/24 viviendas) vive fuera de CI; esto evita que se
+    // pierda la zona sin que nadie lo note.
+    const pages = readFileSync("components/catalogs/reader/pages.tsx", "utf8");
+    const index = pages.slice(pages.indexOf("export function IndexPage"), pages.indexOf("function Fact("));
+    check("índice dentro de ScrollRegion (variante «index»)", /<ScrollRegion label="Índice" variant="index"[^>]*>\s*<ol className=\{styles\.indexList\}>/.test(index));
+    check("índice: todas las entradas, sin cortes ni límites", /catalog\.items\.map\(/.test(index) && !/catalog\.items\.slice\(/.test(index));
+    const css = readFileSync("components/catalogs/reader/reader.module.css", "utf8");
+    check("índice: la hoja es columna flexible en la doble página", /\.indexPage \{\s*display: flex;\s*flex-direction: column;/.test(css));
+  }
+
   section("Ampliación X4 · zonas de los catálogos");
   {
     const mig = readFileSync("supabase/migrations/0195_catalog_selection.sql", "utf8");
