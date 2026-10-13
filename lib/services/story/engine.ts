@@ -8,12 +8,12 @@
 // validación. Todo lo publicado es trazable a evidencia (regla dura 9).
 // Corre exclusivamente server-side desde acciones admin (bajo demanda, D7).
 
-import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/db/admin";
 import { aiComplete, AI_SETTINGS_KEY } from "@/lib/services/ai/chat";
 import { validateClaims, copyWordCount, type StructuredFacts } from "./validate";
 import { enforceStoryInvariants } from "./structure";
 import { STORY_CHAPTERS, type StoryChapter, type StoryClaim } from "./types";
+import { storySourceHash } from "./source-hash";
 
 const EXTRACT_SCHEMA = {
   type: "object",
@@ -93,10 +93,6 @@ Reglas absolutas:
 - No repitas cifras de dormitorios/baños/m² (ya se muestran aparte).
 - Devuelve claim_indexes con los índices de los claims usados en cada bloque.`;
 
-function sha256(s: string): string {
-  return createHash("sha256").update(s).digest("hex");
-}
-
 // Versión de la LÓGICA del motor (extractor+validador+compresor). Entra en la
 // huella de caché: cambiar la lógica invalida las versiones generadas con la
 // anterior y fuerza regeneración limpia — nunca se reutiliza silenciosamente
@@ -113,7 +109,7 @@ function sha256(s: string): string {
 //     superficie exige evidencia positiva de área (m²/m2/metros cuadrados/
 //     construidos/útiles o sustantivo de superficie); "a 200 metros del
 //     Retiro" ya no se compara contra square_meters.
-const ENGINE_VERSION = 4.1;
+// (ENGINE_VERSION vive en source-hash.ts desde BCP-01 C2; sigue valiendo 4.1.)
 
 export type GenerateResult =
   | { ok: true; versionId: string; blocks: number; conflicts: number; reused: boolean }
@@ -140,9 +136,13 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
     floor: null,
     features: [...(row.features ?? []), ...(row.features_manual ?? [])],
   };
-  const sourceHash = sha256(
-    JSON.stringify([ENGINE_VERSION, description, facts.bedrooms, facts.bathrooms, facts.squareMeters, facts.features]),
-  );
+  const sourceHash = storySourceHash({
+    description,
+    bedrooms: facts.bedrooms,
+    bathrooms: facts.bathrooms,
+    squareMeters: facts.squareMeters,
+    features: facts.features,
+  });
 
   // Caché por huella: si ya existe una versión de esta misma fuente, no se
   // vuelve a llamar a la IA (mismo patrón que photos_fingerprint del vídeo).

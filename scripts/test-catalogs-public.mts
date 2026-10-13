@@ -19,6 +19,7 @@ import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
 import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
+import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
 import {
   coverPhotoOf,
   clientDescriptionSrc,
@@ -289,6 +290,29 @@ async function liveTests() {
     const c3 = normalizeCriteria({ operation: "sale", price_min: 1 });
     check("con rango, sin precio no entra; sin rango sí (al final)", c3.ok && !autoSelect(props, c3.criteria).ids.includes("c") && d.ok && autoSelect(props, { ...d.criteria, operation: "sale" }).ids.at(-1) === "c");
     check("búsqueda manual: sin foto obligatoria", d.ok && candidates(props, d.criteria, { requirePhoto: false }).some((x) => x.id === "d") && !candidates(props, d.criteria, { requirePhoto: true }).some((x) => x.id === "d"));
+  }
+
+  section("Ampliación C2 · huella de la historia extraída del motor (Z2)");
+  {
+    // La fórmula que tenía engine.ts en línea, copiada tal cual como referencia.
+    const sha = (x: string) => createHash("sha256").update(x).digest("hex");
+    const facts = { bedrooms: 3, bathrooms: 2, squareMeters: 142, features: ["Ascensor", "Terraza", "Trastero"] };
+    const description = "  Ático con terraza. Salón doble con chimenea.  ";
+    const inline = sha(JSON.stringify([4.1, description.trim(), facts.bedrooms, facts.bathrooms, facts.squareMeters, facts.features]));
+    const input = { description, ...facts };
+    check("misma huella que la fórmula en línea de engine.ts (versión 4.1)", ENGINE_VERSION === 4.1 && storySourceHash(input) === inline);
+    const nulls = { description: null, bedrooms: null, bathrooms: null, squareMeters: null, features: [] as string[] };
+    check("con datos vacíos también coincide", storySourceHash(nulls) === sha(JSON.stringify([4.1, "", null, null, null, []])));
+    const v2 = sha(JSON.stringify([2, description.trim(), 3, 2, 142, facts.features]));
+    const v1 = sha(JSON.stringify([description.trim(), 3, 2, 142, facts.features]));
+    check("vigente con cualquier versión conocida del motor (4.1, 4, 3, 2 y la primera)", isStorySourceCurrent(v2, input) && isStorySourceCurrent(v1, input)
+      && isStorySourceCurrent(storySourceHash(input, 4), input) && isStorySourceCurrent(storySourceHash(input, 3), input));
+    check("no vigente si cambia la fuente o la huella es otra", !isStorySourceCurrent(inline, { ...input, bedrooms: 4 })
+      && !isStorySourceCurrent(inline, { ...input, features: ["Ascensor"] }) && !isStorySourceCurrent("otra", input) && !isStorySourceCurrent(null, input));
+    check("engine.ts usa el módulo extraído (sin fórmula propia)", (() => {
+      const src = readFileSync("lib/services/story/engine.ts", "utf8");
+      return src.includes('from "./source-hash"') && !/JSON\.stringify\(\[ENGINE_VERSION/.test(src);
+    })());
   }
 
   section("Ampliación C1 · ajustes del automático y explicación (solo gestión)");
