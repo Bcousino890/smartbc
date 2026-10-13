@@ -28,6 +28,16 @@ export function textBlocker(text: string | null | undefined): TextBlocker | null
   return null;
 }
 
+/** Todos los bloqueos de un texto (para enseñarlos juntos en el editor). */
+export function textBlockers(text: string | null | undefined): TextBlocker[] {
+  const t = (text ?? "").trim();
+  if (!t) return [];
+  const out: TextBlocker[] = [];
+  if (EMAIL_RE.test(t) || URL_RE.test(t) || PHONE_RE.test(t)) out.push("text_has_contact");
+  if (PRICE_RE.test(t)) out.push("text_has_price");
+  return out;
+}
+
 /** ¿Este fragmento puede ir al lector? (sin contacto, URL, precio ni agencia). */
 export function isPublicSafe(text: string): boolean {
   return textBlocker(text) === null && !AGENCY_RE.test(text);

@@ -22,6 +22,7 @@ import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
 import { deriveEditorial, highlightCandidates, leadFrom, type EditorialInput } from "../lib/catalogs/editorial.ts";
 import { textBlocker } from "../lib/catalogs/text-rules.ts";
+import { checkDraft, draftFromFacts, draftUserText, pendingWarnings, prepareFromSource, type AiFn, type DraftSource } from "../lib/catalogs/ai-draft.ts";
 import {
   coverPhotoOf,
   clientDescriptionSrc,
@@ -389,6 +390,50 @@ async function liveTests() {
       textBlocker("Llame al 600 123 456") === "text_has_contact" && textBlocker("www.x.es") === "text_has_contact" && textBlocker("a@b.com") === "text_has_contact"
       && textBlocker("Por 590.000 €") === "text_has_price" && textBlocker("1.500 euros al mes") === "text_has_price"
       && textBlocker("Reformado entre 1990-2000, con 120 m² y 3 dormitorios.") === null);
+  }
+
+  section("Ampliación C2 · borradores con IA inyectada y comprobación (Z4)");
+  {
+    const calls: Array<Parameters<AiFn>[0]> = [];
+    const fake = (replies: string[]): AiFn => async (o) => {
+      calls.push(o);
+      const r = replies.shift();
+      if (r === undefined) throw new Error("sin respuesta");
+      return r;
+    };
+    const p1 = await prepareFromSource({ description: "Piso exterior. Llame a Inmo Sol al 600 123 456.", features: ["Ascensor"] },
+      fake([JSON.stringify({ description: "Piso exterior.", features: ["Ascensor"] })]));
+    check("preparar desde la ficha: propuesta limpia (no guarda nada)", p1.body === "Piso exterior." && p1.origin === "ai_clean" && p1.lead === null);
+    check("preparar: misma limpieza que la descripción para clientes, en español y sin fotos",
+      /Elimina por completo/.test(calls[0].system) && /español/.test(calls[0].system) && !("images" in calls[0]));
+    const p2 = await prepareFromSource({ description: "x", features: [] }, fake(["{cortado", JSON.stringify({ description: "Texto bueno.", features: [] })]));
+    check("preparar: reintenta una vez si la IA devuelve un JSON cortado", p2.body === "Texto bueno.");
+    let threw = "";
+    try { await prepareFromSource({ description: "", features: [] }, fake([])); } catch (e) { threw = (e as Error).message; }
+    check("preparar: ficha sin texto → error sin llamar a la IA", threw === "source_empty");
+    const slow: AiFn = (o) => new Promise((_, rej) => o.signal?.addEventListener("abort", () => rej(new Error("aborted"))));
+    let aborted = "";
+    // Con un temporizador normal (AbortSignal.timeout no mantiene vivo el proceso de pruebas).
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 30);
+    try { await prepareFromSource({ description: "x", features: [] }, slow, ctl.signal); } catch (e) { aborted = (e as Error).message; }
+    clearTimeout(timer);
+    check("tiempo máximo / cancelación: la llamada se corta y no reintenta", aborted === "aborted");
+    const src: DraftSource = { title: "Piso en Delicias", operation: "Venta", place: "Delicias, Madrid", bedrooms: 3, bathrooms: 2, squareMeters: 110,
+      floor: "Planta 3.ª", features: ["Ascensor", "Terraza"], cleanDescription: "Piso exterior con terraza." };
+    const ut = draftUserText(src);
+    check("borrador con IA: solo hechos conocidos, sin precio ni fotos", !/precio|€|price|foto|photo|http/i.test(ut) && /"dormitorios":3/.test(ut) && /Terraza/.test(ut));
+    const d = await draftFromFacts(src, fake([JSON.stringify({ lead: "Luz y terraza en Delicias.", body: "Piso exterior de 110 m² con terraza." })]));
+    check("borrador con IA: propuesta con entrada y cuerpo (no publica ni guarda)", d.origin === "ai_draft" && d.lead === "Luz y terraza en Delicias.");
+    const ok = checkDraft({ body: d.body, lead: d.lead, highlights: ["Terraza"] }, src);
+    check("comprobación: sin avisos cuando todo sale de la ficha", ok.blockers.length === 0 && ok.warnings.length === 0, JSON.stringify(ok));
+    const bad = checkDraft({ body: "Piso de 140 m² con piscina y garaje. Llame al 600 123 456. Por 590.000 €.", lead: null, highlights: [] }, src);
+    check("comprobación: contacto y precio bloquean", bad.blockers.some((b) => b.code === "text_has_contact") && bad.blockers.some((b) => b.code === "text_has_price"));
+    check("comprobación: cifra y elementos que no están en la ficha → avisos con id estable",
+      ["number:140", "feature:piscina", "feature:garaje"].every((id) => bad.warnings.some((w) => w.id === id)), JSON.stringify(bad.warnings.map((w) => w.id)));
+    const w = checkDraft({ body: "Piso de 140 m² con piscina.", lead: null, highlights: [] }, src);
+    check("avisos: hay que confirmarlos uno a uno", pendingWarnings(w, ["number:140"]).map((x) => x.id).join() === "feature:piscina"
+      && pendingWarnings(w, ["number:140", "feature:piscina"]).length === 0);
   }
 
   section("Ampliación C1 · ajustes del automático y explicación (solo gestión)");
