@@ -75,7 +75,14 @@ Enlace a la especificación: [spec.md](spec.md) (aprobada el 2026-10-13).
 
 T6 contrato público y huella · T7 enlaces · T8 lector C · T9 sincronización · T10 modo medición · T11 revisión local (detalle en el plan aprobado).
 
-**Caso de verificación que se arrastra a T10 (no se implementa ahora).** Si un lector pinta la huella nueva **antes** de que la HOME publique la confirmación del guardado (el SSE puede llegar antes que la respuesta de la acción), el lector guarda esa observación `{huella, tPintado}` en un búfer corto. Cuando llega la confirmación con esa misma huella y ese catálogo, la empareja con el ensayo. No reutiliza una observación antigua cuya huella no coincida con la de ese ensayo. Si `tPintado < tGuardado`, el resultado del ensayo es «≤ 0 s» y se anota tal cual. T10 incluirá un test de este orden de llegada.
+**Notas de ejecución de la fase 2 (sin cambio de arquitectura):**
+- Migración `0193` en vez de `0189` (números ocupados). Funciones: `get_catalog_states` (plural), más `catalog_internal_snapshot` y `catalog_public_fingerprint`. La gestión del enlace también va en SQL (`catalog_share_*`, token con `generate_url_safe_token(21)`, el mismo mecanismo que `randomToken()` según `lib/tokens.ts`), para que el dueño se compruebe en la base igual que en la fase 1.
+- La huella es el `md5` de la instantánea **interna** completa (un superconjunto de lo público): todo cambio público la cambia; algún cambio no visible también, y solo provoca una actualización de más.
+- Rutas: `eventos` (SSE) y `estado`, que reúne las previstas `version` y `contenido` (devuelve el contenido solo si la huella del lector no es la vigente).
+- En la doble página, la introducción va a la izquierda del índice; en una página, encima. El cierre lleva el nombre del asesor y el teléfono de la agencia (sin correo).
+- `tGuardado` es la llegada de la respuesta de la acción a la HOME (E5); como las acciones avisan al vigilante antes de responder, es normal ver resultados «≤ 0 s».
+
+**Caso de verificación que se arrastraba a T10 (hecho en la fase 2, con test).** Si un lector pinta la huella nueva **antes** de que la HOME publique la confirmación del guardado (el SSE puede llegar antes que la respuesta de la acción), el lector guarda esa observación `{huella, tPintado}` en un búfer corto. Cuando llega la confirmación con esa misma huella y ese catálogo, la empareja con el ensayo. No reutiliza una observación antigua cuya huella no coincida con la de ese ensayo. Si `tPintado < tGuardado`, el resultado del ensayo es «≤ 0 s» y se anota tal cual. T10 incluirá un test de este orden de llegada.
 
 ### Fase 3 · PR-3 «Importar PDF» (puertas G1, G2 y G3)
 
