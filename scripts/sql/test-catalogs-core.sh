@@ -17,6 +17,14 @@ $R sql $RB $S/test-rollback-0192.sql $M
 $R sql $S/test-util.sql
 echo "   0192 se vuelve a aplicar tras la reversión"
 
+echo "== 2b. 0193: instantánea pública, huella, enlaces (aplicada dos veces)"
+M3=supabase/migrations/0193_catalog_public.sql
+RB3=docs/changes/2026-10-13-bcp-01-home-catalogo/rollback-0193.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M3 $S/test-catalog-public.sql
+$R sql $RB3 $S/test-rollback-0193.sql $M3
+echo "   0193 se vuelve a aplicar tras su reversión"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

@@ -71,3 +71,33 @@ AS $$
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON auth.users, profiles, properties, property_photos TO service_role;
+
+-- ── Ampliación para la fase 2 (0193): columnas que lee la instantánea ──────
+DO $$ BEGIN
+  CREATE TYPE property_operation AS ENUM ('rent', 'sale');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS zone            text NOT NULL DEFAULT 'Madrid';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS subzone         text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS operation       property_operation NOT NULL DEFAULT 'sale';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS operations      text[] NOT NULL DEFAULT '{}';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS price           numeric(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS rent_price      numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS currency        text DEFAULT 'eur';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS bedrooms        int NOT NULL DEFAULT 0;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS bathrooms       int NOT NULL DEFAULT 0;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS square_meters   int;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS description     text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS features        text[] NOT NULL DEFAULT '{}';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS features_manual text[] NOT NULL DEFAULT '{}';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS floor_override  text;
+ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS source_width  integer;
+ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS source_height integer;
+CREATE TABLE IF NOT EXISTS property_client_descriptions (
+  property_id uuid NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  language    text NOT NULL,
+  src         text NOT NULL,
+  description text,
+  features    text[] NOT NULL DEFAULT '{}',
+  PRIMARY KEY (property_id, language)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON property_client_descriptions TO service_role;
