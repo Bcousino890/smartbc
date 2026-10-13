@@ -21,7 +21,7 @@ import { PrioritySelect, ZoneInfo } from "./priority-select";
 import { BTN_SECONDARY, Notice, Section, fmt } from "./shared";
 import { buildTree, costTotals, family, groupRoots, matches, normalize, type TreeNode } from "./zones-tree";
 import { zoneListings } from "@/lib/scrapers/control-types";
-import { project30, sumComponents, type CostsPayload } from "@/lib/scrapers/cost-model";
+import { fmtDays, project30, sumComponents, type CostsPayload } from "@/lib/scrapers/cost-model";
 import { ZoneCostProvider } from "./zone-cost";
 
 // El mapa trae contornos (cientos de KB): solo se descarga al abrir la vista «Mapa».
@@ -167,7 +167,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
   const totals = useMemo(() => costTotals(all), [all]);
   // Gasto real del portal (medido por el crawler) y su proyección a 30 días; null = aún sin medir.
   const pc = costs?.hasData ? costs.portals[portal] : null;
-  const measured = pc && costs ? { proj: sumComponents(project30(pc.components, costs.projectionDays)), days: costs.daysMeasured, provisional: costs.provisional } : null;
+  const measured = pc && costs ? { proj: sumComponents(project30(pc.components, costs.projectionDays)), days: costs.projectionDays, provisional: costs.provisional } : null;
 
   /** Aplica al instante en pantalla y guarda; si falla, vuelve a leer lo real. */
   async function apply(changes: Array<{ zone_key: string; priority: ZonePriority }>, okMsg: string) {
@@ -310,7 +310,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
               {measured ? (
                 <>
                   gasto real proyectado <strong>≈ {fmt(measured.proj)} créditos/mes</strong>
-                  <span className="text-ink/65">{measured.provisional ? " (provisional: solo datos de hoy)" : ` (medido en ${measured.days} ${measured.days === 1 ? "día" : "días"})`}</span>
+                  <span className="text-ink/65">{measured.provisional ? " (provisional: menos de 1 día medido)" : ` (medido en ${fmtDays(measured.days)})`}</span>
                 </>
               ) : (
                 <>

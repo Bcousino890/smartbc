@@ -7,8 +7,9 @@
  *   - zona '*' · tarea concreta       → créditos por tarea
  *   - zona HOJA · tarea 'cmp:<comp>'  → créditos por zona y componente (solo la hoja, sin sumar a los padres)
  *   - zona '(sin zona)'               → gasto que no se puede atribuir a una zona (listado raíz, árbol…)
- * Aquí se suman las hojas por el árbol de zonas (`parent_key`) y se proyecta a 30 días:
- *   proyección = créditos medidos / días completos medidos × 30
+ *   - zona '*' · tarea 'cov:minutes'  → cobertura: minutos de ese día que el libro midió de verdad (en `credits`)
+ * Aquí se suman las hojas por el árbol de zonas (`parent_key`) y se proyecta a 30 días con TODO el periodo medido:
+ *   proyección = créditos medidos / días cubiertos × 30   (días cubiertos = Σ minutos / 1440; medio día cuenta medio)
  * («reactivación» es puntual: no se extrapola).
  */
 import { creditsPerListing, zoneEstimateCredits, zoneListings, type ScraperPortal, type ScraperZone } from "./control-types";
@@ -37,6 +38,12 @@ export const COMPONENT_HELP: Record<CostComponent, string> = {
 /** Zona que el crawler usa cuando no sabe a qué zona atribuir una petición. */
 export const NO_ZONE_KEY = "(sin zona)";
 export const COMPONENT_PREFIX = "cmp:";
+/** Fila de cobertura del libro (zona '*'): `credits` = minutos medidos ese día. No es gasto. */
+export const COVERAGE_TASK = "cov:minutes";
+/** Plan de Crawio contratado (créditos al mes). El presupuesto guardado en ajustes es otra cosa. */
+export const PLAN_CREDITS = 750_000;
+/** Por debajo de estos días medidos la proyección es frágil: faltan tareas periódicas (barridos cada varios días). */
+export const MIN_RELIABLE_DAYS = 7;
 
 export type ComponentCredits = Record<CostComponent, number>;
 export const emptyComponents = (): ComponentCredits => ({ listado: 0, fichas: 0, verificacion: 0, refresco: 0, reactivacion: 0, otros: 0 });
@@ -64,11 +71,11 @@ export type CostsPayload = {
   hasData: boolean;
   from: string;
   to: string;
-  /** Días COMPLETOS con datos del libro dentro de la ventana (hoy no cuenta mientras no acabe). */
+  /** Días con datos del libro (naturales, cualquiera que sea su cobertura). */
   daysMeasured: number;
-  /** true si solo hay datos de hoy (parciales): la proyección se prorratea por las horas transcurridas. */
+  /** true si lo medido no llega a un día entero: la proyección es provisional. */
   provisional: boolean;
-  /** Divisor de la proyección (días medidos, o fracción de hoy si es provisional). */
+  /** Divisor de la proyección: días CUBIERTOS por el libro (Σ minutos medidos / 1440). */
   projectionDays: number;
   portals: Record<ScraperPortal, PortalCosts | null>;
 };
@@ -149,6 +156,27 @@ export function listingOnlyEstimate(
   return n == null ? null : Math.round(n * creditsPerListing(z.portal));
 }
 
+/** «3,5 días» / «1 día» con coma decimal. */
+export function fmtDays(d: number): string {
+  const r = Math.round(d * 10) / 10;
+  return `${String(r).replace(".", ",")} ${r === 1 ? "día" : "días"}`;
+}
+
+/** Aviso «solo N días medidos» mientras el libro cubra poco tiempo (null si ya es fiable). */
+export function shortWindowWarning(projectionDays: number): string | null {
+  if (!(projectionDays > 0) || projectionDays >= MIN_RELIABLE_DAYS) return null;
+  const n = projectionDays < 1 ? "menos de 1 día" : fmtDays(projectionDays);
+  return `Solo ${n} medido${projectionDays === 1 || (projectionDays >= 1 && Math.round(projectionDays * 10) / 10 === 1) ? "" : "s"}: la proyección extrapola ese tramo y no incluye los barridos que corren cada varios días ni los picos puntuales. Se afina sola con los días; es fiable a partir de ${MIN_RELIABLE_DAYS}.`;
+}
+
+/** Suma de lo proyectado por portal a anuncio activo y mes, por componente (null si no se conoce el nº de anuncios). */
+export function perListingByComponent(projected: ComponentCredits, listings: number | null): ComponentCredits | null {
+  if (!listings || listings <= 0) return null;
+  const out = emptyComponents();
+  for (const k of COST_COMPONENTS) out[k] = Math.round((projected[k] / listings) * 100) / 100;
+  return out;
+}
+
 export type MonthView = {
   /** Proyección a 30 días de todos los portales (créditos). */
   projected30: number;
@@ -159,6 +187,9 @@ export type MonthView = {
   budget: number;
   /** % del presupuesto con la proyección a 30 días. */
   pctOfBudget: number;
+  /** Plan de Crawio (750.000) y % que supone la proyección. */
+  plan: number;
+  pctOfPlan: number;
   tone: "ok" | "warn" | "over";
 };
 
@@ -171,5 +202,6 @@ export function monthView(payload: CostsPayload, budget: number, spentPeriod: nu
   const endOfPeriod = spentPeriod == null ? null : Math.round(spentPeriod + daily * Math.max(0, daysLeft));
   const ref = Math.max(projected30, endOfPeriod ?? 0);
   const pctOfBudget = budget > 0 ? Math.round((projected30 / budget) * 100) : 0;
-  return { projected30, spentPeriod, endOfPeriod, budget, pctOfBudget, tone: ref >= budget ? "over" : ref >= budget * 0.85 ? "warn" : "ok" };
+  const pctOfPlan = Math.round((projected30 / PLAN_CREDITS) * 100);
+  return { projected30, spentPeriod, endOfPeriod, budget, pctOfBudget, plan: PLAN_CREDITS, pctOfPlan, tone: ref >= budget ? "over" : ref >= budget * 0.85 ? "warn" : "ok" };
 }
