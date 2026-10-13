@@ -20,6 +20,13 @@ import { catalogFold, catalogZoneMatch, zoneCandidates } from "./zones";
 //      reconocible no entra si hay criterio de zona.
 //   5. Orden COMPLETO y estable: grupo, precio (sin precio al final),
 //      created_at descendente, id. Después, y solo después, el máximo.
+//
+// Ajustes (C1, migración 0196): las exclusiones salen ANTES del máximo; las
+// inclusiones disponibles (España, sin archivar, disponible o reservada; sin
+// foto también) tienen plaza asegurada y se mezclan en el mismo orden. Una
+// inclusión de otra operación va en un grupo posterior (2) por su propio
+// importe. Si hay más inclusiones disponibles que plazas, entran las primeras
+// del orden.
 // ============================================================================
 
 export interface CandidateProperty {
@@ -41,12 +48,44 @@ export interface CandidateProperty {
 
 export interface Candidate {
   id: string;
-  group: 0 | 1;
+  /** 0/1: grupos de la operación del catálogo (en «ambas», venta y alquiler);
+   *  2: inclusiones de otra operación. */
+  group: 0 | 1 | 2;
   price: number | null;
 }
 
+export type AdjustmentKind = "include" | "exclude";
+export interface Adjustment {
+  propertyId: string;
+  kind: AdjustmentKind;
+}
+export type Via = "match" | "include" | "both";
+
 function positive(n: number | null | undefined): number | null {
   return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** España, sin archivar, disponible o reservada (lo mínimo para aparecer). */
+export function isAvailable(p: Pick<CandidateProperty, "country" | "archived_at" | "status">): boolean {
+  return p.country === "es" && !p.archived_at && (p.status === "available" || p.status === "reserved");
+}
+
+/** ¿La operación de la vivienda es la del catálogo? */
+export function fitsOperation(p: Pick<CandidateProperty, "operation" | "operations">, c: CatalogCriteria): boolean {
+  if (c.operation === "sale") return p.operation === "sale";
+  if (c.operation === "rent") return p.operation === "rent" || p.operations.includes("rent");
+  return true;
+}
+
+/** Grupo e importe con los que se ordena una vivienda en este catálogo (los
+ *  mismos que usa candidates() para las coincidencias). */
+export function orderKeyOf(p: CandidateProperty, c: CatalogCriteria): Candidate {
+  if (!fitsOperation(p, c)) return { id: p.id, group: 2, price: positive(p.price) };
+  if (c.operation === "rent") {
+    return { id: p.id, group: 0, price: positive(p.operation === "rent" ? p.price : p.rent_price) };
+  }
+  if (c.operation === "sale") return { id: p.id, group: 0, price: positive(p.price) };
+  return { id: p.id, group: p.operation === "sale" ? 0 : 1, price: positive(p.price) };
 }
 
 export function zoneMatches(p: Pick<CandidateProperty, "zone" | "subzone">, c: CatalogCriteria): boolean {
@@ -114,12 +153,31 @@ export function sortCandidates(list: Candidate[], c: CatalogCriteria, createdAt:
   });
 }
 
-/** Resultado del modo automático: lista ordenada hasta el máximo y total. */
-export function autoSelect(props: CandidateProperty[], c: CatalogCriteria): { ids: string[]; total: number } {
-  const all = sortCandidates(
-    candidates(props, c, { requirePhoto: true }),
-    c,
-    new Map(props.map((p) => [p.id, p.created_at])),
-  );
-  return { ids: all.slice(0, c.max).map((x) => x.id), total: all.length };
+/** Resultado del modo automático: lista ordenada hasta el máximo, con los
+ *  ajustes aplicados. `total` = coincidencias (sin excluidas) + inclusiones que
+ *  no coinciden; `matched` = coincidencias sin excluidas. */
+export function autoSelect(
+  props: CandidateProperty[],
+  c: CatalogCriteria,
+  adjustments: Adjustment[] = [],
+): { ids: string[]; total: number; matched: number; via: Via[] } {
+  const excluded = new Set(adjustments.filter((a) => a.kind === "exclude").map((a) => a.propertyId));
+  const included = new Set(adjustments.filter((a) => a.kind === "include").map((a) => a.propertyId));
+  const matches = candidates(props, c, { requirePhoto: true }).filter((x) => !excluded.has(x.id));
+  const matchIds = new Set(matches.map((m) => m.id));
+  const extra = props.filter((p) => included.has(p.id) && !matchIds.has(p.id) && isAvailable(p)).map((p) => orderKeyOf(p, c));
+  const all = sortCandidates([...matches, ...extra], c, new Map(props.map((p) => [p.id, p.created_at])));
+  const isIncl = (x: Candidate) => included.has(x.id);
+  const nIncl = all.filter(isIncl).length;
+  const keep = new Set([
+    ...all.filter(isIncl).slice(0, c.max).map((x) => x.id),
+    ...all.filter((x) => !isIncl(x)).slice(0, c.max - Math.min(nIncl, c.max)).map((x) => x.id),
+  ]);
+  const selected = all.filter((x) => keep.has(x.id));
+  return {
+    ids: selected.map((x) => x.id),
+    total: all.length,
+    matched: matches.length,
+    via: selected.map((x) => (matchIds.has(x.id) ? (included.has(x.id) ? "both" : "match") : "include")),
+  };
 }

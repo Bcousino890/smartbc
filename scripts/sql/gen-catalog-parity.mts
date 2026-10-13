@@ -3,7 +3,10 @@
  * TS ↔ SQL con datos sintéticos y deterministas:
  *   · ~300 textos de zona → catalogZoneMatch (TS) frente a catalog_zone_match;
  *   · 500 propiedades y 40 juegos de criterios → autoSelect (TS) frente a
- *     catalog_select (lista ordenada y total).
+ *     catalog_select (lista ordenada, total, coincidencias y `via`), cada juego
+ *     con ajustes aleatorios (C1, 0196): exclusiones de seleccionadas y de
+ *     otras, e inclusiones de cualquier estado (las no disponibles no cuentan),
+ *     a veces más que el máximo.
  * Lo ejecuta scripts/sql/test-catalogs-core.sh (escenario 2d):
  *   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
  *     scripts/sql/gen-catalog-parity.mts > <tmp>.sql
@@ -11,7 +14,7 @@
 import { MADRID_DISTRICTS } from "../../lib/madrid-zones.ts";
 import { catalogBarrios, catalogDistricts, catalogZoneMatch } from "../../lib/catalogs/zones.ts";
 import { normalizeCriteria } from "../../lib/catalogs/criteria.ts";
-import { autoSelect, type CandidateProperty } from "../../lib/catalogs/selection.ts";
+import { autoSelect, fitsOperation, type Adjustment, type CandidateProperty } from "../../lib/catalogs/selection.ts";
 
 let seed = 20261013;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
@@ -105,9 +108,13 @@ const universe = [...props, ...fixtures];
 out.push("SET ROLE service_role;");
 out.push("SELECT catalog_create('00000000-0000-0000-0000-0000000000f1', 'Paridad', NULL) AS cat \\gset");
 out.push("RESET ROLE;");
-out.push("CREATE TEMP TABLE sel_mismatch (n int, crit jsonb, ts uuid[], sqlr uuid[], ts_total int, sql_total int);");
+out.push("CREATE TEMP TABLE sel_mismatch (n int, crit jsonb, ts uuid[], sqlr uuid[], ts_total int, sql_total int, ts_matched int, sql_matched int, ts_via text[], sql_via text[]);");
 out.push("CREATE TEMP TABLE crit_list (c jsonb);");
 const allDistricts = catalogDistricts();
+let withIncl = 0;
+let withOutside = 0;
+let overMax = 0;
+let otherOp = 0;
 for (let n = 0; n < 40; n++) {
   const operation = pick(["sale", "rent", "any"] as const);
   const zones = Array.from({ length: Math.floor(rnd() * 4) }, () => {
@@ -128,19 +135,41 @@ for (let n = 0; n < 40; n++) {
   };
   const norm = normalizeCriteria(raw);
   if (!norm.ok) throw new Error(`criterios inválidos en el generador: ${JSON.stringify(raw)}`);
-  const exp = autoSelect(universe, norm.criteria);
+  // Ajustes: excluir 0–2 de las seleccionadas sin ajustes y 0–2 al azar;
+  // incluir 0–5 al azar (cualquier estado o país). Un ajuste por vivienda.
+  const base = autoSelect(universe, norm.criteria);
+  const adj = new Map<string, Adjustment["kind"]>();
+  for (let e = Math.floor(rnd() * 3); e > 0 && base.ids.length; e--) adj.set(pick(base.ids), "exclude");
+  for (let e = Math.floor(rnd() * 3); e > 0; e--) adj.set(pick(props).id, "exclude");
+  for (let e = Math.floor(rnd() * 6); e > 0; e--) adj.set(pick(props).id, "include");
+  if (n % 7 === 3) for (let e = 0; e < norm.criteria.max + 2; e++) adj.set(pick(props).id, "include");
+  const adjustments: Adjustment[] = [...adj].map(([propertyId, kind]) => ({ propertyId, kind }));
+  const exp = autoSelect(universe, norm.criteria, adjustments);
   const crit = JSON.stringify(norm.criteria);
+  const arr = (ids: string[]) => `ARRAY[${ids.map(q).join(",")}]::uuid[]`;
+  const via = `ARRAY[${exp.via.map(q).join(",")}]::text[]`;
   out.push(`INSERT INTO crit_list VALUES (${q(crit)}::jsonb);`);
+  out.push(`DELETE FROM catalog_adjustments WHERE catalog_id = :'cat';`);
+  if (adjustments.length) {
+    out.push(`INSERT INTO catalog_adjustments (catalog_id, property_id, kind) VALUES ${adjustments.map((a) => `(:'cat', ${q(a.propertyId)}, ${q(a.kind)})`).join(", ")};`);
+  }
   out.push(`INSERT INTO sel_mismatch
-SELECT ${n}, ${q(crit)}::jsonb, ARRAY[${exp.ids.map(q).join(",")}]::uuid[], r.ids, ${exp.total}, r.total
-  FROM (SELECT coalesce(array_agg(property_id ORDER BY ord), '{}') AS ids, coalesce(max(total), 0)::int AS total
+SELECT ${n}, ${q(crit)}::jsonb, ${arr(exp.ids)}, r.ids, ${exp.total}, r.total, ${exp.matched}, r.matched, ${via}, r.via
+  FROM (SELECT coalesce(array_agg(property_id ORDER BY ord), '{}') AS ids, coalesce(max(total), 0)::int AS total,
+               coalesce(max(matched), 0)::int AS matched, coalesce(array_agg(via ORDER BY ord), '{}') AS via
           FROM catalog_select(:'cat', catalog_criteria_normalize(${q(crit)}::jsonb))) r
- WHERE r.ids IS DISTINCT FROM ARRAY[${exp.ids.map(q).join(",")}]::uuid[] OR r.total <> ${exp.total};`);
+ WHERE r.ids IS DISTINCT FROM ${arr(exp.ids)} OR r.total <> ${exp.total} OR r.matched <> ${exp.matched} OR r.via IS DISTINCT FROM ${via};`);
+  if (adjustments.some((a) => a.kind === "include")) withIncl++;
+  if (exp.via.includes("include")) withOutside++;
+  if (adjustments.filter((a) => a.kind === "include").length > norm.criteria.max) overMax++;
+  const byId = new Map(universe.map((p) => [p.id, p]));
+  if (exp.ids.some((id) => !fitsOperation(byId.get(id)!, norm.criteria))) otherOp++;
 }
 out.push(`SELECT test_util.ok((SELECT count(*) FROM crit_list WHERE catalog_criteria_normalize(c) <> c) = 0, 'paridad de criterios: SQL normaliza igual que TS (40 juegos)');`);
 out.push(`SELECT test_util.ok((SELECT count(*) FROM sel_mismatch) = 0,
-  'paridad de selección TS ↔ SQL (40 criterios × 504 propiedades; distintos: ' ||
-  coalesce((SELECT string_agg(n::text || ' ' || crit::text || ' ts=' || ts_total || ' sql=' || sql_total, ' | ') FROM sel_mismatch), 'ninguno') || ')');`);
+  'paridad de selección TS ↔ SQL con ajustes (40 criterios × 504 propiedades; distintos: ' ||
+  coalesce((SELECT string_agg(n::text || ' ' || crit::text || ' ts=' || ts_total || '/' || ts_matched || ' ' || ts_via::text || ' sql=' || sql_total || '/' || sql_matched || ' ' || sql_via::text, ' | ') FROM sel_mismatch), 'ninguno') || ')');`);
+out.push(`\\echo 'paridad con ajustes: ${withIncl} juegos con inclusiones, ${withOutside} con inclusiones fuera de criterios, ${overMax} con más inclusiones que el máximo, ${otherOp} con inclusiones de otra operación en la lista'`);
 out.push(`SELECT test_util.ok((SELECT count(*) FROM properties WHERE slug LIKE 'par-%') = 500, 'paridad: 500 propiedades sintéticas cargadas');`);
 out.push("\\echo 'paridad TS ↔ SQL: todo en verde'");
 process.stdout.write(out.join("\n") + "\n");

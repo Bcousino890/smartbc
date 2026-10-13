@@ -18,6 +18,7 @@ import { CATALOG_ZONE_ALIASES, catalogBarrios, catalogDistricts, catalogZoneMatc
 import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
 import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
+import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import {
   clientDescriptionSrc,
   findForbiddenKeys,
@@ -279,13 +280,69 @@ async function liveTests() {
       P({ id: "g", operation: "rent", operations: ["rent"], price: 3000 }), P({ id: "h", operations: ["sale", "rent"], price: 2000, rent_price: 4000 }),
     ];
     const c1 = normalizeCriteria({ operation: "sale", zones: [{ kind: "district", name: "Salamanca" }, { kind: "barrio", name: "Justicia" }], max: 3 });
-    const res = c1.ok ? autoSelect(props, c1.criteria) : { ids: [], total: 0 };
+    const res0 = c1.ok ? autoSelect(props, c1.criteria) : { ids: [], total: 0 };
+    const res = { ids: res0.ids, total: res0.total };
     check("orden completo y estable, después el máximo (total completo)", JSON.stringify(res) === JSON.stringify({ ids: ["f", "b", "a"], total: 5 }), JSON.stringify(res));
     const c2 = normalizeCriteria({ operation: "rent" });
     check("alquiler: la dual compara su precio de alquiler", c2.ok && JSON.stringify(autoSelect(props, c2.criteria).ids) === JSON.stringify(["g", "h"]));
     const c3 = normalizeCriteria({ operation: "sale", price_min: 1 });
     check("con rango, sin precio no entra; sin rango sí (al final)", c3.ok && !autoSelect(props, c3.criteria).ids.includes("c") && d.ok && autoSelect(props, { ...d.criteria, operation: "sale" }).ids.at(-1) === "c");
     check("búsqueda manual: sin foto obligatoria", d.ok && candidates(props, d.criteria, { requirePhoto: false }).some((x) => x.id === "d") && !candidates(props, d.criteria, { requirePhoto: true }).some((x) => x.id === "d"));
+  }
+
+  section("Ampliación C1 · ajustes del automático y explicación (solo gestión)");
+  {
+    const P = (o: Partial<CandidateProperty> & { id: string }): CandidateProperty => ({
+      country: "es", archived_at: null, status: "available", operation: "sale", operations: ["sale"], price: 1000, rent_price: null,
+      zone: "Tetuán", subzone: null, created_at: "2026-01-01T00:00:00Z", photo_count: 1, ...o,
+    });
+    const props = [
+      P({ id: "d1", price: 500 }), P({ id: "d2", price: 600 }), P({ id: "d3", price: 700 }), P({ id: "d4", price: 800, status: "reserved" }),
+      P({ id: "d5", price: 550, zone: "Chamberí", subzone: "Trafalgar" }), P({ id: "d6", price: 650, photo_count: 0 }),
+      P({ id: "d7", operation: "rent", operations: ["rent"], price: 2000 }), P({ id: "d8", operation: "rent", operations: ["rent"], price: 1500 }),
+      P({ id: "d9", price: 900, status: "sold" }), P({ id: "d10", price: 900, country: "cl" }), P({ id: "d12", price: 1500 }),
+    ];
+    const n = normalizeCriteria({ operation: "sale", zones: [{ kind: "district", name: "Tetuán" }], price_max: 1000, max: 3 });
+    const c = n.ok ? n.criteria : (null as never);
+    const sel = (adj: Array<[string, "include" | "exclude"]>, cc = c) =>
+      autoSelect(props, cc, adj.map(([propertyId, kind]) => ({ propertyId, kind })));
+    const show = (r: ReturnType<typeof sel>) => r.ids.map((id, i) => `${id}:${r.via[i]}`).join(",");
+    check("base: 3 de 4 coincidencias", show(sel([])) === "d1:match,d2:match,d3:match" && sel([]).total === 4);
+    check("exclusión antes del máximo: entra la siguiente", show(sel([["d1", "exclude"]])) === "d2:match,d3:match,d4:match" && sel([["d1", "exclude"]]).matched === 3);
+    check("inclusión fuera de zona: plaza asegurada y mezclada por precio",
+      show(sel([["d1", "exclude"], ["d5", "include"]])) === "d5:include,d2:match,d3:match", show(sel([["d1", "exclude"], ["d5", "include"]])));
+    check("inclusión sin foto: entra en su sitio", show(sel([["d1", "exclude"], ["d5", "include"], ["d6", "include"]])) === "d5:include,d2:match,d6:include");
+    const c5 = { ...c, max: 5 };
+    check("otra operación: grupo posterior por su propio importe (nunca mezclado con venta)",
+      show(sel([["d5", "include"], ["d7", "include"], ["d8", "include"]], c5)) === "d1:match,d5:include,d2:match,d8:include,d7:include",
+      show(sel([["d5", "include"], ["d7", "include"], ["d8", "include"]], c5)));
+    check("incluir una que ya coincide: una vez («both»)", show(sel([["d2", "include"]])) === "d1:match,d2:both,d3:match");
+    check("inclusiones no disponibles (vendida, Chile) no cuentan", show(sel([["d9", "include"], ["d10", "include"]])) === "d1:match,d2:match,d3:match");
+    const over = sel([["d5", "include"], ["d6", "include"], ["d7", "include"], ["d8", "include"]]);
+    check("más inclusiones disponibles que plazas: las primeras del orden y nunca más que el máximo",
+      show(over) === "d5:include,d6:include,d8:include", show(over));
+
+    const ex = (id: string, adj: "include" | "exclude" | null) => explainProperty(props.find((p) => p.id === id)!, c, adj);
+    const m = ex("d2", null);
+    check("explicación: coincide (zona, operación y precio)", m.status === "match" && m.headline === "Coincide con los criterios"
+      && m.details.includes("Zona: distrito Tetuán") && m.details.includes("Venta") && m.details.some((d) => d.startsWith("600 € dentro de")), JSON.stringify(m));
+    const inc = ex("d5", "include");
+    check("explicación: incluida fuera de criterios dice qué no cumple", inc.status === "include" && inc.headline === "Incluida a mano · fuera de criterios"
+      && inc.details.some((d) => d.startsWith("Zona «Trafalgar, Chamberí» fuera de: Tetuán")), JSON.stringify(inc));
+    check("explicación: inclusión sin foto avisa", ex("d6", "include").warnings.includes("Sin foto: el lector la mostrará sin imagen"));
+    const other = ex("d7", "include");
+    check("explicación: otra operación avisa y no compara importes", other.warnings.some((w) => w.startsWith("Otra operación (alquiler)"))
+      && !other.details.some((d) => d.startsWith("Precio")) , JSON.stringify(other));
+    check("explicación: excluida a mano (y si coincidiría)", ex("d2", "exclude").headline === "Excluida a mano (coincidiría con los criterios)"
+      && ex("d12", "exclude").headline === "Excluida a mano");
+    const out = ex("d12", null);
+    check("explicación: no entra, con el motivo", out.status === "out" && out.details.some((d) => d.startsWith("Precio 1.500 €, por encima de 1.000 €")), JSON.stringify(out));
+    check("explicación: inclusión vendida avisa de que no aparece", ex("d9", "include").warnings.some((w) => w.includes("vendida: no aparece")));
+    check("explicación: «both» cuando también coincide", ex("d2", "include").status === "both");
+    const z = normalizeCriteria({ zones: [{ kind: "district", name: "Salamanca" }, { kind: "barrio", name: "Castellana" }, { kind: "free", name: "Goya" }] });
+    check("zonas redundantes: Castellana y Goya ya están dentro de Salamanca", z.ok
+      && JSON.stringify(zoneRedundancies(z.criteria)) === JSON.stringify(["Castellana ya está dentro de Salamanca", "Goya ya está dentro de Salamanca"]),
+      z.ok ? JSON.stringify(zoneRedundancies(z.criteria)) : "");
   }
 
   section("Ampliación X2 · contacto del catálogo");
