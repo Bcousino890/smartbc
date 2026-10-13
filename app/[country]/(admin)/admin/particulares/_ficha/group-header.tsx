@@ -2,7 +2,7 @@
 
 import type { LinkedAd } from "@/lib/particulares/links-types";
 import { cn } from "@/lib/utils";
-import { formatEuros } from "./format";
+import { formatEuros, groupThousands } from "./format";
 import { opMetrics, type Op, type SourceEvent, signedPct } from "./group-history";
 
 /**
@@ -59,7 +59,7 @@ export function GroupHeader({ members, events }: { members: LinkedAd[]; events: 
       )}
       {cell(
         "Precio por m²",
-        ms.map((m) => (m.pricePerM2 != null ? `${m.pricePerM2.toLocaleString("es-ES")} €${ms.length > 1 ? ` (${m.op === "sale" ? "v" : "a"})` : ""}` : null)).filter(Boolean).join(" · ") || "—",
+        ms.map((m) => (m.pricePerM2 != null ? `${groupThousands(m.pricePerM2)} €/m²${ms.length > 1 ? ` (${m.op === "sale" ? "v" : "a"})` : ""}` : null)).filter(Boolean).join(" · ") || "—",
       )}
     </div>
   );
