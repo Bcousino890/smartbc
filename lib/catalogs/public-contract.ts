@@ -22,6 +22,12 @@ export interface PublicPhoto {
   orientation: PhotoOrientation;
 }
 
+export interface PublicSection {
+  heading: string | null;
+  text: string;
+  photo: number | null;
+}
+
 export interface PublicItem {
   /** Clave pública opaca del elemento (catalog_items.public_key). */
   key: string;
@@ -35,9 +41,19 @@ export interface PublicItem {
   bathrooms: number | null;
   squareMeters: number | null;
   floor: string;
-  /** Solo la descripción ya limpiada para clientes (caché en español). */
+  /** Descripción COMPLETA, íntegra, para «La vivienda en detalle»: el texto
+   *  publicado del catálogo si está vigente; si no, la descripción limpia
+   *  para clientes vigente; si no, null. Nunca el texto del portal. */
   description: string | null;
+  /** Características verificadas (limpias + manuales + datos de la historia). */
   features: string[];
+  /** C2 · Entrada breve de la apertura (o null). */
+  lead: string | null;
+  /** C2 · Hasta 3 puntos verificados, literales. */
+  highlights: string[];
+  /** C2 · Recorrido: secciones cortas con su foto (índice en photos) o sin
+   *  ella. Título solo cuando viene de una historia aprobada. */
+  sections: PublicSection[];
   photos: PublicPhoto[];
   /** Índice de la foto de portada dentro de photos (0 si no hay marca). */
   coverIndex: number;

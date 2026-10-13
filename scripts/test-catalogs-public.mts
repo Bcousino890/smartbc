@@ -20,6 +20,8 @@ import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts"
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
+import { deriveEditorial, highlightCandidates, leadFrom, type EditorialInput } from "../lib/catalogs/editorial.ts";
+import { textBlocker } from "../lib/catalogs/text-rules.ts";
 import {
   coverPhotoOf,
   clientDescriptionSrc,
@@ -313,6 +315,80 @@ async function liveTests() {
       const src = readFileSync("lib/services/story/engine.ts", "utf8");
       return src.includes('from "./source-hash"') && !/JSON\.stringify\(\[ENGINE_VERSION/.test(src);
     })());
+  }
+
+  section("Ampliación C2 · recorrido editorial (Z3)");
+  {
+    const CLEAN = "Piso exterior y muy luminoso en una finca señorial. Cocina reformada con salida a un patio tranquilo. " +
+      "Los tres dormitorios dan a la calle y el principal tiene baño en suite. El salón se abre a un balcón corrido.";
+    const base = (o: Partial<EditorialInput> = {}): EditorialInput => ({
+      description: "Texto del portal. Llame al 600 123 456.", features: ["Ascensor"], features_manual: ["Trastero"],
+      bedrooms: 3, bathrooms: 2, square_meters: 110, zone: "Madrid", subzone: "Delicias",
+      cleanDescription: CLEAN, cleanFeatures: ["Ascensor", "Terraza de 20 m²", "Calefacción central", "Llame al 600 111 222"],
+      text: null, story: null,
+      photos: [{ u: "0" }, { u: "1", k: "kitchen" }, { u: "2", k: "living_room" }, { u: "3", k: "terrace_outdoor" }, { u: "4" }],
+      coverIndex: 0, ...o,
+    });
+    const storyHash = storySourceHash({ description: "Texto del portal. Llame al 600 123 456.", bedrooms: 3, bathrooms: 2, squareMeters: 110, features: ["Ascensor", "Trastero"] });
+    const story = { h: storyHash, p: "Un piso con luz de la mañana a la tarde.", b: [
+      { c: "kitchen", t: "Cocina reformada con salida a un patio tranquilo y despensa original." },
+      { c: "living", t: "El salón se abre a un balcón corrido sobre la calle, con techos altos." },
+      { c: "building", t: "Portería." },
+      { c: "outdoor", t: "Terraza de 20 m² orientada al sur, con vistas despejadas." },
+    ] };
+
+    const c = deriveEditorial(base());
+    check("nivel limpio: entrada = 1–2 primeras frases literales (≤ 45 palabras)", c.level === "clean"
+      && c.lead === "Piso exterior y muy luminoso en una finca señorial. Cocina reformada con salida a un patio tranquilo.", c.lead ?? "");
+    check("nivel limpio: secciones SIN títulos y con fotos en su orden (sin la de portada)", c.sections.length === 1
+      && c.sections[0].heading === null && c.sections[0].photo === 1 && c.sections[0].text.startsWith("Los tres dormitorios"));
+    check("descripción completa íntegra, carácter a carácter", c.description === CLEAN);
+    check("puntos verificados: literales, de la lista cerrada, sin contacto (máx. 3)",
+      JSON.stringify(c.highlights) === JSON.stringify(["Ascensor", "Terraza de 20 m²", "Calefacción central"]), JSON.stringify(c.highlights));
+    check("detalle: características limpias + manuales, sin contacto y sin duplicados",
+      JSON.stringify(c.features) === JSON.stringify(["Ascensor", "Terraza de 20 m²", "Calefacción central", "Trastero"]), JSON.stringify(c.features));
+
+    const st = deriveEditorial(base({ story }));
+    check("historia vigente: entrada = la aprobada; capítulos con su título", st.level === "story" && st.lead === story.p
+      && JSON.stringify(st.sections.map((x) => x.heading)) === JSON.stringify(["Cocina y comedor", "Salón y luz", "Vida al aire libre"]), JSON.stringify(st.sections.map((x) => x.heading)));
+    check("historia: foto de la clase de cada capítulo (sin repetir, sin la portada)",
+      JSON.stringify(st.sections.map((x) => x.photo)) === JSON.stringify([1, 2, 3]), JSON.stringify(st.sections.map((x) => x.photo)));
+    check("historia: el micro-capítulo pasa al detalle", !st.sections.some((x) => x.text === "Portería.") && st.features.includes("Portería"));
+    check("historia: la descripción completa sigue siendo la limpia vigente", st.description === CLEAN);
+
+    const stale = deriveEditorial(base({ story, bedrooms: 4 }));
+    check("historia con la fuente cambiada: no se usa (vuelve el nivel limpio)", stale.level === "clean" && !stale.sections.some((x) => x.heading));
+
+    const tx = deriveEditorial(base({ story, text: { b: "Una vivienda pensada para vivir con calma. Tiene una cocina amplia y luminosa. " + "Frase de relleno. ".repeat(80), l: "Calma y luz en Delicias", h: ["Terraza de 20 m²", "Inventado"] } }));
+    check("texto del catálogo vigente: manda sobre la historia y la limpia", tx.level === "text" && tx.lead === "Calma y luz en Delicias");
+    check("texto: los puntos elegidos valen solo si siguen siendo candidatos", JSON.stringify(tx.highlights) === JSON.stringify(["Terraza de 20 m²"]));
+    check("texto: sin título inventado y descripción completa íntegra", tx.sections.every((x) => x.heading === null) && tx.sections.length > 1
+      && tx.description?.startsWith("Una vivienda pensada") === true && tx.description?.endsWith("Frase de relleno.") === true);
+    check("texto sin entrada propia: la entrada son sus primeras frases y no se repiten en las secciones",
+      (() => { const r = deriveEditorial(base({ text: { b: "Primera frase corta. Segunda frase corta. Tercera frase.", l: null, h: [] } }));
+        return r.lead === "Primera frase corta. Segunda frase corta." && r.sections.length === 1 && r.sections[0].text === "Tercera frase."; })());
+
+    const facts = deriveEditorial(base({ cleanDescription: null, cleanFeatures: [] }));
+    check("sin texto: solo datos y fotos (sin secciones ni entrada inventadas)", facts.level === "facts" && facts.lead === null
+      && facts.sections.length === 0 && facts.description === null && JSON.stringify(facts.highlights) === JSON.stringify(["Trastero"]));
+    const leak = deriveEditorial(base({ cleanDescription: "Piso muy luminoso con vistas. Más información en www.agencia.com o en el 600 123 456. Cocina amplia." }));
+    check("privacidad: ninguna sección ni entrada con contacto, URL o agencia", !JSON.stringify(leak.sections).match(/agencia|600 123|www\./) && !(leak.lead ?? "").match(/www\./));
+    const long = "Frase larga de una descripción real con detalles de la vivienda y su entorno. ".repeat(40).trim();
+    const lg = deriveEditorial(base({ cleanDescription: long }));
+    check("descripción de 3.000 caracteres: íntegra en el detalle y repartida sin perder texto", lg.description === long
+      && long.length >= 3000 && (lg.lead + " " + lg.sections.map((x) => x.text).join(" ")).replace(/\s+/g, " ") === long.replace(/\s+/g, " "));
+    check("ninguna sección vacía", [c, st, tx, lg].every((r) => r.sections.every((x) => x.text.trim().length > 0)));
+    check("entrada: una primera frase de > 45 palabras no se recorta (sin entrada)", leadFrom(("palabra ").repeat(50) + ".").lead === null);
+    check("candidatos: deduplicados sin tildes", JSON.stringify(highlightCandidates(["Calefacción", "calefaccion"], [])) === JSON.stringify(["Calefacción"]));
+    const pubC = toPublicCatalog(snap([item({ text: { b: "Texto propio del catálogo. Con dos frases.", l: null, h: [] },
+      story: { h: "x", p: "Entrada", b: [{ c: "living", t: "Salón." }] } })]));
+    check("contrato público con texto e historia: sin claves prohibidas, UUID ni huellas internas",
+      findForbiddenKeys(pubC, FORBIDDEN_PUBLIC_KEYS).length === 0 && !UUID_RE.test(JSON.stringify(pubC))
+      && !/"(h|b|l|p|ph|story|level)":/.test(JSON.stringify(pubC)) && pubC.items[0].description === "Texto propio del catálogo. Con dos frases.");
+    check("bloqueos de publicación iguales a SQL (contacto, URL, correo, precio; años y m² no)",
+      textBlocker("Llame al 600 123 456") === "text_has_contact" && textBlocker("www.x.es") === "text_has_contact" && textBlocker("a@b.com") === "text_has_contact"
+      && textBlocker("Por 590.000 €") === "text_has_price" && textBlocker("1.500 euros al mes") === "text_has_price"
+      && textBlocker("Reformado entre 1990-2000, con 120 m² y 3 dormitorios.") === null);
   }
 
   section("Ampliación C1 · ajustes del automático y explicación (solo gestión)");
