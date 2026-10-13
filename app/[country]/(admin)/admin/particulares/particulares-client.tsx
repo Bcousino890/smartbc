@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Loader2, Phone, RefreshCw, Radar, LayoutGrid, List, SlidersHorizontal, Wrench, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/ui/toast";
 import { ZoneFilter, type ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 import type { IdealistaScraperConfig } from "@/lib/api/v1/idealista/config";
@@ -82,6 +82,7 @@ export function ParticularesClient({
   const [layout, setLayout] = useState<CardLayout>("grid");
   const [now, setNow] = useState<number | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -100,18 +101,74 @@ export function ParticularesClient({
   }, [toolsOpen]);
 
   // Ficha abierta = entrada de historial (?ficha=<id>): «atrás» la cierra sin salir de la lista.
+  // Si el anuncio no está en la página actual (enlace directo, resultado de otra
+  // página…) se pide al servidor por id (/api/admin/particulares/[id]).
   const fichaId = searchParams.get("ficha");
-  const selected = fichaId ? (pageRows.find((r) => r.id === fichaId) ?? null) : null;
-  const fichaHref = (id: string) => {
+  const inPage = useMemo(() => (fichaId ? (pageRows.find((r) => r.id === fichaId) ?? null) : null), [fichaId, pageRows]);
+  const [remote, setRemote] = useState<{ id: string; status: "loading" | "error" | "ready"; row?: ParticularRow } | null>(null);
+  const needsRemote = Boolean(fichaId) && !inPage;
+  useEffect(() => {
+    if (!fichaId || !needsRemote) return;
+    if (remote?.id === fichaId && remote.status === "ready") return;
+    const ac = new AbortController();
+    setRemote({ id: fichaId, status: "loading" });
+    fetch(`/api/admin/particulares/${encodeURIComponent(fichaId)}`, { signal: ac.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return (await res.json()) as ParticularRow;
+      })
+      .then((row) => setRemote({ id: fichaId, status: "ready", row }))
+      .catch((e) => {
+        if (ac.signal.aborted || (e as Error)?.name === "AbortError") return;
+        setRemote({ id: fichaId, status: "error" });
+      });
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fichaId, needsRemote]);
+  const remoteForId = remote && remote.id === fichaId ? remote : null;
+  const selected = inPage ?? (remoteForId?.status === "ready" ? (remoteForId.row ?? null) : null);
+
+  // Las dos formas de actualizar una fila (la de la página y la traída por id).
+  const patchRow = useCallback((id: string, patch: Partial<ParticularRow>) => {
+    setPageRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setRemote((prev) => (prev?.row && prev.row.id === id ? { ...prev, row: { ...prev.row, ...patch } } : prev));
+  }, []);
+
+  // Enlace de cada ficha: parte de la URL SIN `ficha`, así no cambia al abrir una
+  // y las tarjetas (memo) no se vuelven a pintar.
+  const baseQs = useMemo(() => {
     const p = new URLSearchParams(searchParams.toString());
-    p.set("ficha", id);
-    return `${pathname}?${p.toString()}`;
-  };
-  function openParticular(row: ParticularRow) {
-    router.push(fichaHref(row.id), { scroll: false });
-  }
+    p.delete("ficha");
+    return p.toString();
+  }, [searchParams]);
+  const fichaHref = useCallback(
+    (id: string) => `${pathname}?${baseQs ? `${baseQs}&` : ""}ficha=${encodeURIComponent(id)}`,
+    [pathname, baseQs],
+  );
+  const openedFromList = useRef(false);
+  const fichaHrefRef = useRef(fichaHref);
+  fichaHrefRef.current = fichaHref;
+  const openParticular = useCallback(
+    (row: ParticularRow) => {
+      openedFromList.current = true;
+      // pushState nativo (Next lo integra con useSearchParams): abrir una ficha no
+      // vuelve a pedir la página al servidor, solo añade la entrada de historial.
+      window.history.pushState(null, "", fichaHrefRef.current(row.id));
+    },
+    [],
+  );
   function closeParticular() {
-    router.back();
+    if (openedFromList.current) {
+      openedFromList.current = false;
+      window.history.back();
+    } else {
+      // Enlace directo: no hay entrada anterior de la lista a la que volver. Se quita
+      // `?ficha=` sin pasar por el servidor (no recarga la lista).
+      const p = new URLSearchParams(window.location.search);
+      p.delete("ficha");
+      const qs = p.toString();
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+    }
   }
 
   // Gestión «contactados / sin gestionar» se remata aquí sobre la página ya traída.
@@ -129,8 +186,22 @@ export function ParticularesClient({
   const showingFrom = visibleRows.length === 0 ? 0 : (currentPage - 1) * ANUNCIOS_POR_PAGINA + 1;
   const showingTo = showingFrom === 0 ? 0 : showingFrom + visibleRows.length - 1;
 
+  // Prefetch de la página siguiente al acercarse al botón (una vez por URL).
+  const prefetched = useRef(new Set<string>());
+  function prefetchPage(n: number) {
+    if (n > totalPages) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("ficha");
+    params.set("page", String(n));
+    const href = `${pathname}?${params.toString()}`;
+    if (prefetched.current.has(href)) return;
+    prefetched.current.add(href);
+    router.prefetch(href);
+  }
+
   function goToPage(n: number) {
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("ficha");
     if (n <= 1) params.delete("page");
     else params.set("page", String(n));
     const qs = params.toString();
@@ -177,16 +248,16 @@ export function ParticularesClient({
     }
   }
 
-  function handleCopyPhone(phone: string, id: string) {
+  const handleCopyPhone = useCallback((phone: string, id: string) => {
     navigator.clipboard.writeText(phone.replace(/[\s\-().]/g, "")).catch(() => {});
     setCopiedPhoneId(id);
     setTimeout(() => setCopiedPhoneId(null), 2000);
-  }
+  }, []);
 
   const chips = buildChips(f);
   const extraChips = chips.filter((c) => c.tone !== "scope");
   const panelCount = countPanelFilters(f);
-  const busy = f.pending || pageNavPending;
+  const busy = f.pending || f.settling || pageNavPending;
 
   const opValue = operation === "" ? "all" : operation;
   // Con texto en la búsqueda se mira en todos los estados y anunciantes (ver page.tsx).
@@ -195,25 +266,39 @@ export function ParticularesClient({
 
   return (
     <>
+      {fichaId && !selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="Ficha del anuncio">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            {remoteForId?.status === "error" ? (
+              <>
+                <p role="alert" className="text-sm font-semibold text-red-800">Anuncio no encontrado</p>
+                <p className="mt-1 text-xs text-ink/65">Puede que se haya eliminado o que el enlace no sea correcto.</p>
+                <button type="button" onClick={closeParticular} className={cn("mt-4 h-10 rounded-xl bg-ink px-5 text-sm font-semibold text-cream-50", FOCUS_RING)}>
+                  Cerrar
+                </button>
+              </>
+            ) : (
+              <p role="status" className="flex items-center justify-center gap-2 text-sm text-ink/75">
+                <Loader2 size={16} className="animate-spin" aria-hidden /> Cargando ficha…
+              </p>
+            )}
+          </div>
+        </div>
+      )}
       {selected && (
         <ParticularModal
+          key={selected.id}
           row={selected}
           onClose={closeParticular}
-          onPhoneUpdated={(newPhone) =>
-            setPageRows((prev) => prev.map((r) => (r.id === selected.id ? { ...r, phone: newPhone } : r)))
-          }
-          onAssigned={(advisorId, advisorName) =>
-            setPageRows((prev) => prev.map((r) => (r.id === selected.id ? { ...r, assigned_to: advisorId, assigned_name: advisorName } : r)))
-          }
-          onActiveChanged={(active, takenDownAt) =>
-            setPageRows((prev) => prev.map((r) => (r.id === selected.id ? { ...r, is_active: active, taken_down_at: takenDownAt } : r)))
-          }
+          onPhoneUpdated={(newPhone) => patchRow(selected.id, { phone: newPhone })}
+          onAssigned={(advisorId, advisorName) => patchRow(selected.id, { assigned_to: advisorId, assigned_name: advisorName })}
+          onActiveChanged={(active, takenDownAt) => patchRow(selected.id, { is_active: active, taken_down_at: takenDownAt })}
           staffOptions={staffOptions}
           canCreateProperty={!currentRole || canAccess(currentRole, "properties", "create")}
         />
       )}
 
-      <FiltersPanel open={filtersOpen} onClose={() => setFiltersOpen(false)} f={f} total={total} currentUserId={currentUserId} />
+      <FiltersPanel open={filtersOpen} onClose={closeFilters} f={f} total={total} busy={busy} currentUserId={currentUserId} />
       <ScraperDialog open={scrapersOpen} onClose={() => setScrapersOpen(false)} config={scraperConfig} />
 
       {/* Cifras: solo particulares activos, sin copias enlazadas */}
@@ -391,7 +476,7 @@ export function ParticularesClient({
           </div>
         ) : (
           <>
-            <div className={cn("mt-4 grid gap-3 transition-opacity", layout === "list" ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3", busy && "opacity-60")}>
+            <div className={cn("mt-4 grid gap-3 transition-opacity", layout === "list" ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3", busy && "opacity-60")} aria-busy={busy}>
               {visibleRows.map((r) => (
                 <ParticularCard
                   key={r.id}
@@ -413,7 +498,7 @@ export function ParticularesClient({
                   <ChevronLeft size={14} /> Anterior
                 </button>
                 <span className="text-sm font-medium text-ink/75">Página {currentPage} de {fmtNum(totalPages)}</span>
-                <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages || pageNavPending} className={cn("flex h-10 items-center gap-1.5 rounded-xl border border-ink/15 bg-white px-4 text-sm font-semibold text-ink hover:border-ink/40 disabled:opacity-40", FOCUS_RING)}>
+                <button type="button" onPointerEnter={() => prefetchPage(currentPage + 1)} onFocus={() => prefetchPage(currentPage + 1)} onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages || pageNavPending} className={cn("flex h-10 items-center gap-1.5 rounded-xl border border-ink/15 bg-white px-4 text-sm font-semibold text-ink hover:border-ink/40 disabled:opacity-40", FOCUS_RING)}>
                   Siguiente <ChevronRight size={14} />
                 </button>
               </div>
