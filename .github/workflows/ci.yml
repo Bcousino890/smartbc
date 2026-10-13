@@ -51,6 +51,8 @@ jobs:
       # de precios/planta y referencias para añadir propiedades. Puro, sin BD.
       - name: Catálogos (acceso y formato, offline)
         run: npm run test:catalogs
+      - name: Catálogos (contrato público, sincronización y medición, offline)
+        run: npm run test:catalogs-public
 
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build

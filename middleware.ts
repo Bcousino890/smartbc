@@ -16,7 +16,7 @@ import {
 // propiedad. Ambas son públicas y se resuelven con service role en servidor.
 // "/a" → enlace temporal de UN particular (anuncio scrapeado, no ficha
 // nuestra), completamente aparte de "/c"/"/v" — ver migración 0149.
-const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p", "/v", "/a"];
+const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p", "/v", "/a", "/seleccion"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes", "/documentacion"];
 // Los árboles de país (/es/admin, /cl/admin) también son admin: antes solo
 // se protegían en el layout; el middleware ni los miraba.
@@ -142,6 +142,10 @@ export const config = {
     // sesión; isAdmin/isClient no casan con /api), y cada una de estas rutas
     // comprueba sesión y permisos por su cuenta. Si añades una ruta de subida,
     // añádela aquí y que se autentique sola.
-    "/((?!_next/static|_next/image|favicon.ico|api/admin/properties/upload|api/admin/publicacion/upload-media|api/admin/idealista/upload-media|api/admin/idealista/video-music|api/admin/zinto/media/send|api/property-applications/documents/upload|api/property-applications/documents/auto-upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // api/seleccion (BCP-01): canal en vivo y consultas del lector público de
+    // catálogos; sin sesión (entra por token), así se ahorra el refresco de
+    // la cookie en cada consulta de respaldo (2 por segundo) y el SSE no
+    // pasa por aquí.
+    "/((?!_next/static|_next/image|favicon.ico|api/admin/properties/upload|api/admin/publicacion/upload-media|api/admin/idealista/upload-media|api/admin/idealista/video-music|api/admin/zinto/media/send|api/property-applications/documents/upload|api/property-applications/documents/auto-upload|api/seleccion|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

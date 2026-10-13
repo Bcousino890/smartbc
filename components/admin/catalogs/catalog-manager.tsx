@@ -7,12 +7,15 @@ import { ArrowDown, ArrowUp, ArrowLeft } from "lucide-react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
+import { MeasurePanel, useHomeMeasure } from "./measure-panel";
+import { SharePanel, type ShareActions, type ShareView } from "./share-panel";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
 // llegan inyectadas: en la página real son las acciones de servidor (con la
-// guarda del dueño y las funciones SQL de 0192); en la prueba local, falsas.
+// guarda del dueño y las funciones SQL de 0192/0193); en la prueba local,
+// falsas. Fase 2: enlace para compartir y, con ?medir=1, el modo medición.
 
-type Res = ActionResult<{ version: number }>;
+type Res = ActionResult<{ version: number; fingerprint?: string | null }>;
 
 export interface CatalogManagerActions {
   updateMeta: (i: { catalogId: string; title: string; intro?: string | null }) => Promise<Res>;
@@ -45,6 +48,9 @@ export function CatalogManager({
   basePath,
   numberLabel,
   onLocalAdd,
+  share = null,
+  shareActions,
+  measureMode = false,
 }: {
   catalog: CatalogDetail;
   actions: CatalogManagerActions;
@@ -53,6 +59,10 @@ export function CatalogManager({
   numberLabel?: string | null;
   /** Solo en la prueba local: devuelve el elemento sintético que se añadió. */
   onLocalAdd?: (reference: string) => CatalogItemView | null;
+  share?: ShareView | null;
+  shareActions?: ShareActions;
+  /** ?medir=1: instrumenta cada guardado para la medición de D13. */
+  measureMode?: boolean;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(catalog.items);
@@ -62,12 +72,25 @@ export function CatalogManager({
   const [reference, setReference] = useState("");
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
+  const [currentShare, setCurrentShare] = useState<ShareView | null>(share);
+  const measure = useHomeMeasure(measureMode, currentShare && !currentShare.expired ? currentShare.token : null);
 
   useEffect(() => setItems(catalog.items), [catalog.items]);
   useEffect(() => setStatus(catalog.status), [catalog.status]);
 
-  function run(fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void) {
+  useEffect(() => setCurrentShare(share), [share]);
+
+  function run(fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label = ok) {
     setMessage(null);
+    let trial: { trial: string; tStart: number } | null = null;
+    if (measure.enabled) {
+      trial = measure.begin();
+      if (!trial) {
+        onFail?.();
+        setMessage({ kind: "error", text: "Medición: espera a que respondan los lectores del ensayo anterior (máx. 5 s)." });
+        return;
+      }
+    }
     start(async () => {
       const res = await fn();
       if (!res.ok) {
@@ -75,6 +98,7 @@ export function CatalogManager({
         setMessage({ kind: "error", text: res.error });
         return;
       }
+      if (trial) measure.complete(trial, label, res.fingerprint);
       onOk?.();
       setMessage({ kind: "ok", text: ok });
       if (!onLocalAdd) router.refresh();
@@ -93,6 +117,7 @@ export function CatalogManager({
       "Orden guardado.",
       undefined,
       () => setItems(before),
+      "orden",
     );
   }
 
@@ -105,6 +130,7 @@ export function CatalogManager({
       "Propiedad quitada del catálogo.",
       undefined,
       () => setItems(before),
+      "retirada",
     );
   }
 
@@ -119,12 +145,14 @@ export function CatalogManager({
         const local = onLocalAdd?.(ref);
         if (local) setItems((xs) => [...xs, local]);
       },
+      undefined,
+      "alta",
     );
   }
 
   function saveMeta(e: React.FormEvent) {
     e.preventDefault();
-    run(() => actions.updateMeta({ catalogId: catalog.id, title, intro }), "Datos guardados.");
+    run(() => actions.updateMeta({ catalogId: catalog.id, title, intro }), "Datos guardados.", undefined, undefined, "edición");
   }
 
   function toggleStatus() {
@@ -314,10 +342,16 @@ export function CatalogManager({
               Guardar
             </button>
           </form>
-          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-3 text-xs text-ink/55">
-            El enlace para compartir, el lector y la descarga en PDF llegan en las fases siguientes. Por ahora el
-            catálogo no es visible para nadie más.
-          </p>
+          {shareActions ? (
+            <SharePanel
+              catalogId={catalog.id}
+              share={currentShare}
+              archived={archived}
+              actions={shareActions}
+              onChange={setCurrentShare}
+            />
+          ) : null}
+          {measureMode ? <MeasurePanel measure={measure} hasShare={!!currentShare && !currentShare.expired} /> : null}
         </aside>
       </div>
     </div>

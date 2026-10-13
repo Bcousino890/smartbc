@@ -83,3 +83,91 @@ Revisión adicional de Codex: no solicitada por Fabricio para la fase 1.
 - **CI del último commit** (este registro): se comprueba tras el push; su resultado está en el PR.
 - **Merge:** lo decide Fabricio. Puede disparar el despliegue y aplicar `0192` en producción según el script versionado.
 - Se conservan el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01` y la rama.
+
+---
+
+# Fase 2 · PR-2 «Enlace y lector en vivo»
+
+## Base y commits
+
+Rama `fabri/bcp-01-fase2`, base `0af50705bcab0a7855ab4bec66849268a633699e` (merge de #310; `origin/main` al empezar y otra vez antes del push, comprobado con `git fetch` y `git ls-remote`). Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-fase2`. El `main` local, el stash, las demás ramas y el worktree de la fase 1 no se tocaron.
+
+| Commit | Tarea |
+| --- | --- |
+| `96629f5` | T6 · migración `0193_catalog_public.sql`, pruebas SQL, reversión |
+| `937d624` | T6–T10 · contrato público, enlaces, lector C, sincronización, medición, datos de prueba |
+| siguiente | Expediente de la fase 2 y registro del PR |
+
+Número de migración: `0188`–`0192` ya existen, así que la fase 2 usa `0193` (el plan decía `0189`). Comprobado libre en `origin/main` antes del push.
+
+## Qué hay
+
+- **0193** (solo funciones nuevas, todas `SECURITY INVOKER`, `search_path` fijo, `EXECUTE` solo para `service_role`): `catalog_internal_snapshot`, `get_public_catalog`, `get_catalog_states`, `catalog_public_fingerprint` y `catalog_share_create/renew/revoke`.
+- **Contrato público** (`lib/catalogs/public-contract.ts`, `to-public.ts`): lista cerrada de campos; fotos por `/p/{slug}/{i}.webp`; descripción y características **solo** si existe la versión limpiada para clientes en español y sigue correspondiendo al texto actual de la ficha.
+- **Enlaces** (T7): crear (60 días por defecto, 1–365), renovar con el mismo enlace aunque haya caducado, revocar. Panel en la gestión del catálogo.
+- **Lector** `/seleccion/[token]` (T8): C · Boutique, doble página desde 900 × 620 y una página por debajo, índice, galería, teclado, deslizar, cápsula «← n / N →», modo desplazamiento (recordado en el navegador), «reducir movimiento», D12 (siguiente, índice, vacío), aviso sin conexión, caducidad local y una única vista de «no disponible».
+- **Sincronización** (T9, E4): `GET /api/seleccion/[token]/eventos` (SSE: `hello`, `update` con el contenido entero, `ping` cada 500 ms, `unavailable`) y `GET /api/seleccion/[token]/estado` (respaldo). Vigilante único por proceso cada 300 ms; las acciones avisan al guardar.
+- **Medición** (T10, E5): `?medir=1` en la gestión y en el lector.
+- **Datos de prueba** (T11): almacén en memoria y API de cambios solo con `NODE_ENV=development` + `CATALOG_FIXTURES=1`.
+
+## Verificaciones
+
+Todas en local (E7), con Node 22.23.3, datos sintéticos y sin red externa en el navegador.
+
+| Comprobación | Orden | Resultado |
+| --- | --- | --- |
+| Pruebas SQL de 0192 + 0193 (Postgres 16 temporal) | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-catalogs-core.sh` | Todos los escenarios en verde, **145 comprobaciones**. 0193: instantánea sin UUID, correo del dueño ni URL de almacenamiento; huella que cambia con el precio de una propiedad que **no** es la última editada, con el borrado en cascada, al pasar a vendida/archivada (sale) o reservada (marca), con alta/baja/orden/portada/URL de fotos, `features`, `floor_override` y descripción limpia, orden y título; que **no** cambia con propiedades de fuera del catálogo; función de instantánea de una sola sentencia; revocado, caducado o archivado → `valid=false` con la misma huella; nuevo enlace tras revocar con otro token; renovar un enlace caducado lo reactiva con el mismo token; días fuera de 1–365, enlace duplicado, sin enlace y actor ajeno rechazados; `anon` y `authenticated` sin permiso en las 7 funciones; 0193 aplicada dos veces, revertida y vuelta a aplicar. |
+| Lint de migraciones | `python3 scripts/lint-migrations.py` | OK |
+| Tests puros nuevos (en CI) | `npm run test:catalogs-public` | **99 en verde**: privacidad del contrato (claves prohibidas, UUID, URL de almacenamiento, teléfono de otra agencia en la descripción, caché desfasada), días del enlace; vigilante con reloj simulado (cambio en ≤ 300 ms con contenido completo, `poke`, lector con huella vieja al darse de alta, latido verificado, una consulta por pasada, `unavailable` sin cambio de contenido, **0 temporizadores** sin lectores, guardado durante una consulta en curso); cliente (arranque con guardado durante el saludo, caída del SSE justo antes de guardar → visible ≤ 2 s por el respaldo, SSE que nunca conecta, revocación por SSE y por consulta, caducidad local sin red, aviso sin conexión, `stop()` sin temporizadores); D12; espera de gesto ≤ 0,38 s; medición (pintado antes de la confirmación → «≤ 0 s», A → B → A sin reutilizar la pintura vieja, versión posterior que no se empareja con un ensayo anterior, lector ausente → fallo, duplicados y otro catálogo ignorados, 20 × 2 → aprueba, > 2 s o un solo lector → fallo). |
+| Tests puros de la fase 1 | `npm run test:catalogs` | En verde |
+| Tipos | `npx tsc --noEmit` | Sin errores |
+| Guía tipográfica | `npm run test:typography` | Las mismas 15 infracciones previas que en la base, ninguna nueva (comparado línea a línea). Fuera de CI. |
+| Regresiones | `test:viewing-collections`, `test:client-shortlist`, `test:portal-links`, `test:smartlink`, `test:particulares`, `test:idealista`, `test:lead-merge`, `test:zinto-v2` | Todos en verde |
+| `/v`, `/s`, `/c`, `/compartir`, `/p` | `git diff 0af5070..HEAD` | Sin cambios |
+| Lector e integración local | `scripts/dev-fixtures.sh` + Playwright del proyecto (Chrome con proxy a un puerto cerrado) | **52 en verde** a 1440 × 900 y 362 × 780 táctil: navegación, índice, galería, teclado, deslizar, cápsula, modo desplazamiento y su memoria, menos movimiento, catálogos de 1, 4 y 12 viviendas y vacío, título de 120 caracteres, descripción de 1.500, doce fotos, foto vertical, reservada, precio y planta sin dato, venta y alquiler, cierre con el teléfono de la agencia, sin UUID en el HTML, `noindex`, fuentes Fraunces + Karla, **0 desbordes**. En vivo: cambio de precio, D12 a la siguiente y al índice, galería abierta cuya vivienda se quita, vacío, revocación sin cambio de contenido, caducidad, token inexistente, SSE bloqueado → respaldo, sin conexión → aviso y vuelta. |
+| Enlace en la gestión (local) | Playwright sobre `/dev-fixtures` | 10 en verde: 60 por defecto, 0/366/2,5 rechazados, crear, renovar (mismo enlace), revocar, 362 px sin desbordes. |
+| Medición sintética de punta a punta | HOME de prueba `?vivo=1&medir=1` + 2 lectores `?medir=1` | 20 ensayos (5 altas, 5 ediciones, 5 órdenes, 5 retiradas) × 2 lectores = 40 resultados, 0 fallos, máximo 0,03 s; repetida dos veces. **Sintética: no demuestra D13 en vivo.** |
+| Otras cifras locales (sintéticas) | — | Revocación vista en ~40 ms; respaldo sin SSE: cambio visible en 389–459 ms. |
+| Build de Next | CI del PR | Ver «PR, CI y merge». |
+
+Correcciones hechas durante la revisión local: índice que desbordaba con títulos largos, galería móvil con el botón de cerrar fuera de pantalla, modo desplazamiento y paso de página que ensanchaban la página en móvil, folio que pisaba una descripción larga, hueco sobre la foto en móvil y **título de la portada que recortaba descendentes y acentos** (`catalog-cover.module.css`, pieza de la fase 1: corrección mínima de un defecto real; también mejora las miniaturas de la HOME).
+
+## Criterios de aceptación (fase 2)
+
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| AC7 D13 (≤ 2 s) | Instrumentado; **pendiente: medición en vivo de Fabricio** (20 × 2) | Tests con reloj simulado y medición sintética local. Las cifras locales no demuestran el objetivo en vivo. |
+| AC8 D12 y casos límite | Demostrado en local; **pendiente en vivo** | Tests de `reader-state` e integración local. |
+| AC9 caducidad, revocación y sin conexión | Demostrado en local y SQL; **pendiente en vivo** | Tests SQL, del cliente y de integración. |
+| AC11 privacidad | Demostrado en tests | Tests SQL de la instantánea, tests del contrato y HTML del lector sin UUID. |
+| AC12 aspecto del lector | Capturas locales; **aprobación de Fabricio pendiente** | Capturas a 1440 px y 362 px. |
+| AC13 regresiones y CI | Regresiones locales en verde; CI en el PR | — |
+
+## Pendiente o no demostrado
+
+- **D13 en vivo**: solo lo demuestra la medición de Fabricio (instrucciones en el PR). Si no pasa, se diagnostica sin relajar el objetivo.
+- **nginx y el SSE**: `X-Accel-Buffering: no` y `Cache-Control: no-transform` (este último evita también la compresión de Next). Si nginx lo retiene igualmente, el lector cae al respaldo (consulta cada 500 ms) tras 1 s de silencio; en la medición se notaría.
+- **Descripción de las viviendas**: solo se enseña la versión ya limpiada para clientes (la genera hoy «Ver residencia» de las colecciones `/v`, en español). Sin ella, el lector muestra los datos estructurados y no la descripción. Generarla al añadir la propiedad sería escribir fuera de las tablas del catálogo: no se hace en esta fase.
+- **Cambios desde otras pantallas** (precio, fotos, estado de una propiedad editada en su ficha): los recoge el vigilante en ≤ 300 ms porque la huella cubre la instantánea completa. Están dentro de D13; su comprobación en vivo queda pendiente.
+- **Coste del vigilante**: con lectores abiertos, una consulta cada 300 ms que calcula la instantánea de cada enlace abierto. Sin lectores, nada.
+- **Varios procesos**: el aviso inmediato de las acciones es del proceso; con un solo proceso de PM2 (lo documentado) no importa.
+- Diferencias con producción no comprobadas: versión de Postgres, datos reales y nginx.
+
+## Recuperación
+
+- **Código:** `git revert` del merge en otro PR.
+- **Datos:** `rollback-0193.sql` borra solo las 7 funciones (los enlaces creados quedan en `catalog_shares`, de 0192, pero nadie puede abrirlos). Lo ejecuta una persona y luego quita su fila de `schema_migrations`. Probado en el Postgres temporal.
+- **Enlaces de QA:** revocarlos desde la gestión al terminar.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada para la fase 2.
+
+## PR, CI y merge (fase 2)
+
+- **PR-2:** [#311](https://github.com/Bcousino890/smartbc/pull/311), `fabri/bcp-01-fase2` → `main`.
+- **`origin/main` antes del push:** seguía en `0af5070…` y `0193` seguía libre (`git fetch` + `git ls-remote`).
+- **CI en `694696d`:** en verde ([run 38428360720](https://github.com/Bcousino890/smartbc/actions/runs/38428360720)): TypeScript, particulares, Idealista, leads, Zinto v2, Catálogos (fase 1), **Catálogos (contrato público, sincronización y medición)**, **build de Next.js** y lint de migraciones.
+- **CI del último commit** (este registro, solo documentación): se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0193` en producción con el script versionado. Después, QA en vivo y la medición de D13 (instrucciones en el PR).
+- Se conservan el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-fase2` y la rama.
