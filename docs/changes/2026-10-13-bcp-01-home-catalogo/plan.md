@@ -108,3 +108,12 @@ T18 fuentes · T19 composición C · T20 ruta de descarga · T21 verificación (
 ## Aprobación
 
 Fabricio, 2026-10-13: aprobó el plan corregido y autorizó la fase 1 (T1–T5, PR-1 y CI; se para antes del merge y antes de la fase 2; sin revisión adicional de Codex).
+
+## Ampliación (aprobada el 2026-10-13)
+
+Plan: [ampliacion-plan.md](ampliacion-plan.md), aprobado por Fabricio el 2026-10-13 (incluido el máximo automático de 1 a 24). Autorización actual: X0–X3 / PR-A, con parada antes del merge. Tres PR:
+- **A**, marca, contacto y cierre (`0194`);
+- **B**, zonas, precio, modos y anuncios (`0195`);
+- **C**, recorrido editorial (`0196`).
+
+Tareas X0–X13. Los números de migración se vuelven a comprobar antes de cada push.

@@ -9,7 +9,11 @@
  *     scripts/test-catalogs-public.mts
  */
 import { createHash } from "node:crypto";
-import { AGENCY_PHONE, FORBIDDEN_PUBLIC_KEYS, UUID_RE } from "../lib/catalogs/public-contract.ts";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { FORBIDDEN_PUBLIC_KEYS, UUID_RE } from "../lib/catalogs/public-contract.ts";
+import { isValidContactName, validateCatalogContact } from "../lib/catalogs/contact.ts";
+import { contactPhoneHref, contactRoleLabel, formatContactPhone } from "../lib/catalogs/contact-format.ts";
 import {
   clientDescriptionSrc,
   findForbiddenKeys,
@@ -89,7 +93,8 @@ function snap(items: InternalItem[], over: Partial<InternalSnapshot> = {}): Inte
     intro: "Una selección para ti.",
     created_at: "2026-10-13T10:00:00Z",
     status: "active",
-    owner_name: "Fabricio Andrée",
+    owner_name: "Perfil Del Dueño",
+    contact: { name: "Laura Méndez", phone: "+34600111222", role: "asesora" },
     items,
     ...over,
   };
@@ -139,7 +144,9 @@ function pubCatalog(keys: string[], title = "Catálogo"): PublicCatalog {
     intro: null,
     edition: "Otoño 2026",
     preparedBy: "Fabricio Andree",
-    phone: AGENCY_PHONE,
+    phone: "+34 641 457 123",
+    phoneHref: "tel:+34641457123",
+    role: "asesor",
     coverPhoto: null,
     items: keys.map((key) => ({
       key,
@@ -212,6 +219,57 @@ class FakeEs implements EventSourceLike {
 }
 
 async function liveTests() {
+  section("Ampliación X2 · contacto del catálogo");
+  {
+    const ok = validateCatalogContact({ name: "  Laura Méndez ", phone: "600 111 222", role: "asesora" });
+    check("contacto válido normalizado a E.164", ok.ok && ok.contact.phone === "+34600111222" && ok.contact.name === "Laura Méndez");
+    const intl = validateCatalogContact({ name: "Laura", phone: "0044 7700 900123", role: "asesor" });
+    check("internacional 00 → +", intl.ok && intl.contact.phone === "+447700900123");
+    const bad: Array<[Record<string, unknown>, string]> = [
+      [{ name: "L", phone: "600111222", role: "asesor" }, "invalid_contact_name"],
+      [{ name: "x".repeat(81), phone: "600111222", role: "asesor" }, "invalid_contact_name"],
+      [{ name: "laura@agencia.es", phone: "600111222", role: "asesor" }, "invalid_contact_name"],
+      [{ name: "Laura www.agencia.es", phone: "600111222", role: "asesor" }, "invalid_contact_name"],
+      [{ name: "Laura 600 111 222", phone: "600111222", role: "asesor" }, "invalid_contact_name"],
+      [{ name: "Laura", phone: "12345", role: "asesor" }, "invalid_contact_phone"],
+      [{ name: "Laura", phone: "+34 123", role: "asesor" }, "invalid_contact_phone"],
+      [{ name: "Laura", phone: "600111222", role: "jefa" }, "invalid_contact_role"],
+      [{}, "invalid_contact_name"],
+    ];
+    check("validaciones (nombre, teléfono, rol)", bad.every(([i, e]) => {
+      const r = validateCatalogContact(i);
+      return !r.ok && r.error === e;
+    }));
+    check("nombre: mismas reglas que SQL (2–80, sin @/web/teléfono)", isValidContactName("Ana") && !isValidContactName(" A ") && isValidContactName("María José de la Fuente-López"));
+    check("formato +34", formatContactPhone("+34641457123") === "+34 641 457 123");
+    check("formato internacional", formatContactPhone("+447700900123") === "+44 770 090 012 3");
+    check("formato inválido → null", formatContactPhone("600111222") === null && contactPhoneHref("abc") === null);
+    check("etiqueta asesor/asesora", contactRoleLabel("asesor") === "Tu asesor" && contactRoleLabel("asesora") === "Tu asesora");
+    // Sin contacto en la instantánea: no se inventa uno (ni perfil ni constante).
+    const noContact = toPublicCatalog({ ...snap([]), contact: { name: null, phone: null, role: null } });
+    check("sin contacto → líneas vacías, sin recurrir al perfil ni al teléfono de la agencia",
+      noContact.preparedBy === null && noContact.phone === null && noContact.phoneHref === null && noContact.role === "asesor");
+    // Regla #297 intacta fuera de los catálogos: firmas y colecciones siguen
+    // con el teléfono de la agencia y nadie fuera de lib/catalogs usa el
+    // contacto editable.
+    check("firma de correo: teléfono de la agencia intacto", /AGENCY_PHONE = "\+34 641 457 123"/.test(readFileSync("lib/mailbox/signature.ts", "utf8")));
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const f of readdirSync(dir)) {
+        const pth = join(dir, f);
+        if (f === "node_modules" || f.startsWith(".")) continue;
+        if (statSync(pth).isDirectory()) walk(pth);
+        else if (/\.(ts|tsx)$/.test(f) && /catalogs\/contact(-format)?["']/.test(readFileSync(pth, "utf8"))) offenders.push(pth);
+      }
+    };
+    for (const d of ["app", "components", "lib"]) walk(d);
+    const allowed = (pth: string) =>
+      pth.startsWith("lib/catalogs/") || pth.startsWith("components/admin/catalogs/") ||
+      pth.startsWith("components/catalogs/") || pth.startsWith("app/[country]/(admin)/admin/mi-espacio/") ||
+      pth.startsWith("app/seleccion/") || pth.startsWith("app/dev-fixtures/");
+    check("contacto editable solo en catálogos", offenders.every(allowed), offenders.filter((x) => !allowed(x)).join(", "));
+  }
+
   section("T7 · días del enlace");
   check("vacío → 60", (parseShareDays("") as { days: number }).days === SHARE_DEFAULT_DAYS);
   check("ausente → 60", (parseShareDays(undefined) as { days: number }).days === 60);
@@ -585,8 +643,9 @@ async function main() {
     check("sin descripción de portal (teléfono ajeno)", !json.includes("600 123 456") && !json.includes("Inmobiliaria Sol"));
     check("sin características de portal", !json.includes("agencia@ejemplo.com") && cat.items[0].features.length === 0);
     check("descripción omitida sin caché", cat.items[0].description === null);
-    check("teléfono de la agencia", cat.phone === AGENCY_PHONE);
-    check("quien la prepara", cat.preparedBy === "Fabricio Andrée");
+    check("contacto del catálogo, no del perfil", cat.preparedBy === "Laura Méndez" && !json.includes("Perfil Del Dueño"));
+    check("teléfono del catálogo formateado", cat.phone === "+34 600 111 222" && cat.phoneHref === "tel:+34600111222");
+    check("asesora", cat.role === "asesora");
     check("edición", cat.edition === "Otoño 2026", cat.edition);
     check("lugar", cat.items[0].place === "Chamberí, Madrid");
     check("precio", cat.items[0].price === "1.450.000 €", cat.items[0].price);

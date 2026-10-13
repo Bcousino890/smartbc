@@ -21,7 +21,7 @@ export function coverPhotoUrl(slug: string | null | undefined, width = 640): str
 export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary[]> {
   const { data: cats, error } = await db()
     .from("catalogs")
-    .select("id, title, intro, status, version, created_at, updated_at")
+    .select("id, title, intro, status, version, created_at, updated_at, contact_name")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: true });
   if (error || !cats?.length) return [];
@@ -52,6 +52,7 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
     numberLabel: catalogNumberLabel(i + 1),
     edition: editionLabel(new Date(c.created_at)),
     coverPhotoUrl: coverPhotoUrl(firstSlug.get(c.id)),
+    contactName: c.contact_name ?? null,
   }));
 
   // Activos primero, y dentro de cada grupo lo último que se tocó.
@@ -63,7 +64,7 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
 export async function getCatalogDetail(ownerId: string, catalogId: string): Promise<CatalogDetail | null> {
   const { data: cat, error } = await db()
     .from("catalogs")
-    .select("id, title, intro, status, version, created_at, updated_at, owner_id")
+    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role")
     .eq("id", catalogId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -114,6 +115,11 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     updatedAt: cat.updated_at,
     edition: editionLabel(new Date(cat.created_at)),
     items: views,
+    contact: {
+      name: cat.contact_name ?? null,
+      phone: cat.contact_phone ?? null,
+      role: cat.contact_role === "asesora" ? "asesora" : "asesor",
+    },
   };
 }
 

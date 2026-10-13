@@ -15,6 +15,8 @@ export interface CatalogSummary {
   numberLabel: string | null;
   edition: string;
   coverPhotoUrl: string | null;
+  /** Nombre visible del contacto del catálogo (0194). */
+  contactName: string | null;
 }
 
 export interface CatalogItemView {
@@ -43,4 +45,13 @@ export interface CatalogDetail {
   updatedAt: string;
   edition: string;
   items: CatalogItemView[];
+  contact: CatalogContactView;
+}
+
+/** Contacto público guardado en el catálogo (0194). */
+export interface CatalogContactView {
+  name: string | null;
+  /** E.164 */
+  phone: string | null;
+  role: "asesor" | "asesora";
 }

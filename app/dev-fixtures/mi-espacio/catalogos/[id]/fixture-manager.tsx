@@ -40,6 +40,14 @@ export function FixtureCatalogManager({
     removeProperty: () => live({ op: "remove", key: "__first__" }),
     reorder: () => live({ op: "reorder" }),
     setStatus: async () => ({ ok: true as const, version: 1 }),
+    // Validación mínima de prueba (la real es del servidor y de SQL).
+    setContact: async ({ name, phone, role }) => {
+      const digits = phone.replace(/[^\d+]/g, "");
+      if (name.trim().length < 2) return { ok: false as const, error: "El nombre del asesor tiene que tener entre 2 y 80 caracteres, sin correos, webs ni teléfonos." };
+      if (!/^(\+[1-9]\d{7,14}|[6789]\d{8})$/.test(digits)) return { ok: false as const, error: "El teléfono no es válido. Escríbelo con prefijo (+34 600 000 000) o como móvil español." };
+      const e164 = digits.startsWith("+") ? digits : `+34${digits}`;
+      return live({ op: "contact", name: name.trim(), phone: e164, role });
+    },
     addProperty: async ({ reference }) => {
       const ref = parsePropertyRef(reference);
       if (ref.kind === "invalid") return { ok: false as const, error: refErrorMessage(ref.reason) };
@@ -78,7 +86,6 @@ export function FixtureCatalogManager({
     <CatalogManager
       catalog={catalog}
       actions={actions}
-      preparedBy="Fabricio Andree"
       basePath="/dev-fixtures/mi-espacio"
       numberLabel="nº 01"
       onLocalAdd={onLocalAdd}

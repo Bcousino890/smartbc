@@ -35,7 +35,8 @@
   font-family: var(--text);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
-  padding: 16px 12px 88px;
+  --nav-h: 56px;
+  padding: 16px 12px calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
   box-sizing: border-box;
 }
 
@@ -512,6 +513,17 @@
   padding: 1.6em 0 4em;
 }
 
+.scrollCue {
+  display: none;
+}
+
+.scrollWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .textScroll {
   padding: 0 1.4em;
   text-align: center;
@@ -528,12 +540,43 @@
     flex-direction: column;
     padding: 3em 0 4em;
   }
+  .scrollWrap {
+    flex: 1;
+  }
   .textScroll {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     scrollbar-width: thin;
     padding: 0 3em 1em;
+  }
+  .textScroll:focus-visible {
+    outline-offset: -2px;
+  }
+  /* Señal de que el texto sigue: el propio texto se desvanece abajo (sin
+     tapar el fondo de la página) y aparece «Sigue leyendo ↓». */
+  .textScroll[data-more="true"] {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 4em), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 4em), transparent);
+  }
+  .root .scrollCue {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    padding: 0.5em 1em;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    font: 500 0.7em var(--text);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--accent);
+  }
+  .root .scrollCue:hover {
+    background: rgba(155, 74, 46, 0.08);
   }
   .scrollFlow .textScroll {
     overflow: visible;
@@ -705,71 +748,144 @@
   margin: 0;
 }
 
-.contact {
-  display: grid;
-  gap: 0.4em;
-  margin: 0.8em 0 0;
+/* Cierre «Hablemos» (D20): logo, filete, título, tarjeta con una sola acción. */
+.closingPage {
+  justify-content: flex-start;
+  gap: 0;
+  padding: 3.2em 1.4em 3em;
 }
 
-.contact div {
+@media (min-width: 900px) and (min-height: 620px) {
+  .closingPage {
+    padding: 3.2em 3em 3em;
+  }
+}
+
+.closingLogo {
+  display: block;
+  width: 52%;
+  max-width: 22em;
+  height: auto;
+  aspect-ratio: 3282 / 519;
+}
+
+@media not all and (min-width: 900px) and (min-height: 620px) {
+  .closingLogo {
+    width: 70%;
+  }
+}
+
+.closingRule {
+  display: block;
+  width: 2.2em;
+  height: 1px;
+  background: var(--rule);
+  margin: 1.8em 0 1.6em;
+}
+
+.closingPage .closingTitle {
+  margin: 0.2em 0 0.4em;
+}
+
+.contactCard {
   display: flex;
-  gap: 0.6em;
-  justify-content: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
+  margin: 2em 0 0;
+  padding: 1.6em 2.2em 1.8em;
+  width: min(100%, 22em);
+  background: var(--mat);
+  box-shadow: 0 0.6em 1.4em rgba(60, 40, 20, 0.12);
 }
 
-.contact dt {
-  font: 500 0.7em var(--text);
-  letter-spacing: 0.2em;
+.contactRole {
+  margin: 0;
+  font: 500 0.66em var(--text);
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--muted);
-  align-self: center;
 }
 
-.contact dd {
+.contactName {
+  margin: 0.25em 0 0.8em;
+  font: italic 500 1.9em/1.2 var(--display);
+  overflow-wrap: anywhere;
+}
+
+.callButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 44px;
+  padding: 0.8em 1.6em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff8f0;
+  font: 600 0.95em var(--text);
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+
+.callButton:hover {
+  background: #873f26;
+}
+
+.callButton svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.contactNumber {
+  display: block;
+  margin-top: 0.8em;
   font: italic 1.05em var(--display);
-  margin: 0;
+  color: var(--ink);
 }
 
-.contact a {
-  color: inherit;
-}
-
-.note {
-  font: 0.78em/1.5 var(--text);
+.closingFoot {
+  margin: auto 0 0;
+  padding-top: 2em;
+  font: 0.75em/1.5 var(--text);
   color: var(--muted);
   max-width: 26em;
-  margin: 0;
 }
 
-/* ── Navegación: una cápsula «← 3 / 9 →» ───────────────────────────────── */
+.closingPage .ornament {
+  margin: 0.6em 0 0;
+}
+
+/* ── Navegación «← 3 / 9 →» ─────────────────────────────────────────────
+   Escritorio (doble página): cápsula debajo del libro, en el flujo.
+   Una página (móvil/ventanas estrechas): barra OPACA de ancho completo pegada
+   abajo; la página reserva su altura más el área segura, así que nunca tapa
+   texto, botones ni avisos (condición 1 de la ampliación). */
 
 .capsule {
   position: fixed;
-  left: 50%;
-  bottom: max(12px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 20;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(251, 247, 240, 0.94);
-  box-shadow: 0 4px 18px rgba(60, 40, 20, 0.25);
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding: 0 8px env(safe-area-inset-bottom);
+  background: var(--mat);
+  border-top: 1px solid rgba(155, 74, 46, 0.2);
+  box-shadow: 0 -4px 14px rgba(60, 40, 20, 0.08);
   font: 13px/1 var(--text);
   color: var(--ink);
-  backdrop-filter: blur(6px);
-  max-width: calc(100vw - 24px);
 }
 
 .capsule button {
   border: 0;
   background: none;
   border-radius: 999px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0 12px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
   white-space: nowrap;
 }
 
@@ -783,7 +899,7 @@
 }
 
 .counter {
-  min-width: 4.5em;
+  min-width: 4.2em;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -798,9 +914,14 @@
 @media (min-width: 900px) and (min-height: 620px) {
   .capsule {
     position: static;
-    transform: none;
-    margin: 14px auto 0;
     width: max-content;
+    height: auto;
+    margin: 14px auto 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(251, 247, 240, 0.94);
+    box-shadow: 0 4px 18px rgba(60, 40, 20, 0.25);
   }
 }
 

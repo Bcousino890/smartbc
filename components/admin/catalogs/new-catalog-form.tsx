@@ -3,18 +3,26 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createCatalogAction } from "@/app/[country]/(admin)/admin/mi-espacio/actions";
+import { CONTACT_DEFAULT_PHONE, CONTACT_DEFAULT_ROLE, formatContactPhone, type ContactRole } from "@/lib/catalogs/contact-format";
+import { ContactFields } from "./contact-fields";
 
 export function NewCatalogForm({
   basePath,
   mode = "live",
+  defaultContactName,
 }: {
   basePath: string;
   mode?: "live" | "demo";
+  /** Precarga del nombre visible (el del dueño). Se puede cambiar antes de crear. */
+  defaultContactName: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [intro, setIntro] = useState("");
+  const [contactName, setContactName] = useState(defaultContactName);
+  const [contactPhone, setContactPhone] = useState(formatContactPhone(CONTACT_DEFAULT_PHONE) ?? "");
+  const [contactRole, setContactRole] = useState<ContactRole>(CONTACT_DEFAULT_ROLE);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -38,7 +46,11 @@ export function NewCatalogForm({
       return;
     }
     start(async () => {
-      const res = await createCatalogAction({ title, intro });
+      const res = await createCatalogAction({
+        title,
+        intro,
+        contact: { name: contactName, phone: contactPhone, role: contactRole },
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -73,6 +85,15 @@ export function NewCatalogForm({
           className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
         />
       </label>
+      <ContactFields
+        idPrefix="nc"
+        name={contactName}
+        phone={contactPhone}
+        role={contactRole}
+        onName={setContactName}
+        onPhone={setContactPhone}
+        onRole={setContactRole}
+      />
       {error ? (
         <p role="alert" className="text-sm text-red-700">
           {error}

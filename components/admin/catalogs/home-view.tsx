@@ -27,6 +27,7 @@ export function HomeView({
   mode = "live",
 }: {
   catalogs: CatalogSummary[];
+  /** Nombre con el que se PRECARGA el contacto de un catálogo nuevo. */
   preparedBy: string;
   basePath?: string;
   /** "demo": datos de prueba en local; no guarda nada. */
@@ -87,7 +88,7 @@ export function HomeView({
                 : `${active} activo${active === 1 ? "" : "s"} · ${catalogs.length} en total`}
             </p>
           </div>
-          <NewCatalogForm basePath={basePath} mode={mode} />
+          <NewCatalogForm basePath={basePath} mode={mode} defaultContactName={preparedBy} />
         </div>
 
         {catalogs.length === 0 ? (
@@ -110,7 +111,7 @@ export function HomeView({
                         numberLabel: c.numberLabel,
                         edition: c.edition,
                         photoUrl: c.coverPhotoUrl,
-                        preparedBy,
+                        preparedBy: c.contactName,
                       }}
                     />
                   </div>

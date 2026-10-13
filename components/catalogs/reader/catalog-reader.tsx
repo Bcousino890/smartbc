@@ -109,6 +109,17 @@ export function CatalogReader({
   const chanRef = useRef<BroadcastChannel | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
 
+  // La barra de navegación de una página va fija abajo: al enfocar un control
+  // o desplazarse a un ancla, el navegador deja ese hueco libre.
+  useEffect(() => {
+    const html = document.documentElement;
+    const before = html.style.scrollPaddingBottom;
+    html.style.scrollPaddingBottom = "calc(64px + env(safe-area-inset-bottom))";
+    return () => {
+      html.style.scrollPaddingBottom = before;
+    };
+  }, []);
+
   // Preferencias: modo desplazamiento recordado y «reducir movimiento».
   useEffect(() => {
     try {
@@ -296,6 +307,9 @@ export function CatalogReader({
         return;
       }
       if (scrollModeRef.current) return;
+      // Dentro de un texto que se desplaza por dentro, Av/Re Pág desplazan el
+      // texto (no pasan de página); las flechas ← → siguen pasando página.
+      if ((e.key === "PageDown" || e.key === "PageUp") && t?.closest("[data-scroll-region]")) return;
       const pages = pagesOf(s.catalog);
       if (e.key === "ArrowRight" || e.key === "PageDown") stepBy(1);
       else if (e.key === "ArrowLeft" || e.key === "PageUp") stepBy(-1);

@@ -7,6 +7,8 @@ import { ArrowDown, ArrowUp, ArrowLeft } from "lucide-react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
+import { formatContactPhone, type ContactRole } from "@/lib/catalogs/contact-format";
+import { ContactFields } from "./contact-fields";
 import { MeasurePanel, useHomeMeasure } from "./measure-panel";
 import { SharePanel, type ShareActions, type ShareView } from "./share-panel";
 
@@ -23,6 +25,7 @@ export interface CatalogManagerActions {
   removeProperty: (i: { catalogId: string; propertyId: string }) => Promise<Res>;
   reorder: (i: { catalogId: string; propertyIds: string[] }) => Promise<Res>;
   setStatus: (i: { catalogId: string; status: "active" | "archived" }) => Promise<Res>;
+  setContact: (i: { catalogId: string; name: string; phone: string; role: string }) => Promise<Res>;
 }
 
 const STATUS_LABEL: Record<CatalogItemView["status"], string | null> = {
@@ -44,7 +47,6 @@ function facts(it: CatalogItemView): string {
 export function CatalogManager({
   catalog,
   actions,
-  preparedBy,
   basePath,
   numberLabel,
   onLocalAdd,
@@ -54,7 +56,6 @@ export function CatalogManager({
 }: {
   catalog: CatalogDetail;
   actions: CatalogManagerActions;
-  preparedBy: string;
   basePath: string;
   numberLabel?: string | null;
   /** Solo en la prueba local: devuelve el elemento sintético que se añadió. */
@@ -70,6 +71,9 @@ export function CatalogManager({
   const [title, setTitle] = useState(catalog.title);
   const [intro, setIntro] = useState(catalog.intro ?? "");
   const [reference, setReference] = useState("");
+  const [contactName, setContactName] = useState(catalog.contact.name ?? "");
+  const [contactPhone, setContactPhone] = useState(formatContactPhone(catalog.contact.phone) ?? catalog.contact.phone ?? "");
+  const [contactRole, setContactRole] = useState<ContactRole>(catalog.contact.role);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const [currentShare, setCurrentShare] = useState<ShareView | null>(share);
@@ -153,6 +157,17 @@ export function CatalogManager({
   function saveMeta(e: React.FormEvent) {
     e.preventDefault();
     run(() => actions.updateMeta({ catalogId: catalog.id, title, intro }), "Datos guardados.", undefined, undefined, "edición");
+  }
+
+  function saveContact(e: React.FormEvent) {
+    e.preventDefault();
+    run(
+      () => actions.setContact({ catalogId: catalog.id, name: contactName, phone: contactPhone, role: contactRole }),
+      "Contacto guardado. Quien tenga el enlace abierto lo verá al momento.",
+      undefined,
+      undefined,
+      "contacto",
+    );
   }
 
   function toggleStatus() {
@@ -309,7 +324,7 @@ export function CatalogManager({
                 numberLabel,
                 edition: catalog.edition,
                 photoUrl: items[0]?.photoUrl ?? null,
-                preparedBy,
+                preparedBy: contactName.trim() || null,
               }}
             />
           </div>
@@ -340,6 +355,24 @@ export function CatalogManager({
               className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
             >
               Guardar
+            </button>
+          </form>
+          <form onSubmit={saveContact} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="contact-form">
+            <ContactFields
+              idPrefix="cm"
+              name={contactName}
+              phone={contactPhone}
+              role={contactRole}
+              onName={setContactName}
+              onPhone={setContactPhone}
+              onRole={setContactRole}
+            />
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
+            >
+              Guardar contacto
             </button>
           </form>
           {shareActions ? (

@@ -25,6 +25,14 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M3 $S/
 $R sql $RB3 $S/test-rollback-0193.sql $M3
 echo "   0193 se vuelve a aplicar tras su reversión"
 
+echo "== 2c. 0194: contacto del catálogo (datos previos + aplicada dos veces)"
+M4=supabase/migrations/0194_catalog_contact.sql
+RB4=docs/changes/2026-10-13-bcp-01-home-catalogo/rollback-0194.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $S/test-catalog-contact-pre.sql $M4 $M4 $S/test-catalog-contact.sql
+$R sql $RB4 $S/test-rollback-0194.sql $M4 $S/test-catalog-public.sql
+echo "   0194 se vuelve a aplicar tras su reversión y los tests de 0193 siguen en verde"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
