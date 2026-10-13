@@ -7,6 +7,8 @@
 //   2. llama a una función SQL de 0192 con p_actor = id del dueño, que vuelve
 //      a comprobar la propiedad del catálogo en la base de datos;
 //   3. solo escribe en tablas del catálogo. Nunca en properties ni en clientes.
+// Tras guardar con éxito (fase 2): avisa al vigilante de los lectores abiertos
+// y devuelve la huella pública nueva (la usa el modo medición de D13).
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -16,7 +18,10 @@ import { withHomeAccess, type ActionResult } from "@/lib/catalogs/access";
 import { catalogErrorMessage } from "@/lib/catalogs/errors";
 import { isHomeOwner } from "@/lib/catalogs/owner";
 import { findPropertyId } from "@/lib/catalogs/queries";
+import { getCatalogFingerprint } from "@/lib/catalogs/public-data";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
+import { parseShareDays } from "@/lib/catalogs/share";
+import { notifyCatalogChanged } from "@/lib/catalogs/sync-hub-instance";
 import { isUuid, isValidOrder, normalizeIntro, normalizeTitle } from "@/lib/catalogs/validate";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -64,11 +69,20 @@ function revalidateCatalog(catalogId: string) {
   revalidatePath(`${HOME_PATH}/catalogos/${catalogId}`);
 }
 
+type Saved = { version: number; fingerprint: string | null };
+
+/** Tras un guardado con éxito: lectores abiertos al día ya y huella nueva. */
+async function saved(profileId: string, catalogId: string, version: unknown): Promise<{ ok: true } & Saved> {
+  notifyCatalogChanged();
+  revalidateCatalog(catalogId);
+  return { ok: true as const, version: Number(version), fingerprint: await getCatalogFingerprint(profileId, catalogId) };
+}
+
 export async function updateCatalogMetaAction(input: {
   catalogId: string;
   title: string;
   intro?: string | null;
-}): Promise<ActionResult<{ version: number }>> {
+}): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     const title = normalizeTitle(input.title);
@@ -82,8 +96,7 @@ export async function updateCatalogMetaAction(input: {
       p_intro: intro.value,
     });
     if (error) return fail(error);
-    revalidateCatalog(input.catalogId);
-    return { ok: true as const, version: Number(data) };
+    return saved(profile.id, input.catalogId, data);
   }));
 }
 
@@ -92,7 +105,7 @@ export async function updateCatalogMetaAction(input: {
 export async function addPropertyToCatalogAction(input: {
   catalogId: string;
   reference: string;
-}): Promise<ActionResult<{ version: number }>> {
+}): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     const ref = parsePropertyRef(input.reference);
@@ -105,15 +118,14 @@ export async function addPropertyToCatalogAction(input: {
       p_property: propertyId,
     });
     if (error) return fail(error);
-    revalidateCatalog(input.catalogId);
-    return { ok: true as const, version: Number(data) };
+    return saved(profile.id, input.catalogId, data);
   }));
 }
 
 export async function removePropertyFromCatalogAction(input: {
   catalogId: string;
   propertyId: string;
-}): Promise<ActionResult<{ version: number }>> {
+}): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     const { data, error } = await db().rpc("catalog_remove_item", {
@@ -122,8 +134,7 @@ export async function removePropertyFromCatalogAction(input: {
       p_property: input.propertyId,
     });
     if (error) return fail(error);
-    revalidateCatalog(input.catalogId);
-    return { ok: true as const, version: Number(data) };
+    return saved(profile.id, input.catalogId, data);
   }));
 }
 
@@ -131,7 +142,7 @@ export async function removePropertyFromCatalogAction(input: {
 export async function reorderCatalogAction(input: {
   catalogId: string;
   propertyIds: string[];
-}): Promise<ActionResult<{ version: number }>> {
+}): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isValidOrder(input?.propertyIds)) return fail("order_mismatch");
     const { data, error } = await db().rpc("catalog_reorder", {
@@ -140,15 +151,14 @@ export async function reorderCatalogAction(input: {
       p_properties: input.propertyIds,
     });
     if (error) return fail(error);
-    revalidateCatalog(input.catalogId);
-    return { ok: true as const, version: Number(data) };
+    return saved(profile.id, input.catalogId, data);
   }));
 }
 
 export async function setCatalogStatusAction(input: {
   catalogId: string;
   status: "active" | "archived";
-}): Promise<ActionResult<{ version: number }>> {
+}): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     if (input.status !== "active" && input.status !== "archived") return fail("invalid_status");
@@ -158,7 +168,60 @@ export async function setCatalogStatusAction(input: {
       p_status: input.status,
     });
     if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data);
+  }));
+}
+
+// ── Enlace para compartir (fase 2, T7) ──────────────────────────────────────
+
+type ShareResult = ActionResult<{ token: string; expiresAt: string }>;
+
+/** Crea el enlace del catálogo: 60 días por defecto, de 1 a 365. */
+export async function createShareAction(input: { catalogId: string; days?: number | string | null }): Promise<ShareResult> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const days = parseShareDays(input.days);
+    if (!days.ok) return fail("invalid_days");
+    const { data, error } = await db().rpc("catalog_share_create", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_days: days.days,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row?.token) return fail(error);
     revalidateCatalog(input.catalogId);
-    return { ok: true as const, version: Number(data) };
+    return { ok: true as const, token: String(row.token), expiresAt: String(row.expires_at) };
+  }));
+}
+
+/** Renueva el enlace (aunque ya hubiera caducado) con el MISMO token. */
+export async function renewShareAction(input: { catalogId: string; days?: number | string | null }): Promise<ShareResult> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const days = parseShareDays(input.days);
+    if (!days.ok) return fail("invalid_days");
+    const { data, error } = await db().rpc("catalog_share_renew", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_days: days.days,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row?.token) return fail(error);
+    notifyCatalogChanged();
+    revalidateCatalog(input.catalogId);
+    return { ok: true as const, token: String(row.token), expiresAt: String(row.expires_at) };
+  }));
+}
+
+/** Revoca el enlace: deja de funcionar al momento para quien lo tenga
+ *  abierto. Un enlace nuevo tendrá otro token. */
+export async function revokeShareAction(input: { catalogId: string }): Promise<ActionResult<object>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const { error } = await db().rpc("catalog_share_revoke", { p_actor: profile.id, p_catalog: input.catalogId });
+    if (error) return fail(error);
+    notifyCatalogChanged();
+    revalidateCatalog(input.catalogId);
+    return { ok: true as const };
   }));
 }

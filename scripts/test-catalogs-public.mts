@@ -1,0 +1,683 @@
+/**
+ * Tests de la parte pública de los catálogos (BCP-01 fase 2), sin base de
+ * datos ni red:
+ *   · contrato público y privacidad (T6)
+ *   · validación de días de los enlaces (T7)
+ *
+ * Ejecutar:
+ *   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
+ *     scripts/test-catalogs-public.mts
+ */
+import { createHash } from "node:crypto";
+import { AGENCY_PHONE, FORBIDDEN_PUBLIC_KEYS, UUID_RE } from "../lib/catalogs/public-contract.ts";
+import {
+  clientDescriptionSrc,
+  findForbiddenKeys,
+  toPublicCatalog,
+  type InternalItem,
+  type InternalSnapshot,
+} from "../lib/catalogs/to-public.ts";
+
+import { parseShareDays, isShareToken, SHARE_DEFAULT_DAYS } from "../lib/catalogs/share.ts";
+import { SyncHub, HUB_CHECK_MS, HUB_HEARTBEAT_MS, type HubEvent, type TokenState } from "../lib/catalogs/sync-hub.ts";
+import { SyncClient, type EventSourceLike, type FetchStateResult } from "../lib/catalogs/sync-client.ts";
+import {
+  applyUpdate,
+  initialState,
+  openGallery,
+  pagesOf,
+  step,
+  updateDelay,
+  PAGE_TURN_MS,
+  REMOVED_NOTICE,
+} from "../lib/catalogs/reader-state.ts";
+import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
+import type { PublicCatalog, PublicCatalogState } from "../lib/catalogs/public-contract.ts";
+
+let failures = 0;
+
+function check(name: string, condition: boolean, detail?: string) {
+  if (condition) {
+    console.log(`  ✅ ${name}`);
+  } else {
+    failures++;
+    console.log(`  ❌ ${name}${detail ? ` — ${detail}` : ""}`);
+  }
+}
+
+function section(title: string) {
+  console.log(`\n${title}`);
+}
+
+const md5 = (s: string) => createHash("md5").update(s).digest("hex");
+
+const RAW_DESC = "Precioso piso reformado. Llame a Inmobiliaria Sol al 600 123 456. Ref. 4411.";
+const RAW_FEATURES = ["Planta 7ª exterior", "Ascensor", "", "Contacto: agencia@ejemplo.com"];
+
+function item(over: Partial<InternalItem> = {}): InternalItem {
+  return {
+    key: "k1AbCdEfGhIj",
+    slug: "piso-almagro-12",
+    title: "Piso luminoso en Almagro",
+    zone: "Madrid",
+    subzone: "Chamberí",
+    operation: "sale",
+    operations: null,
+    price: 1450000,
+    rent_price: null,
+    currency: "eur",
+    status: "available",
+    bedrooms: 3,
+    bathrooms: 2,
+    square_meters: 142,
+    description: RAW_DESC,
+    features: RAW_FEATURES,
+    features_manual: null,
+    floor_override: null,
+    clean: null,
+    photos: [
+      { u: md5("https://x.supabase.co/storage/v1/object/public/properties-photos/a.webp"), w: 1600, h: 1067, c: false },
+      { u: md5("https://x.supabase.co/storage/v1/object/public/properties-photos/b.webp"), w: 1000, h: 1500, c: true },
+    ],
+    ...over,
+  };
+}
+
+function snap(items: InternalItem[], over: Partial<InternalSnapshot> = {}): InternalSnapshot {
+  return {
+    title: "Ático y luz · Chamberí",
+    intro: "Una selección para ti.",
+    created_at: "2026-10-13T10:00:00Z",
+    status: "active",
+    owner_name: "Fabricio Andrée",
+    items,
+    ...over,
+  };
+}
+
+// ── Reloj simulado ─────────────────────────────────────────────────────────
+
+class FakeClock {
+  t = 1_000_000;
+  private seq = 0;
+  timers = new Map<number, { at: number; fn: () => void; every: number | null }>();
+  now = () => this.t;
+  setTimeout = (fn: () => void, ms: number) => this.add(fn, ms, null);
+  setInterval = (fn: () => void, ms: number) => this.add(fn, ms, ms);
+  clear = (h: unknown) => {
+    this.timers.delete(h as number);
+  };
+  private add(fn: () => void, ms: number, every: number | null) {
+    const id = ++this.seq;
+    this.timers.set(id, { at: this.t + Math.max(0, ms), fn, every });
+    return id;
+  }
+  async flush() {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  }
+  async advance(ms: number) {
+    const end = this.t + ms;
+    for (;;) {
+      let nextId = -1;
+      let next: { at: number; fn: () => void; every: number | null } | null = null;
+      for (const [id, tm] of this.timers) if (tm.at <= end && (!next || tm.at < next.at)) [nextId, next] = [id, tm];
+      if (!next) break;
+      this.t = next.at;
+      if (next.every !== null) next.at += next.every;
+      else this.timers.delete(nextId);
+      next.fn();
+      await this.flush();
+    }
+    this.t = end;
+    await this.flush();
+  }
+}
+
+function pubCatalog(keys: string[], title = "Catálogo"): PublicCatalog {
+  return {
+    title,
+    intro: null,
+    edition: "Otoño 2026",
+    preparedBy: "Fabricio Andree",
+    phone: AGENCY_PHONE,
+    coverPhoto: null,
+    items: keys.map((key) => ({
+      key,
+      title: `Vivienda ${key}`,
+      place: null,
+      operation: "Venta",
+      price: "1 €",
+      reserved: false,
+      bedrooms: null,
+      bathrooms: null,
+      squareMeters: null,
+      floor: "Planta · sin dato",
+      description: null,
+      features: [],
+      photos: [{ src: `/p/${key}/0.webp`, width: null, height: null, orientation: "unknown" as const }, { src: `/p/${key}/1.webp`, width: null, height: null, orientation: "unknown" as const }],
+      coverIndex: 0,
+    })),
+  };
+}
+
+function pubState(fp: string, keys: string[], expiresAt = "2099-01-01T00:00:00Z"): PublicCatalogState {
+  return { fingerprint: fp, expiresAt, catalog: pubCatalog(keys) };
+}
+
+/** Base de datos simulada para el vigilante. */
+class FakeDb {
+  fp = "A";
+  keys = ["a", "b", "c"];
+  valid = true;
+  stateCalls = 0;
+  contentCalls = 0;
+  state(): TokenState {
+    return this.valid ? { valid: true, fingerprint: this.fp, expiresAt: "2099-01-01T00:00:00Z" } : { valid: false, fingerprint: null, expiresAt: null };
+  }
+}
+
+function makeHub(clock: FakeClock, db: FakeDb) {
+  return new SyncHub({
+    fetchStates: async (tokens) => {
+      db.stateCalls++;
+      return new Map(tokens.map((t) => [t, db.state()]));
+    },
+    fetchContent: async () => {
+      db.contentCalls++;
+      return db.valid ? pubState(db.fp, db.keys) : null;
+    },
+    now: clock.now,
+    setInterval: clock.setInterval,
+    clearInterval: clock.clear,
+  });
+}
+
+/** EventSource simulado que se conecta al vigilante simulado. */
+class FakeEs implements EventSourceLike {
+  onerror: ((ev: unknown) => void) | null = null;
+  closed = false;
+  listeners = new Map<string, Array<(ev: { data: string }) => void>>();
+  unsub: (() => void) | null = null;
+  addEventListener(type: string, fn: (ev: { data: string }) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  emit(type: string, data: unknown) {
+    if (this.closed) return;
+    for (const fn of this.listeners.get(type) ?? []) fn({ data: JSON.stringify(data) });
+  }
+  close() {
+    this.closed = true;
+    this.unsub?.();
+  }
+}
+
+async function liveTests() {
+  section("T7 · días del enlace");
+  check("vacío → 60", (parseShareDays("") as { days: number }).days === SHARE_DEFAULT_DAYS);
+  check("ausente → 60", (parseShareDays(undefined) as { days: number }).days === 60);
+  check("1 y 365 valen", parseShareDays(1).ok && parseShareDays("365").ok);
+  check("0, 366, -5, 2.5 y texto no valen", [0, 366, -5, 2.5, "abc", "12d"].every((v) => !parseShareDays(v).ok));
+  check("token de 28 caracteres vale", isShareToken("AbCdEfGhIjKlMnOpQrStUvWxYz_-"));
+  check("token corto, con / o con espacios no", [ "abc", "a/b".padEnd(30, "x"), " ".repeat(30)].every((t) => !isShareToken(t)));
+
+  section("T9 · vigilante del servidor (reloj simulado)");
+  {
+    const clock = new FakeClock();
+    const db = new FakeDb();
+    const hub = makeHub(clock, db);
+    const evA: HubEvent[] = [];
+    const evB: HubEvent[] = [];
+    const unA = hub.subscribe("tok1", "A", (e) => evA.push(e));
+    await clock.flush();
+    check("alta → 2 temporizadores (300 ms y 500 ms)", hub.stats().timers === 2);
+    db.fp = "B";
+    await clock.advance(HUB_CHECK_MS);
+    const upd = evA.find((e) => e.type === "update");
+    check("cambio recogido en ≤ 300 ms con contenido completo", !!upd && upd.type === "update" && upd.state.fingerprint === "B");
+    const contentBefore = db.contentCalls;
+    db.fp = "C";
+    hub.poke();
+    await clock.flush();
+    check("poke() tras guardar comprueba al momento", evA.filter((e) => e.type === "update").length === 2 && db.contentCalls === contentBefore + 1);
+    const unB = hub.subscribe("tok1", "B", (e) => evB.push(e));
+    await clock.flush();
+    check("lector que saludó con huella vieja se pone al día en el alta", evB.some((e) => e.type === "update" && e.state.fingerprint === "C"));
+    await clock.advance(HUB_HEARTBEAT_MS);
+    const ping = evA.find((e) => e.type === "ping");
+    check("latido cada 500 ms con huella y verificado", !!ping && ping.type === "ping" && ping.fingerprint === "C" && ping.verified === true);
+    const callsBefore = db.stateCalls;
+    await clock.advance(3000);
+    check("una consulta por pasada para todos los lectores", db.stateCalls - callsBefore === 10, String(db.stateCalls - callsBefore));
+    db.valid = false;
+    await clock.advance(HUB_CHECK_MS);
+    check("revocado/caducado sin cambiar contenido → unavailable", evA.at(-1)?.type === "unavailable" && evB.at(-1)?.type === "unavailable");
+    check("sin lectores válidos → 0 temporizadores", hub.stats().timers === 0 && hub.stats().tokens === 0);
+    unA();
+    unB();
+    unA();
+    check("bajas idempotentes", hub.stats().listeners === 0);
+  }
+  {
+    const clock = new FakeClock();
+    const db = new FakeDb();
+    const hub = makeHub(clock, db);
+    const un1 = hub.subscribe("t1", "A", () => {});
+    const un2 = hub.subscribe("t2", "A", () => {});
+    await clock.flush();
+    un1();
+    check("queda un lector → siguen los temporizadores", hub.stats().timers === 2);
+    un2();
+    check("último lector fuera → 0 temporizadores y mapa vacío", hub.stats().timers === 0 && hub.stats().tokens === 0);
+    hub.poke();
+    await clock.advance(2000);
+    check("sin lectores no se consulta la BD", db.stateCalls <= 2, String(db.stateCalls));
+  }
+  {
+    // Comprobación lenta: un poke durante la consulta no se pierde.
+    const clock = new FakeClock();
+    const db = new FakeDb();
+    let release: (() => void) | null = null;
+    const hub = new SyncHub({
+      fetchStates: (tokens) =>
+        new Promise((res) => {
+          const snap = db.state();
+          release = () => res(new Map(tokens.map((t) => [t, snap])));
+        }),
+      fetchContent: async () => pubState(db.fp, db.keys),
+      now: clock.now,
+      setInterval: clock.setInterval,
+      clearInterval: clock.clear,
+    });
+    const ev: HubEvent[] = [];
+    hub.subscribe("t", "A", (e) => ev.push(e));
+    await clock.flush();
+    db.fp = "B";
+    hub.poke();
+    release!();
+    await clock.flush();
+    release!();
+    await clock.flush();
+    check("guardado durante una consulta en curso → se repite y llega", ev.some((e) => e.type === "update" && e.state.fingerprint === "B"));
+  }
+
+  section("T9 · sincronización del lector (reloj simulado)");
+  async function clientRig(opts: { sseUp?: boolean } = {}) {
+    const clock = new FakeClock();
+    const db = new FakeDb();
+    const hub = makeHub(clock, db);
+    const sources: FakeEs[] = [];
+    let sseUp = opts.sseUp ?? true;
+    const states: PublicCatalogState[] = [];
+    const conn: string[] = [];
+    let unavailable = 0;
+    let polls = 0;
+    const client = new SyncClient(
+      {
+        openEventSource: () => {
+          const es = new FakeEs();
+          sources.push(es);
+          if (sseUp) {
+            // Como la ruta: lee el estado, saluda y se da de alta.
+            void Promise.resolve().then(() => {
+              if (es.closed) return;
+              if (!db.valid) {
+                es.emit("unavailable", {});
+                return;
+              }
+              const hello = pubState(db.fp, db.keys);
+              es.emit("hello", hello);
+              es.unsub = hub.subscribe("tok", hello.fingerprint, (e) => {
+                if (e.type === "update") es.emit("update", e.state);
+                else if (e.type === "ping") es.emit("ping", { fingerprint: e.fingerprint, verified: e.verified });
+                else es.emit("unavailable", {});
+              });
+            });
+          }
+          return es;
+        },
+        fetchState: async (known): Promise<FetchStateResult> => {
+          polls++;
+          if (!db.valid) return { kind: "invalid" };
+          return known === db.fp
+            ? { kind: "ok", fingerprint: db.fp, expiresAt: "2099-01-01T00:00:00Z" }
+            : { kind: "ok", fingerprint: db.fp, expiresAt: "2099-01-01T00:00:00Z", catalog: pubCatalog(db.keys) };
+        },
+        now: clock.now,
+        setTimeout: clock.setTimeout,
+        clearTimeout: clock.clear,
+        setInterval: clock.setInterval,
+        clearInterval: clock.clear,
+      },
+      {
+        onState: (s) => states.push(s),
+        onUnavailable: () => unavailable++,
+        onConnectivity: (c) => conn.push(c),
+      },
+    );
+    return {
+      clock, db, hub, sources, client, states, conn,
+      get unavailable() { return unavailable; },
+      get polls() { return polls; },
+      setSse(up: boolean) { sseUp = up; },
+    };
+  }
+  {
+    const r = await clientRig();
+    r.client.start();
+    check("arranque: consulta al momento y abre el SSE a la vez", r.polls === 1 && r.sources.length === 1);
+    // Guardado justo durante el saludo.
+    r.db.fp = "B";
+    r.hub.poke();
+    await r.clock.flush();
+    await r.clock.advance(400);
+    check("guardado durante el saludo → se ve la huella nueva en < 0,5 s", r.states.at(-1)?.fingerprint === "B");
+    check("SSE confirmado → deja de consultar", r.client.stats().sseConfirmed && !r.client.stats().polling);
+    const pollsBefore = r.polls;
+    await r.clock.advance(2000);
+    check("con SSE sano no hay consultas de respaldo", r.polls === pollsBefore);
+    r.client.stop();
+    await r.clock.flush();
+    check("stop() → 0 temporizadores y SSE cerrado", r.client.stats().timers === 0 && !r.client.stats().sseOpen && r.sources.every((s) => s.closed));
+    check("stop() → el vigilante se queda sin lectores", r.hub.stats().timers === 0 && r.hub.stats().listeners === 0);
+  }
+  {
+    const r = await clientRig();
+    r.client.start();
+    await r.clock.advance(600);
+    // El SSE se cae (nginx, red) sin avisar y justo después se guarda.
+    const es = r.sources[0];
+    es.unsub?.();
+    es.listeners.clear();
+    r.setSse(false);
+    await r.clock.advance(100);
+    const tSave = r.clock.now();
+    r.db.fp = "B";
+    let seenAt: number | null = null;
+    for (let i = 0; i < 40 && seenAt === null; i++) {
+      await r.clock.advance(50);
+      if (r.states.at(-1)?.fingerprint === "B") seenAt = r.clock.now();
+    }
+    const lag = seenAt === null ? Infinity : seenAt - tSave;
+    check("SSE caído justo antes de guardar → visible en ≤ 2 s por el respaldo", lag <= 2000, `${lag} ms`);
+    check("respaldo activo y reconexión programada", r.client.stats().polling);
+    r.setSse(true);
+    await r.clock.advance(3000);
+    check("al volver el SSE deja de consultar", r.client.stats().sseConfirmed && !r.client.stats().polling);
+    r.client.stop();
+    check("stop() tras respaldo → 0 temporizadores", r.client.stats().timers === 0);
+  }
+  {
+    const r = await clientRig({ sseUp: false });
+    r.client.start();
+    r.db.fp = "B";
+    await r.clock.advance(500);
+    check("SSE que nunca conecta → consulta cada 500 ms y ve el cambio", r.states.at(-1)?.fingerprint === "B");
+    r.client.stop();
+  }
+  {
+    const r = await clientRig();
+    r.client.start();
+    await r.clock.advance(600);
+    const fpBefore = r.states.at(-1)?.fingerprint;
+    r.db.valid = false;
+    await r.clock.advance(HUB_CHECK_MS + 10);
+    check("revocación sin cambio de contenido → no disponible por SSE", r.unavailable === 1 && fpBefore === r.db.fp);
+    check("no disponible → todo parado", r.client.stats().timers === 0 && !r.client.stats().sseOpen);
+  }
+  {
+    const r = await clientRig({ sseUp: false });
+    r.client.start();
+    await r.clock.flush();
+    r.db.valid = false;
+    await r.clock.advance(500);
+    check("revocación detectada también por la consulta de respaldo", r.unavailable === 1);
+  }
+  {
+    // Caducidad local programada sin red.
+    const clock = new FakeClock();
+    let unavailable = 0;
+    const exp = new Date(clock.now() + 5000).toISOString();
+    const c = new SyncClient(
+      {
+        openEventSource: () => new FakeEs(),
+        fetchState: async () => ({ kind: "error" }),
+        now: clock.now,
+        setTimeout: clock.setTimeout,
+        clearTimeout: clock.clear,
+        setInterval: clock.setInterval,
+        clearInterval: clock.clear,
+      },
+      { onState: () => {}, onUnavailable: () => unavailable++ },
+      { fingerprint: "A", expiresAt: exp, catalog: pubCatalog(["a"]) },
+    );
+    const conn: string[] = [];
+    c.start();
+    await clock.advance(4900);
+    check("antes de caducar sigue disponible", unavailable === 0);
+    await clock.advance(200);
+    check("caducidad aplicada en local sin red", unavailable === 1 && c.stats().timers === 0);
+    void conn;
+  }
+  {
+    const r = await clientRig({ sseUp: false });
+    r.client.start();
+    await r.clock.advance(100);
+    // Corte total: la consulta falla.
+    (r.client as unknown as { deps: { fetchState: () => Promise<FetchStateResult> } }).deps.fetchState = async () => ({ kind: "error" });
+    await r.clock.advance(2600);
+    check("sin contacto > 2 s → aviso «sin verificar»", r.conn.at(-1) === "offline");
+    r.client.stop();
+  }
+
+  section("T8 · estado del lector (D12)");
+  {
+    const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b" });
+    check("páginas: portada, índice, 3 viviendas, cierre", pagesOf(s0.catalog).length === 6);
+    const s1 = applyUpdate(s0, pubState("B", ["a", "c"]));
+    check("se quita la que leo → pasa a la siguiente", s1.page.kind === "item" && s1.page.key === "c" && s1.notice === REMOVED_NOTICE);
+    const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c" }), pubState("B", ["a", "b"]));
+    check("se quita la última → vuelve al índice", s2.page.kind === "index" && !!s2.notice);
+    const s3 = applyUpdate(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a" }), pubState("B", []));
+    check("no queda ninguna → índice vacío", s3.page.kind === "index" && s3.catalog.items.length === 0);
+    const s4 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "a" }), pubState("B", ["c", "b", "a"]));
+    check("reordenar no me mueve de la vivienda", s4.page.kind === "item" && s4.page.key === "a" && s4.notice === null);
+    const s5 = applyUpdate(initialState(pubState("A", ["a", "b", "c", "d"]), { kind: "item", key: "b" }), pubState("B", ["a", "d"]));
+    check("se quitan la actual y la siguiente → la siguiente que queda", s5.page.kind === "item" && s5.page.key === "d");
+    const g0 = openGallery(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a" }), "a", 1);
+    const g1 = applyUpdate(g0, pubState("B", ["a", "b"].concat("z")));
+    check("galería abierta: cambio aplicado al momento y conserva la foto", g1.gallery?.key === "a" && g1.gallery.photo === 1 && g1.fingerprint === "B");
+    const g2 = applyUpdate(g0, pubState("C", ["b"]));
+    check("galería de una vivienda quitada → se cierra y D12", g2.gallery === null && g2.page.kind === "item" && g2.page.key === "b");
+    const same = applyUpdate(s0, pubState("A", ["a", "b", "c"], "2100-01-01T00:00:00Z"));
+    check("misma huella con nueva caducidad → solo cambia la caducidad", same.page === s0.page && same.expiresAt.startsWith("2100"));
+    check("paso de página en el borde no se sale", step(initialState(pubState("A", ["a"])), -1).page.kind === "cover");
+  }
+  {
+    const d1 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });
+    const d2 = updateDelay({ now: 1300, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });
+    const d3 = updateDelay({ now: 1000, turnStartedAt: 900, reducedMotion: true, galleryOpen: false });
+    const d4 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: true });
+    const d5 = updateDelay({ now: 1000, turnStartedAt: 5000, reducedMotion: false, galleryOpen: false });
+    check("gesto en curso → espera ≤ 0,38 s", d1 === PAGE_TURN_MS && d2 === 80 && d5 <= PAGE_TURN_MS, `${d1} ${d2} ${d5}`);
+    check("menos movimiento o galería → 0 s", d3 === 0 && d4 === 0);
+  }
+
+  section("T10 · medición correlacionada");
+  {
+    const home = new HomeMeter("tok");
+    const r1 = new ReaderMeter("L1", "tok");
+    const r2 = new ReaderMeter("L2", "tok");
+    r1.onPaint("A", 10);
+    r2.onPaint("A", 10);
+    home.onPresence(r1.presence(), 100);
+    home.onPresence(r2.presence(), 100);
+    // Ensayo 1, normal: guarda en 1000, pintan después.
+    const t1 = home.saved({ trial: "e1", label: "edición", fingerprint: "B", tStart: 900, tSaved: 1000 });
+    check("ensayo espera a los dos lectores", home.busy() && t1.catalog === "tok");
+    const a = [...r1.onTrial(t1), ...r1.onPaint("B", 1400)];
+    const b = [...r2.onTrial(t1), ...r2.onPaint("B", 1650)];
+    a.concat(b).forEach((m) => home.onResult(m));
+    check("dos resultados independientes", home.rows[0].done && (home.rows[0].results.L1 as { latencyMs: number }).latencyMs === 400 && (home.rows[0].results.L2 as { latencyMs: number }).latencyMs === 650);
+    // Ensayo 2: el SSE gana — el lector pinta ANTES de que llegue la confirmación.
+    const p1 = r1.onPaint("C", 1900);
+    const p2 = r2.onPaint("C", 2100);
+    check("pintado antes del ensayo → se guarda, no se descarta", p1.length === 0 && p2.length === 0);
+    const t2 = home.saved({ trial: "e2", label: "alta", fingerprint: "C", tStart: 1800, tSaved: 2000 });
+    const res2 = [...r1.onTrial(t2), ...r2.onTrial(t2)];
+    res2.forEach((m) => home.onResult(m));
+    check("se empareja al llegar el ensayo; ≤ 0 s anotado tal cual", res2.length === 2 && res2[0].latencyMs === -100 && formatLatency(res2[0].latencyMs) === "≤ 0 s" && res2[1].latencyMs === 100);
+    // Ensayo 3: vuelve a A (A → B → C → A). La pintura vieja de A (t=10) no vale.
+    const t3 = home.saved({ trial: "e3", label: "deshacer", fingerprint: "A", tStart: 3000, tSaved: 3100 });
+    const stale = r1.onTrial(t3);
+    check("A → B → A: no reutiliza la pintura vieja de A", stale.length === 0);
+    const fresh = r1.onPaint("A", 3300);
+    check("se empareja con la pintura nueva de A", fresh.length === 1 && fresh[0].latencyMs === 200);
+    fresh.forEach((m) => home.onResult(m));
+    // L2 se salta A y pinta directamente una versión posterior D.
+    const later = [...r2.onTrial(t3), ...r2.onPaint("D", 3500)];
+    check("una versión posterior no se mide como la de un ensayo anterior", later.length === 0);
+    home.tick(3100 + 5001);
+    check("lector sin respuesta en 5 s → fallo", home.rows[2].results.L2 === "missing" && !home.busy());
+    // Resultado repetido o de otro catálogo: se ignora.
+    check("resultado duplicado ignorado", home.onResult(res2[0]) === false);
+    check("resultado de otro catálogo ignorado", home.onResult({ ...res2[0], catalog: "otro", trial: "e2" }) === false);
+    const s = home.summary();
+    check("resumen: fallo contado, no aprueba", s.failures === 1 && s.pass === false && s.results === 5 && s.maxMs === 650);
+    check("CSV con una fila por lector y ensayo", home.csv().split("\n").length === 1 + 6 && /fallo: sin respuesta/.test(home.csv()));
+  }
+  {
+    const home = new HomeMeter("tok");
+    const readers = [new ReaderMeter("L1", "tok"), new ReaderMeter("L2", "tok")];
+    readers.forEach((r) => home.onPresence(r.presence(), 0));
+    for (let i = 0; i < 20; i++) {
+      const fp = `F${i}`;
+      readers.forEach((r) => home.onPresence(r.presence(), i * 10_000));
+      const t = home.saved({ trial: `e${i}`, label: "x", fingerprint: fp, tStart: i * 10_000, tSaved: i * 10_000 + 100 });
+      readers.forEach((r, j) => [...r.onTrial(t), ...r.onPaint(fp, i * 10_000 + 600 + j * 300)].forEach((m) => home.onResult(m)));
+    }
+    const s = home.summary();
+    check("20 ensayos × 2 lectores ≤ 2 s → aprueba", s.pass && s.results === 40 && s.maxMs === 800, JSON.stringify(s));
+    const home2 = new HomeMeter("tok");
+    home2.onPresence(readers[0].presence(), 0);
+    home2.saved({ trial: "x", label: "x", fingerprint: "Z", tStart: 0, tSaved: 1 });
+    check("con un solo lector presente el ensayo cuenta un fallo", home2.summary().failures >= 1);
+    const late = new HomeMeter("tok");
+    readers.forEach((r) => late.onPresence(r.presence(), 0));
+    late.saved({ trial: "y", label: "y", fingerprint: "Y", tStart: 0, tSaved: 0 });
+    late.onResult({ type: "result", trial: "y", catalog: "tok", reader: "L1", fingerprint: "Y", tPainted: 2500, latencyMs: 2500 });
+    check("> 2 s cuenta como fallo", late.summary().failures >= 1);
+    const wrongFp = late.onResult({ type: "result", trial: "y", catalog: "tok", reader: "L2", fingerprint: "OTRA", tPainted: 10, latencyMs: 10 });
+    check("resultado con otra huella para ese ensayo se rechaza", wrongFp === false);
+    void ({} as TrialMsg);
+  }
+}
+
+async function main() {
+  section("T6 · contrato público y privacidad");
+  {
+    const cat = toPublicCatalog(snap([item()]));
+    const json = JSON.stringify(cat);
+    const forbidden = findForbiddenKeys(cat, FORBIDDEN_PUBLIC_KEYS);
+    check("ninguna clave prohibida", forbidden.length === 0, forbidden.join(", "));
+    check("ningún UUID", !UUID_RE.test(json));
+    check("ninguna URL de almacenamiento", !/supabase|storage\/v1|properties-photos/i.test(json));
+    check("sin hash de URL de foto", !json.includes(md5("https://x.supabase.co/storage/v1/object/public/properties-photos/a.webp")));
+    check("sin descripción de portal (teléfono ajeno)", !json.includes("600 123 456") && !json.includes("Inmobiliaria Sol"));
+    check("sin características de portal", !json.includes("agencia@ejemplo.com") && cat.items[0].features.length === 0);
+    check("descripción omitida sin caché", cat.items[0].description === null);
+    check("teléfono de la agencia", cat.phone === AGENCY_PHONE);
+    check("quien la prepara", cat.preparedBy === "Fabricio Andrée");
+    check("edición", cat.edition === "Otoño 2026", cat.edition);
+    check("lugar", cat.items[0].place === "Chamberí, Madrid");
+    check("precio", cat.items[0].price === "1.450.000 €", cat.items[0].price);
+    check("planta sin ordinal desde features", cat.items[0].floor === "Planta 7", cat.items[0].floor);
+    check("fotos por el proxy", cat.items[0].photos.map((p) => p.src).join() === "/p/piso-almagro-12/0.webp,/p/piso-almagro-12/1.webp");
+    check("orientaciones", cat.items[0].photos.map((p) => p.orientation).join() === "landscape,portrait");
+    check("portada = foto marcada", cat.items[0].coverIndex === 1 && cat.coverPhoto === "/p/piso-almagro-12/1.webp");
+    check("clave pública conservada", cat.items[0].key === "k1AbCdEfGhIj");
+  }
+  {
+    const src = clientDescriptionSrc(RAW_DESC, RAW_FEATURES);
+    const ok = toPublicCatalog(
+      snap([item({ clean: { src, description: "Precioso piso reformado.", features: ["Planta 7 exterior", "Ascensor", " "] } })]),
+    );
+    check("caché vigente → descripción limpia", ok.items[0].description === "Precioso piso reformado.");
+    check("caché vigente → características limpias sin vacíos", ok.items[0].features.join("|") === "Planta 7 exterior|Ascensor");
+    const stale = toPublicCatalog(
+      snap([item({ description: RAW_DESC + " Nuevo texto.", clean: { src, description: "Antiguo", features: ["X"] } })]),
+    );
+    check("caché desfasada → nada de texto", stale.items[0].description === null && stale.items[0].features.length === 0);
+    const expectedSrc = md5(RAW_DESC.trim() + "\u0000" + RAW_FEATURES.filter((f) => f.trim()).join("\u0001"));
+    check("hash igual que client-description.ts", src === expectedSrc);
+  }
+  {
+    const c = toPublicCatalog(
+      snap([
+        item({ key: "a", status: "reserved" }),
+        item({ key: "b", status: "sold" }),
+        item({ key: "c", status: "archived" }),
+      ]),
+    );
+    check("reservada aparece con marca", c.items.length === 1 && c.items[0].reserved === true);
+    check("vendida y archivada no aparecen", !c.items.some((i) => i.key === "b" || i.key === "c"));
+  }
+  {
+    const c = toPublicCatalog(
+      snap([
+        item({
+          price: null,
+          operation: "rent",
+          bedrooms: null,
+          square_meters: "0",
+          features: [],
+          title: "Estudio",
+          description: null,
+          photos: [
+            { u: "x", w: null, h: null, c: null },
+            { u: "x", w: 800, h: 800, c: null },
+            { u: "y", w: 800, h: 790, c: null },
+          ],
+        }),
+      ]),
+    );
+    const it = c.items[0];
+    check("precio sin dato", it.price === "Precio · sin dato");
+    check("planta sin dato", it.floor === "Planta · sin dato");
+    check("m² 0 → sin dato", it.squareMeters === null && it.bedrooms === null);
+    check("fotos repetidas se cuentan una vez (como el proxy)", it.photos.length === 2 && it.photos[1].src.endsWith("/1.webp"));
+    check("sin medidas → unknown; casi cuadrada → square", it.photos[0].orientation === "unknown" && it.photos[1].orientation === "square");
+    check("portada por defecto 0", it.coverIndex === 0);
+  }
+  {
+    const c = toPublicCatalog(snap([item({ floor_override: "atico" }), item({ key: "z", floor_override: "0" })]));
+    check("ático", c.items[0].floor === "Ático", c.items[0].floor);
+    check("planta 0 → Planta baja", c.items[1].floor === "Planta baja", c.items[1].floor);
+    const dual = toPublicCatalog(snap([item({ operations: ["sale", "rent"], rent_price: 4800 })]));
+    check("venta y alquiler", dual.items[0].price === "Venta 1.450.000 € · Alquiler 4.800 €/mes", dual.items[0].price);
+    const empty = toPublicCatalog(snap([], { intro: "  " }));
+    check("catálogo vacío", empty.items.length === 0 && empty.coverPhoto === null && empty.intro === null);
+    const slugHostile = toPublicCatalog(snap([item({ slug: "a/b?c" })]));
+    check("slug escapado en la ruta de foto", slugHostile.items[0].photos[0].src === "/p/a%2Fb%3Fc/0.webp");
+  }
+  {
+    // Una instantánea interna con campos que NO están en la lista blanca no
+    // los arrastra (p. ej. si alguien amplía la función SQL).
+    const extra = item() as InternalItem & Record<string, unknown>;
+    extra.bc_reference = "BC-1234";
+    extra.id = "4f1c2d1e-0000-4000-8000-000000000001";
+    extra.notes = "nota interna";
+    const c = toPublicCatalog(snap([extra]));
+    const json = JSON.stringify(c);
+    check("campos internos nuevos no se cuelan", !json.includes("BC-1234") && !json.includes("nota interna") && !UUID_RE.test(json));
+  }
+
+  await liveTests();
+
+  console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
+  if (failures > 0) process.exit(1);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
