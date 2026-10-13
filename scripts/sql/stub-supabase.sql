@@ -118,3 +118,30 @@ CREATE TABLE IF NOT EXISTS idealista_listings (
 );
 REVOKE ALL ON idealista_listings FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON idealista_listings TO service_role;
+
+-- ── Ampliación C2 (0197): historias de SmartLink y clase de foto ───────────
+-- Solo pruebas locales. En producción ya existen (0144, 0150, 0151).
+CREATE TABLE IF NOT EXISTS property_story_versions (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id      uuid NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  source_hash      text NOT NULL,
+  status           text NOT NULL DEFAULT 'generated',
+  notes            text,
+  prelude          text,
+  prelude_status   text,
+  prelude_headline text,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS property_story_blocks (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  version_id uuid NOT NULL REFERENCES property_story_versions(id) ON DELETE CASCADE,
+  chapter    text NOT NULL,
+  copy       text NOT NULL,
+  position   int  NOT NULL DEFAULT 0,
+  status     text NOT NULL DEFAULT 'generated'
+);
+ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS ai_class       text;
+ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS ai_confidence  numeric;
+ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS class_override text;
+REVOKE ALL ON property_story_versions, property_story_blocks FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON property_story_versions, property_story_blocks TO service_role;
