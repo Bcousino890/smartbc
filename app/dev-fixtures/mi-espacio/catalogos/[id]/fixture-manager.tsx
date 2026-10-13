@@ -7,8 +7,9 @@ import { parseShareDays } from "@/lib/catalogs/share";
 import { useRef, useState } from "react";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
-import { autoSelect, candidates, sortCandidates } from "@/lib/catalogs/selection";
-import { fixtureProperties, fixtureSavedListings, fixtureView } from "@/lib/catalogs/fixtures-selection";
+import { autoSelect, candidates, isAvailable, sortCandidates, type AdjustmentKind } from "@/lib/catalogs/selection";
+import { explainProperty, INCLUDED_UNAVAILABLE } from "@/lib/catalogs/explain";
+import { fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView } from "@/lib/catalogs/fixtures-selection";
 import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 
 // SOLO DESARROLLO LOCAL (BCP-01, E7): acciones falsas, para revisar el gestor
@@ -43,6 +44,9 @@ export function FixtureCatalogManager({
 }) {
   const [cat, setCat] = useState<CatalogDetail>(catalog);
   const manualRef = useRef<CatalogItemView[]>(catalog.items);
+  // C1: ajustes y portada en memoria, con las mismas reglas que SQL (0196).
+  const adjRef = useRef(new Map<string, AdjustmentKind>());
+  const coverRef = useRef<{ propertyId: string | null; photoId: string | null }>({ propertyId: null, photoId: null });
   const live = async (body: Record<string, unknown> & { skipNotify?: boolean }) => {
     if (!liveToken) return { ok: true as const, version: 1, fingerprint: null, publicChange: true };
     const { skipNotify, ...rest } = body;
@@ -56,10 +60,60 @@ export function FixtureCatalogManager({
     const r = await mutate({ token: liveToken, op: "noop" });
     return { ok: true as const, version: 1, fingerprint: r.fingerprint, publicChange: false };
   };
-  const autoItems = (c: CatalogCriteria) => {
-    const r = autoSelect(fixtureProperties, c);
-    return { items: r.ids.map((id, i) => fixtureView(byId.get(id)!, (i + 1) * 100)), total: r.total };
+  const explained = (id: string, c: CatalogCriteria, pos: number) => {
+    const p = byId.get(id)!;
+    const adjustment = adjRef.current.get(id) ?? null;
+    return { ...fixtureView(p, pos), adjustment, explain: explainProperty(p, c, adjustment) };
   };
+  const autoItems = (c: CatalogCriteria) => {
+    const r = autoSelect(fixtureProperties, c, [...adjRef.current].map(([propertyId, kind]) => ({ propertyId, kind })));
+    return {
+      items: r.ids.map((id, i) => ({ ...explained(id, c, (i + 1) * 100), via: r.via[i] })),
+      total: r.total,
+      matched: r.matched,
+    };
+  };
+  const adjustmentsOf = (c: CatalogCriteria): CatalogDetail["adjustments"] => {
+    const ids = [...adjRef.current];
+    const incl = ids.filter(([, k]) => k === "include").map(([id]) => explained(id, c, 0));
+    const unavailable = incl.filter((v) => v.explain.headline === INCLUDED_UNAVAILABLE);
+    const included = incl.length - unavailable.length;
+    return { included, unavailable, excluded: ids.filter(([, k]) => k === "exclude").map(([id]) => explained(id, c, 0)), overMax: included > c.max };
+  };
+  /** Fotos de una vivienda de prueba (las del ejemplo manual: 2 si tiene foto). */
+  const photosOf = (propertyId: string) => {
+    const p = byId.get(propertyId);
+    const n = p ? p.photo_count : manualRef.current.find((x) => x.propertyId === propertyId)?.photoUrl ? 2 : 0;
+    return Array.from({ length: n }, (_, i) => ({ id: `${propertyId}#${i}`, url: fixturePhotoUrl(propertyId, i), isCover: i === 0 }));
+  };
+  /** Misma regla de portada que el lector (to-public.ts → coverPhotoOf). */
+  const coverOf = (items: CatalogItemView[]): CatalogDetail["cover"] => {
+    const { propertyId, photoId } = coverRef.current;
+    const warnings: string[] = [];
+    if (items.length === 0) warnings.push("El catálogo está vacío: la portada sale sin foto.");
+    const first = items.find((x) => x.photoUrl)?.photoUrl ?? null;
+    let effective = first;
+    if (propertyId) {
+      const it = items.find((x) => x.propertyId === propertyId);
+      const photos = photosOf(propertyId);
+      if (!it) warnings.push("La vivienda elegida para la portada ya no está en el catálogo: se usa la primera vivienda con foto.");
+      else if (photos.length === 0) warnings.push("La vivienda elegida no tiene fotos: se usa la primera vivienda con foto.");
+      else {
+        const ph = photos.find((x) => x.id === photoId);
+        if (photoId && !ph) warnings.push("La foto elegida ya no existe: se usa la foto de portada de esa vivienda.");
+        effective = (ph ?? photos[0]).url;
+      }
+    }
+    return { chosenPropertyId: propertyId, chosenPhotoId: photoId, effectivePhotoUrl: effective, warnings };
+  };
+  /** Recalcula la lista efectiva, los ajustes y la portada. */
+  const refresh = (patch: Partial<CatalogDetail> = {}) =>
+    setCat((c0) => {
+      const c = { ...c0, ...patch };
+      const a = c.mode === "auto" ? autoItems(c.criteria) : null;
+      const items = a ? a.items : manualRef.current;
+      return { ...c, items, autoTotal: a ? a.total : null, autoMatched: a ? a.matched : null, adjustments: adjustmentsOf(c.criteria), cover: coverOf(items) };
+    });
   let n = 0;
   const actions: CatalogManagerActions = {
     updateMeta: ({ title, skipNotify }) => live({ op: "title", title: `${title} · ${++n}`, skipNotify }),
@@ -83,23 +137,23 @@ export function FixtureCatalogManager({
       const n = normalizeCriteria(criteria);
       if (!n.ok) return invalid;
       const all = sortCandidates(candidates(fixtureProperties, n.criteria, { requirePhoto: false, text }), n.criteria, createdAt);
-      const inCat = new Set(manualRef.current.map((x) => x.propertyId));
+      const inCat = new Set((cat.mode === "auto" ? autoItems(cat.criteria).items : manualRef.current).map((x) => x.propertyId));
       return {
         ok: true as const,
         total: all.length,
-        items: all.slice(offset, offset + 20).map((x) => ({ ...fixtureView(byId.get(x.id)!), inCatalog: inCat.has(x.id) })),
+        items: all.slice(offset, offset + 20).map((x) => ({ ...explained(x.id, cat.criteria, 100), inCatalog: inCat.has(x.id) })),
       };
     },
     selection: {
-      setCriteria: async ({ criteria }) => {
+      setCriteria: async ({ criteria, skipNotify }) => {
         const n = normalizeCriteria(criteria);
         if (!n.ok) return invalid;
-        setCat((c) => {
-          if (c.mode !== "auto") return { ...c, criteria: n.criteria };
-          const a = autoItems(n.criteria);
-          return { ...c, criteria: n.criteria, items: a.items, autoTotal: a.total };
-        });
-        return unchanged();
+        if (adjustmentsOf(n.criteria).included > n.criteria.max) {
+          return { ok: false as const, error: "Hay más inclusiones que ese máximo. Sube el máximo o quita una inclusión." };
+        }
+        const changes = cat.mode === "auto" && JSON.stringify(autoItems(n.criteria).items.map((x) => x.propertyId)) !== JSON.stringify(cat.items.map((x) => x.propertyId));
+        refresh({ criteria: n.criteria });
+        return changes ? live({ op: "reorder", skipNotify }) : unchanged();
       },
       previewAuto: async ({ criteria }) => {
         const n = normalizeCriteria(criteria);
@@ -120,15 +174,50 @@ export function FixtureCatalogManager({
       },
       setMode: async ({ mode, strategy }) => {
         if (mode === cat.mode) return { ok: false as const, error: "El catálogo ya está en ese modo." };
-        if (mode === "auto") {
-          const a = autoItems(cat.criteria);
-          setCat((c) => ({ ...c, mode: "auto", items: a.items, autoTotal: a.total, manualCount: manualRef.current.length }));
-        } else {
-          if (strategy === "convert") manualRef.current = autoItems(cat.criteria).items;
-          setCat((c) => ({ ...c, mode: "manual", items: manualRef.current, autoTotal: null, manualCount: manualRef.current.length }));
-        }
+        if (mode === "manual" && strategy === "convert") manualRef.current = autoItems(cat.criteria).items;
+        refresh({ mode, manualCount: mode === "manual" && strategy === "convert" ? manualRef.current.length : manualRef.current.length });
         return unchanged();
       },
+    },
+    adjust: async ({ propertyId, kind, skipNotify }) => {
+      if (cat.mode !== "auto") return { ok: false as const, error: "Incluir y excluir solo se usa en modo automático. En manual, añade o quita viviendas de la lista." };
+      const p = byId.get(propertyId);
+      if (!p) return { ok: false as const, error: "No encuentro esa propiedad." };
+      if (adjRef.current.get(propertyId) === kind) return unchanged();
+      if (kind === "include") {
+        if (!isAvailable(p)) return { ok: false as const, error: p.country !== "es" ? "En esta versión solo se pueden añadir propiedades de España." : "Esa propiedad está vendida o archivada; no se puede añadir." };
+        if (adjustmentsOf(cat.criteria).included + 1 > cat.criteria.max) {
+          return { ok: false as const, error: "No caben más inclusiones con el máximo actual. Sube el máximo o quita una inclusión." };
+        }
+      }
+      const before = autoItems(cat.criteria).items.map((x) => x.propertyId).join();
+      adjRef.current.set(propertyId, kind);
+      const after = autoItems(cat.criteria).items.map((x) => x.propertyId).join();
+      refresh();
+      if (before === after) return unchanged();
+      return kind === "exclude" ? live({ op: "remove", key: "__first__", skipNotify }) : live({ op: "add", title: p.title, skipNotify });
+    },
+    clearAdjustment: async ({ propertyId, skipNotify }) => {
+      if (!adjRef.current.has(propertyId)) return { ok: false as const, error: "Esa vivienda ya no tenía ningún ajuste." };
+      const before = autoItems(cat.criteria).items.map((x) => x.propertyId).join();
+      adjRef.current.delete(propertyId);
+      const after = autoItems(cat.criteria).items.map((x) => x.propertyId).join();
+      refresh();
+      return before === after ? unchanged() : live({ op: "reorder", skipNotify });
+    },
+    cover: {
+      set: async ({ propertyId, photoId, skipNotify }) => {
+        if (propertyId && !cat.items.some((x) => x.propertyId === propertyId)) {
+          return { ok: false as const, error: "La portada tiene que ser una vivienda que esté ahora en el catálogo." };
+        }
+        if (photoId && (!propertyId || !photosOf(propertyId).some((x) => x.id === photoId))) {
+          return { ok: false as const, error: "Esa foto no es de la vivienda elegida." };
+        }
+        coverRef.current = { propertyId: propertyId ?? null, photoId: photoId ?? null };
+        refresh();
+        return live({ op: "cover", choose: propertyId ? cat.items.findIndex((x) => x.propertyId === propertyId) : null, skipNotify });
+      },
+      photos: async ({ propertyId }) => ({ ok: true as const, photos: photosOf(propertyId) }),
     },
     ads: {
       add: async ({ listingId, codeOrUrl }) => {

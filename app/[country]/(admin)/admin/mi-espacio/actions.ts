@@ -24,11 +24,12 @@ import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { getCatalogFingerprint } from "@/lib/catalogs/public-data";
 import {
   autoSelection,
+  listCoverPhotos,
   modePreview,
   searchCatalogProperties,
   searchSavedListings,
 } from "@/lib/catalogs/queries";
-import type { CatalogItemView } from "@/lib/catalogs/types";
+import type { CatalogItemView, CoverPhotoOption } from "@/lib/catalogs/types";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
 import { notifyCatalogChanged } from "@/lib/catalogs/sync-hub-instance";
@@ -420,6 +421,85 @@ export async function addPropertyByIdAction(input: {
     });
     if (error) return fail(error);
     return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+// ── Ajustes del automático y portada (ampliación C1, 0196) ─────────────────
+
+/** Incluir o excluir una vivienda de un catálogo automático (persistente). */
+export async function adjustCatalogAction(input: {
+  catalogId: string;
+  propertyId: string;
+  kind: "include" | "exclude";
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (input.kind !== "include" && input.kind !== "exclude") return fail("invalid_adjustment");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_adjust", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_kind: input.kind,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Quitar el ajuste: la vivienda vuelve a seguir los criterios. */
+export async function clearCatalogAdjustmentAction(input: {
+  catalogId: string;
+  propertyId: string;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_adjust_clear", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Portada elegida: vivienda de la lista y, si se quiere, una de sus fotos.
+ *  Sin vivienda, vuelve la portada automática. */
+export async function setCatalogCoverAction(input: {
+  catalogId: string;
+  propertyId: string | null;
+  photoId?: string | null;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const propertyId = input.propertyId ?? null;
+    const photoId = input.photoId ?? null;
+    if ((propertyId !== null && !isUuid(propertyId)) || (photoId !== null && !isUuid(photoId))) return fail("invalid_cover_photo");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_set_cover", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: propertyId,
+      p_photo: photoId,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Fotos de una vivienda del catálogo para elegir portada (solo lectura). */
+export async function listCoverPhotosAction(input: {
+  catalogId: string;
+  propertyId: string;
+}): Promise<ActionResult<{ photos: CoverPhotoOption[] }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    // Solo catálogos del dueño (la elección la vuelve a validar SQL).
+    const { data: cat } = await db().from("catalogs").select("id").eq("id", input.catalogId).eq("owner_id", profile.id).maybeSingle();
+    if (!cat) return fail("forbidden");
+    return { ok: true as const, photos: await listCoverPhotos(input.catalogId, input.propertyId) };
   }));
 }
 

@@ -212,6 +212,7 @@ export type FixtureOp =
   | { op: "reorder"; token: string; keys?: string[] }
   | { op: "status"; token: string; key: string; status: "available" | "reserved" | "sold" | "archived" }
   | { op: "photo"; token: string; key: string }
+  | { op: "cover"; token: string; choose: number | null }
   | { op: "revoke"; token: string }
   | { op: "expire"; token: string; inMs?: number }
   | { op: "archive"; token: string };
@@ -233,6 +234,11 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       break;
     case "title":
       snap.title = op.title;
+      break;
+    case "cover":
+      // C1: portada elegida (sintética): la vivienda nº `choose` de la lista.
+      if (op.choose === null || op.choose < 0) delete snap.cover;
+      else snap.cover = { key: snap.items[op.choose]?.key ?? null, photo: null };
       break;
     case "contact":
       snap.contact = { name: op.name, phone: op.phone, role: op.role };

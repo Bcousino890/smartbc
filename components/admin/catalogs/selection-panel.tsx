@@ -14,6 +14,7 @@ import {
 } from "@/lib/catalogs/criteria";
 import type { CatalogItemView } from "@/lib/catalogs/types";
 import { catalogBarrios, catalogDistricts } from "@/lib/catalogs/zones";
+import { zoneRedundancies } from "@/lib/catalogs/explain";
 
 // Zonas, precio y modo de un catálogo (BCP-01 ampliación X7, D21). Interfaz
 // del admin (Lato). Los criterios filtran la búsqueda en modo manual y SON la
@@ -24,7 +25,7 @@ type Res = ActionResult<{ version: number; fingerprint?: string | null; publicCh
 
 export interface SelectionActions {
   setCriteria: (i: { catalogId: string; criteria: CatalogCriteria; skipNotify?: boolean }) => Promise<Res>;
-  previewAuto: (i: { catalogId: string; criteria: CatalogCriteria }) => Promise<ActionResult<{ items: CatalogItemView[]; total: number }>>;
+  previewAuto: (i: { catalogId: string; criteria: CatalogCriteria }) => Promise<ActionResult<{ items: CatalogItemView[]; total: number; matched?: number }>>;
   previewMode: (i: {
     catalogId: string;
     mode: "manual" | "auto";
@@ -93,7 +94,7 @@ export function SelectionPanel({
   const [pmin, setPmin] = useState(initial.price_min === null ? "" : String(initial.price_min));
   const [pmax, setPmax] = useState(initial.price_max === null ? "" : String(initial.price_max));
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ items: CatalogItemView[]; total: number } | null>(null);
+  const [preview, setPreview] = useState<{ items: CatalogItemView[]; total: number; matched?: number } | null>(null);
   const [modePrev, setModePrev] = useState<{
     to: "manual" | "auto";
     entering: CatalogItemView[];
@@ -149,7 +150,7 @@ export function SelectionPanel({
     if (!crit) return;
     startBusy(async () => {
       const r = await actions.previewAuto({ catalogId, criteria: crit });
-      if (r.ok) setPreview({ items: r.items, total: r.total });
+      if (r.ok) setPreview({ items: r.items, total: r.total, matched: r.matched });
       else setError(r.error);
     });
   }
@@ -322,6 +323,11 @@ export function SelectionPanel({
           </button>
         </div>
         <p className="text-xs text-ink/45">Chueca cuenta como Justicia, Malasaña como Universidad y Huertas como Cortes.</p>
+        {zoneRedundancies(c).length ? (
+          <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="zone-redundant">
+            {zoneRedundancies(c).join(" · ")}: no estrecha la búsqueda.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -403,9 +409,10 @@ export function SelectionPanel({
         <div className="space-y-2 rounded-lg border border-gold/20 bg-white p-3" data-testid="auto-preview">
           <p className="text-xs text-ink/70">
             <strong>
-              {preview.items.length} de {preview.total}
+              {preview.items.length} de {preview.matched ?? preview.total}
             </strong>{" "}
             coinciden {criteriaSummary(c) ? `· ${criteriaSummary(c)}` : ""}
+            {preview.items.some((it) => it.via === "include") ? " · con tus inclusiones" : ""}
           </p>
           <MiniList items={preview.items} empty="Ninguna vivienda encaja con estos criterios." />
         </div>

@@ -36,6 +36,10 @@ export interface InternalSnapshot {
   /** 0194: contacto público guardado en el catálogo. */
   contact?: { name: string | null; phone: string | null; role: string | null } | null;
   items: InternalItem[];
+  /** 0196 (C1): portada elegida. Solo existe si hay elección: la clave
+   *  pública de la vivienda (null si ya no está en la lista) y el
+   *  identificador opaco de la foto (el mismo `u` de photos; null si no hay). */
+  cover?: { key: string | null; photo: string | null } | null;
 }
 
 export interface InternalItem {
@@ -116,6 +120,39 @@ function toPublicPhotos(it: InternalItem): { photos: PublicPhoto[]; coverIndex: 
   return { photos, coverIndex: coverIndex < 0 ? 0 : coverIndex };
 }
 
+/** Índice público (el del proxy) de la foto `u` de una vivienda, o -1. */
+function photoIndexOf(it: InternalItem, u: string): number {
+  const seen = new Set<string>();
+  for (const ph of it.photos ?? []) {
+    if (!ph || typeof ph.u !== "string" || seen.has(ph.u)) continue;
+    if (ph.u === u) return seen.size;
+    seen.add(ph.u);
+  }
+  return -1;
+}
+
+/**
+ * Portada del catálogo (C1). Independiente del orden:
+ *   1. la foto elegida, si sigue existiendo;
+ *   2. si no, la foto de portada de la vivienda elegida;
+ *   3. si la vivienda ya no está o no tiene fotos, la primera vivienda con foto;
+ *   4. catálogo vacío (o sin fotos): sin foto.
+ */
+export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, items?: PublicItem[]): string | null {
+  const internal = (snap.items ?? []).filter((it) => it && it.status !== "sold" && it.status !== "archived");
+  const pubs = items ?? internal.map(toPublicItem);
+  const key = snap.cover?.key;
+  if (typeof key === "string") {
+    const i = internal.findIndex((it) => String(it.key) === key);
+    if (i >= 0 && pubs[i] && pubs[i].photos.length > 0) {
+      const idx = typeof snap.cover?.photo === "string" ? photoIndexOf(internal[i], snap.cover.photo) : -1;
+      return pubs[i].photos[idx >= 0 ? idx : pubs[i].coverIndex].src;
+    }
+  }
+  const first = pubs.find((it) => it.photos.length > 0);
+  return first ? first.photos[first.coverIndex].src : null;
+}
+
 export function toPublicItem(it: InternalItem): PublicItem {
   const clean = it.clean;
   const cleanValid =
@@ -156,7 +193,6 @@ export function toPublicCatalog(snap: InternalSnapshot): PublicCatalog {
   const items = (snap.items ?? [])
     .filter((it) => it && it.status !== "sold" && it.status !== "archived")
     .map(toPublicItem);
-  const first = items.find((it) => it.photos.length > 0);
   const contact = snap.contact ?? null;
   return {
     title: String(snap.title ?? "").trim(),
@@ -166,7 +202,7 @@ export function toPublicCatalog(snap: InternalSnapshot): PublicCatalog {
     phone: formatContactPhone(contact?.phone),
     phoneHref: contactPhoneHref(contact?.phone),
     role: isContactRole(contact?.role) ? contact.role : "asesor",
-    coverPhoto: first ? first.photos[first.coverIndex].src : null,
+    coverPhoto: coverPhotoOf(snap, items),
     items,
   };
 }
