@@ -133,8 +133,17 @@ export async function loadStats(period: StatsPeriod, portal: StatsPortalFilter, 
 
   // Ranking de zonas
   const labels = new Map<string, string>();
-  const { data: zl } = await db.from("scraper_zones").select("portal,zone_key,label");
-  for (const z of (zl ?? []) as Array<{ portal: string; zone_key: string; label: string }>) labels.set(`${z.portal}|${z.zone_key}`, z.label);
+  // PostgREST corta a 1.000 filas por petición y hay más zonas que eso: se lee por páginas.
+  for (let page = 0; page < 20; page++) {
+    const { data: zl } = await db
+      .from("scraper_zones")
+      .select("portal,zone_key,label")
+      .order("portal", { ascending: true })
+      .order("zone_key", { ascending: true })
+      .range(page * 1000, page * 1000 + 999);
+    for (const z of (zl ?? []) as Array<{ portal: string; zone_key: string; label: string }>) labels.set(`${z.portal}|${z.zone_key}`, z.label);
+    if (!zl || zl.length < 1000) break;
+  }
   const zmap = new Map<string, Row[]>();
   for (const r of rows) {
     if (r.zone_key === "*" || r.task !== "*") continue;
