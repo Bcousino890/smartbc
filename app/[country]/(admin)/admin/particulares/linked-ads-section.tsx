@@ -3,7 +3,7 @@
 import { addressLine } from "@/lib/particulares/address-title";
 import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Link2, Users } from "lucide-react";
-import { formatPrice } from "@/lib/format";
+import { groupThousands } from "./_ficha/format";
 import type {
   LinkedAd,
   LinkInfo,
@@ -24,7 +24,7 @@ import { setParticularLinkStatus } from "./link-actions";
 const portalName = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
 const opName = (op: string | null) => (op === "rent" ? "Alquiler" : op === "sale" ? "Venta" : "—");
 const priceText = (ad: { price: number | null; operation: string | null }) =>
-  ad.price == null ? "Sin precio" : `${formatPrice(ad.price)} €${ad.operation === "rent" ? "/mes" : ""}`;
+  ad.price == null ? "Sin precio" : `${groupThousands(Math.round(ad.price))} €${ad.operation === "rent" ? "/mes" : ""}`;
 
 /** Texto del distintivo de operación en el listado: «Venta + Alquiler» si el inmueble tiene las dos. */
 export function linkedOpLabel(row: {
@@ -59,7 +59,7 @@ export function LinkedOffersLine({
     <p className="mt-0.5 truncate text-xs text-ink/50" title="Otras ofertas del mismo inmueble">
       También:{" "}
       {others
-        .map((o) => `${opName(o.op)} ${o.price == null ? "" : `${formatPrice(o.price)} €${o.op === "rent" ? "/mes" : ""} `}(${portalName(o.portal)})`)
+        .map((o) => `${opName(o.op)} ${o.price == null ? "" : `${groupThousands(Math.round(o.price))} €${o.op === "rent" ? "/mes" : ""} `}(${portalName(o.portal)})`)
         .join(" · ")}
     </p>
   );

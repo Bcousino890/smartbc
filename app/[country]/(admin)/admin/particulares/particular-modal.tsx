@@ -8,7 +8,6 @@ import { createPortal } from "react-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useToast } from "@/components/ui/toast";
 import { Modal } from "@/components/ui/modal";
-import { formatPrice } from "@/lib/format";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { cn } from "@/lib/utils";
 import { assignParticular, createParticularShareLink, createPropertyFromParticular, logParticularContact, setParticularActive, updateParticularPhone } from "./actions";
@@ -255,7 +254,7 @@ function asPrice(v: unknown): number | null {
 
 function euros(v: unknown): string {
   const n = asPrice(v);
-  return n != null ? `${formatPrice(n)} €` : "—";
+  return n != null ? `${groupThousands(Math.round(n))} €` : "—";
 }
 
 type TimelineEntry = {
@@ -274,7 +273,7 @@ function changeToEntry(c: ParticularChangeRow): TimelineEntry {
       const price = asPrice(c.new_value?.price);
       return {
         ...base,
-        title: price != null ? `Alta del anuncio · ${formatPrice(price)} €` : "Alta del anuncio",
+        title: price != null ? `Alta del anuncio · ${groupThousands(Math.round(price))} €` : "Alta del anuncio",
         icon: <Sparkles size={12} strokeWidth={2} />,
         iconClass: "bg-gold/20 text-gold-dark",
       };
@@ -448,8 +447,8 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {kpi("Precio inicial", first != null ? `${formatPrice(first)} €` : "—")}
-        {kpi("Precio actual", last != null ? `${formatPrice(last)} €` : "—")}
+        {kpi("Precio inicial", first != null ? `${groupThousands(Math.round(first))} €` : "—")}
+        {kpi("Precio actual", last != null ? `${groupThousands(Math.round(last))} €` : "—")}
         {kpi(
           "Variación",
           varPct == null || Math.abs(varPct) < 0.05 ? "Sin cambios" : `${varPct > 0 ? "+" : "−"}${Math.abs(varPct).toFixed(1).replace(".", ",")} %`,
@@ -468,10 +467,10 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
               <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(10, 10, 10, 0.08)" />
                 <XAxis dataKey="label" stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} tickLine={false} />
-                <YAxis stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} width={64} domain={["auto", "auto"]} tickFormatter={(v) => formatPrice(Number(v))} tickLine={false} />
+                <YAxis stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} width={64} domain={["auto", "auto"]} tickFormatter={(v) => groupThousands(Math.round(Number(v)))} tickLine={false} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "rgba(251, 248, 243, 0.97)", border: "1px solid rgba(10, 10, 10, 0.1)", borderRadius: "10px", fontSize: "13px" }}
-                  formatter={(value: unknown) => [typeof value === "number" ? `${formatPrice(value)} €` : "—", "Precio"]}
+                  formatter={(value: unknown) => [typeof value === "number" ? `${groupThousands(Math.round(value))} €` : "—", "Precio"]}
                   labelFormatter={(label) => `Fecha: ${label}`}
                 />
                 <Line type="stepAfter" dataKey="price" stroke="#8a6d2f" strokeWidth={2.5} dot={{ r: 4, fill: "#8a6d2f", strokeWidth: 0 }} isAnimationActive={false} name="Precio" />
@@ -501,7 +500,7 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
                     <p className="text-sm font-semibold text-ink">{e.title}</p>
                     <p className="mt-0.5 text-xs text-ink/65">{HISTORY_DATE_FMT.format(new Date(e.date))}</p>
                   </div>
-                  {pr != null && <p className="shrink-0 text-sm font-semibold tabular-nums text-ink">{formatPrice(pr)} €</p>}
+                  {pr != null && <p className="shrink-0 text-sm font-semibold tabular-nums text-ink">{groupThousands(Math.round(pr))} €</p>}
                 </li>
               );
             })}

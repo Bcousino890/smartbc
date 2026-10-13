@@ -146,7 +146,7 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
               <span className="absolute bottom-1 left-1 flex flex-col gap-0.5 rounded bg-white/90 px-1.5 py-0.5 text-xs text-ink/70">
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full bg-red-600" aria-hidden />
-                  Pin de Idealista (aproximado)
+                  {LABEL[pt.precision]}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full bg-blue-600" aria-hidden />
