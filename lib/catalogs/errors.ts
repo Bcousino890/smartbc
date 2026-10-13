@@ -1,5 +1,5 @@
 // ============================================================================
-// Traducción de los errores de las funciones SQL de 0192, 0193 y 0194 a mensajes para
+// Traducción de los errores de las funciones SQL de 0192–0195 a mensajes para
 // Fabricio. Pura: se prueba en scripts/test-catalogs.mts.
 // ============================================================================
 
@@ -22,6 +22,16 @@ const MESSAGES: Record<string, string> = {
   invalid_contact_name: "El nombre del asesor tiene que tener entre 2 y 80 caracteres, sin correos, webs ni teléfonos.",
   invalid_contact_phone: "El teléfono no es válido. Escríbelo con prefijo (+34 600 000 000) o como móvil español.",
   invalid_contact_role: "Elige «asesor» o «asesora».",
+  invalid_criteria: "Revisa los criterios: zonas reconocidas, precio con operación (venta o alquiler), mínimo ≤ máximo y entre 1 y 24 viviendas.",
+  catalog_auto: "Este catálogo está en modo automático: la lista sale de los criterios. Pásalo a manual para elegir viviendas a mano.",
+  invalid_mode: "Modo no válido.",
+  invalid_strategy: "Elige si vuelves a tu lista anterior o conviertes la selección actual.",
+  mode_unchanged: "El catálogo ya está en ese modo.",
+  ad_required: "Elige una ficha guardada o pega el enlace o el código del anuncio.",
+  invalid_ad_code: "No reconozco ese anuncio. Pega el enlace de Idealista (…/inmueble/123456789/) o su número.",
+  invalid_ad_note: "La nota no puede pasar de 200 caracteres.",
+  listing_not_found: "No encuentro esa ficha guardada.",
+  ad_exists: "Ese anuncio ya está asociado a este catálogo.",
 };
 
 export const GENERIC_ERROR = "No se ha podido guardar. Inténtalo de nuevo.";

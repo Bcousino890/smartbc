@@ -14,9 +14,12 @@ export async function POST(req: Request) {
   if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)) return new NextResponse("forbidden", { status: 403 });
   const op = await req.json().catch(() => null);
   if (!op || typeof op.op !== "string") return NextResponse.json({ error: "bad_op" }, { status: 400 });
-  const { fixtureMutate } = await import("@/lib/catalogs/fixture-store");
+  const { fixtureMutate, fixtureGetPublic } = await import("@/lib/catalogs/fixture-store");
   const { notifyCatalogChanged } = await import("@/lib/catalogs/sync-hub-instance");
-  const res = await fixtureMutate(op);
-  notifyCatalogChanged();
-  return NextResponse.json(res, { headers: { "Cache-Control": "no-store" } });
+  // Huella antes y después (medición: «sin cambio público»). notify:false =
+  // «sin aviso inmediato» (el cambio llega por la pasada del vigilante).
+  const before = typeof op.token === "string" ? (await fixtureGetPublic(op.token))?.fingerprint ?? null : null;
+  const res = op.op === "noop" ? { fingerprint: before } : await fixtureMutate(op);
+  if (op.notify !== false) notifyCatalogChanged();
+  return NextResponse.json({ ...res, before }, { headers: { "Cache-Control": "no-store" } });
 }

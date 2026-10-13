@@ -19,7 +19,16 @@ import { validateCatalogContact } from "@/lib/catalogs/contact";
 import { catalogErrorMessage } from "@/lib/catalogs/errors";
 import { isHomeOwner } from "@/lib/catalogs/owner";
 import { findPropertyId } from "@/lib/catalogs/queries";
+import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
+import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { getCatalogFingerprint } from "@/lib/catalogs/public-data";
+import {
+  autoSelection,
+  modePreview,
+  searchCatalogProperties,
+  searchSavedListings,
+} from "@/lib/catalogs/queries";
+import type { CatalogItemView } from "@/lib/catalogs/types";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
 import { notifyCatalogChanged } from "@/lib/catalogs/sync-hub-instance";
@@ -78,26 +87,54 @@ function revalidateCatalog(catalogId: string) {
   revalidatePath(`${HOME_PATH}/catalogos/${catalogId}`);
 }
 
-type Saved = { version: number; fingerprint: string | null };
+type Saved = {
+  version: number;
+  /** Huella pública tras guardar (medición de D13). */
+  fingerprint: string | null;
+  /** Huella antes de guardar: si es la misma, el guardado no cambió nada de
+   *  lo que ve el lector («sin cambio público»; la medición no lo cuenta). */
+  fingerprintBefore: string | null;
+  publicChange: boolean;
+};
+
+/** Opción SOLO del modo medición: no avisar al vigilante para medir el camino
+ *  de los cambios hechos desde otras pantallas (≤ 300 ms del vigilante). */
+type MeasureOpts = { skipNotify?: boolean };
+
+const fpBefore = (profileId: string, catalogId: string) => getCatalogFingerprint(profileId, catalogId);
 
 /** Tras un guardado con éxito: lectores abiertos al día ya y huella nueva. */
-async function saved(profileId: string, catalogId: string, version: unknown): Promise<{ ok: true } & Saved> {
-  notifyCatalogChanged();
+async function saved(
+  profileId: string,
+  catalogId: string,
+  version: unknown,
+  before: string | null,
+  opts?: MeasureOpts,
+): Promise<{ ok: true } & Saved> {
+  if (!opts?.skipNotify) notifyCatalogChanged();
   revalidateCatalog(catalogId);
-  return { ok: true as const, version: Number(version), fingerprint: await getCatalogFingerprint(profileId, catalogId) };
+  const after = await getCatalogFingerprint(profileId, catalogId);
+  return {
+    ok: true as const,
+    version: Number(version),
+    fingerprint: after,
+    fingerprintBefore: before,
+    publicChange: before === null || after === null || before !== after,
+  };
 }
 
 export async function updateCatalogMetaAction(input: {
   catalogId: string;
   title: string;
   intro?: string | null;
-}): Promise<ActionResult<Saved>> {
+} & MeasureOpts): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     const title = normalizeTitle(input.title);
     if (!title.ok) return fail(title.error);
     const intro = normalizeIntro(input.intro);
     if (!intro.ok) return fail(intro.error);
+    const before = await fpBefore(profile.id, input.catalogId);
     const { data, error } = await db().rpc("catalog_update_meta", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
@@ -105,7 +142,7 @@ export async function updateCatalogMetaAction(input: {
       p_intro: intro.value,
     });
     if (error) return fail(error);
-    return saved(profile.id, input.catalogId, data);
+    return saved(profile.id, input.catalogId, data, before, input);
   }));
 }
 
@@ -114,36 +151,38 @@ export async function updateCatalogMetaAction(input: {
 export async function addPropertyToCatalogAction(input: {
   catalogId: string;
   reference: string;
-}): Promise<ActionResult<Saved>> {
+} & MeasureOpts): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     const ref = parsePropertyRef(input.reference);
     if (ref.kind === "invalid") return { ok: false as const, error: refErrorMessage(ref.reason) };
     const propertyId = await findPropertyId(ref);
     if (!propertyId) return fail("property_not_found");
+    const before = await fpBefore(profile.id, input.catalogId);
     const { data, error } = await db().rpc("catalog_add_property", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
       p_property: propertyId,
     });
     if (error) return fail(error);
-    return saved(profile.id, input.catalogId, data);
+    return saved(profile.id, input.catalogId, data, before, input);
   }));
 }
 
 export async function removePropertyFromCatalogAction(input: {
   catalogId: string;
   propertyId: string;
-}): Promise<ActionResult<Saved>> {
+} & MeasureOpts): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
     const { data, error } = await db().rpc("catalog_remove_item", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
       p_property: input.propertyId,
     });
     if (error) return fail(error);
-    return saved(profile.id, input.catalogId, data);
+    return saved(profile.id, input.catalogId, data, before, input);
   }));
 }
 
@@ -151,33 +190,35 @@ export async function removePropertyFromCatalogAction(input: {
 export async function reorderCatalogAction(input: {
   catalogId: string;
   propertyIds: string[];
-}): Promise<ActionResult<Saved>> {
+} & MeasureOpts): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isValidOrder(input?.propertyIds)) return fail("order_mismatch");
+    const before = await fpBefore(profile.id, input.catalogId);
     const { data, error } = await db().rpc("catalog_reorder", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
       p_properties: input.propertyIds,
     });
     if (error) return fail(error);
-    return saved(profile.id, input.catalogId, data);
+    return saved(profile.id, input.catalogId, data, before, input);
   }));
 }
 
 export async function setCatalogStatusAction(input: {
   catalogId: string;
   status: "active" | "archived";
-}): Promise<ActionResult<Saved>> {
+} & MeasureOpts): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     if (input.status !== "active" && input.status !== "archived") return fail("invalid_status");
+    const before = await fpBefore(profile.id, input.catalogId);
     const { data, error } = await db().rpc("catalog_set_status", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
       p_status: input.status,
     });
     if (error) return fail(error);
-    return saved(profile.id, input.catalogId, data);
+    return saved(profile.id, input.catalogId, data, before, input);
   }));
 }
 
@@ -244,11 +285,12 @@ export async function setCatalogContactAction(input: {
   name: string;
   phone: string;
   role: string;
-}): Promise<ActionResult<Saved & { phone: string }>> {
+} & MeasureOpts): Promise<ActionResult<Saved & { phone: string }>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId)) return fail("forbidden");
     const contact = validateCatalogContact(input);
     if (!contact.ok) return fail(contact.error);
+    const before = await fpBefore(profile.id, input.catalogId);
     const { data, error } = await db().rpc("catalog_set_contact", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
@@ -257,6 +299,178 @@ export async function setCatalogContactAction(input: {
       p_role: contact.contact.role,
     });
     if (error) return fail(error);
-    return { ...(await saved(profile.id, input.catalogId, data)), phone: contact.contact.phone };
+    return { ...(await saved(profile.id, input.catalogId, data, before, input)), phone: contact.contact.phone };
+  }));
+}
+
+// ── Zonas, precio y modo (ampliación PR-B, 0195) ────────────────────────────
+
+/** Guarda los criterios (filtros de búsqueda en manual; la selección en
+ *  automático). Mismas reglas que SQL (catalog_criteria_normalize). */
+export async function setCatalogCriteriaAction(input: {
+  catalogId: string;
+  criteria: unknown;
+} & MeasureOpts): Promise<ActionResult<Saved & { criteria: CatalogCriteria }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const n = normalizeCriteria(input.criteria);
+    if (!n.ok) return fail(n.error);
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_set_criteria", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_criteria: n.criteria,
+    });
+    if (error) return fail(error);
+    return { ...(await saved(profile.id, input.catalogId, data, before, input)), criteria: n.criteria };
+  }));
+}
+
+/** Resultado automático con unos criterios aún sin guardar (vista previa). */
+export async function previewAutoSelectionAction(input: {
+  catalogId: string;
+  criteria: unknown;
+}): Promise<ActionResult<{ items: CatalogItemView[]; total: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const n = normalizeCriteria(input.criteria);
+    if (!n.ok) return fail(n.error);
+    try {
+      return { ok: true as const, ...(await autoSelection(profile.id, input.catalogId, n.criteria)) };
+    } catch (err) {
+      return fail({ message: err instanceof Error ? err.message.replace(/^[^:]+:\s*/, "") : null });
+    }
+  }));
+}
+
+/** Qué entra y qué sale si se cambia de modo (no escribe nada). */
+export async function previewModeAction(input: {
+  catalogId: string;
+  mode: "manual" | "auto";
+}): Promise<ActionResult<{ entering: CatalogItemView[]; leaving: CatalogItemView[]; autoTotal: number; manualCount: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (input.mode !== "manual" && input.mode !== "auto") return fail("invalid_mode");
+    try {
+      return { ok: true as const, ...(await modePreview(profile.id, input.catalogId, input.mode)) };
+    } catch (err) {
+      return fail({ message: err instanceof Error ? err.message.replace(/^[^:]+:\s*/, "") : null });
+    }
+  }));
+}
+
+/** Cambia de modo. manual → auto deja la lista manual intacta; auto → manual
+ *  pide «restore» (volver a la lista guardada) o «convert» (convertir la
+ *  selección actual en lista manual). */
+export async function setCatalogModeAction(input: {
+  catalogId: string;
+  mode: "manual" | "auto";
+  strategy?: "restore" | "convert" | null;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (input.mode !== "manual" && input.mode !== "auto") return fail("invalid_mode");
+    const strategy = input.mode === "manual" ? input.strategy ?? null : null;
+    if (input.mode === "manual" && strategy !== "restore" && strategy !== "convert") return fail("invalid_strategy");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_set_mode", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_mode: input.mode,
+      p_strategy: strategy,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Búsqueda de propiedades para añadir a mano (solo lectura). */
+export async function searchCatalogPropertiesAction(input: {
+  catalogId: string;
+  criteria: unknown;
+  text?: string | null;
+  offset?: number;
+}): Promise<ActionResult<{ items: Array<CatalogItemView & { inCatalog: boolean }>; total: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const n = normalizeCriteria(input.criteria);
+    if (!n.ok) return fail(n.error);
+    const text = typeof input.text === "string" && input.text.trim() ? input.text.trim().slice(0, 80) : null;
+    const offset = Number.isInteger(input.offset) && (input.offset as number) >= 0 ? (input.offset as number) : 0;
+    try {
+      return { ok: true as const, ...(await searchCatalogProperties(profile.id, input.catalogId, n.criteria, text, offset)) };
+    } catch (err) {
+      return fail({ message: err instanceof Error ? err.message.replace(/^[^:]+:\s*/, "") : null });
+    }
+  }));
+}
+
+/** Añade una propiedad elegida en la búsqueda (modo manual). */
+export async function addPropertyByIdAction(input: {
+  catalogId: string;
+  propertyId: string;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_add_property", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+// ── Anuncios de origen (interno; nunca llega al lector) ────────────────────
+
+/** Asocia un anuncio: una ficha guardada o un código/URL de Idealista. La URL
+ *  NO se abre: solo se extrae el número. */
+export async function addCatalogAdAction(input: {
+  catalogId: string;
+  listingId?: string | null;
+  codeOrUrl?: string | null;
+  note?: string | null;
+}): Promise<ActionResult<{ id: string }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const listingId = input.listingId ? (isUuid(input.listingId) ? input.listingId : null) : null;
+    if (input.listingId && !listingId) return fail("listing_not_found");
+    let code: string | null = null;
+    if (input.codeOrUrl && input.codeOrUrl.trim()) {
+      code = parseIdealistaAdCode(input.codeOrUrl);
+      if (!code) return fail("invalid_ad_code");
+    }
+    const note = typeof input.note === "string" ? input.note.trim().slice(0, 200) || null : null;
+    const { data, error } = await db().rpc("catalog_ad_add", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_listing: listingId,
+      p_code: code,
+      p_note: note,
+    });
+    if (error || !data) return fail(error);
+    revalidateCatalog(input.catalogId);
+    return { ok: true as const, id: String(data) };
+  }));
+}
+
+export async function removeCatalogAdAction(input: { catalogId: string; adId: string }): Promise<ActionResult<object>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.adId)) return fail("forbidden");
+    const { error } = await db().rpc("catalog_ad_remove", { p_actor: profile.id, p_ad: input.adId });
+    if (error) return fail(error);
+    revalidateCatalog(input.catalogId);
+    return { ok: true as const };
+  }));
+}
+
+/** Busca en Fichas guardadas para asociar (solo lectura; no se modifica). */
+export async function searchSavedListingsAction(input: {
+  text: string;
+}): Promise<ActionResult<{ items: Awaited<ReturnType<typeof searchSavedListings>> }>> {
+  return finish(await withHomeAccess(ownerDeps, async () => {
+    return { ok: true as const, items: await searchSavedListings(String(input?.text ?? "").slice(0, 80)) };
   }));
 }
