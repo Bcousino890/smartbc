@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 
 /** Utilidades visuales comunes de las secciones del diálogo de scrapers. */
 
-export const nf = new Intl.NumberFormat("es-ES");
+// es-ES no agrupa los números de 4 cifras (6506); «always» fuerza 6.506 como en el resto del panel.
+export const nf = new Intl.NumberFormat("es-ES", { useGrouping: "always" } as Intl.NumberFormatOptions);
 export const fmt = (n: number | null | undefined) => (n == null ? "—" : nf.format(Math.round(n)));
 
 export function relTime(iso: string | null | undefined, nowMs: number): string {

@@ -165,8 +165,8 @@ export function fmtDays(d: number): string {
 /** Aviso «solo N días medidos» mientras el libro cubra poco tiempo (null si ya es fiable). */
 export function shortWindowWarning(projectionDays: number): string | null {
   if (!(projectionDays > 0) || projectionDays >= MIN_RELIABLE_DAYS) return null;
-  const n = projectionDays < 1 ? "menos de 1 día" : fmtDays(projectionDays);
-  return `Solo ${n} medido${projectionDays === 1 || (projectionDays >= 1 && Math.round(projectionDays * 10) / 10 === 1) ? "" : "s"}: la proyección extrapola ese tramo y no incluye los barridos que corren cada varios días ni los picos puntuales. Se afina sola con los días; es fiable a partir de ${MIN_RELIABLE_DAYS}.`;
+  const lead = projectionDays < 1 ? "Solo se ha medido menos de 1 día" : `Solo se han medido ${fmtDays(projectionDays)}`;
+  return `${lead}: la proyección extrapola ese tramo y no incluye los barridos que corren cada varios días ni los picos puntuales. Se afina sola con los días; es fiable a partir de ${MIN_RELIABLE_DAYS}.`;
 }
 
 /** Suma de lo proyectado por portal a anuncio activo y mes, por componente (null si no se conoce el nº de anuncios). */
