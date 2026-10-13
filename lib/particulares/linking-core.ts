@@ -244,6 +244,10 @@ type Feats = {
   phonesDiffer: boolean; // los dos tienen teléfono y ninguno coincide
   streetBoth: boolean; // los dos tienen calle y número reconocibles
   S: boolean; // misma calle y número
+  /** Misma calle (por nombre) aunque el número sea otro. */
+  nameSame: boolean;
+  /** |número A − número B| cuando los dos lo tienen. */
+  numDelta: number | null;
   dist: number | null;
   /** Hay coordenadas pero una es aproximada: no sirven para enlazar, solo para vetar si están MUY lejos. */
   distWeak: boolean;
@@ -311,6 +315,8 @@ function pairFeats(x: Norm, y: Norm): Feats {
     Fx: x.floor != null && x.floor === y.floor && !(x.exposure && y.exposure && x.exposure !== y.exposure),
     streetBoth,
     S,
+    nameSame: streetBoth && jaccard(x.tokens, y.tokens) >= 0.6,
+    numDelta: x.number && y.number ? Math.abs(Number(x.number) - Number(y.number)) : null,
     dist,
     distWeak,
     far: rawDist != null && rawDist > (distWeak ? 1500 : 800),
@@ -371,7 +377,16 @@ function classify(f: Feats): Classified {
     if (f.T && (f.Mw || (f.B && f.BA)) && priceOk) {
       const bathsOk = !f.baKnown || f.BA || (f.baTol && (!f.sameOp || f.P5));
       const roomsOk = f.B || !f.bKnown;
-      const addrOk = !streetDiffers || f.near60;
+      // Calle u número distintos = otro portal/otro piso, aunque las coordenadas estén cerca (los
+      // portales vecinos están a 5-50 m y el pin no distingue). Única excepción: MISMA calle, entre
+      // portales distintos (un portal redondea/oculta el número) y pin ≤60 m con o bien número ±2
+      // y pin ≤25 m, o bien misma operación con precio ±3 % y metros ±3 % (misma ficha clavada).
+      const numberSlip =
+        f.nameSame &&
+        !f.samePortal &&
+        f.near60 &&
+        ((f.numDelta != null && f.numDelta <= 2 && f.dist != null && f.dist <= 25) || (f.sameOp && f.P3 && f.M));
+      const addrOk = !streetDiffers || numberSlip;
       const strong =
         addrOk &&
         bathsOk &&
@@ -388,7 +403,7 @@ function classify(f: Feats): Classified {
       return {
         relation: "mismo_inmueble",
         level: "probable",
-        rule: streetDiffers && !f.near60 ? "R1d teléfono, otra dirección" : "R1e teléfono, características aproximadas",
+        rule: !addrOk ? "R1d teléfono, otra dirección" : "R1e teléfono, características aproximadas",
       };
     }
     if (f.T && f.Mw && f.sameOp && !f.P15 && f.P40) {

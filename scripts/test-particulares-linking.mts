@@ -292,6 +292,55 @@ console.log("── planta en inglés vs español (misma publicación de Idealis
   check("«4ª planta» vs «3rd floor» se contradicen", computeLinks([es, en3]).links.every((l) => l.relation !== "mismo_inmueble"));
 }
 
+console.log("── dirección limpia (0186) y direcciones solo-barrio: no contradicen ni enlazan por sí solas ──");
+{
+  const kb = streetKey("Pinar del Rey · Hortaleza");
+  check("«Pinar del Rey · Hortaleza»: sin número (no es calle)", kb.number === null && kb.tokens.has("pinar"), kb);
+  const kg = streetKey("Goya");
+  check("«Goya» solo-barrio: sin número", kg.number === null && kg.tokens.has("goya"), kg);
+  const ko = streetKey("Calle de Orense, 49");
+  check("«Calle de Orense, 49»: calle + número", ko.number === "49" && [...ko.tokens].join() === "orense", ko);
+  const base = { phone: "+34688000111", square_meters: 70, bedrooms: 2, bathrooms: 1, price: 400000 };
+  // mismo teléfono y características: una calle y un barrio (no se contradicen) = cierto
+  const street = row({ ...base, address: "Calle de Orense, 49" });
+  const barrio = row({ ...base, portal: "fotocasa", address: "Goya" });
+  check("calle vs solo-barrio con mismo teléfono: cierto (no hay contradicción)", computeLinks([street, barrio]).links.some((l) => l.level === "cierto"));
+  // sin teléfono: dos solo-barrio iguales NO enlazan por coincidir en barrio
+  const b1 = row({ address: "Goya", phone: null, owner_name: "Ana", price: 400000, square_meters: 70 });
+  const b2 = row({ address: "Goya", portal: "fotocasa", phone: null, owner_name: "Ana", price: 400000, square_meters: 70 });
+  check("dos solo-barrio «Goya» sin teléfono, mismos m²/hab/precio: ningún enlace", computeLinks([b1, b2]).links.length === 0, computeLinks([b1, b2]).links);
+  const p1 = row({ address: "Pinar del Rey · Hortaleza", phone: null, price: 300000, square_meters: 60, bedrooms: 2 });
+  const p2 = row({ address: "Pinar del Rey · Hortaleza", portal: "fotocasa", phone: null, price: 300000, square_meters: 60, bedrooms: 2 });
+  check("dos «Pinar del Rey · Hortaleza» sin teléfono: ningún enlace", computeLinks([p1, p2]).links.length === 0);
+}
+
+console.log("── «cierto» con calle o número distintos (medido 2026-10-13: 27 en la BD) ──");
+{
+  const mk = (address: string, portal: string, lat: number) =>
+    row({ phone: "+34699222333", square_meters: 90, bedrooms: 3, bathrooms: 2, price: 700000, portal, address, latitude: lat, longitude: -3.7, location_precision: "exact" });
+  // misma calle, portales distintos (31 vs 37 en el mismo portal), pin a 19 m
+  const a = mk("Calle de Aguilafuente, 31, Valdezarza", "fotocasa", 40.4500);
+  const b = mk("Calle de Aguilafuente, 37, Valdezarza", "fotocasa", 40.45017);
+  const r1 = computeLinks([a, b]);
+  check("mismo portal, nº 31 vs 37, pin a 19 m: probable, no cierto", r1.links.length === 1 && r1.links[0].level === "probable", r1.links);
+  // calles distintas con el pin a 19 m
+  const c = mk("Plaza conde de toreno, 1", "idealista", 40.4500);
+  const d = mk("Calle de San Bernardino, 2, Universidad - Malasaña", "fotocasa", 40.45017);
+  const r2 = computeLinks([c, d]);
+  check("calles distintas con el pin a 19 m: probable, no cierto", r2.links.length === 1 && r2.links[0].level === "probable", r2.links);
+  // mismo portal Δ=2 cross-portal y a 5 m: se mantiene (un portal redondea el número)
+  const e = mk("Paseo del Rey, 24, Argüelles", "fotocasa", 40.4500);
+  const f = mk("Paseo del Rey, 26", "idealista", 40.450045);
+  check("misma calle, entre portales, nº ±2 y pin a 5 m: sigue cierto", computeLinks([e, f]).links.some((l) => l.level === "cierto"));
+  // Δ=4 entre portales: probable
+  const g = { ...mk("Paseo del Rey, 22, Argüelles", "fotocasa", 40.4500), price: 650000 };
+  check("misma calle, nº ±4 y precio distinto: probable", computeLinks([g, f]).links.every((l) => l.level !== "cierto"));
+  // mismo número pero pin a 40 m y calle igual: cierto (nada se contradice)
+  const h = mk("Calle de Fernando el Católico, 40", "idealista", 40.4500);
+  const i = mk("Calle de Fernando el Católico, 40, Gaztambide", "fotocasa", 40.45036);
+  check("misma calle y número: cierto", computeLinks([h, i]).links.some((l) => l.level === "cierto"));
+}
+
 console.log("── teléfonos de cualquier país (corrige la pérdida del 3,2 % de Fotocasa) ──");
 check("España: igual que antes", normalizeContactPhone("+34 600 12 34 56") === "+34600123456" && normalizeContactPhone("600123456") === "+34600123456" && normalizeContactPhone("0034600123456") === "+34600123456");
 check("Francia: +33 y 0033 se conservan en E.164", normalizeContactPhone("+33 7 12 34 56 78") === "+33712345678" && normalizeContactPhone("0033712345678") === "+33712345678");
