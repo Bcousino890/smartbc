@@ -434,3 +434,87 @@ Postgres 16 temporal en este Mac, datos sintéticos (`scripts/sql/perf-catalogs.
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# Corrección tras la QA de PR-B · índice recortado
+
+## Base y commits
+
+Rama `fabri/bcp-01-indice`, base `7a9635cb58d4cc3493c368f2a5ffde3a8759eb58` (merge de #313, PR-B), comprobada en remoto. Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-indice`.
+
+| Commit | Qué |
+| --- | --- |
+| `84a7d25` | Índice dentro de la zona desplazable, datos sintéticos de 20 y 24 viviendas y guarda en `test:catalogs-public` |
+| siguiente | Este resultado y las capturas |
+
+## Defecto
+
+En la QA en vivo de Fabricio (1280 × 720, 20 viviendas, 23 páginas), el índice se cortaba tras la entrada 11:
+- la sección medía 610 px con `overflow: hidden`, y el contenido, 1006 px;
+- la rueda no desplazaba nada (`scrollTop` en 0).
+
+**Causa:** en la doble página (≥ 900 × 620) cada hoja tiene altura fija y `overflow: hidden`. Las descripciones largas ya se desplazaban dentro de su página (`ScrollRegion`, PR-A), pero la lista del índice no tenía zona propia.
+
+Reproducido en local antes del arreglo (`capturas-indice/antes-1280-indice-20.jpg`):
+- **también con 12 viviendas**, y también a 1440 × 1000 (860 px de hoja para 945 de contenido);
+- con 20 viviendas a 1280 × 720, 610 px para 1054;
+- en móvil no se recortaba, porque la página fluye.
+
+## Arreglo
+
+- La lista del índice va en la **misma `ScrollRegion`** que las descripciones largas (variante `index`). En la doble página se desplaza dentro de la hoja con:
+  - el degradado abajo;
+  - la señal **«Más viviendas ↓»** (un clic desplaza);
+  - la zona enfocable y con nombre («Índice (se desplaza)»);
+  - Av/Re Pág, que desplazan sin pasar de página (← → siguen pasando de página).
+- Nada más cambia:
+  - siguen todas las entradas, los títulos completos, los folios y el tamaño del texto;
+  - la cabecera «En esta selección» no se mueve;
+  - la composición Boutique y la navegación («Índice», ← →, clic en una entrada) siguen igual.
+- En una página (móvil) y en el modo «Desplazar» el índice fluye entero y no aparece la señal.
+- **No cambian:** la selección automática, el máximo, los filtros, el contrato público ni la base de datos. Sin dependencias ni migraciones.
+
+## Verificaciones (locales, datos sintéticos, E7)
+
+| Comprobación | Resultado |
+| --- | --- |
+| Índice en el navegador (Playwright): 12, 20 y 24 viviendas × 1280 × 720, 1440 × 1000, 362 y 320 px | **186 en verde**. En cada caso: <br>• todas las entradas, folios seguidos (3…N+2) y el título completo de la última (la de 24 lleva el de 120 caracteres); <br>• tamaño del título del índice sin reducir; <br>• ninguna entrada recortada por un contenedor sin desplazamiento; sin desbordes horizontales; sin errores de JS. <br>En la doble página: <br>• la señal y la zona enfocable aparecen solo si hace falta; <br>• la última **no** se ve al entrar; <br>• **rueda** → `scrollTop` > 0, la última a la vista (comprobado con `elementFromPoint`) y la señal desaparece al final, sin pasar de página; <br>• **clic** en la última → su página (N+2) con su título; el botón «Índice» vuelve; <br>• clic en la señal desplaza; Av Pág desplaza sin pasar de página; <br>• **teclado**: Tab llega a la última, queda a la vista y Enter la abre; <br>• modo «Desplazar»: la última se ve y no hay zona interna. <br>En móvil: <br>• se llega desplazando la página, la barra inferior no la tapa y **tocarla** abre su página. |
+| Mismo diagnóstico con el código anterior | Recortada en los 6 casos de doble página (rueda sin efecto); móvil, bien |
+| Lector (fase 2), enlace, medición 20 × 2, PR-A y PR-B en el navegador | 52, 10, 6, 54 y 40 en verde, sin tocar las pruebas |
+| `npm run test:catalogs-public` (en CI) | **133 en verde**: los 130 de antes y 3 guardas nuevas (índice dentro de `ScrollRegion`, sin cortar la lista, hoja en columna flexible). La guarda principal falla con el código anterior (comprobado) |
+| `test:catalogs`, `tsc`, 8 regresiones, lint de migraciones | En verde |
+| `test:typography` | Las mismas 15 infracciones que la base, ninguna nueva |
+
+**Capturas** en `capturas-indice/`:
+- antes: 1280 × 720 con 20 viviendas, recortado;
+- después, 1280 × 720 con 20 viviendas: al entrar y al final;
+- 1440 × 1000 con 24 viviendas, al final;
+- 362 px con 20 viviendas, al entrar;
+- 320 px con 24 viviendas, al final.
+
+La insignia redonda «N» es la de desarrollo de Next y no existe en producción.
+
+**Táctil en la doble página** (tableta horizontal): la zona usa `overflow-y: auto`, que el navegador desplaza con el dedo. Playwright no simula ese gesto, así que **queda para tu QA en una tableta**.
+
+## QA en vivo de Fabricio (tras el merge)
+
+1. Abre el enlace de 20 viviendas a 1280 × 720 y ve al índice. Abajo se ve «Más viviendas ↓» y la lista se desvanece.
+2. Usa la rueda sobre el índice hasta la entrada 20 y haz clic: abre la página 22.
+3. Vuelve con «Índice». Con el teclado, recorre las entradas con Tab hasta la última y pulsa Enter.
+4. A 1440 × 1000 y en el móvil, llega a la última entrada y ábrela.
+5. Si puedes, prueba en una tableta horizontal que el índice se desplaza con el dedo.
+
+## Pendiente o no demostrado
+
+- La QA en vivo de arriba.
+- **Sigue pendiente** lo de PR-B:
+  - el recuento de producción, que ejecuta Fabricio;
+  - la decisión de rendimiento y D13.
+  - El recuento por sí solo no demuestra la latencia en vivo ni la capacidad. Nada de eso se da por cumplido aquí.
+- PR-C no empieza hasta tu merge.
+- Fuera del alcance de esta corrección, sin cambios:
+  - la observación sobre fotos de marcador («pendiente de reportaje»), que no tiene regla aprobada;
+  - la composición de la descripción, que pertenece a C.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.
