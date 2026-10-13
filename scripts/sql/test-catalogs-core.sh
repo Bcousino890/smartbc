@@ -41,12 +41,25 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $S/
 $R sql $RB5 $S/test-rollback-0195.sql $M5 $S/test-catalog-contact-pre.sql
 echo "   0195 se vuelve a aplicar tras su reversión"
 
+M6=supabase/migrations/0196_catalog_adjustments.sql
 echo "== 2e. paridad TS ↔ SQL de zonas y selección (datos sintéticos deterministas)"
 PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")
 node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-catalog-parity.mts > "$PAR" 2>/dev/null
 $R reset
-$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 "$PAR"
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 "$PAR"
 rm -f "$PAR"
+
+echo "== 2f. 0196 sobre los tests de 0195: ajustes y portada no cambian nada sin usarse"
+RB6=docs/changes/2026-10-13-bcp-01-home-catalogo/rollback-0196.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $S/test-catalog-auto-pre.sql $M5 $M6 $M6 $S/test-catalog-auto.sql
+
+echo "== 2g. 0196: ajustes del automático y portada (catálogos previos + aplicada dos veces)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $S/test-catalog-adjust-pre.sql $M6 $M6 $S/test-catalog-adjust.sql
+$R sql $RB6 $S/test-rollback-0196.sql $M6
+$R sql $S/test-util.sql
+echo "   0196 se vuelve a aplicar tras su reversión"
 
 echo "== 3. siembra sin coincidencias"
 $R reset
