@@ -7,9 +7,21 @@ import styles from "./reader.module.css";
 // página (descripciones largas). Si hay más texto del que cabe, se ve una
 // señal («Sigue leyendo ↓») con un degradado, y la zona se puede enfocar con
 // el teclado para desplazarla con flechas, Av Pág o espacio. En una página
-// (móvil) el texto fluye y la señal no aparece.
+// (móvil) el texto fluye y la señal no aparece. El índice usa la misma zona
+// (variante «index»), con su propia señal, para que ninguna entrada quede
+// recortada en la doble página.
 
-export function ScrollRegion({ label, children }: { label: string; children: ReactNode }) {
+export function ScrollRegion({
+  label,
+  children,
+  variant = "text",
+  cue = "Sigue leyendo ↓",
+}: {
+  label: string;
+  children: ReactNode;
+  variant?: "text" | "index";
+  cue?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<{ scrollable: boolean; atEnd: boolean }>({ scrollable: false, atEnd: true });
 
@@ -40,7 +52,7 @@ export function ScrollRegion({ label, children }: { label: string; children: Rea
     <div className={styles.scrollWrap}>
       <div
         ref={ref}
-        className={styles.textScroll}
+        className={variant === "index" ? `${styles.textScroll} ${styles.indexScroll}` : styles.textScroll}
         data-scroll-region=""
         data-scrollable={state.scrollable ? "true" : "false"}
         data-more={more ? "true" : "false"}
@@ -57,7 +69,7 @@ export function ScrollRegion({ label, children }: { label: string; children: Rea
           data-testid="scroll-cue"
           onClick={() => ref.current?.scrollBy({ top: (ref.current?.clientHeight ?? 300) * 0.8, behavior: "smooth" })}
         >
-          Sigue leyendo ↓
+          {cue}
         </button>
       ) : null}
     </div>

@@ -409,6 +409,30 @@
   }
 }
 
+/* El índice usa la zona de ScrollRegion: en una página fluye entero; en la
+   doble página (altura fija) la lista se desplaza dentro de la página, con
+   el mismo degradado y la señal «Más viviendas ↓» que los textos largos. */
+.textScroll.indexScroll {
+  display: block;
+  text-align: left;
+  padding: 0;
+}
+
+@media (min-width: 900px) and (min-height: 620px) {
+  .indexPage {
+    display: flex;
+    flex-direction: column;
+  }
+  .indexHead {
+    flex: none;
+  }
+  /* Un poco de aire para que el foco de cada entrada no se corte. */
+  .textScroll.indexScroll {
+    padding: 0.3em 0.5em 1.5em;
+    margin: -0.3em -0.5em 0;
+  }
+}
+
 .emptyBox {
   text-align: center;
   padding: var(--s8) var(--s4);

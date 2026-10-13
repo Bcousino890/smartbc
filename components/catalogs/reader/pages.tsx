@@ -128,6 +128,7 @@ export function IndexPage({
           </span>
         </div>
       ) : (
+        <ScrollRegion label="Índice" variant="index" cue="Más viviendas ↓">
         <ol className={styles.indexList}>
           {catalog.items.map((it, i) => (
             <li key={it.key}>
@@ -147,6 +148,7 @@ export function IndexPage({
             </li>
           ))}
         </ol>
+        </ScrollRegion>
       )}
     </section>
   );
