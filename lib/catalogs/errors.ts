@@ -1,5 +1,5 @@
 // ============================================================================
-// Traducción de los errores de las funciones SQL de 0192–0196 a mensajes para
+// Traducción de los errores de las funciones SQL de 0192–0197 a mensajes para
 // Fabricio. Pura: se prueba en scripts/test-catalogs.mts.
 // ============================================================================
 
@@ -39,6 +39,15 @@ const MESSAGES: Record<string, string> = {
   adjustment_not_found: "Esa vivienda ya no tenía ningún ajuste.",
   cover_not_in_catalog: "La portada tiene que ser una vivienda que esté ahora en el catálogo.",
   invalid_cover_photo: "Esa foto no es de la vivienda elegida.",
+  draft_changed: "El borrador ha cambiado desde que lo abriste (en otra pestaña o con otra acción). Recarga la página antes de guardar o publicar.",
+  text_has_contact: "El texto tiene un teléfono, un correo o una web. Quítalo antes de publicar.",
+  text_has_price: "El texto menciona un precio. El precio ya se ve aparte y se actualiza solo: quítalo del texto.",
+  text_empty: "Escribe la entrada o el texto antes de publicar.",
+  text_not_found: "Esa vivienda no tiene texto guardado en este catálogo.",
+  text_not_published: "Ese texto no estaba publicado.",
+  text_too_long: "El texto es demasiado largo: hasta 6.000 caracteres, la entrada hasta 280 y hasta 3 puntos.",
+  invalid_text: "Texto no válido.",
+  text_unconfirmed: "Hay avisos sin revisar: corrige el texto o confirma cada aviso antes de publicar.",
 };
 
 export const GENERIC_ERROR = "No se ha podido guardar. Inténtalo de nuevo.";

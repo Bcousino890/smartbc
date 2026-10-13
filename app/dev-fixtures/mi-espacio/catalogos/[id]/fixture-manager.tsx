@@ -11,6 +11,7 @@ import { autoSelect, candidates, isAvailable, sortCandidates, type AdjustmentKin
 import { explainProperty, INCLUDED_UNAVAILABLE } from "@/lib/catalogs/explain";
 import { fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView } from "@/lib/catalogs/fixtures-selection";
 import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
+import { createFixtureTexts } from "./fixture-texts";
 
 // SOLO DESARROLLO LOCAL (BCP-01, E7): acciones falsas, para revisar el gestor
 // sin base de datos ni sistemas reales. Reproducen los mismos mensajes de
@@ -47,6 +48,9 @@ export function FixtureCatalogManager({
   // C1: ajustes y portada en memoria, con las mismas reglas que SQL (0196).
   const adjRef = useRef(new Map<string, AdjustmentKind>());
   const coverRef = useRef<{ propertyId: string | null; photoId: string | null }>({ propertyId: null, photoId: null });
+  const catRef = useRef(cat);
+  catRef.current = cat;
+  const [, bump] = useState(0);
   const live = async (body: Record<string, unknown> & { skipNotify?: boolean }) => {
     if (!liveToken) return { ok: true as const, version: 1, fingerprint: null, publicChange: true };
     const { skipNotify, ...rest } = body;
@@ -60,6 +64,16 @@ export function FixtureCatalogManager({
     const r = await mutate({ token: liveToken, op: "noop" });
     return { ok: true as const, version: 1, fingerprint: r.fingerprint, publicChange: false };
   };
+  const textsRef = useRef<ReturnType<typeof createFixtureTexts> | null>(null);
+  if (!textsRef.current) {
+    textsRef.current = createFixtureTexts({
+      items: () => catRef.current.items,
+      live: (b) => live(b),
+      unchanged: () => unchanged(),
+      onChange: () => bump((n) => n + 1),
+    });
+  }
+  const fxTexts = textsRef.current;
   const explained = (id: string, c: CatalogCriteria, pos: number) => {
     const p = byId.get(id)!;
     const adjustment = adjRef.current.get(id) ?? null;
@@ -205,6 +219,7 @@ export function FixtureCatalogManager({
       refresh();
       return before === after ? unchanged() : live({ op: "reorder", skipNotify });
     },
+    texts: fxTexts.actions,
     cover: {
       set: async ({ propertyId, photoId, skipNotify }) => {
         if (propertyId && !cat.items.some((x) => x.propertyId === propertyId)) {
@@ -275,6 +290,8 @@ export function FixtureCatalogManager({
       share={liveToken ? { token: liveToken, expiresAt: new Date(Date.now() + 60 * 86_400_000).toISOString(), expired: false } : null}
       shareActions={shareActions}
       measureMode={measureMode}
+      texts={fxTexts.views()}
+      storyHref={() => "#historia-de-prueba"}
     />
   );
 }

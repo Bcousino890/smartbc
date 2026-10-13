@@ -15,6 +15,8 @@ import { SelectionPanel, type SelectionActions } from "./selection-panel";
 import { PropertySearch, type SearchAction } from "./property-search";
 import { AdsPanel, type AdActions } from "./ads-panel";
 import { CoverPicker, type CoverActions } from "./cover-picker";
+import { CatalogTextsPanel, type TextActions } from "./catalog-texts-panel";
+import type { CatalogTextView } from "@/lib/catalogs/texts";
 import type { CatalogCriteria } from "@/lib/catalogs/criteria";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
@@ -47,6 +49,8 @@ export interface CatalogManagerActions {
   adjust: (i: { catalogId: string; propertyId: string; kind: "include" | "exclude" } & M) => Promise<Res>;
   clearAdjustment: (i: { catalogId: string; propertyId: string } & M) => Promise<Res>;
   cover: CoverActions;
+  /** Ampliación C2 */
+  texts: TextActions;
 }
 
 const STATUS_LABEL: Record<CatalogItemView["status"], string | null> = {
@@ -74,6 +78,8 @@ export function CatalogManager({
   share = null,
   shareActions,
   measureMode = false,
+  texts = [],
+  storyHref = (slug: string) => `/es/admin/propiedades/${encodeURIComponent(slug)}/story`,
 }: {
   catalog: CatalogDetail;
   actions: CatalogManagerActions;
@@ -85,6 +91,10 @@ export function CatalogManager({
   shareActions?: ShareActions;
   /** ?medir=1: instrumenta cada guardado para la medición de D13. */
   measureMode?: boolean;
+  /** C2: textos de las viviendas (lista + reserva). */
+  texts?: CatalogTextView[];
+  /** C2: enlace a la historia de una ficha (revisión aparte). */
+  storyHref?: (slug: string) => string;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(catalog.items);
@@ -519,6 +529,21 @@ export function CatalogManager({
               </ul>
             </section>
           ) : null}
+
+          <CatalogTextsPanel
+            catalogId={catalog.id}
+            texts={texts}
+            actions={{
+              ...actions.texts,
+              save: (i) => actions.texts.save({ ...i, ...mo }),
+              publish: (i) => actions.texts.publish({ ...i, ...mo }),
+              withdraw: (i) => actions.texts.withdraw({ ...i, ...mo }),
+              remove: (i) => actions.texts.remove({ ...i, ...mo }),
+            }}
+            run={run}
+            pending={pending}
+            storyHref={storyHref}
+          />
         </section>
 
         <aside className="min-w-0 space-y-4">
