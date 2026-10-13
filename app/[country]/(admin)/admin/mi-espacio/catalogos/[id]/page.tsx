@@ -11,6 +11,7 @@ import {
   revokeShareAction,
   removePropertyFromCatalogAction,
   reorderCatalogAction,
+  setCatalogContactAction,
   setCatalogStatusAction,
   updateCatalogMetaAction,
 } from "../../actions";
@@ -43,7 +44,6 @@ export default async function CatalogPage({
       </header>
       <CatalogManager
         catalog={catalog}
-        preparedBy={profile.full_name?.trim() || "Fabricio Andree"}
         basePath="/es/admin/mi-espacio"
         numberLabel={numberLabel}
         share={share}
@@ -55,6 +55,7 @@ export default async function CatalogPage({
           removeProperty: removePropertyFromCatalogAction,
           reorder: reorderCatalogAction,
           setStatus: setCatalogStatusAction,
+          setContact: setCatalogContactAction,
         }}
       />
     </div>

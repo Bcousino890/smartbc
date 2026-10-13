@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { ATICO_FLOOR, resolveFloor } from "@/lib/floor";
 import { editionLabel, floorLabel, operationLabel, priceLabel } from "./format";
+import { contactPhoneHref, formatContactPhone, isContactRole } from "./contact-format";
 import {
-  AGENCY_PHONE,
   type PhotoOrientation,
   type PublicCatalog,
   type PublicItem,
@@ -31,7 +31,10 @@ export interface InternalSnapshot {
   intro: string | null;
   created_at: string;
   status: string;
+  /** Se conserva por compatibilidad con 0193; el lector ya no la usa. */
   owner_name: string | null;
+  /** 0194: contacto público guardado en el catálogo. */
+  contact?: { name: string | null; phone: string | null; role: string | null } | null;
   items: InternalItem[];
 }
 
@@ -154,12 +157,15 @@ export function toPublicCatalog(snap: InternalSnapshot): PublicCatalog {
     .filter((it) => it && it.status !== "sold" && it.status !== "archived")
     .map(toPublicItem);
   const first = items.find((it) => it.photos.length > 0);
+  const contact = snap.contact ?? null;
   return {
     title: String(snap.title ?? "").trim(),
     intro: typeof snap.intro === "string" && snap.intro.trim() ? snap.intro.trim() : null,
     edition: editionLabel(new Date(snap.created_at)),
-    preparedBy: typeof snap.owner_name === "string" && snap.owner_name.trim() ? snap.owner_name.trim() : null,
-    phone: AGENCY_PHONE,
+    preparedBy: typeof contact?.name === "string" && contact.name.trim() ? contact.name.trim() : null,
+    phone: formatContactPhone(contact?.phone),
+    phoneHref: contactPhoneHref(contact?.phone),
+    role: isContactRole(contact?.role) ? contact.role : "asesor",
     coverPhoto: first ? first.photos[first.coverIndex].src : null,
     items,
   };

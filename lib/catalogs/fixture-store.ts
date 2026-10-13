@@ -118,6 +118,7 @@ async function seed(): Promise<Map<string, Share>> {
     created_at: "2026-10-01T09:00:00Z",
     status: "active",
     owner_name: "Fabricio Andree",
+    contact: { name: "Fabricio Andree", phone: "+34641457123", role: "asesor" },
     items,
   });
   const far = Date.now() + 60 * 86_400_000;
@@ -178,6 +179,7 @@ export type FixtureOp =
   | { op: "reset" }
   | { op: "price"; token: string; key: string; price: number }
   | { op: "title"; token: string; title: string }
+  | { op: "contact"; token: string; name: string; phone: string; role: "asesor" | "asesora" }
   | { op: "remove"; token: string; key: string }
   | { op: "add"; token: string; title?: string }
   | { op: "reorder"; token: string; keys?: string[] }
@@ -204,6 +206,9 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       break;
     case "title":
       snap.title = op.title;
+      break;
+    case "contact":
+      snap.contact = { name: op.name, phone: op.phone, role: op.role };
       break;
     case "remove":
       snap.items = op.key === "__first__" ? snap.items.slice(1) : snap.items.filter((it) => it.key !== op.key);

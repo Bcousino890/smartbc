@@ -292,12 +292,14 @@ export function ClosingPage({ catalog, expiresAt }: { catalog: PublicCatalog; ex
             <dd>{catalog.preparedBy}</dd>
           </div>
         ) : null}
-        <div>
-          <dt>Teléfono</dt>
-          <dd>
-            <a href={`tel:${catalog.phone.replace(/\s+/g, "")}`}>{catalog.phone}</a>
-          </dd>
-        </div>
+        {catalog.phone && catalog.phoneHref ? (
+          <div>
+            <dt>Teléfono</dt>
+            <dd>
+              <a href={catalog.phoneHref}>{catalog.phone}</a>
+            </dd>
+          </div>
+        ) : null}
       </dl>
       <p className={styles.note}>Esta selección se actualiza sola cuando hay cambios. Disponible hasta el {shareExpiryLabel(expiresAt)}.</p>
       <span className={styles.ornament} aria-hidden="true">

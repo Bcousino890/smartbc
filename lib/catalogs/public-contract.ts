@@ -10,8 +10,7 @@
 // sin limpiar (puede traer el teléfono de otra inmobiliaria).
 // ============================================================================
 
-/** Teléfono de contacto del cierre: siempre el de la agencia (regla #297). */
-export const AGENCY_PHONE = "+34 641 457 123";
+import type { ContactRole } from "./contact-format";
 
 export type PhotoOrientation = "landscape" | "portrait" | "square" | "unknown";
 
@@ -49,8 +48,14 @@ export interface PublicCatalog {
   intro: string | null;
   /** «Otoño 2026» */
   edition: string;
+  /** Contacto guardado EN EL CATÁLOGO (0194): nunca el perfil del dueño ni
+   *  una constante. Si falta un dato, esa línea no se pinta. */
   preparedBy: string | null;
-  phone: string;
+  /** «+34 641 457 123» */
+  phone: string | null;
+  /** «tel:+34641457123» */
+  phoneHref: string | null;
+  role: ContactRole;
   coverPhoto: string | null;
   items: PublicItem[];
 }

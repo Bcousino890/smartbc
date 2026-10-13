@@ -15,6 +15,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { withHomeAccess, type ActionResult } from "@/lib/catalogs/access";
+import { validateCatalogContact } from "@/lib/catalogs/contact";
 import { catalogErrorMessage } from "@/lib/catalogs/errors";
 import { isHomeOwner } from "@/lib/catalogs/owner";
 import { findPropertyId } from "@/lib/catalogs/queries";
@@ -46,17 +47,25 @@ function finish<T extends object>(res: ActionResult<T>): ActionResult<T> {
 export async function createCatalogAction(input: {
   title: string;
   intro?: string | null;
+  /** Contacto público del catálogo (0194). El formulario lo precarga con el
+   *  nombre del dueño y el teléfono de la agencia; se guarda lo que llegue. */
+  contact: { name: string; phone: string; role: string };
 }): Promise<ActionResult<{ id: string }>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     const title = normalizeTitle(input?.title);
     if (!title.ok) return fail(title.error);
     const intro = normalizeIntro(input?.intro);
     if (!intro.ok) return fail(intro.error);
+    const contact = validateCatalogContact(input?.contact ?? {});
+    if (!contact.ok) return fail(contact.error);
 
-    const { data, error } = await db().rpc("catalog_create", {
+    const { data, error } = await db().rpc("catalog_create_v2", {
       p_actor: profile.id,
       p_title: title.value,
       p_intro: intro.value,
+      p_name: contact.contact.name,
+      p_phone: contact.contact.phone,
+      p_role: contact.contact.role,
     });
     if (error || !data) return fail(error);
     revalidatePath(HOME_PATH);
@@ -223,5 +232,31 @@ export async function revokeShareAction(input: { catalogId: string }): Promise<A
     notifyCatalogChanged();
     revalidateCatalog(input.catalogId);
     return { ok: true as const };
+  }));
+}
+
+// ── Contacto público del catálogo (ampliación, 0194) ────────────────────────
+
+/** Nombre, teléfono y «asesor/asesora» que ve quien abre el enlace. Solo
+ *  cambia lo que se MUESTRA: no da acceso a la HOME a la persona nombrada. */
+export async function setCatalogContactAction(input: {
+  catalogId: string;
+  name: string;
+  phone: string;
+  role: string;
+}): Promise<ActionResult<Saved & { phone: string }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const contact = validateCatalogContact(input);
+    if (!contact.ok) return fail(contact.error);
+    const { data, error } = await db().rpc("catalog_set_contact", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_name: contact.contact.name,
+      p_phone: contact.contact.phone,
+      p_role: contact.contact.role,
+    });
+    if (error) return fail(error);
+    return { ...(await saved(profile.id, input.catalogId, data)), phone: contact.contact.phone };
   }));
 }

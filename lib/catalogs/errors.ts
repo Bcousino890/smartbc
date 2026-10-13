@@ -1,5 +1,5 @@
 // ============================================================================
-// Traducción de los errores de las funciones SQL de 0192 y 0193 a mensajes para
+// Traducción de los errores de las funciones SQL de 0192, 0193 y 0194 a mensajes para
 // Fabricio. Pura: se prueba en scripts/test-catalogs.mts.
 // ============================================================================
 
@@ -19,6 +19,9 @@ const MESSAGES: Record<string, string> = {
   invalid_days: "La duración del enlace tiene que ser de 1 a 365 días.",
   share_exists: "Este catálogo ya tiene un enlace activo. Renuévalo o revócalo antes de crear otro.",
   no_share: "Este catálogo no tiene un enlace activo.",
+  invalid_contact_name: "El nombre del asesor tiene que tener entre 2 y 80 caracteres, sin correos, webs ni teléfonos.",
+  invalid_contact_phone: "El teléfono no es válido. Escríbelo con prefijo (+34 600 000 000) o como móvil español.",
+  invalid_contact_role: "Elige «asesor» o «asesora».",
 };
 
 export const GENERIC_ERROR = "No se ha podido guardar. Inténtalo de nuevo.";
