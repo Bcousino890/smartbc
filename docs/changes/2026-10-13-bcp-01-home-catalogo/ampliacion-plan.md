@@ -247,6 +247,8 @@ Tres PR, en este orden. Cada uno tiene su CI, tu QA en vivo y tu merge. Cada ram
 
 ### PR-C · Recorrido editorial
 
+> **Sustituido (2026-10-13).** Fabricio aprobó dividir C en **C1** (ajustes, explicación y portada) y **C2** (descripciones y recorrido editorial) con reglas nuevas. Manda [`ampliacion-c-enmienda.md`](ampliacion-c-enmienda.md); lo de abajo queda como referencia para C2.
+
 **X10 · Migración `0196`: ediciones por catálogo y vivienda, e historia en la instantánea**
 
 *Ediciones editoriales (condición 4)*
