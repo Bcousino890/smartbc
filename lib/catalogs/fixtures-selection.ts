@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { operationLabel, priceLabel } from "./format";
+import { syntheticPhoto } from "./fixtures";
 import type { CandidateProperty } from "./selection";
 import type { CatalogItemView } from "./types";
 
@@ -77,7 +78,7 @@ export function fixtureView(p: FixtureProperty, position = 100): CatalogItemView
     bedrooms: p.bedrooms,
     bathrooms: p.bathrooms,
     squareMeters: p.square_meters,
-    photoUrl: null,
+    photoUrl: p.photo_count > 0 ? fixturePhotoUrl(p.id, 0) : null,
   };
 }
 
@@ -86,3 +87,9 @@ export const fixtureSavedListings = [
   { id: "e2000000-0000-0000-0000-000000000002", reference: "BC-1502", title: "Piso familiar en Chamberí", code: "108654321", state: "published" },
   { id: "e2000000-0000-0000-0000-000000000003", reference: "BC-I-0007", title: "Inspo · loft en Justicia", code: null, state: "draft" },
 ];
+
+/** «Foto» sintética nº `i` de una vivienda de prueba (SVG en data URI). */
+export function fixturePhotoUrl(propertyId: string, i: number): string {
+  const n = Number(propertyId.slice(-2)) || 1;
+  return syntheticPhoto((n * 37 + i * 61) % 360, 320, 240, `${n}·${i + 1}`);
+}

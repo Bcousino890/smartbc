@@ -9,6 +9,9 @@ import { fitsOperation, isAvailable, orderKeyOf, type AdjustmentKind, type Candi
 // llega al contrato público ni al lector.
 // ============================================================================
 
+/** Cabecera de una inclusión que hoy no puede aparecer (vendida, archivada…). */
+export const INCLUDED_UNAVAILABLE = "Incluida a mano · no disponible";
+
 export type ExplainStatus = "match" | "include" | "both" | "excluded" | "out";
 
 export interface Explanation {
@@ -123,7 +126,7 @@ export function explainProperty(p: CandidateProperty, c: CatalogCriteria, adjust
   if (adjustment === "include") {
     if (unavailable) {
       warnings.push(`Incluida, pero ${unavailable}: no aparece en el catálogo (la inclusión se conserva)`);
-      return { status: "include", headline: "Incluida a mano · no disponible", details: fails.filter((f) => !f.startsWith("No disponible")), warnings };
+      return { status: "include", headline: INCLUDED_UNAVAILABLE, details: fails.filter((f) => !f.startsWith("No disponible")), warnings };
     }
     if (matches) return { status: "both", headline: "Coincide con los criterios · también incluida a mano", details, warnings };
     if (!hasPhoto) warnings.push("Sin foto: el lector la mostrará sin imagen");

@@ -20,6 +20,7 @@ import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts"
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import {
+  coverPhotoOf,
   clientDescriptionSrc,
   findForbiddenKeys,
   toPublicCatalog,
@@ -343,6 +344,33 @@ async function liveTests() {
     check("zonas redundantes: Castellana y Goya ya están dentro de Salamanca", z.ok
       && JSON.stringify(zoneRedundancies(z.criteria)) === JSON.stringify(["Castellana ya está dentro de Salamanca", "Goya ya está dentro de Salamanca"]),
       z.ok ? JSON.stringify(zoneRedundancies(z.criteria)) : "");
+  }
+
+  section("Ampliación C1 · portada elegida y privacidad del contrato");
+  {
+    const u = (n: string) => md5(`https://x.supabase.co/storage/v1/object/public/properties-photos/${n}.webp`);
+    const A = item({ key: "kA0000000000001", slug: "piso-a", photos: [
+      { u: u("a1"), w: 1600, h: 1067, c: true }, { u: u("a2"), w: 1600, h: 1067, c: false }, { u: u("a1"), w: 1600, h: 1067, c: false }, { u: u("a3"), w: 1000, h: 1500, c: false }] });
+    const B = item({ key: "kB0000000000002", slug: "piso-b", photos: [{ u: u("b1"), w: 1600, h: 1067, c: false }, { u: u("b2"), w: 1600, h: 1067, c: true }] });
+    const N = item({ key: "kN0000000000003", slug: "sin-fotos", photos: [] });
+    const S = item({ key: "kS0000000000004", slug: "vendida", status: "sold" });
+    check("sin elección: la regla de siempre (primera con foto, su portada)", coverPhotoOf(snap([N, B, A])) === "/p/piso-b/1.webp");
+    check("elegida con foto concreta (índice del proxy sin URL repetidas)",
+      coverPhotoOf(snap([B, A], { cover: { key: "kA0000000000001", photo: u("a3") } })) === "/p/piso-a/2.webp");
+    check("independiente del orden: sigue siendo la elegida aunque no sea la primera",
+      toPublicCatalog(snap([B, A], { cover: { key: "kA0000000000001", photo: u("a2") } })).coverPhoto === "/p/piso-a/1.webp");
+    check("foto elegida desaparecida → la foto de portada de esa vivienda",
+      coverPhotoOf(snap([B, A], { cover: { key: "kA0000000000001", photo: null } })) === "/p/piso-a/0.webp"
+      && coverPhotoOf(snap([B, A], { cover: { key: "kA0000000000001", photo: u("zz") } })) === "/p/piso-a/0.webp");
+    check("vivienda fuera de la lista → la primera con foto", coverPhotoOf(snap([B, A], { cover: { key: null, photo: null } })) === "/p/piso-b/1.webp");
+    check("vivienda elegida sin fotos → la primera con foto", coverPhotoOf(snap([N, A], { cover: { key: "kN0000000000003", photo: null } })) === "/p/piso-a/0.webp");
+    check("vivienda elegida vendida (defensa en profundidad) → la primera con foto", coverPhotoOf(snap([S, B], { cover: { key: "kS0000000000004", photo: null } })) === "/p/piso-b/1.webp");
+    check("catálogo vacío → sin foto", coverPhotoOf(snap([], { cover: { key: "kA0000000000001", photo: u("a1") } })) === null);
+    const pub = toPublicCatalog(snap([B, A], { cover: { key: "kA0000000000001", photo: u("a3") } }));
+    const json = JSON.stringify(pub);
+    check("contrato público: ni portada interna, ni ajustes, ni criterios, ni explicación, ni anuncios",
+      !("cover" in pub) && !/"(via|adjustment|explain|matched|criteria|ads|reasons|cover_property_id|cover_photo_id)"/.test(json)
+      && findForbiddenKeys(pub, FORBIDDEN_PUBLIC_KEYS).length === 0 && !UUID_RE.test(json) && !json.includes("supabase"), json.slice(0, 200));
   }
 
   section("Ampliación X2 · contacto del catálogo");

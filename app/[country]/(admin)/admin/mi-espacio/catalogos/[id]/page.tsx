@@ -6,6 +6,10 @@ import { getCatalogDetail, listOwnerCatalogs } from "@/lib/catalogs/queries";
 import { isUuid } from "@/lib/catalogs/validate";
 import {
   addCatalogAdAction,
+  adjustCatalogAction,
+  clearCatalogAdjustmentAction,
+  listCoverPhotosAction,
+  setCatalogCoverAction,
   addPropertyByIdAction,
   addPropertyToCatalogAction,
   previewAutoSelectionAction,
@@ -78,6 +82,9 @@ export default async function CatalogPage({
             remove: removeCatalogAdAction,
             searchListings: searchSavedListingsAction,
           },
+          adjust: adjustCatalogAction,
+          clearAdjustment: clearCatalogAdjustmentAction,
+          cover: { set: setCatalogCoverAction, photos: listCoverPhotosAction },
         }}
       />
     </div>

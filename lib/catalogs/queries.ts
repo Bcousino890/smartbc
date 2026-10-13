@@ -2,7 +2,10 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { catalogNumberLabel, editionLabel, operationLabel, priceLabel } from "./format";
 import { DEFAULT_CRITERIA, normalizeCriteria, type CatalogCriteria } from "./criteria";
-import type { CatalogAdView, CatalogDetail, CatalogItemView, CatalogSummary } from "./types";
+import { explainProperty, INCLUDED_UNAVAILABLE } from "./explain";
+import { type AdjustmentKind, type CandidateProperty, type Via } from "./selection";
+import { coverPhotoOf, type InternalSnapshot } from "./to-public";
+import type { CatalogAdView, CatalogCoverState, CatalogDetail, CatalogItemView, CatalogSummary, CoverPhotoOption } from "./types";
 
 // ============================================================================
 // Lecturas de la HOME y de la gestión de catálogos (BCP-01). Siempre filtradas
@@ -41,19 +44,16 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
     count.set(it.catalog_id, (count.get(it.catalog_id) ?? 0) + 1);
     if (!firstSlug.has(it.catalog_id) && it.properties?.slug) firstSlug.set(it.catalog_id, it.properties.slug);
   }
-  // Catálogos automáticos: lo que cuenta es su selección (no la lista manual
-  // guardada). Uno por uno: son pocos y la consulta ya está medida (X6).
+  // Portada (C1) y, en automático, el número de viviendas: de la MISMA
+  // instantánea que lee el lector, para que la HOME enseñe la misma portada.
+  // Uno por uno: son pocos y la consulta ya está medida (X6/Y5).
+  const cover = new Map<string, string | null>();
   for (const c of cats as any[]) {
-    if (c.mode !== "auto") continue;
-    try {
-      const auto = await autoSelection(ownerId, c.id, null);
-      count.set(c.id, auto.items.length);
-      if (auto.items[0]) firstSlug.set(c.id, auto.items[0].slug);
-      else firstSlug.delete(c.id);
-    } catch {
-      count.set(c.id, 0);
-      firstSlug.delete(c.id);
-    }
+    const snap = await internalSnapshot(c.id);
+    if (!snap) continue;
+    const photo = coverPhotoOf(snap);
+    cover.set(c.id, photo ? `${photo}?w=640` : null);
+    if (c.mode === "auto") count.set(c.id, (snap.items ?? []).filter((it) => it && it.status !== "sold" && it.status !== "archived").length);
   }
 
   const summaries: CatalogSummary[] = cats.map((c: any, i: number) => ({
@@ -67,7 +67,7 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
     itemCount: count.get(c.id) ?? 0,
     numberLabel: catalogNumberLabel(i + 1),
     edition: editionLabel(new Date(c.created_at)),
-    coverPhotoUrl: coverPhotoUrl(firstSlug.get(c.id)),
+    coverPhotoUrl: cover.has(c.id) ? cover.get(c.id) ?? null : coverPhotoUrl(firstSlug.get(c.id)),
     contactName: c.contact_name ?? null,
     mode: c.mode === "auto" ? "auto" : "manual",
     criteria: criteriaOf(c.criteria),
@@ -80,13 +80,45 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
   );
 }
 
+/** Instantánea interna de un catálogo (la del lector). Solo para catálogos
+ *  que ya se han leído filtrando por el dueño. */
+async function internalSnapshot(catalogId: string): Promise<InternalSnapshot | null> {
+  const { data, error } = await db().rpc("catalog_internal_snapshot", { p_catalog: catalogId });
+  if (error || !data) return null;
+  return data as InternalSnapshot;
+}
+
 function criteriaOf(raw: unknown): CatalogCriteria {
   const n = normalizeCriteria(raw);
   return n.ok ? n.criteria : { ...DEFAULT_CRITERIA, zones: [] };
 }
 
 const PROPERTY_VIEW_COLUMNS =
-  "id, slug, title, zone, subzone, bc_reference, status, archived_at, operation, operations, price, rent_price, currency, bedrooms, bathrooms, square_meters";
+  "id, slug, title, zone, subzone, bc_reference, status, archived_at, country, created_at, operation, operations, price, rent_price, currency, bedrooms, bathrooms, square_meters, property_photos(count)";
+
+/** Los datos que usan la selección y la explicación (C1). */
+function toCandidate(p: any): CandidateProperty {
+  const photos = Array.isArray(p.property_photos) ? Number(p.property_photos[0]?.count ?? 0) : 0;
+  return {
+    id: p.id,
+    country: p.country ?? "es",
+    archived_at: p.archived_at ?? null,
+    status: String(p.status ?? ""),
+    operation: p.operation === "rent" ? "rent" : "sale",
+    operations: Array.isArray(p.operations) ? p.operations : [],
+    price: p.price === null || p.price === undefined ? null : Number(p.price),
+    rent_price: p.rent_price === null || p.rent_price === undefined ? null : Number(p.rent_price),
+    zone: p.zone ?? null,
+    subzone: p.subzone ?? null,
+    created_at: p.created_at ?? "",
+    photo_count: photos,
+    bc_reference: p.bc_reference ?? null,
+    title: p.title ?? null,
+  };
+}
+
+/** Explicación de gestión (C1) para una vivienda, con su ajuste. */
+type ExplainCtx = { criteria: CatalogCriteria; adjustments: Map<string, AdjustmentKind>; via?: Map<string, Via> };
 
 function toItemView(p: any, position: number): CatalogItemView {
   return {
@@ -112,21 +144,36 @@ function toItemView(p: any, position: number): CatalogItemView {
   };
 }
 
-/** Vistas de propiedades en el orden de `ids` (solo lectura). */
-export async function propertyViews(ids: string[]): Promise<CatalogItemView[]> {
+/** Vistas de propiedades en el orden de `ids` (solo lectura). Con `ctx`,
+ *  cada una lleva su explicación y su ajuste (solo gestión). */
+export async function propertyViews(ids: string[], ctx?: ExplainCtx): Promise<CatalogItemView[]> {
   if (ids.length === 0) return [];
   const { data } = await db().from("properties").select(PROPERTY_VIEW_COLUMNS).in("id", ids);
   const byId = new Map(((data ?? []) as any[]).map((p) => [p.id, p]));
-  return ids.flatMap((id, i) => (byId.has(id) ? [toItemView(byId.get(id), (i + 1) * 100)] : []));
+  return ids.flatMap((id, i) => {
+    const p = byId.get(id);
+    if (!p) return [];
+    const view = toItemView(p, (i + 1) * 100);
+    if (!ctx) return [view];
+    const adjustment = ctx.adjustments.get(id) ?? null;
+    return [{ ...view, adjustment, via: ctx.via?.get(id), explain: explainProperty(toCandidate(p), ctx.criteria, adjustment) }];
+  });
+}
+
+/** Ajustes guardados de un catálogo (C1). */
+async function catalogAdjustments(catalogId: string): Promise<Map<string, AdjustmentKind>> {
+  const { data } = await db().from("catalog_adjustments").select("property_id, kind").eq("catalog_id", catalogId);
+  return new Map(((data ?? []) as any[]).map((r) => [r.property_id as string, r.kind as AdjustmentKind]));
 }
 
 /** Resultado automático (con unos criterios dados o los guardados). Pasa por
- *  catalog_auto_preview, que comprueba el dueño en la base de datos. */
+ *  catalog_auto_preview, que comprueba el dueño en la base de datos. Cada
+ *  vivienda lleva cómo entró (`via`) y su explicación (solo gestión). */
 export async function autoSelection(
   ownerId: string,
   catalogId: string,
   criteria: CatalogCriteria | null,
-): Promise<{ items: CatalogItemView[]; total: number }> {
+): Promise<{ items: CatalogItemView[]; total: number; matched: number }> {
   const { data, error } = await db().rpc("catalog_auto_preview", {
     p_actor: ownerId,
     p_catalog: catalogId,
@@ -134,13 +181,71 @@ export async function autoSelection(
   });
   if (error) throw new Error(`catalog_auto_preview: ${error.message}`);
   const rows = ((data ?? []) as any[]).sort((a, b) => Number(a.ord) - Number(b.ord));
-  return { items: await propertyViews(rows.map((r) => r.property_id)), total: rows.length ? Number(rows[0].total) : 0 };
+  let crit = criteria;
+  if (!crit) {
+    const { data: cat } = await db().from("catalogs").select("criteria").eq("id", catalogId).maybeSingle();
+    crit = criteriaOf(cat?.criteria);
+  }
+  const ctx: ExplainCtx = {
+    criteria: crit,
+    adjustments: await catalogAdjustments(catalogId),
+    via: new Map(rows.map((r) => [r.property_id as string, r.via as Via])),
+  };
+  return {
+    items: await propertyViews(rows.map((r) => r.property_id), ctx),
+    total: rows.length ? Number(rows[0].total) : 0,
+    matched: rows.length ? Number(rows[0].matched ?? rows[0].total) : 0,
+  };
+}
+
+/** Estado de la portada (C1): la elección guardada, la foto que ve hoy el
+ *  lector (misma instantánea) y los avisos. */
+async function coverState(catalogId: string, cat: any, snap: InternalSnapshot | null): Promise<CatalogCoverState> {
+  const chosenPropertyId: string | null = cat.cover_property_id ?? null;
+  const chosenPhotoId: string | null = cat.cover_photo_id ?? null;
+  const photo = snap ? coverPhotoOf(snap) : null;
+  const warnings: string[] = [];
+  const items = (snap?.items ?? []).filter((it) => it && it.status !== "sold" && it.status !== "archived");
+  if (items.length === 0) warnings.push("El catálogo está vacío: la portada sale sin foto.");
+  if (chosenPropertyId && snap) {
+    const key = snap.cover?.key ?? null;
+    if (key === null) {
+      warnings.push("La vivienda elegida para la portada ya no está en el catálogo: se usa la primera vivienda con foto.");
+    } else {
+      const it = items.find((x) => String(x.key) === key);
+      if (it && (it.photos ?? []).length === 0) warnings.push("La vivienda elegida no tiene fotos: se usa la primera vivienda con foto.");
+      else if (chosenPhotoId && !snap.cover?.photo) warnings.push("La foto elegida ya no existe: se usa la foto de portada de esa vivienda.");
+    }
+  }
+  return { chosenPropertyId, chosenPhotoId, effectivePhotoUrl: photo ? `${photo}?w=640` : null, warnings };
+}
+
+/** Fotos de una vivienda para elegir portada, con la URL del proxy neutro
+ *  (mismo índice que el lector: orden por posición, sin URL repetidas). */
+export async function listCoverPhotos(catalogId: string, propertyId: string): Promise<CoverPhotoOption[]> {
+  void catalogId;
+  const { data: prop } = await db().from("properties").select("slug").eq("id", propertyId).maybeSingle();
+  if (!prop?.slug) return [];
+  const { data } = await db()
+    .from("property_photos")
+    .select("id, url, is_cover, position")
+    .eq("property_id", propertyId)
+    .order("position", { ascending: true })
+    .order("id", { ascending: true });
+  const seen = new Set<string>();
+  const out: CoverPhotoOption[] = [];
+  for (const ph of (data ?? []) as any[]) {
+    if (!ph?.url || seen.has(ph.url)) continue;
+    seen.add(ph.url);
+    out.push({ id: ph.id, url: `/p/${encodeURIComponent(prop.slug)}/${out.length}.webp?w=320`, isCover: ph.is_cover === true });
+  }
+  return out;
 }
 
 export async function getCatalogDetail(ownerId: string, catalogId: string): Promise<CatalogDetail | null> {
   const { data: cat, error } = await db()
     .from("catalogs")
-    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role, mode, criteria")
+    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role, mode, criteria, cover_property_id, cover_photo_id")
     .eq("id", catalogId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -159,6 +264,16 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
   const mode: "manual" | "auto" = cat.mode === "auto" ? "auto" : "manual";
   const criteria = criteriaOf(cat.criteria);
   const auto = mode === "auto" ? await autoSelection(ownerId, catalogId, null) : null;
+
+  // Ajustes guardados (C1): las excluidas y las inclusiones que hoy no pueden
+  // aparecer se enseñan aparte, con su explicación.
+  const adj = await catalogAdjustments(catalogId);
+  const ctx: ExplainCtx = { criteria, adjustments: adj };
+  const excluded = await propertyViews([...adj].filter(([, k]) => k === "exclude").map(([id]) => id), ctx);
+  const includedViews = await propertyViews([...adj].filter(([, k]) => k === "include").map(([id]) => id), ctx);
+  const unavailable = includedViews.filter((v) => v.explain?.headline === INCLUDED_UNAVAILABLE);
+  const included = includedViews.length - unavailable.length;
+  const snap = await internalSnapshot(catalogId);
 
   return {
     id: cat.id,
@@ -180,11 +295,16 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     autoTotal: auto ? auto.total : null,
     manualCount: manual.length,
     ads: (await listCatalogAds([catalogId])).get(catalogId) ?? [],
+    autoMatched: auto ? auto.matched : null,
+    adjustments: { included, excluded, unavailable, overMax: included > criteria.max },
+    cover: await coverState(catalogId, cat, snap),
   };
 }
 
-/** Búsqueda de la gestión (modo manual): mismos filtros que el automático
- *  sin foto obligatoria ni máximo. Solo lectura, comprobada en SQL. */
+/** Búsqueda de la gestión: mismos filtros que el automático sin foto
+ *  obligatoria ni máximo. Cada resultado lleva su ajuste y la explicación
+ *  frente a los criterios GUARDADOS (los que deciden la lista). Solo lectura,
+ *  comprobada en SQL. */
 export async function searchCatalogProperties(
   ownerId: string,
   catalogId: string,
@@ -203,7 +323,10 @@ export async function searchCatalogProperties(
   });
   if (error) throw new Error(`catalog_property_search: ${error.message}`);
   const rows = (data ?? []) as any[];
-  const views = await propertyViews(rows.map((r) => r.property_id));
+  const { data: cat } = await db().from("catalogs").select("criteria").eq("id", catalogId).maybeSingle();
+  const adjustments = new Map<string, AdjustmentKind>();
+  for (const r of rows) if (r.adjustment === "include" || r.adjustment === "exclude") adjustments.set(r.property_id, r.adjustment);
+  const views = await propertyViews(rows.map((r) => r.property_id), { criteria: criteriaOf(cat?.criteria), adjustments });
   const inCat = new Map(rows.map((r) => [r.property_id, r.in_catalog === true]));
   return {
     items: views.map((v) => ({ ...v, inCatalog: inCat.get(v.propertyId) ?? false })),

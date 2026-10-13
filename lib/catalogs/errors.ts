@@ -1,5 +1,5 @@
 // ============================================================================
-// Traducción de los errores de las funciones SQL de 0192–0195 a mensajes para
+// Traducción de los errores de las funciones SQL de 0192–0196 a mensajes para
 // Fabricio. Pura: se prueba en scripts/test-catalogs.mts.
 // ============================================================================
 
@@ -32,6 +32,13 @@ const MESSAGES: Record<string, string> = {
   invalid_ad_note: "La nota no puede pasar de 200 caracteres.",
   listing_not_found: "No encuentro esa ficha guardada.",
   ad_exists: "Ese anuncio ya está asociado a este catálogo.",
+  invalid_adjustment: "Ajuste no válido.",
+  catalog_manual: "Incluir y excluir solo se usa en modo automático. En manual, añade o quita viviendas de la lista.",
+  too_many_inclusions: "No caben más inclusiones con el máximo actual. Sube el máximo o quita una inclusión.",
+  max_below_inclusions: "Hay más inclusiones que ese máximo. Sube el máximo o quita una inclusión.",
+  adjustment_not_found: "Esa vivienda ya no tenía ningún ajuste.",
+  cover_not_in_catalog: "La portada tiene que ser una vivienda que esté ahora en el catálogo.",
+  invalid_cover_photo: "Esa foto no es de la vivienda elegida.",
 };
 
 export const GENERIC_ERROR = "No se ha podido guardar. Inténtalo de nuevo.";
