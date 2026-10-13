@@ -606,6 +606,14 @@ Postgres 16 temporal en este Mac, datos sintéticos (`scripts/sql/perf-c1.sh`, 1
 - La QA en vivo de arriba, incluido D13 (≤ 2 s) en el VPS: las mediciones de aquí son locales y sintéticas.
 - C2 (descripciones y recorrido editorial) empieza tras tu merge y la QA de C1.
 
+## PR, CI y merge (C1)
+
+- **PR:** [#315](https://github.com/Bcousino890/smartbc/pull/315), `fabri/bcp-01-c1` → `main`.
+- **`origin/main` antes del push:** `57a13bd…` (sin cambios desde la base); `0196` libre en `main` y en los 28 PR abiertos.
+- **CI del último commit:** se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0196`; el rollback del build no deshace el esquema.
+- Se conservan el worktree y la rama.
+
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
