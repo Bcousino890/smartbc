@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { isEstimatedPortal, zoneCredits, zoneListings, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
-import { COMPONENT_LABEL, COST_COMPONENTS, listingOnlyEstimate } from "@/lib/scrapers/cost-model";
+import { COMPONENT_LABEL, COST_COMPONENTS, fmtDays, listingOnlyEstimate } from "@/lib/scrapers/cost-model";
 import { FOCUS_RING } from "../controls";
 import { fmt } from "./shared";
 import { useZoneCost } from "./zone-cost";
@@ -103,7 +103,7 @@ export function ZoneInfo({ z, hasKids = false }: { z: ScraperZone; hasKids?: boo
         )}
         {kids}
         <span className="block text-xs text-ink/65">
-          Medido {fmt(c.total)} créditos{zc.provisional ? " hoy (provisional)" : ` en ${zc.days} ${zc.days === 1 ? "día" : "días"}`}
+          Medido {fmt(c.total)} créditos{zc.provisional ? " en menos de 1 día (provisional)" : ` en ${fmtDays(zc.days)}`}
           {parts.length > 0 && <> · al mes: {parts.join(" · ")}</>}
           {c.perListing != null && <> · {fmt(c.perListing)} créditos por anuncio al mes</>}
         </span>

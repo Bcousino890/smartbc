@@ -24,7 +24,7 @@ export function ZoneCostProvider({ portal, zones, costs, children }: { portal: S
     const pc = costs?.hasData ? costs.portals[portal] : null;
     const map = rollupZoneCosts(zones, pc, costs?.projectionDays ?? 0);
     const provisional = !!costs?.provisional;
-    const days = costs?.daysMeasured ?? 0;
+    const days = costs?.projectionDays ?? 0;   // días CUBIERTOS por el libro (un medio día cuenta medio)
     return {
       of: (z) => {
         if (!costs?.hasData || !pc) return { status: "sin-libro", cost: null, provisional, days };

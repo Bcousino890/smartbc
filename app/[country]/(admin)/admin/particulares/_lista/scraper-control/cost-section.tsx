@@ -2,14 +2,17 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { PORTAL_LABEL, SCRAPER_PORTALS, TASKS, type ScraperControlPayload, type ScraperPortal } from "@/lib/scrapers/control-types";
+import { PORTAL_LABEL, SCRAPER_PORTALS, TASKS, zoneListings, type ScraperControlPayload, type ScraperPortal } from "@/lib/scrapers/control-types";
 import {
   COMPONENT_HELP,
   COMPONENT_LABEL,
   COST_COMPONENTS,
+  fmtDays,
   monthView,
+  perListingByComponent,
   project30,
   rollupZoneCosts,
+  shortWindowWarning,
   sumComponents,
   type CostsPayload,
   type PortalCosts,
@@ -49,6 +52,9 @@ function PortalBlock({ portal, pc, costs, data }: { portal: ScraperPortal; pc: P
     .filter((l) => l.total > 0)
     .sort((a, b) => b.total - a.total)
     .slice(0, 8);
+  // Anuncios activos del portal = suma de las zonas raíz (cada anuncio cuenta una vez).
+  const nListings = zones.filter((z) => !z.parent_key).reduce((n, z) => n + (z.listings_private ?? zoneListings(z) ?? 0), 0);
+  const perListing = perListingByComponent(proj, nListings);
   const gap = pc.totalCredits > 0 ? Math.abs(pc.totalCredits - measuredTotal) / pc.totalCredits : 0;
 
   return (
@@ -73,6 +79,9 @@ function PortalBlock({ portal, pc, costs, data }: { portal: ScraperPortal; pc: P
             <th scope="col" className="px-2 py-1 text-right font-medium">
               Al mes
             </th>
+            <th scope="col" className="px-2 py-1 text-right font-medium" title="Créditos al mes por anuncio activo">
+              Por anuncio
+            </th>
             <th scope="col" className="py-1 pl-2 text-right font-medium">
               %
             </th>
@@ -86,6 +95,7 @@ function PortalBlock({ portal, pc, costs, data }: { portal: ScraperPortal; pc: P
               </th>
               <td className="px-2 py-1.5 text-right text-ink/80">{fmt(pc.components[k])}</td>
               <td className="px-2 py-1.5 text-right font-semibold text-ink">{fmt(proj[k])}</td>
+              <td className="px-2 py-1.5 text-right text-ink/65">{perListing ? perListing[k].toLocaleString("es-ES") : "—"}</td>
               <td className="py-1.5 pl-2 text-right text-ink/65">{pctOf(proj[k], projTotal)}</td>
             </tr>
           ))}
@@ -95,12 +105,14 @@ function PortalBlock({ portal, pc, costs, data }: { portal: ScraperPortal; pc: P
             </th>
             <td className="px-2 py-1.5 text-right">{fmt(measuredTotal)}</td>
             <td className="px-2 py-1.5 text-right">{fmt(projTotal)}</td>
+            <td className="px-2 py-1.5 text-right">{nListings > 0 ? (Math.round((projTotal / nListings) * 100) / 100).toLocaleString("es-ES") : "—"}</td>
             <td className="py-1.5 pl-2 text-right">100 %</td>
           </tr>
         </tbody>
       </table>
       <p className="mt-1 text-xs text-ink/65">
-        «Medido» = {costs.provisional ? "créditos de hoy (parcial)" : `${costs.daysMeasured} ${costs.daysMeasured === 1 ? "día completo" : "días completos"}`}. «Al mes» = ritmo medido × 30 días; las reactivaciones son puntuales y no se multiplican.
+        «Medido» = {costs.provisional ? "menos de 1 día" : fmtDays(costs.projectionDays)} de libro de gasto. «Al mes» = ritmo medido × 30 días; las reactivaciones son puntuales y no se multiplican.
+        «Por anuncio» = créditos al mes por anuncio activo ({nListings > 0 ? `${fmt(nListings)} anuncios` : "nº de anuncios aún sin leer"}).
       </p>
 
       {pc.tasks.length > 0 && (
@@ -195,18 +207,15 @@ export function CostSection({ data, costs, error }: { data: ScraperControlPayloa
         </div>
       ) : (
         <div className="space-y-4">
-          {costs.provisional && (
-            <Notice tone="warn">
-              Solo hay datos de hoy, que aún no ha terminado: la proyección es provisional y se afinará mañana, con el primer día completo.
-            </Notice>
-          )}
+          {shortWindowWarning(costs.projectionDays) && <Notice tone="warn">{shortWindowWarning(costs.projectionDays)}</Notice>}
           {month && (
             <div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                 <Kpi label="Proyección a 30 días" value={fmt(month.projected30)} detail="créditos, al ritmo medido" />
                 <Kpi label="Gastado en el periodo" value={month.spentPeriod == null ? "—" : fmt(month.spentPeriod)} detail={`renueva el ${renewLabel}`} />
                 <Kpi label="Al renovar (previsión)" value={month.endOfPeriod == null ? "—" : fmt(month.endOfPeriod)} detail={`${daysLeft} ${daysLeft === 1 ? "día" : "días"} por delante`} />
-                <Kpi label="Presupuesto" value={fmt(month.budget)} detail={`${month.pctOfBudget} % con la proyección`} />
+                <Kpi label="Presupuesto guardado" value={fmt(month.budget)} detail={`${month.pctOfBudget} % con la proyección`} />
+                <Kpi label="Plan de Crawio" value={fmt(month.plan)} detail={`${month.pctOfPlan} % con la proyección`} />
               </div>
               <div
                 role="img"

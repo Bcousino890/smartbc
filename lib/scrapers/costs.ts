@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { SCRAPER_PORTALS, type ScraperPortal } from "./control-types";
 import {
   COMPONENT_PREFIX,
+  COVERAGE_TASK,
   NO_ZONE_KEY,
   emptyComponents,
   isComponent,
@@ -13,15 +14,17 @@ import {
 /**
  * Gasto REAL en créditos por portal / zona / componente / tarea, medido por el crawler
  * (libro de gasto) y publicado en `scraper_stats_daily` (ver cost-model.ts para el formato de las filas).
- * La ventana son los últimos 7 días COMPLETOS (los de «hoy» solo se usan si no hay ningún día completo,
- * y entonces la proyección se prorratea por las horas transcurridas y se marca como provisional).
+ * La ventana es TODO el periodo disponible (hasta 30 días, incluido hoy). Cada día pesa lo que el libro cubrió:
+ * la fila 'cov:minutes' trae los minutos medidos (el primer día empieza a media jornada, hoy acaba «ahora»); si un
+ * día no la tiene (publicado por un crawler anterior) pesa 1 si ya acabó y la fracción transcurrida si es hoy.
+ * proyección = créditos / Σ pesos × 30.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 type Row = { day: string; portal: ScraperPortal; zone_key: string; task: string; requests: number; credits: number };
 
-export const COST_WINDOW_DAYS = 7;
+export const COST_WINDOW_DAYS = 30;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 function isMissingTable(err: { code?: string; message?: string } | null | undefined): boolean {
@@ -76,23 +79,20 @@ export async function loadCosts(): Promise<CostsPayload> {
     throw new Error("No se pudo leer el gasto de créditos");
   }
 
-  // Días con datos del libro = días con filas por componente. Los completos son los anteriores a hoy.
+  // Días con datos del libro = días con filas por componente. Cada uno pesa los minutos que el libro midió.
   const ledgerDays = new Set(cmp.rows.map((r) => r.day));
-  const complete = [...ledgerDays].filter((d) => d < today);
-  let days: Set<string>;
-  let provisional = false;
-  let projectionDays: number;
-  if (complete.length > 0) {
-    days = new Set(complete);
-    projectionDays = complete.length;
-  } else if (ledgerDays.has(today)) {
-    days = new Set([today]);
-    provisional = true;
-    // Fracción del día UTC transcurrida (mínimo 3 h: antes la proyección sería puro ruido).
-    projectionDays = Math.max(3 / 24, (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440);
-  } else {
-    return empty;
+  if (ledgerDays.size === 0) return empty;
+  const covMinutes = new Map<string, number>();
+  for (const r of tot.rows) if (r.task === COVERAGE_TASK) covMinutes.set(r.day, Math.max(covMinutes.get(r.day) ?? 0, r.credits));
+  const elapsedToday = Math.max(3 / 24, (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440);
+  const days = new Set(ledgerDays);
+  let projectionDays = 0;
+  for (const d of ledgerDays) {
+    const m = covMinutes.get(d);
+    projectionDays += m != null ? Math.min(1, m / 1440) : d < today ? 1 : elapsedToday;
   }
+  projectionDays = Math.round(projectionDays * 1000) / 1000;
+  const provisional = projectionDays < 1;
 
   const portals: Record<ScraperPortal, PortalCosts | null> = { idealista: null, fotocasa: null, pisos: null, habitaclia: null };
   const get = (p: ScraperPortal): PortalCosts =>
@@ -123,6 +123,7 @@ export async function loadCosts(): Promise<CostsPayload> {
     if (!days.has(r.day) || !SCRAPER_PORTALS.includes(r.portal)) continue;
     const p = get(r.portal);
     if (r.task === "*") p.totalCredits += r.credits;
+    else if (r.task === COVERAGE_TASK) continue;
     else if (!r.task.startsWith(COMPONENT_PREFIX)) taskSum.set(`${r.portal}|${r.task}`, (taskSum.get(`${r.portal}|${r.task}`) ?? 0) + r.credits);
   }
   for (const [k, credits] of taskSum) {
@@ -131,5 +132,5 @@ export async function loadCosts(): Promise<CostsPayload> {
   }
   for (const p of Object.values(portals)) p?.tasks.sort((a, b) => b.credits - a.credits);
 
-  return { ...empty, hasData: true, daysMeasured: provisional ? 0 : days.size, provisional, projectionDays, portals };
+  return { ...empty, hasData: true, daysMeasured: days.size, provisional, projectionDays, portals };
 }
