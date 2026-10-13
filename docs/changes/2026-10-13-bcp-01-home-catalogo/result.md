@@ -515,6 +515,13 @@ La insignia redonda «N» es la de desarrollo de Next y no existe en producción
   - la observación sobre fotos de marcador («pendiente de reportaje»), que no tiene regla aprobada;
   - la composición de la descripción, que pertenece a C.
 
+## PR, CI y merge (corrección del índice)
+
+- **PR:** [#314](https://github.com/Bcousino890/smartbc/pull/314), `fabri/bcp-01-indice` → `main`.
+- **`origin/main` antes del push:** `7a9635c…` (sin cambios desde la base).
+- **CI del último commit:** se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Sin migración: un rollback del build lo deshace por completo.
+
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
