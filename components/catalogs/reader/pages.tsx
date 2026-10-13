@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { shareExpiryLabel } from "@/lib/catalogs/share";
+import { ScrollRegion } from "./scroll-region";
 import styles from "./reader.module.css";
 
 // Páginas del lector C · Boutique (BCP-01 T8). Solo pintan el contrato
@@ -227,7 +228,7 @@ export function TextPage({
 }) {
   return (
     <section className={`${styles.page} ${styles.textPage}`} aria-label={item.title}>
-      <div className={styles.textScroll}>
+      <ScrollRegion label={item.title}>
       <p className={styles.runner}>
         {catalog.title} · {catalog.edition}
       </p>
@@ -273,35 +274,44 @@ export function TextPage({
           </button>
         </>
       ) : null}
-      </div>
+      </ScrollRegion>
       <p className={styles.folio}>— {page} —</p>
     </section>
   );
 }
 
+/** Cierre «Hablemos» (D20): marca, tarjeta del asesor y UNA acción (llamar).
+ *  El contacto es el guardado en el catálogo; si falta un dato, no se pinta. */
 export function ClosingPage({ catalog, expiresAt }: { catalog: PublicCatalog; expiresAt: string }) {
+  const hasCard = !!catalog.preparedBy || !!catalog.phone;
   return (
     <section className={`${styles.page} ${styles.closingPage}`} aria-label="Contacto">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className={styles.closingLogo} src="/logo.png" alt="Benjamín Cousiño Propiedades" width={3282} height={519} decoding="async" />
+      <span className={styles.closingRule} aria-hidden="true" />
       <p className={styles.kicker}>Contacto</p>
       <h2 className={styles.closingTitle}>Hablemos</h2>
       <p className={styles.lede}>Si alguna de estas viviendas te encaja, organizamos la visita cuando mejor te venga.</p>
-      <dl className={styles.contact}>
-        {catalog.preparedBy ? (
-          <div>
-            <dt>Asesor</dt>
-            <dd>{catalog.preparedBy}</dd>
-          </div>
-        ) : null}
-        {catalog.phone && catalog.phoneHref ? (
-          <div>
-            <dt>Teléfono</dt>
-            <dd>
-              <a href={catalog.phoneHref}>{catalog.phone}</a>
-            </dd>
-          </div>
-        ) : null}
-      </dl>
-      <p className={styles.note}>Esta selección se actualiza sola cuando hay cambios. Disponible hasta el {shareExpiryLabel(expiresAt)}.</p>
+      {hasCard ? (
+        <div className={styles.contactCard} data-testid="contact-card">
+          <p className={styles.contactRole}>{catalog.role === "asesora" ? "Tu asesora" : "Tu asesor"}</p>
+          {catalog.preparedBy ? <p className={styles.contactName}>{catalog.preparedBy}</p> : null}
+          {catalog.phone && catalog.phoneHref ? (
+            <>
+              <a className={styles.callButton} href={catalog.phoneHref} data-testid="call">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z" />
+                </svg>
+                Llamar
+              </a>
+              <span className={styles.contactNumber}>{catalog.phone}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      <p className={styles.closingFoot}>
+        Selección preparada para ti. Se actualiza sola cuando hay cambios · disponible hasta el {shareExpiryLabel(expiresAt)}.
+      </p>
       <span className={styles.ornament} aria-hidden="true">
         ✦
       </span>

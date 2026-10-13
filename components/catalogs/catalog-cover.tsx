@@ -2,7 +2,8 @@ import { catalogFontVariables } from "@/lib/catalogs/fonts";
 import styles from "./catalog-cover.module.css";
 
 // Portada Boutique de un catálogo (BCP-01 T5, D17). Sirve de miniatura en la
-// estantería de la HOME y, en la fase 2, de primera página del lector. Solo
+// estantería de la HOME y de primera página del lector. Lleva el logo oficial
+// (D18), que se oculta en las miniaturas pequeñas. Solo
 // recibe datos ya públicos (título, introducción, foto de portada por el
 // proxy /p/[slug]/[idx], nombre de quien la prepara).
 
@@ -31,6 +32,8 @@ export function CatalogCover({
   return (
     <div className={`${styles.frame}${className ? ` ${className}` : ""}`}>
     <div className={`${catalogFontVariables} ${styles.cover}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className={styles.logo} src="/logo.png" alt="Benjamín Cousiño Propiedades" width={3282} height={519} decoding="async" />
       <div className={styles.kickers}>
         <span>{left}</span>
         <span>{data.edition}</span>

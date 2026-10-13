@@ -45,6 +45,31 @@
 }
 
 /* Etiquetas a ambos lados (principio de Pleat); se apilan si no caben. */
+/* Logo oficial (D18): public/logo.png tal cual, sin filtros, con su
+   proporción (3282 × 519 ≈ 6,32:1). Tinta #121626 sobre el papel: 15,4:1. */
+.logo {
+  display: block;
+  flex: none;
+  width: 44%;
+  height: auto;
+  aspect-ratio: 3282 / 519;
+  margin: 0 0 1.1em;
+}
+
+/* Portada estrecha (lector en móvil): el logo algo más grande. */
+@container (max-width: 480px) {
+  .logo {
+    width: 62%;
+  }
+}
+
+/* Miniatura de la HOME: a ese tamaño no se lee; se oculta. */
+@container (max-width: 219px) {
+  .logo {
+    display: none;
+  }
+}
+
 .kickers {
   display: flex;
   flex-wrap: wrap;
