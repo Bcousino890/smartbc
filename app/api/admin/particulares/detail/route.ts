@@ -14,7 +14,7 @@ import { canAccess } from "@/lib/permissions";
  * tampoco viaja en el listado para mantenerlo ligero.
  */
 const DETAIL_COLUMNS =
-  "id, photos, price_per_m2, previous_price, price_drop_pct, floor, has_lift, " +
+  "id, photos, description, features, price_per_m2, previous_price, price_drop_pct, floor, has_lift, " +
   "condition, year_built, orientation, energy_consumption, energy_emissions, " +
   "advertiser_profile_url, reference, source_update_text, district:scraper_extra->>district";
 export async function GET(req: NextRequest) {

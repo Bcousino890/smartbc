@@ -6,7 +6,7 @@ import {
   getParticularesPage,
   getParticularesStats,
   getParticularesZoneCounts,
-  getStaffOptions,
+  getStaffOptionsCached,
   type ParticularesFilters,
 } from "@/lib/db/queries/particulares";
 import { decodeZonePolygons } from "@/lib/zone-polygon";
@@ -99,7 +99,7 @@ export default async function AdminParticularesPage({
   // anunciante), si no, "Chamberí (900)" prometería agencias que no se ven.
   const zoneCountsPromise = getParticularesZoneCounts(showRetired, advertiserFilter);
   const statsPromise = getParticularesStats();
-  const staffOptionsPromise = getStaffOptions().catch(() => []);
+  const staffOptionsPromise = getStaffOptionsCached().catch(() => []);
   const scraperConfigPromise = getIdealistaScraperConfig();
   // Mismo criterio que getParticularesZoneCounts: solo 3 columnas cortas
   // (id/latitude/longitude) recorridas una vez, nunca la fila enriquecida

@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "../admin";
 import { buildSearchPlan } from "@/lib/particulares/search-clauses";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
@@ -23,8 +24,11 @@ import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filte
  * en el VPS: el listado nunca se rompe.
  */
 
+// `description` y `features` NO van en el listado (la tarjeta no los pinta, ≈50 %
+// del payload de la página): la ficha los pide con el resto del detalle en
+// /api/admin/particulares/detail.
 const BASE_COLUMNS =
-  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, cover_url, features, owner_name, phone, chat_only, latitude, longitude, location_precision, taken_down_at, detected_at, created_at, updated_at, is_active";
+  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, cover_url, owner_name, phone, chat_only, latitude, longitude, location_precision, taken_down_at, detected_at, created_at, updated_at, is_active";
 
 // Columnas de la migración 0036 (plano + vídeo). Pueden no existir aún en el
 // VPS — por eso van en intentos separados (degradación elegante).
@@ -648,6 +652,13 @@ export async function getStaffOptions(
   }));
 }
 
+/** Staff para el desplegable de asignación, cacheado 60 s (casi nunca cambia y se pedía en cada filtro). */
+export const getStaffOptionsCached: () => Promise<Array<{ id: string; name: string }>> = unstable_cache(
+  () => getStaffOptions(),
+  ["particulares-staff-options"],
+  { revalidate: 60 },
+);
+
 export type ParticularesStats = {
   /** PARTICULARES activos (no agencias) y sin copias enlazadas: exactamente lo
    *  que lista la pantalla por defecto. Antes contaba TODOS los anuncios
@@ -674,7 +685,13 @@ export type ParticularesStats = {
  * `duplicate_of` (0176) o `advertiser_type` (0012), reintenta sin ese filtro
  * en vez de devolver ceros.
  */
-export async function getParticularesStats(): Promise<ParticularesStats> {
+export const getParticularesStats: () => Promise<ParticularesStats> = unstable_cache(
+  () => computeParticularesStats(),
+  ["particulares-stats"],
+  { revalidate: 30 },
+);
+
+async function computeParticularesStats(): Promise<ParticularesStats> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -718,12 +735,22 @@ export async function getParticularesStats(): Promise<ParticularesStats> {
   };
 }
 
+/** Fila ya agregada (zona + municipio + estado + portal) con sus conteos. */
+type ZoneCountRow = {
+  zone: string | null;
+  municipality: string | null;
+  is_active: boolean;
+  portal: string;
+  total: number;
+  missing_phone: number;
+};
+
 // Agrupa por distrito canónico de Madrid — mismo algoritmo que antes vivía
 // en el `useMemo` de particulares-client.tsx sobre `allRows`; se movió aquí
 // para poder calcularlo server-side sobre el dataset ligero de abajo, en vez
 // de sobre las filas enriquecidas completas.
 function buildZoneGroups(
-  rows: Array<{ zone: string | null; is_active: boolean; phone: string | null; municipality?: string | null }>,
+  rows: ZoneCountRow[],
   showRetired: boolean,
 ): ZoneFilterGroup[] {
   const districts = new Map<
@@ -742,12 +769,12 @@ function buildZoneGroups(
       districts.set(district, { total: 0, missingPhone: 0, zones: new Map() });
     }
     const d = districts.get(district)!;
-    d.total++;
-    if (!r.phone) d.missingPhone++;
+    d.total += r.total;
+    d.missingPhone += r.missing_phone;
     if (!d.zones.has(r.zone)) d.zones.set(r.zone, { total: 0, missingPhone: 0 });
     const z = d.zones.get(r.zone)!;
-    z.total++;
-    if (!r.phone) z.missingPhone++;
+    z.total += r.total;
+    z.missingPhone += r.missing_phone;
   }
   return Array.from(districts.entries())
     .sort((a, b) => {
@@ -765,11 +792,11 @@ function buildZoneGroups(
     }));
 }
 
-function buildPortalCounts(rows: Array<{ portal: string; is_active: boolean }>): Record<string, number> {
+function buildPortalCounts(rows: ZoneCountRow[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const r of rows) {
     if (!r.is_active) continue;
-    counts[r.portal] = (counts[r.portal] ?? 0) + 1;
+    counts[r.portal] = (counts[r.portal] ?? 0) + r.total;
   }
   return counts;
 }
@@ -791,10 +818,45 @@ export async function getParticularesZoneCounts(
   advertiser: "particular" | "professional" | "unknown" | "" = "",
 ): Promise<{ zoneGroups: ZoneFilterGroup[]; portalCounts: Record<string, number> }> {
   try {
+    const rows = await getZoneCountRows(advertiser);
+    return {
+      zoneGroups: buildZoneGroups(rows, showRetired),
+      portalCounts: buildPortalCounts(rows),
+    };
+  } catch (err) {
+    // El desplegable de zonas/el desglose por portal son secundarios frente
+    // a poder ver el listado — nunca deben tumbar la página entera.
+    console.error("[particulares] getParticularesZoneCounts: excepción", err);
+    return { zoneGroups: [], portalCounts: {} };
+  }
+}
+
+/**
+ * Conteos agregados por zona/municipio/estado/portal. Antes se bajaban ≈22k
+ * filas en ≈22 peticiones secuenciales de 1000 (≈2 MB) EN CADA carga y cada
+ * cambio de filtro; ahora es un GROUP BY en SQL (`particulares_zone_counts`,
+ * migración 0190: ≈2k filas) y el resultado se cachea 60 s por tipo de
+ * anunciante (los conteos del desplegable no necesitan ser al segundo).
+ * Si la función aún no existe (migración sin aplicar) se usa el recorrido
+ * antiguo.
+ */
+const getZoneCountRows = unstable_cache(
+  async (advertiser: string): Promise<ZoneCountRow[]> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = createAdminClient() as any;
-    // Filtrar en SQL (indexado) además de ser exacto evita recorrer los ≈88k
-    // anuncios cuando solo se ven los ≈21k de particulares.
+    const rpc = await supabase.rpc("particulares_zone_counts", { p_advertiser: advertiser });
+    if (!rpc.error && Array.isArray(rpc.data)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (rpc.data as any[]).map((r) => ({
+        zone: r.zone ?? null,
+        municipality: r.municipality ?? null,
+        is_active: Boolean(r.is_active),
+        portal: String(r.portal),
+        total: Number(r.total),
+        missing_phone: Number(r.missing_phone),
+      }));
+    }
+    // Filtrar en SQL (indexado) evita recorrer los ≈88k anuncios cuando solo se ven los ≈21k de particulares.
     const run = (withAdvertiser: boolean) =>
       fetchAllRows((from, to) => {
         let q = supabase.from("particulares").select("zone, is_active, phone, portal, municipality:scraper_extra->>municipality");
@@ -808,21 +870,23 @@ export async function getParticularesZoneCounts(
     let { rows, error } = await run(true);
     // Sin la columna advertiser_type (migración 0012) → como antes, sin filtrar.
     if (error && advertiser) ({ rows, error } = await run(false));
-    if (error) {
-      console.error("[particulares] getParticularesZoneCounts: error de BD", error);
-      return { zoneGroups: [], portalCounts: {} };
+    if (error) throw new Error(error.message);
+    const agg = new Map<string, ZoneCountRow>();
+    for (const r of rows) {
+      const key = JSON.stringify([r.zone, r.municipality, r.is_active, r.portal]);
+      let e = agg.get(key);
+      if (!e) {
+        e = { zone: r.zone, municipality: r.municipality ?? null, is_active: r.is_active, portal: r.portal, total: 0, missing_phone: 0 };
+        agg.set(key, e);
+      }
+      e.total++;
+      if (!r.phone) e.missing_phone++;
     }
-    return {
-      zoneGroups: buildZoneGroups(rows, showRetired),
-      portalCounts: buildPortalCounts(rows),
-    };
-  } catch (err) {
-    // El desplegable de zonas/el desglose por portal son secundarios frente
-    // a poder ver el listado — nunca deben tumbar la página entera.
-    console.error("[particulares] getParticularesZoneCounts: excepción", err);
-    return { zoneGroups: [], portalCounts: {} };
-  }
-}
+    return [...agg.values()];
+  },
+  ["particulares-zone-counts"],
+  { revalidate: 60 },
+);
 
 /**
  * Resuelve el filtro de "zona dibujada en el mapa" a la lista EXACTA de ids
