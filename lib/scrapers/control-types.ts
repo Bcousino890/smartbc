@@ -233,15 +233,15 @@ export function zoneListings(z: Pick<ScraperZone, "listings_sale" | "listings_re
 
 /**
  * Portales cuyo coste por zona es una ESTIMACIÓN del modelo (no un cálculo por anuncios de listado):
- *  - Habitaclia: 2 barridos al día y una página de 29 anuncios cubre una zona → ≈ 60 créditos por operación y mes
+ *  - Habitaclia: 2 pasadas al día × 30 días × 1 página (29 anuncios cubren una zona) → ≈ 60 créditos por operación y mes
  *    (más páginas si la zona tiene más de 29 particulares).
- *  - Pisos.com: ≈ 30 créditos por zona, mes y operación (adaptativo, ~3 pasadas diarias de ~1 página; es una cota alta).
+ *  - Pisos.com: ≈ 90 créditos por zona, mes y operación (radar de 3 pasadas al día × 30 días × ≥1 página de «más recientes»).
  */
 export const ESTIMATED_ZONE_PORTALS: readonly ScraperPortal[] = ["pisos", "habitaclia"];
 export const isEstimatedPortal = (p: ScraperPortal): boolean => ESTIMATED_ZONE_PORTALS.includes(p);
 const HABITACLIA_PAGE = 29;
 const HABITACLIA_CREDITS_PER_PAGE_OP = 60;
-const PISOS_CREDITS_PER_ZONE_OP = 30;
+const PISOS_CREDITS_PER_ZONE_OP = 90;
 
 /** Estimación mensual (prioridad «Marcada») de una zona de Pisos.com / Habitaclia; null si el portal no usa este modelo. */
 export function zoneEstimateCredits(

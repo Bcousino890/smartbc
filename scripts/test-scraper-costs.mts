@@ -176,15 +176,15 @@ test("estimación por zona de Habitaclia y Pisos.com", () => {
   assert.equal(zoneEstimateCredits(hz({ listings_private: 29 })), 120);
   assert.equal(zoneEstimateCredits(hz({ listings_private: 30 })), 240); // 2 páginas
   assert.equal(zoneEstimateCredits(hz({ rent_active: false })), 60);
-  // Pisos.com: ≈ 30 por zona, mes y operación.
-  assert.equal(zoneEstimateCredits(pz()), 60);
-  assert.equal(zoneEstimateCredits(pz({ sale_active: false })), 30);
+  // Pisos.com: ≈ 90 por zona, mes y operación.
+  assert.equal(zoneEstimateCredits(pz()), 180);
+  assert.equal(zoneEstimateCredits(pz({ sale_active: false })), 90);
   assert.equal(zoneEstimateCredits(pz({ sale_active: false, rent_active: false })), 0);
   // Idealista/Fotocasa siguen con el modelo de anuncios.
   assert.equal(zoneEstimateCredits(zone("a", null)), null);
   assert.equal(zoneBaseCredits(zone("a", null, { listings_sale: 300 })), 201);
   assert.equal(zoneBaseCredits(zone("a", null)), null);
-  assert.equal(zoneBaseCredits(pz()), 60);
+  assert.equal(zoneBaseCredits(pz()), 180);
 });
 
 console.log(`${n} pruebas OK`);
