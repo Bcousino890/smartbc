@@ -171,3 +171,119 @@ Revisión adicional de Codex: no solicitada para la fase 2.
 - **CI del último commit** (este registro, solo documentación): se comprueba tras el push; su resultado está en el PR.
 - **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0193` en producción con el script versionado. Después, QA en vivo y la medición de D13 (instrucciones en el PR).
 - Se conservan el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-fase2` y la rama.
+
+---
+
+# Ampliación · PR-A «Marca, contacto y cierre» (X0–X3)
+
+## Base y commits
+
+Rama `fabri/bcp-01-amp-a`, base `f770e544360c350e5821701a83f857d4136decf0` (merge de #311), comprobada **en remoto** con `git ls-remote` al preparar el worktree y otra vez antes del push. Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-amp-a`. No se tocaron el `main` local (`1506dbc`), el stash ni los worktrees de las fases 1 y 2.
+
+| Commit | Tarea |
+| --- | --- |
+| `430671e` | X0 · especificación, decisiones (D18–D23, P1–P9, máximo de 1 a 24 aprobado) y plan aprobados en el expediente |
+| `efa2067` | X1 · migración `0194_catalog_contact.sql`, pruebas SQL y `rollback-0194.sql` |
+| `73eafdf` | X2 · contacto editable: validación, creación y gestión, contrato público desde el catálogo |
+| `87a9063` | X3 · logo, cierre «Hablemos», barra móvil y señal de desplazamiento |
+| siguiente | Este resultado |
+
+`0194` era el número libre en `origin/main` antes del push.
+
+## Qué cambia
+
+- **Contacto público por catálogo** (`catalogs.contact_name`, `contact_phone` en E.164 y `contact_role`).
+  - Lo ven la portada («Preparada por») y el cierre.
+  - **Solo cambia lo que se muestra:** el nombre puede ser de otra persona y eso no le da acceso a Mi espacio (`home_owners` no cambia; probado en SQL).
+  - El lector lo toma **solo** del catálogo; nunca recurre al perfil ni a una constante. Si falta un dato, esa línea no se pinta.
+- **Catálogos existentes:** la migración los rellena con tu nombre de perfil, `+34 641 457 123` y «asesor», que es lo que ya se veía.
+- **Catálogo nuevo:** el formulario precarga los mismos valores y se pueden cambiar antes de crear.
+- **Regla #297:** intacta fuera de los catálogos. Un test lo vigila con la firma de correo y comprobando que nadie fuera del módulo usa el contacto editable.
+- **Logo oficial** en la portada y en el cierre.
+  - Es `public/logo.png` tal cual, sin filtros y con su proporción 6,32:1.
+  - Contraste medido de 15,4:1 sobre el papel.
+  - Se oculta en las miniaturas de la HOME de menos de 220 px.
+- **Cierre «Hablemos»** según la maqueta aprobada:
+  - logo, filete, «Contacto» y «Hablemos»;
+  - tarjeta con «Tu asesor/a» y el nombre;
+  - **una sola acción**, «Llamar» (`tel:`), y el número escrito debajo;
+  - vigencia del enlace.
+  - Sin WhatsApp, correo ni envíos.
+- **Navegación en una página (móvil):** una barra **opaca de ancho completo** fija abajo.
+  - La página reserva su altura más el área segura, y `scroll-padding` evita que un control enfocado quede debajo.
+  - En la doble página, la cápsula sigue igual.
+- **Texto largo en la doble página:**
+  - el texto se desvanece abajo y aparece «Sigue leyendo ↓»;
+  - la zona se puede enfocar con el teclado;
+  - Av/Re Pág la desplazan sin pasar de página y ← → siguen pasando de página.
+
+## Verificaciones (locales, datos sintéticos, E7)
+
+| Comprobación | Resultado |
+| --- | --- |
+| SQL 0192 + 0193 + 0194 (`scripts/sql/test-catalogs-core.sh`, Postgres 16 temporal) | Todos los escenarios en verde, **257 comprobaciones**. Detalle de 0194: <br>• relleno de un catálogo creado antes de 0194; <br>• la instantánea conserva las claves de 0193 y añade `contact`; <br>• guardar el mismo contacto no cambia la huella; editarlo la cambia y sube la versión; <br>• validaciones de nombre, teléfono y rol, y nada se guarda si fallan; <br>• otro staff, un cliente y un actor nulo → `forbidden`; <br>• el asesor nombrado no entra en `home_owners`; <br>• `catalog_create` (firma de 0192) guarda los valores por defecto y `catalog_create_v2` el elegido; <br>• un perfil sin nombre válido no hace inventar un nombre; <br>• las restricciones protegen también escrituras directas; <br>• `anon` y `authenticated` sin permiso; <br>• 0192 y 0193 intactas; <br>• 0194 aplicada dos veces, revertida (y comprobado lo revertido) y vuelta a aplicar, con los tests de 0193 en verde después. |
+| Lint de migraciones | OK |
+| `npm run test:catalogs-public` (en CI) | 111 en verde: los 99 de la fase 2, que siguen pasando, y 12 nuevos sobre la validación (mismas reglas que SQL), el formato, el contrato sin perfil ni constante y la regla #297 intacta |
+| `npm run test:catalogs`, `tsc --noEmit` | En verde |
+| Regresiones (`viewing-collections`, `client-shortlist`, `portal-links`, `smartlink`, `particulares`, `idealista`, `lead-merge`, `zinto-v2`) | Todas en verde |
+| `test:typography` | Las mismas 15 infracciones que en la base, ninguna nueva (fuera de CI) |
+| `/v`, `/s`, `/c`, `/compartir`, `/p`, `lib/mailbox`, `lib/viewing-collections` | Sin cambios (`git diff`) |
+| Lector de la fase 2 (Playwright, 1440 y 362 px) | 52 en verde con el código nuevo |
+| PR-A en el navegador (Playwright, 1440, 362 y 320 px) | **54 en verde**: <br>• logo en la portada con su proporción y sin filtro; <br>• cierre con logo, «Tu asesor», nombre y número, una sola acción `tel:`; <br>• contacto editado con el lector abierto, visible en 2–3 ms (**sintético**); <br>• señal de desplazamiento: visible, enfocable, Av Pág desplaza el texto sin pasar de página, desaparece al final, ← sigue pasando de página; <br>• **la barra móvil no tapa nada**: al final de la página, con cada control enfocado y con los avisos de D12 y sin conexión, en la vivienda, el cierre, el índice y el modo desplazamiento; <br>• 0 desbordes; sin errores de JS; <br>• HOME: el logo se ve en miniaturas de 220 px o más y se oculta por debajo; crear precarga el contacto; <br>• gestión: precarga, teléfono inválido → aviso, guardar, el contrato público ya trae el contacto nuevo, 362 px sin desbordes. |
+| Medición sintética 20 × 2 (fase 2) y panel del enlace | En verde (40/40, máximo 0,04 s; **local y sintético**) |
+
+**Observaciones de la revisión visual:**
+- Las capturas de página completa en móvil pintan la barra fija donde acaba la primera pantalla. Por eso la evidencia de móvil son capturas de pantalla a distintas alturas, más la comprobación programática de que nada queda tapado.
+- En local aparece la insignia redonda «N» de Next, que es solo de desarrollo y no existe en producción.
+- Con la emulación sin conexión de Playwright, un SSE ya abierto no se corta. El aviso «sin conexión» se probó con la API del lector inaccesible desde el arranque, igual que en la fase 2.
+
+## Criterios
+
+| Criterio | Estado |
+| --- | --- |
+| AC15 logo | Demostrado en local; **aprobación visual en vivo pendiente** |
+| AC16 contacto editable | Demostrado en SQL y en local; **pendiente en vivo** |
+| AC17 cierre | Capturas locales; **aprobación visual de Fabricio pendiente** |
+| Condición 1 (barra móvil) | Demostrado en local a 362 y 320 px; **pendiente en un móvil real** |
+| D13 para los cambios de contacto | Instrumentado (el guardado del contacto es un ensayo más con `?medir=1`); **medición en vivo pendiente** |
+
+## Compatibilidad del despliegue y recuperación
+
+- **Tras tu merge:** el despliegue compila, aplica `0194` y después cambia de versión. Mientras tanto, el build anterior sigue funcionando con la base nueva:
+  - `catalog_create` mantiene su firma y ahora guarda el contacto por defecto;
+  - la instantánea conserva todas las claves de 0193.
+- **Si el despliegue vuelve al build anterior** (rollback del build), **el esquema no se revierte solo**. `0194` queda aplicada, lo que es compatible (ver arriba), y el lector anterior seguiría mostrando el perfil y el teléfono fijo.
+- **Revertir de verdad:**
+  - otro PR con `git revert` del merge;
+  - `rollback-0194.sql`, que ejecuta una persona y que **borra los contactos editados**;
+  - después, quitar la fila de `schema_migrations`.
+  - Probado en el Postgres temporal.
+
+## QA en vivo de Fabricio (tras el merge)
+
+1. Abre la HOME. Las portadas grandes muestran el logo arriba y las miniaturas pequeñas, no.
+2. En un catálogo de QA con enlace, abre el lector en otra ventana y ve al cierre. Comprueba el logo, «Tu asesor», tu nombre, «Llamar» y `+34 641 457 123`.
+3. En la gestión, «Contacto que verá el cliente»:
+   - pon otro nombre, otro móvil y «Tu asesora», y guarda;
+   - el lector abierto cambia la portada y el cierre solo;
+   - «Llamar» marca el número nuevo.
+4. Escribe un teléfono incorrecto: aparece un aviso y no se guarda.
+5. Comprueba que la persona nombrada (si es staff) **no** ve «Mi espacio» ni puede abrir `/es/admin/mi-espacio`.
+6. Crea un catálogo: el formulario trae tu nombre, el teléfono de la agencia y «Tu asesor».
+7. Un catálogo antiguo se ve igual que antes, con el logo añadido.
+8. En el móvil:
+   - recorre el lector hasta el cierre;
+   - la barra de abajo no tapa ningún texto ni botón al final de cada página;
+   - los avisos se leen.
+9. En el escritorio, una vivienda con descripción larga muestra «Sigue leyendo ↓». Al hacer clic avanza el texto; con el foco en el texto, Av Pág lo desplaza.
+10. D13: repite los 20 ensayos × 2 lectores de la fase 2 (puedes incluir cambios de contacto). Sigue pendiente también la medición de la fase 2.
+11. Al terminar, revoca el enlace de QA.
+
+## Pendiente o no demostrado
+
+- Toda la QA en vivo de arriba, incluida la medición de 2 s (de esta entrega y de la fase 2).
+- PR-B y PR-C empiezan tras tu merge y la QA de A.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.
