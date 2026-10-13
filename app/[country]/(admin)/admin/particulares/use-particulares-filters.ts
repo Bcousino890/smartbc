@@ -45,10 +45,13 @@ const URL_DEFAULTS: Partial<Record<keyof FilterValues, string>> = {
 };
 
 // Nombre de cada filtro en la URL (cortos, para que el link compartido no
-// sea kilométrico) y si su escritura a la URL se debounced. Los campos de
-// texto/número se debounced 250ms (no vale la pena reescribir la URL en
-// cada tecla); los selects/checkboxes se escriben al instante.
-const DEBOUNCE_MS = 250;
+// sea kilométrico) y si su escritura a la URL se debounced. El texto espera
+// 350 ms tras la última tecla; los campos numéricos ya traen su propio
+// debounce local (NumberField, 300 ms) y aquí solo se agrupan 150 ms (por los
+// deslizadores, que disparan muchos cambios seguidos); los selects/checkboxes
+// se escriben al instante.
+const TEXT_DEBOUNCE_MS = 350;
+const NUMERIC_DEBOUNCE_MS = 150;
 
 type FilterValues = {
   query: string;
@@ -207,6 +210,11 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
   // mientras el servidor resuelve la consulta, para que la lista pueda enseñar
   // esqueletos en vez de seguir mostrando datos que ya no corresponden.
   const [pending, startTransition] = useTransition();
+  // true entre un cambio de filtro y el momento en que se lanza la navegación
+  // (el debounce): el contador debe decir «Buscando…» también en ese hueco.
+  const [settling, setSettling] = useState(false);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
 
   const [query, setQueryRaw] = useState(() => searchParams.get(PARAM_KEYS.query) ?? "");
   const [operation, setOperationRaw] = useState<OperationFilter>(() =>
@@ -364,6 +372,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     if (timerRef.current) clearTimeout(timerRef.current);
 
     function flush() {
+      timerRef.current = null;
+      setSettling(false);
       const params = new URLSearchParams();
       for (const key of Object.keys(PARAM_KEYS) as (keyof FilterValues)[]) {
         const v = values[key];
@@ -372,6 +382,14 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
         params.set(PARAM_KEYS[key], v === true ? "1" : String(v));
       }
       const qs = params.toString();
+      // Misma URL de filtros que la actual (sin página ni ficha): nada que navegar.
+      const cur = new URLSearchParams(searchParamsRef.current.toString());
+      const hadExtras = cur.has("page") || cur.has("ficha");
+      cur.delete("page");
+      cur.delete("ficha");
+      if (!hadExtras && cur.toString() === qs) return;
+      // Una sola navegación en transición: la lista anterior sigue visible y
+      // una navegación nueva sustituye a la que aún no ha terminado.
       startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
     }
 
@@ -379,7 +397,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     if (needsImmediate) {
       flush();
     } else {
-      timerRef.current = setTimeout(flush, DEBOUNCE_MS);
+      setSettling(true);
+      timerRef.current = setTimeout(flush, changedKeys.includes("query") ? TEXT_DEBOUNCE_MS : NUMERIC_DEBOUNCE_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -485,6 +504,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
 
   return {
     pending,
+    settling,
     clearAll,
     query,
     setQuery,

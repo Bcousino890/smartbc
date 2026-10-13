@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown } from "lucide-react";
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // Controles pequeños y reutilizables de la barra y del panel de filtros. Todos
@@ -177,7 +177,15 @@ export function SwitchRow({
 const FIELD =
   "h-10 w-full rounded-xl border border-ink/15 bg-white px-3 text-sm text-ink placeholder:text-ink/50 transition focus:border-ink/40 disabled:cursor-not-allowed disabled:bg-ink/[0.04] disabled:text-ink/45";
 
-/** Campo numérico con sufijo (€, m²…). Solo dígitos: el valor sigue siendo string, como en la URL. */
+/**
+ * Campo numérico con sufijo (€, m²…). Solo dígitos: el valor sigue siendo string, como en la URL.
+ *
+ * Lo tecleado vive en un borrador local: el padre (y por tanto la URL y el
+ * servidor) solo recibe el valor 300 ms después de la última tecla, al salir
+ * del campo o con Intro. Mientras el campo tiene el borrador, el `value` que
+ * llega de fuera NO lo pisa (antes, una re-sincronización a mitad de escritura
+ * dejaba «80» en «8»).
+ */
 export function NumberField({
   value,
   onChange,
@@ -193,13 +201,39 @@ export function NumberField({
   ariaLabel: string;
   allowDecimal?: boolean;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRef = useRef<string | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const commit = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (draftRef.current !== null) onChangeRef.current(draftRef.current);
+  };
+  // Al desmontar con un valor aún sin confirmar (Esc con el panel abierto), se confirma.
+  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); if (draftRef.current !== null) onChangeRef.current(draftRef.current); } }, []);
+
   return (
     <div className="relative">
       <input
         type="text"
         inputMode={allowDecimal ? "decimal" : "numeric"}
-        value={value}
-        onChange={(e) => onChange(e.target.value.replace(allowDecimal ? /[^0-9.]/g : /[^0-9]/g, ""))}
+        value={draft ?? value}
+        onChange={(e) => {
+          const v = e.target.value.replace(allowDecimal ? /[^0-9.]/g : /[^0-9]/g, "");
+          draftRef.current = v;
+          setDraft(v);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(commit, 300);
+        }}
+        onBlur={() => {
+          commit();
+          draftRef.current = null;
+          setDraft(null);
+        }}
+        onKeyDown={(e) => e.key === "Enter" && commit()}
         placeholder={placeholder}
         aria-label={ariaLabel}
         className={cn(FIELD, suffix && "pr-9", FOCUS_RING)}

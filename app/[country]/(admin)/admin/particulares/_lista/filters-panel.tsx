@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter";
 import type { ParticularesFiltersApi } from "../use-particulares-filters";
 import { ADVERTISER_LABEL, CONDITION_OPTIONS, ENERGY_LETTERS, EXTRA_OPTIONS, ORIENTATION_LABEL, POSITION_OPTIONS, RENTAL_KIND_LABEL, SINCE_LABEL, TYPE_GROUPS, VIEW_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
@@ -11,8 +11,11 @@ import { RangeSlider } from "./range-slider";
 import { fmtEur, fmtNum } from "./format";
 
 function Section({ title, defaultOpen = true, active = false, children }: { title: string; defaultOpen?: boolean; active?: boolean; children: React.ReactNode }) {
+  // Las secciones plegadas no montan su contenido (p. ej. el mapa de zona
+  // dibujada) hasta que se abren por primera vez: abrir el panel no hace ese trabajo.
+  const [everOpen, setEverOpen] = useState(defaultOpen);
   return (
-    <details open={defaultOpen} className="group border-b border-ink/10 py-4">
+    <details open={defaultOpen} onToggle={(e) => e.currentTarget.open && setEverOpen(true)} className="group border-b border-ink/10 py-4">
       <summary className={`flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-ink ${FOCUS_RING}`}>
         <span className="flex items-center gap-2">
           {title}
@@ -24,7 +27,7 @@ function Section({ title, defaultOpen = true, active = false, children }: { titl
         </span>
         <span aria-hidden className="text-ink/50 transition group-open:rotate-180">⌄</span>
       </summary>
-      <div className="mt-3 space-y-3">{children}</div>
+      {everOpen && <div className="mt-3 space-y-3">{children}</div>}
     </details>
   );
 }
@@ -70,19 +73,27 @@ export function FiltersPanel({
   onClose,
   f,
   total,
+  busy = false,
   currentUserId,
 }: {
   open: boolean;
   onClose: () => void;
   f: ParticularesFiltersApi;
   total: number;
+  /** La lista se está recalculando: el número de «Ver N anuncios» aún no es el definitivo. */
+  busy?: boolean;
   currentUserId?: string;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  // `onClose` llega como flecha nueva en cada render del padre: si fuera dependencia
+  // del efecto, el foco saltaba al botón de cerrar cada vez que la lista terminaba
+  // de cargar y se perdían las cifras que se estaban tecleando («80» → «8»).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseRef.current();
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -90,7 +101,7 @@ export function FiltersPanel({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   const rent = f.operation === "rent";
@@ -384,8 +395,8 @@ export function FiltersPanel({
           <button type="button" onClick={f.clearAll} className={`h-11 flex-1 rounded-xl border border-ink/20 text-sm font-medium text-ink hover:bg-ink/5 ${FOCUS_RING}`}>
             Limpiar
           </button>
-          <button type="button" onClick={onClose} className={`h-11 flex-[2] rounded-xl bg-ink text-sm font-semibold text-cream-50 hover:bg-ink/90 ${FOCUS_RING}`}>
-            Ver {fmtNum(total)} anuncios
+          <button type="button" onClick={onClose} aria-live="polite" className={`h-11 flex-[2] rounded-xl bg-ink text-sm font-semibold text-cream-50 hover:bg-ink/90 ${FOCUS_RING}`}>
+            {busy ? "Buscando…" : `Ver ${fmtNum(total)} anuncios`}
           </button>
         </footer>
       </aside>
