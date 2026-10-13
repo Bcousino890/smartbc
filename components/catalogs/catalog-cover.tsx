@@ -18,22 +18,19 @@ export interface CatalogCoverData {
   preparedBy?: string | null;
 }
 
+/** La portada escala con el ANCHO de su contenedor (unidades cqi): la misma
+ *  pieza sirve de miniatura de 150 px o de página de 600 px sin desajustes. */
 export function CatalogCover({
   data,
-  fontSizePx = 16,
   className,
 }: {
   data: CatalogCoverData;
-  /** Tamaño base: 16 en una página, ~4 en una miniatura. */
-  fontSizePx?: number;
   className?: string;
 }) {
   const left = ["Selección privada", data.numberLabel].filter(Boolean).join(" · ");
   return (
-    <div
-      className={`${catalogFontVariables} ${styles.cover}${className ? ` ${className}` : ""}`}
-      style={{ fontSize: `${fontSizePx}px` }}
-    >
+    <div className={`${styles.frame}${className ? ` ${className}` : ""}`}>
+    <div className={`${catalogFontVariables} ${styles.cover}`}>
       <div className={styles.kickers}>
         <span>{left}</span>
         <span>{data.edition}</span>
@@ -56,6 +53,7 @@ export function CatalogCover({
           Preparada por <strong>{data.preparedBy}</strong>
         </p>
       ) : null}
+    </div>
     </div>
   );
 }

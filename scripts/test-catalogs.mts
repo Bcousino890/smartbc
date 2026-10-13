@@ -23,6 +23,8 @@ import {
   operationLabel,
   priceLabel,
 } from "../lib/catalogs/format.ts";
+import { isCatalogFixtureMode } from "../lib/catalogs/fixture-mode.ts";
+import { isUuid, isValidOrder, normalizeIntro, normalizeTitle } from "../lib/catalogs/validate.ts";
 
 let failures = 0;
 
@@ -146,6 +148,25 @@ async function main() {
   check("ático", floorLabel(9, true) === "Ático");
   check("planta desconocida", floorLabel(null) === "Planta · sin dato");
   check("ningún formato usa ordinales «ª/º»", ![floorLabel(1), floorLabel(7), floorLabel(0)].some((s) => /[ªº]/.test(s)));
+
+  section("Datos de prueba: solo en desarrollo Y con la variable (E7)");
+  check("producción + variable → NO", !isCatalogFixtureMode({ NODE_ENV: "production", CATALOG_FIXTURES: "1" }));
+  check("desarrollo sin variable → NO", !isCatalogFixtureMode({ NODE_ENV: "development" }));
+  check("test + variable → NO", !isCatalogFixtureMode({ NODE_ENV: "test", CATALOG_FIXTURES: "1" }));
+  check("desarrollo + variable distinta de «1» → NO", !isCatalogFixtureMode({ NODE_ENV: "development", CATALOG_FIXTURES: "true" }));
+  check("desarrollo + CATALOG_FIXTURES=1 → sí", isCatalogFixtureMode({ NODE_ENV: "development", CATALOG_FIXTURES: "1" }));
+
+  section("Validación de entradas");
+  check("uuid válido", isUuid("f0000000-0000-0000-0000-000000000001"));
+  check("uuid inválido", !isUuid("1; drop table") && !isUuid(42) && !isUuid(""));
+  check("título se limpia", (() => { const r = normalizeTitle("  Selección   A  "); return r.ok && r.value === "Selección A"; })());
+  check("título vacío → error", !normalizeTitle("   ").ok);
+  check("título de 161 → error", !normalizeTitle("x".repeat(161)).ok);
+  check("intro vacía → null", (() => { const r = normalizeIntro("  "); return r.ok && r.value === null; })());
+  check("intro de 2001 → error", !normalizeIntro("x".repeat(2001)).ok);
+  check("orden válido", isValidOrder(["f0000000-0000-0000-0000-000000000001", "f0000000-0000-0000-0000-000000000002"]));
+  check("orden con repetidos → no", !isValidOrder(["f0000000-0000-0000-0000-000000000001", "F0000000-0000-0000-0000-000000000001"]));
+  check("orden con basura → no", !isValidOrder(["f0000000-0000-0000-0000-000000000001", "x"]) && !isValidOrder("no"));
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
   if (failures > 0) process.exit(1);

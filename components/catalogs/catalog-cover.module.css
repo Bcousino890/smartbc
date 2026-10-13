@@ -1,8 +1,16 @@
-/* Portada Boutique del catálogo (D17). Todas las medidas en em: el tamaño lo
-   fija font-size en la raíz, así la misma portada sirve de miniatura en la
+/* Portada Boutique del catálogo (D17). Medidas en em sobre una base que escala
+   con el ancho del contenedor (cqi): la misma portada sirve de miniatura en la
    HOME y de página en el lector. Fuentes y colores limitados a esta pieza. */
 
+.frame {
+  container-type: inline-size;
+  width: 100%;
+  height: 100%;
+}
+
 .cover {
+  /* 16 px por cada 600 px de ancho del contenedor. */
+  font-size: 2.6667cqi;
   --paper: #f4ede1;
   --ink: #2b2118;
   --accent: #9b4a2e;

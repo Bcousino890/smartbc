@@ -7,6 +7,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
 import { isStaffRole } from "@/lib/permissions";
 import { isCountry } from "@/lib/country-config";
+import { isHomeOwner } from "@/lib/catalogs/owner";
 import type { AdminUser } from "@/lib/types";
 
 export default async function AdminLayout({
@@ -64,6 +65,11 @@ export default async function AdminLayout({
   // (user_permission_overrides) para el PAÍS ACTIVO. El sidebar oculta los
   // módulos sin "view".
   const permissions = await getEffectivePermissions(profile.id, profile.role, country);
+
+  // Entrada «Mi espacio» del menú (BCP-01). isHomeOwner nunca lanza: ante
+  // cualquier error responde false. Solo decide si se ENSEÑA el enlace; la
+  // página se protege por su cuenta en el servidor.
+  const homeOwner = country === "es" ? await isHomeOwner(profile.id) : false;
 
   // Obtener visitas pendientes para el badge del sidebar
   // Wrapped in try-catch: migration 0027 may not be applied yet on the VPS
@@ -163,7 +169,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} country={country} canSwitchCountry={canSwitchCountry} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} country={country} canSwitchCountry={canSwitchCountry} isHomeOwner={homeOwner} />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
