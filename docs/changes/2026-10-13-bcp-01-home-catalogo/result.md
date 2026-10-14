@@ -720,4 +720,4 @@ Revisión adicional de Codex: no solicitada.
 
 # QA de C2 tras el despliegue
 
-Fabricio fusionó #316. La reproducción de la QA y la propuesta de correcciones y reorganización están en [`qa-c2/`](qa-c2/informe.md). Hay cuatro defectos confirmados: un capítulo de historia inaccesible en escritorio a partir del 7.º (reproducido con datos sintéticos), letra de 11 px en doble página a 1280 × 720, la señal de desplazamiento sobre un botón y fotos sin estado de carga o error. Pendiente de aprobación; sin cambios en la aplicación.
+Fabricio fusionó #316. La reproducción de la QA y la propuesta de correcciones y reorganización están en [`qa-c2/`](qa-c2/informe.md). Hay cuatro defectos confirmados: un capítulo de historia inaccesible en escritorio a partir del 7.º (reproducido con datos sintéticos), letra de 11 px en doble página a 1280 × 720, la señal de desplazamiento sobre un botón y fotos sin estado de carga o error. Decisiones DQ1–DQ8 aprobadas el 14 de octubre de 2026 ([enmienda §0](qa-c2/enmienda.md)); plan de E1 en borrador, pendiente de aprobación para ejecutarse ([`plan-e1.md`](qa-c2/plan-e1.md)). Sin cambios en la aplicación.

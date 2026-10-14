@@ -1,6 +1,25 @@
 # BCP-01 · Enmienda tras la QA de C2: lector y gestor
 
-Fecha: 14 de octubre de 2026. **Estado: propuesta pendiente de aprobación de Fabricio.** No autoriza implementar: si se aprueba, el siguiente paso es el plan de implementación de cada entrega.
+Fecha: 14 de octubre de 2026. **Estado: decisiones DQ1–DQ8 aprobadas por Fabricio** (registro en §0). La aprobación permite actualizar esta enmienda y preparar el plan de **E1** ([`plan-e1.md`](plan-e1.md)); **no** autoriza implementar.
+
+## 0. Registro de aprobación (14 de octubre de 2026)
+
+Fabricio aprueba DQ1–DQ8, la dirección de las maquetas y el orden de entregas **E1 → E2 → E3**, con estas precisiones, que **mandan sobre el texto de las secciones siguientes** cuando difieran:
+
+| | Decisión aprobada |
+| --- | --- |
+| **D-QA1** (DQ1) | El recorrido se agrupa por **extensión y espacio disponible real**, no solo por número de capítulos. Las palabras son una heurística: el encaje se **comprueba renderizado** con los tamaños de letra aprobados. Se conserva todo el contenido, sin relleno. No se promete un número fijo de páginas cuando el material no cabe. |
+| **D-QA2** (DQ2) | Una entrada de más de unas **45 palabras** sale de la apertura y va **íntegra al principio del recorrido**, con un enlace de navegación claro. |
+| **D-QA3** (DQ3) | Sin foto adecuada para el recorrido: una **página de texto cuidadosamente compuesta**, nunca una foto que no corresponde. |
+| **D-QA4** (DQ4) | El recorrido automático se salta las fotos **clasificadas de forma fiable** como `floor_plan`, `street_context` u `other`, con la regla de confianza existente (corregida a mano, o IA ≥ 0,75). Las fotos **sin clasificar siguen siendo elegibles**: E1 no garantiza apartar un mapa o un aviso sin clasificar. No se aplica en silencio ninguna exclusión más amplia. |
+| **D-QA5** (DQ5) | En **E3**: elegir la foto de apertura y excluir fotos **por catálogo**. «No usar esta foto en este catálogo» la **oculta en todo ese catálogo**: galería, miniaturas, apertura, recorrido y, donde aplique, portada del catálogo. Las fotos originales del CRM se conservan y siguen disponibles en todo lo demás. Los respaldos seguros de la portada se definen en la especificación y el plan de E3. **Su migración no se implementa ahora.** |
+| **D-QA6** (DQ6) | Sin descripción vigente: **ficha de datos completa** y **mosaico adaptable de hasta cuatro fotos adicionales elegibles**, con acceso al resto de la galería. Nunca se inventa una descripción ni se muestran diagnósticos internos al cliente. |
+| **D-QA7** (DQ7) | El gestor se organiza en **Viviendas, Contenido, Diseño y Compartir**, con la lista compacta y el editor único aprobados. Se conservan la **navegación global del CRM** y la tipografía Lato del admin: la barra lateral esquemática de las maquetas **no** autoriza rediseñarla. |
+| **D-QA8** (DQ8) | **Diagnósticos de material en Contenido** («Sin descripción», capítulos sin foto adecuada…), **sin llamadas a la IA**. |
+| **D-QA9** | **Valores sin guardar.** Cambiar de sección, cerrar un editor o abrir otra vivienda **conserva los valores escritos durante la sesión de edición actual**, en **todos** los formularios: criterios, título e introducción, portada, contacto y texto de cada vivienda. Nada se guarda ni se publica solo. **No** se promete que los valores sin guardar sobrevivan a una recarga (no está especificado). |
+| **D-QA10** | **Entregas.** <ul><li>**E1:** defectos del lector L1–L4 más DQ1–DQ4 y DQ6, **sin migración**.</li><li>**E2:** organización del gestor y diagnósticos, conservando las acciones de servidor y la semántica de selección existentes.</li><li>**E3:** fotos por catálogo, con migración y plan de recuperación propios.</li><li>PDF (importar/exportar), fuera de este trabajo.</li></ul> |
+
+Sin revisión adicional de Codex.
 
 Base: `origin/main` = `11f4bc1` (C2 fusionado). Evidencia: [informe de reproducción](informe.md). Maquetas: [lector](maquetas/lector.html) y [gestor](maquetas/gestor.html), con capturas en [`capturas/`](capturas/) (`maqueta-*.jpg`). Todo con datos sintéticos.
 
@@ -100,11 +119,11 @@ Cabecera fija con nombre, estado, número de viviendas, **«Vista previa»** y *
   - siguen disponibles, **con las mismas reglas y mensajes**: incluir, excluir, quitar inclusión, volver a permitir, subir/bajar y quitar en manual, pasar a manual o automático, «Volver a mi lista anterior» y «Convertir»;
   - los bloqueos del máximo y los avisos (sin foto, otra operación, no disponible, zonas redundantes) se mantienen;
   - las explicaciones salen en el panel de la vivienda, no repetidas en cada fila.
-- **AC-G3 Contenido (borradores):**
+- **AC-G3 Contenido (borradores) y valores sin guardar (D-QA9):**
   - un editor abierto a la vez;
-  - cerrar el panel, pasar a otra vivienda o cambiar de sección **conserva lo escrito**, sin guardarlo;
+  - cerrar el panel, pasar a otra vivienda o cambiar de sección **conserva lo escrito durante la sesión de edición**, sin guardarlo. Vale para **todos** los formularios: criterios, título e introducción, portada, contacto y texto de cada vivienda;
   - la fila y el filtro marcan «Cambios sin guardar»;
-  - salir de la página con cambios pide la confirmación del navegador;
+  - salir de la página con cambios pide la confirmación del navegador. Una recarga **no** conserva los valores sin guardar, y la interfaz no lo sugiere;
   - nada se guarda ni se publica solo;
   - «Guardar borrador» y «Publicar» siguen separados, con las mismas condiciones para publicar (borrador guardado, sin cambios pendientes, sin bloqueos, avisos confirmados uno a uno).
 - **AC-G4 Contenido (IA):**
@@ -147,6 +166,6 @@ Si DQ1–DQ6 no se aprueban, E1 queda en L1–L4. E1 y E2 no dependen entre sí.
 
 ## 7. Fase y siguiente paso
 
-- **Fase actual:** QA de C2 tras el despliegue. Reproducción terminada y propuesta lista para revisión. No se ha cambiado la aplicación.
-- **Siguiente paso:** Fabricio decide DQ1–DQ8 y el reparto en entregas. Con eso se redacta el plan de implementación de **E1** (y después de E2), que también requiere su aprobación.
+- **Fase actual:** decisiones aprobadas (§0). Plan de E1 en **borrador**, pendiente de aprobación para ejecutarse: [`plan-e1.md`](plan-e1.md). No se ha cambiado la aplicación.
+- **Siguiente paso:** Fabricio aprueba (o corrige) el plan de E1. Solo entonces se prepara el entorno y se implementa E1. E2 y E3 tendrán su propio plan.
 - **Fuera de alcance:** PDF (importar/exportar) y la medición D13 en vivo, que sigue pendiente.

@@ -94,4 +94,4 @@ Aprobadas por Fabricio al encargar C2; sustituyen a lo que §5 dejaba abierto.
 
 ## 9. QA de C2 tras el despliegue (14 de octubre de 2026)
 
-Reproducción de los problemas del lector y propuesta de reorganización del gestor, **pendientes de aprobación**: [informe](qa-c2/informe.md), [enmienda con decisiones DQ1–DQ8 y criterios](qa-c2/enmienda.md) y [maquetas](qa-c2/maquetas/). No cambia nada de lo aprobado en §8 hasta que Fabricio decida.
+Reproducción de los problemas del lector y propuesta de reorganización del gestor, **pendientes de aprobación**: [informe](qa-c2/informe.md), [enmienda con decisiones DQ1–DQ8 y criterios](qa-c2/enmienda.md) y [maquetas](qa-c2/maquetas/). **Aprobado el 14 de octubre de 2026:** DQ1–DQ8, la dirección de las maquetas y el orden E1 → E2 → E3, con las precisiones D-QA1–D-QA10 de la [enmienda §0](qa-c2/enmienda.md). Plan de E1 en borrador: [`qa-c2/plan-e1.md`](qa-c2/plan-e1.md).
