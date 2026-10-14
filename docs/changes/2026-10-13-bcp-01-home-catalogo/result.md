@@ -738,7 +738,7 @@ Rama `fabri/bcp-01-e1`, base `origin/main` = `36aff9aab45e8d8479cca46c5a48aaf2f3
 | `a90ae3f` | T4 · composición adaptativa y sus consumidores (API y consumidores en el mismo commit) |
 | `59975c6` | T5 · fixtures sintéticas de la QA |
 | `97e7f3b`, `cd1dcc0`, `9ea42bc`, `65be14f` | T6 · calibración renderizada y arreglos que encontró la matriz de navegador |
-| siguiente | T7 · este resultado y las capturas |
+| `fa34a03` | T7 · este resultado y las capturas |
 
 ## Qué hay
 
@@ -904,8 +904,9 @@ Capturas en [`qa-c2/capturas-e1/`](qa-c2/capturas-e1/) (JPEG): apertura y recorr
 
 ## PR, CI y merge (E1)
 
-- PR: se abre tras el push; enlace a continuación.
-- CI del último commit: se comprueba tras el push.
+- PR: [#317](https://github.com/Bcousino890/smartbc/pull/317), `fabri/bcp-01-e1` → `main`.
+- `origin/main` antes del push: `36aff9a…`, sin cambios desde la base.
+- CI del último commit: se comprueba tras el push; su resultado está en el PR.
 - Merge: lo decide Fabricio. Puede desplegar; no hay migración.
 
 ## Revisión
