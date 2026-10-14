@@ -717,3 +717,7 @@ Postgres 16.13 temporal en un Mac (Apple M2, 8 GB, macOS 26.5), datos sintético
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# QA de C2 tras el despliegue
+
+Fabricio fusionó #316. La reproducción de la QA y la propuesta de correcciones y reorganización están en [`qa-c2/`](qa-c2/informe.md). Hay cuatro defectos confirmados: un capítulo de historia inaccesible en escritorio a partir del 7.º (reproducido con datos sintéticos), letra de 11 px en doble página a 1280 × 720, la señal de desplazamiento sobre un botón y fotos sin estado de carga o error. Pendiente de aprobación; sin cambios en la aplicación.
