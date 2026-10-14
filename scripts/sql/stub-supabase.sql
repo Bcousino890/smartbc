@@ -140,6 +140,10 @@ CREATE TABLE IF NOT EXISTS property_story_blocks (
   position   int  NOT NULL DEFAULT 0,
   status     text NOT NULL DEFAULT 'generated'
 );
+-- Los mismos índices que ya declara 0144 en producción (no son nuevos).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_story_approved_per_property ON property_story_versions(property_id) WHERE status = 'approved';
+CREATE INDEX IF NOT EXISTS idx_story_versions_property ON property_story_versions(property_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_story_blocks_version ON property_story_blocks(version_id, position);
 ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS ai_class       text;
 ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS ai_confidence  numeric;
 ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS class_override text;

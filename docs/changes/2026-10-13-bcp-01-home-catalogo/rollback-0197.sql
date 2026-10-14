@@ -117,7 +117,6 @@ AS $$
   WHERE c.id = p_catalog
 $$;
 
-DROP FUNCTION IF EXISTS catalog_item_json_c(uuid, uuid, text);
 DROP FUNCTION IF EXISTS catalog_text_states(uuid, uuid);
 DROP FUNCTION IF EXISTS catalog_text_delete(uuid, uuid, uuid);
 DROP FUNCTION IF EXISTS catalog_text_withdraw(uuid, uuid, uuid);

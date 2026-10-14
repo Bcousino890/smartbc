@@ -322,39 +322,6 @@ AS $$
   WHERE p.id = p_property
 $$;
 
--- JSON de una vivienda DENTRO de un catálogo: el de siempre + el texto
--- publicado vigente de ese catálogo + la historia aprobada (si existen).
-CREATE OR REPLACE FUNCTION catalog_item_json_c(p_catalog uuid, p_property uuid, p_key text)
-RETURNS jsonb
-LANGUAGE sql
-STABLE
-SET search_path = public
-AS $$
-  SELECT catalog_item_json(p_property, p_key)
-    || coalesce((
-         SELECT jsonb_build_object('text', jsonb_build_object('b', t.pub_body, 'l', t.pub_lead, 'h', to_jsonb(t.pub_highlights)))
-           FROM catalog_texts t
-          WHERE t.catalog_id = p_catalog AND t.property_id = p_property
-            AND (t.pub_body IS NOT NULL OR t.pub_lead IS NOT NULL)
-            AND t.pub_source_hash = catalog_source_hash(p_property)
-       ), '{}'::jsonb)
-    || coalesce((
-         SELECT jsonb_build_object('story', jsonb_build_object(
-                  'h',  v.source_hash,
-                  'p',  CASE WHEN v.prelude_status = 'approved' THEN v.prelude END,
-                  'ph', CASE WHEN v.prelude_status = 'approved' THEN v.prelude_headline END,
-                  'b',  bl.blocks))
-           FROM property_story_versions v
-           CROSS JOIN LATERAL (
-             SELECT jsonb_agg(jsonb_build_object('c', b.chapter, 't', b.copy) ORDER BY b.position, b.id) AS blocks
-               FROM property_story_blocks b
-              WHERE b.version_id = v.id AND b.status = 'approved' AND btrim(b.copy) <> ''
-           ) bl
-          WHERE v.property_id = p_property AND v.status = 'approved' AND bl.blocks IS NOT NULL
-          LIMIT 1
-       ), '{}'::jsonb)
-$$;
-
 CREATE OR REPLACE FUNCTION catalog_internal_snapshot(p_catalog uuid)
 RETURNS jsonb
 LANGUAGE sql
@@ -387,21 +354,52 @@ AS $$
   )) END
   FROM catalogs c
   CROSS JOIN LATERAL (
-    SELECT CASE WHEN c.mode = 'auto' THEN
-      coalesce((
-        SELECT jsonb_agg(catalog_item_json_c(c.id, s.property_id, s.public_key) ORDER BY s.ord)
+    -- La lista efectiva (automática o manual) y, en la MISMA consulta, el
+    -- texto publicado vigente de este catálogo y la historia aprobada de cada
+    -- vivienda. Una función por vivienda costaba ~30 % más (medido en Z7).
+    SELECT coalesce(jsonb_agg(
+             catalog_item_json(l.property_id, l.public_key)
+             || coalesce(tx.j, '{}'::jsonb)
+             || coalesce(st.j, '{}'::jsonb)
+             ORDER BY l.o1, l.o2), '[]'::jsonb) AS items
+      FROM (
+        SELECT s.property_id, s.public_key, s.ord AS o1, NULL::uuid AS o2
           FROM catalog_select(c.id, c.criteria) s
-      ), '[]'::jsonb)
-    ELSE
-      coalesce((
-        SELECT jsonb_agg(catalog_item_json_c(c.id, ci.property_id, ci.public_key) ORDER BY ci.position, ci.id)
+         WHERE c.mode = 'auto'
+        UNION ALL
+        SELECT ci.property_id, ci.public_key, ci.position::bigint, ci.id
           FROM catalog_items ci
           JOIN properties p ON p.id = ci.property_id
-         WHERE ci.catalog_id = c.id
+         WHERE c.mode <> 'auto'
+           AND ci.catalog_id = c.id
            AND p.archived_at IS NULL
            AND p.status::text NOT IN ('sold', 'archived')
-      ), '[]'::jsonb)
-    END AS items
+      ) l
+      -- Texto del catálogo: solo si está publicado y su fuente no cambió.
+      LEFT JOIN LATERAL (
+        SELECT jsonb_build_object('text', jsonb_build_object('b', t.pub_body, 'l', t.pub_lead, 'h', to_jsonb(t.pub_highlights))) AS j
+          FROM catalog_texts t
+         WHERE t.catalog_id = c.id AND t.property_id = l.property_id
+           AND (t.pub_body IS NOT NULL OR t.pub_lead IS NOT NULL)
+           AND t.pub_source_hash = catalog_source_hash(l.property_id)
+      ) tx ON true
+      -- Historia aprobada (solo lectura; su vigencia se comprueba en TS con
+      -- la huella del motor). Bloques aprobados con texto, en su orden.
+      LEFT JOIN LATERAL (
+        SELECT jsonb_build_object('story', jsonb_build_object(
+                 'h',  v.source_hash,
+                 'p',  CASE WHEN v.prelude_status = 'approved' THEN v.prelude END,
+                 'ph', CASE WHEN v.prelude_status = 'approved' THEN v.prelude_headline END,
+                 'b',  bl.blocks)) AS j
+          FROM property_story_versions v
+          CROSS JOIN LATERAL (
+            SELECT jsonb_agg(jsonb_build_object('c', b.chapter, 't', b.copy) ORDER BY b.position, b.id) AS blocks
+              FROM property_story_blocks b
+             WHERE b.version_id = v.id AND b.status = 'approved' AND btrim(b.copy) <> ''
+          ) bl
+         WHERE v.property_id = l.property_id AND v.status = 'approved' AND bl.blocks IS NOT NULL
+         LIMIT 1
+      ) st ON true
     -- OFFSET 0: sin esto el planificador «aplana» la subconsulta y copia la
     -- expresión en cada uso de it.items, así que con portada elegida la lista
     -- se calculaba DOS veces (medido en Y5: el doble de tiempo).
@@ -422,7 +420,6 @@ REVOKE ALL ON FUNCTION catalog_text_withdraw(uuid, uuid, uuid)                  
 REVOKE ALL ON FUNCTION catalog_text_delete(uuid, uuid, uuid)                            FROM public, anon, authenticated;
 REVOKE ALL ON FUNCTION catalog_text_states(uuid, uuid)                                  FROM public, anon, authenticated;
 REVOKE ALL ON FUNCTION catalog_item_json(uuid, text)                                    FROM public, anon, authenticated;
-REVOKE ALL ON FUNCTION catalog_item_json_c(uuid, uuid, text)                            FROM public, anon, authenticated;
 REVOKE ALL ON FUNCTION catalog_internal_snapshot(uuid)                                  FROM public, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION catalog_source_facts(uuid)                                    TO service_role;
@@ -435,7 +432,6 @@ GRANT EXECUTE ON FUNCTION catalog_text_withdraw(uuid, uuid, uuid)               
 GRANT EXECUTE ON FUNCTION catalog_text_delete(uuid, uuid, uuid)                         TO service_role;
 GRANT EXECUTE ON FUNCTION catalog_text_states(uuid, uuid)                               TO service_role;
 GRANT EXECUTE ON FUNCTION catalog_item_json(uuid, text)                                 TO service_role;
-GRANT EXECUTE ON FUNCTION catalog_item_json_c(uuid, uuid, text)                         TO service_role;
 GRANT EXECUTE ON FUNCTION catalog_internal_snapshot(uuid)                               TO service_role;
 
 COMMIT;

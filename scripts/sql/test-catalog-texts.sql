@@ -135,7 +135,7 @@ RESET ROLE;
 SET ROLE anon;
 SELECT test_util.expect_error('SELECT count(*) FROM catalog_texts', 'insufficient_privilege');
 SELECT test_util.expect_error(format('SELECT catalog_text_publish(%L, %L, %L, NULL)', :'owner', :'cat', :'p2'), 'insufficient_privilege');
-SELECT test_util.expect_error(format('SELECT catalog_item_json_c(%L, %L, %L)', :'cat', :'p2', 'k'), 'insufficient_privilege');
+SELECT test_util.expect_error(format('SELECT catalog_internal_snapshot(%L)', :'cat'), 'insufficient_privilege');
 RESET ROLE;
 SET ROLE authenticated;
 SELECT test_util.expect_error('SELECT count(*) FROM catalog_texts', 'insufficient_privilege');
@@ -145,6 +145,6 @@ SELECT test_util.ok((SELECT relrowsecurity FROM pg_class WHERE relname = 'catalo
 SELECT test_util.ok(NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'catalog_texts'), 'sin políticas: solo service_role');
 SELECT test_util.ok((SELECT bool_and(p.prosecdef = false AND p.proconfig @> ARRAY['search_path=public'])
                        FROM pg_proc p WHERE p.proname IN ('catalog_text_save_draft', 'catalog_text_publish', 'catalog_text_withdraw', 'catalog_text_delete',
-                                                         'catalog_text_states', 'catalog_source_hash', 'catalog_item_json_c', 'catalog_internal_snapshot')),
+                                                         'catalog_text_states', 'catalog_source_hash', 'catalog_internal_snapshot')),
   'funciones nuevas: SECURITY INVOKER y search_path fijo');
 \echo 'test-catalog-texts.sql: todo en verde'
