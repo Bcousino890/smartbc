@@ -401,6 +401,9 @@ export function OpeningPage({
               </span>
             ) : null}
             {showLead ? <LeadAndHighlights item={item} /> : <LeadAndHighlights item={{ ...item, lead: null }} />}
+            {layout.openingSections.map((i) => (
+              <SectionText key={i} section={item.sections[i]} />
+            ))}
             <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
             {!showLead && onContinue ? (
               <button type="button" className={styles.continueLink} onClick={onContinue} data-testid="to-journey">

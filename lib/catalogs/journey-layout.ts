@@ -27,6 +27,8 @@ import type { PublicItem } from "./public-contract";
 //   8. Detalle si hay descripción, características o capítulos de historia
 //      que no caben en el recorrido («La historia completa»).
 //   9. Sin texto ni secciones: ficha breve en la apertura, sin detalle.
+//  10. Un recorrido de menos de TINY_WORDS (sin entrada larga) va entero en la
+//      apertura: ninguna doble página para una sola frase.
 // ============================================================================
 
 export const LEAD_OPENING_MAX_WORDS = 45;
@@ -69,6 +71,9 @@ export interface JourneySpread {
 export interface ItemLayout {
   /** La entrada cabe en la apertura (≤ ~45 palabras) o no hay entrada. */
   introInOpening: boolean;
+  /** Recorrido de menos de TINY_WORDS palabras: sus secciones van en la
+   *  apertura y no hay doble página de recorrido (nada escaso). */
+  openingSections: number[];
   spreads: JourneySpread[];
   /** Quedan secciones fuera del recorrido (están íntegras en el detalle). */
   truncated: boolean;
@@ -169,7 +174,10 @@ export function pairSpreads(pages: JourneyPage[]): JourneySpread[] {
 export function itemLayout(item: PublicItem): ItemLayout {
   const introInOpening = countWords(item.lead) <= LEAD_OPENING_MAX_WORDS;
   const brief = item.sections.length === 0 && !item.description;
-  const all = pairSpreads(packPages(journeyBlocks(item)));
+  const blocks = journeyBlocks(item);
+  const tinyJourney = blocks.length > 0 && blocks.every((b) => b.kind === "section") && blocks.reduce((n, b) => n + b.words, 0) < TINY_WORDS;
+  const openingSections = tinyJourney ? blocks.map((b) => (b.kind === "section" ? b.index : -1)) : [];
+  const all = tinyJourney ? [] : pairSpreads(packPages(blocks));
   const spreads = all.slice(0, MAX_JOURNEY_SPREADS);
   const truncated = all.length > spreads.length;
   // Recorrido truncado: la última página lleva el enlace «Sigue en…». Si no
@@ -192,12 +200,12 @@ export function itemLayout(item: PublicItem): ItemLayout {
   const description = !!item.description;
   const features = item.features.length > 0;
   const detail = !brief && (story || description || features) ? { story, description, features } : null;
-  return { introInOpening, spreads, truncated, detail, brief };
+  return { introInOpening, openingSections, spreads, truncated, detail, brief };
 }
 
 /** Índices de las secciones que se ven en el recorrido (en orden). */
 export function sectionsInJourney(layout: ItemLayout): number[] {
-  const out: number[] = [];
+  const out: number[] = [...layout.openingSections];
   for (const sp of layout.spreads) {
     for (const slot of sp.slots) {
       if (slot.kind !== "text") continue;

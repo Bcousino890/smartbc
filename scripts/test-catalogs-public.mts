@@ -1017,6 +1017,9 @@ async function liveTests() {
     check("(i) entrada de 45 palabras en la apertura; de 46, en el recorrido",
       itemLayout(mk({ lead: W(LEAD_OPENING_MAX_WORDS, "E"), sections: [], description: "x" })).introInOpening
       && !itemLayout(mk({ lead: W(LEAD_OPENING_MAX_WORDS + 1, "E"), sections: [], description: "x" })).introInOpening);
+    // (l) recorrido de una sola frase (9 palabras): va en la apertura, sin doble página.
+    const Ll = mk({ lead: W(30, "Entrada"), sections: [sec(9, null, 1)], description: "Texto completo.", features: [] });
+    check("(l) 9 palabras de recorrido → en la apertura; partes: apertura y detalle", itemLayout(Ll).openingSections.join() === "0" && itemParts(Ll, "spread").join() === "open,detail");
     // (j) página suelta con foto → [foto grande | texto].
     check("(j) página suelta con foto → foto grande y texto", slots(itemLayout(mk({ lead: null, sections: [sec(30, null, 2)], description: "x" }))) === "foto2 | [s0]");
 
