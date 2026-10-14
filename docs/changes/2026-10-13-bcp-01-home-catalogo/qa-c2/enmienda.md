@@ -168,6 +168,8 @@ Si DQ1–DQ6 no se aprueban, E1 queda en L1–L4. E1 y E2 no dependen entre sí.
 
 ## 7. Fase y siguiente paso
 
+> **Actualización (15 de octubre de 2026):** E1 está fusionado (PR #317). El plan de **E2** está en **borrador**, pendiente de que Fabricio apruebe su ejecución: [`plan-e2.md`](plan-e2.md). Lo que sigue en esta sección es el estado del 14 de octubre.
+
 - **Fase actual:** decisiones aprobadas (§0). Plan de E1 en **borrador**, pendiente de aprobación para ejecutarse: [`plan-e1.md`](plan-e1.md). No se ha cambiado la aplicación.
 - **Siguiente paso:** Fabricio aprueba (o corrige) el plan de E1. Solo entonces se prepara el entorno y se implementa E1. E2 y E3 tendrán su propio plan.
 - **Fuera de alcance:** PDF (importar/exportar) y la medición D13 en vivo, que sigue pendiente.
