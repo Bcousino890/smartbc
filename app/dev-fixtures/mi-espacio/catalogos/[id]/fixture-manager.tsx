@@ -4,7 +4,7 @@ import { CatalogManager, type CatalogManagerActions } from "@/components/admin/c
 import type { ShareActions } from "@/components/admin/catalogs/share-panel";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
 import { autoSelect, candidates, isAvailable, sortCandidates, type AdjustmentKind } from "@/lib/catalogs/selection";
@@ -74,6 +74,21 @@ export function FixtureCatalogManager({
     });
   }
   const fxTexts = textsRef.current;
+  // Solo pruebas locales: simula que cambió la ficha de la vivienda i (el texto
+  // publicado deja de valer y el lector de prueba vuelve al siguiente nivel).
+  useEffect(() => {
+    const w = window as unknown as { __fxChangeSource?: (i: number) => Promise<void> };
+    w.__fxChangeSource = async (i: number) => {
+      const it = catRef.current.items[i];
+      if (!it) return;
+      fxTexts.changeSource(it.propertyId);
+      bump((n) => n + 1);
+      await live({ op: "text", index: i, body: null, lead: null });
+    };
+    return () => {
+      delete w.__fxChangeSource;
+    };
+  });
   const explained = (id: string, c: CatalogCriteria, pos: number) => {
     const p = byId.get(id)!;
     const adjustment = adjRef.current.get(id) ?? null;

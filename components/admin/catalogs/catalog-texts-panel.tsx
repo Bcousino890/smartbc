@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { DraftCheck, DraftProposal } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
@@ -130,6 +130,37 @@ function TextEditor({
     setProposal(null);
     if (c) setCheck(c);
     setConfirmed([]);
+  }
+
+  // Al abrir un borrador ya guardado, su comprobación (solo lectura, sin IA):
+  // los avisos y bloqueos se ven siempre, no solo justo después de guardar.
+  useEffect(() => {
+    if (!saved || !(saved.body || saved.lead)) return;
+    let alive = true;
+    actions
+      .preview({ catalogId, propertyId: view.propertyId, body: saved.body, lead: saved.lead, highlights: saved.highlights })
+      .then((r) => {
+        if (alive && r.ok) setCheck((c) => c ?? r.check);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // Solo al abrir: después manda lo que devuelve cada guardado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Tras «Borrar texto»: el editor vuelve a empezar vacío. */
+  function resetAfterDelete() {
+    setBody("");
+    setLead("");
+    setHighlights([]);
+    setRev(null);
+    setBase({ body: "", lead: "", highlights: "" });
+    setCheck(null);
+    setConfirmed([]);
+    setPreview(null);
+    setOrigin("manual");
   }
 
   function cancelAi() {
@@ -361,7 +392,7 @@ function TextEditor({
             type="button"
             onClick={() => {
               if (!window.confirm("¿Borrar el texto de esta vivienda en este catálogo (borrador y publicado)? No se puede deshacer.")) return;
-              run(() => actions.remove({ catalogId, propertyId: view.propertyId }), "Texto borrado.", undefined, undefined, "borrado de texto");
+              run(() => actions.remove({ catalogId, propertyId: view.propertyId }), "Texto borrado.", resetAfterDelete, undefined, "borrado de texto");
             }}
             disabled={pending || busy}
             className="rounded-lg px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
@@ -432,7 +463,7 @@ export function CatalogTextsPanel({
         </div>
         {open === t.propertyId ? (
           <TextEditor
-            key={`${t.propertyId}-${t.draft?.rev ?? 0}-${t.published?.at ?? ""}`}
+            key={t.propertyId}
             catalogId={catalogId}
             view={t}
             actions={actions}
