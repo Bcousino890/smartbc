@@ -617,3 +617,103 @@ Postgres 16 temporal en este Mac, datos sintéticos (`scripts/sql/perf-c1.sh`, 1
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# Ampliación · C2 «Textos del catálogo y recorrido editorial» (Z1–Z7)
+
+## Base y commits
+
+Rama `fabri/bcp-01-c2`, base `06d5e88b913e860ae33d4afb61ac0c4b3dbc4053` (merge de C1), comprobada en remoto al empezar y otra vez antes del push. Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-c2`. `0197` libre en `main` y en los 28 PR abiertos. Reglas aprobadas: [`ampliacion-c-enmienda.md`](ampliacion-c-enmienda.md) §8.
+
+| Commit | Tarea |
+| --- | --- |
+| `409c732` | Z1 · `0197_catalog_texts.sql`, pruebas SQL y `rollback-0197.sql` |
+| `5d80ff3` | Z2 · huella de la historia en un módulo puro (`source-hash.ts`), misma fórmula |
+| `6a3797c` | Z3 · derivación editorial pura (`editorial.ts`) y reglas de texto (`text-rules.ts`) |
+| `ef8f1f8` | Z4 · «Preparar» y «Borrador con IA» solo en el catálogo; comprobación determinista |
+| `ef200e5` | Z5 · gestión de los textos (real y `/dev-fixtures`) |
+| `78a3b74` | Z6 · lector por partes: apertura, recorrido y detalle; hoja continua en móvil |
+| `ab19832` | Z5 · corrección: el editor conservaba mal los avisos al guardar (hallado en las pruebas de navegador) |
+| `269ba73` | Z7 · medición C1/C2 e instantánea en una sola consulta |
+| siguiente | este resultado, la enmienda §8 y las capturas |
+
+## Qué hay
+
+- **Texto por catálogo y vivienda** (`catalog_texts`): borrador y publicado por separado. Guardar un borrador **no** cambia lo que ve el cliente (misma huella). Publicar copia el borrador y **sella la huella de la fuente** (texto de la ficha, características, m², dormitorios, baños, planta y operación; **no** precio ni disponibilidad). Retirar, borrar (con confirmación) y la reserva: si la vivienda sale de la lista, su texto se conserva hasta que se borre.
+- **Prioridad en el lector:** texto publicado y vigente → historia aprobada vigente (comprobada con todas las versiones del motor) → descripción limpia vigente → solo datos y fotos.
+- **Fuente cambiada:** el texto deja de verse, se conserva, la gestión dice qué cambió («Publicado · revisar (cambió los m²)») y el lector baja de nivel. Un cambio de precio no lo invalida.
+- **IA solo al pulsar** con el proveedor ya configurado (hoy DeepSeek; sin cambiar configuración, sin dependencia nueva y sin estimar coste por llamada): «Preparar desde la ficha» usa la limpieza de siempre **sin escribir** en `property_client_descriptions`; «Borrador con IA» recibe solo hechos (sin precios, fotos ni contacto). Devuelven una **propuesta**; 60 s de máximo, «Cancelar», y una respuesta tardía nunca pisa lo editado.
+- **Comprobación al publicar:** teléfono, correo, web y precio **bloquean** (en TS y otra vez en SQL); cifras y elementos que la ficha no dice son avisos que se confirman uno a uno. Los avisos se ven al abrir un borrador guardado.
+- **Recorrido C · Boutique** (doble página): apertura (foto, título, precio, datos clave, entrada breve y hasta 3 puntos verificados) → hasta 3 dobles páginas de secciones breves alternando foto y texto → detalle con la ficha completa y la **descripción íntegra**. Si el texto no cabe en el recorrido, la última doble página enlaza al detalle. Solo los capítulos de una historia aprobada llevan título. **Una página (móvil):** una hoja continua por vivienda con todo el recorrido y la ficha y la descripción plegables.
+- **Índice y folios** cuentan las partes; el índice da la apertura de cada vivienda. **D12 desde cualquier parte:** vivienda quitada → apertura de la siguiente con aviso → índice → estado vacío; si una parte deja de existir (texto acortado o retirado), la anterior que exista; reordenar no te mueve; girar/estrechar conserva la vivienda.
+- **Aislamiento y privacidad:** nada de C2 escribe en `property_client_descriptions`, `properties.description` ni en las historias (prueba SQL); el contrato público no lleva borradores, huellas, fuente sellada ni UUID (prueba).
+
+## Verificaciones (locales, datos sintéticos, E7)
+
+| Comprobación | Resultado |
+| --- | --- |
+| SQL 0192–0197 (`scripts/sql/test-catalogs-core.sh`) | Todos los escenarios en verde, **683 comprobaciones**. Nuevos: **2h** (0197 aplicada dos veces, `rollback-0197.sql`, reaplicación) y **2i** (las pruebas de 0196 pasan sobre 0197); `test-catalog-texts.sql`: compatibilidad de la instantánea sin textos, clase de foto, borrador sin cambio de huella, `draft_changed`, bloqueos sin falsos positivos (años, m²), fuente cambiada, precio que no invalida, reserva, retirar, borrar, aislamiento de tablas globales, permisos, RLS y SECURITY INVOKER |
+| `npm run test:catalogs-public` (en CI) | **219 en verde** (159 de C1 + 60 de C2: huella de la historia idéntica a la anterior, derivación editorial, IA falsa con tiempo agotado y cancelación, comprobación, lector por partes y D12 desde cada parte) |
+| `test:catalogs`, `tsc`, `npm run build`, 8 regresiones (`smartlink`, `viewing-collections`, `client-shortlist`, `portal-links`, `particulares`, `idealista`, `lead-merge`, `zinto-v2`), lint de migraciones | En verde |
+| `test:typography` | Las mismas 15 infracciones que la base |
+| C2 en el navegador (Playwright, `/dev-fixtures`) | **186 en verde**: 1440 × 900 y 1280 × 720 (13 páginas, folios del índice 3/8/12, cada parte con su folio, descripción íntegra en el detalle, texto de 5.938 caracteres con enlace al detalle, Av Pág dentro del texto, galería desde una foto del recorrido, modo desplazamiento, «reducir movimiento»); 362 y 320 px (hoja continua, plegables, barra que no tapa, deslizar); **1, 12 y 24 viviendas** recorriendo **todas** las páginas sin desbordes a los cuatro tamaños (6/48/93 páginas en doble página, 4/15/27 en una); D12 en vivo desde recorrido, detalle y última, estado vacío, galería abierta, reordenar y cambio de composición; privacidad del contrato; gestión con IA falsa (cancelar, respuesta tardía que no pisa, borrador, avisos al reabrir, bloqueos de teléfono y precio, vista previa, publicar en vivo, retirar, fuente cambiada, borrar, reserva al excluir y vuelta); editor a 362 y 320 px |
+| Regresiones del lector (fase 2, PR-A, PR-B, índice, enlace, C1) | 52, 54, 40, 187, 10 y 31 en verde. **Cambios de expectativa justificados:** en doble página cada vivienda tiene ahora varias partes, así que el catálogo de prueba pasa de 7 a **13** páginas y el de una vivienda de 4 a **6** (calculado de forma independiente desde el estado público); «índice → vivienda 2» va a la página **6** y se comprueba que es la que dice el índice; la señal «Sigue leyendo» se busca en el detalle, donde vive ahora la descripción larga; y la comprobación «la barra no tapa» ignora el contenido de un plegable cerrado (no se pinta; comprobado con `checkVisibility()` y captura). En móvil los recuentos no cambian |
+| Medición sintética 20 × 2 publicando y retirando textos | **PASA** 20/20, 40/40, 10 por el camino del vigilante. Tres ejecuciones: máximo **1,46 s** con el equipo saturado (carga 53 por procesos del sistema) y **0,21 s y 0,22 s** con carga normal. C1 y fase 2 repetidas: PASA (0,29 s y 0,19 s). **Local y sintético** |
+
+Capturas en `capturas-c2/` (apertura, recorrido, detalle, historia, solo datos, 24 viviendas, hoja móvil, D12, gestión con avisos, bloqueos, IA que no pisa, fuente cambiada, reserva y medición). La insignia «N» es la de desarrollo de Next.
+
+## Rendimiento (Z7)
+
+Postgres 16.13 temporal en un Mac (Apple M2, 8 GB, macOS 26.5), datos sintéticos (`scripts/sql/perf-c2.sh`, 10 vueltas de calentamiento; p50/p95/máx. en ms). Fases sobre **los mismos datos**: **C1** (0196 con 2 exclusiones, 2 inclusiones y portada en los 20 automáticos), **C2** (0197 sin textos ni historias) y **C2+textos**: texto de **5.879 caracteres** (el máximo es 6.000) publicado en **las 600 viviendas de los 40 catálogos** e historia aprobada de 7 capítulos en 1 de cada 3 propiedades. Es el peor caso, no el uso esperado. Tabla completa: `medidas/perf-c2-2026-10-14.tsv`. **No es producción** y **no demuestra D13**.
+
+| Propiedades | Instantánea 24 viviendas (p50 · bytes) C1 → C2 → C2+textos | Vigilante, 5 enlaces auto (p50 / p95) | 20 enlaces auto (p50 / p95) | 20 enlaces manuales (p50) |
+| --- | --- | --- | --- | --- |
+| 1.000 | 4,4 → 5,4 → 7,4 ms · 38 KB → 38 KB → **221 KB** | 30 / 31 → 34 / 35 → **41 / 42** | 119 / 127 → 134 / 136 → **165 / 167** | 15 → 25 → 44 |
+| 2.000 | 6,2 → 7,2 → 9,8 ms · 38 KB → 38 KB → 214 KB | 38 / 39 → 41 / 42 → **48 / 49** | 148 / 153 → 164 / 168 → **193 / 196** | 15 → 25 → 45 |
+| 10.000 | 24 → 24 → 26 ms · 38 KB → 38 KB → 214 KB | 115 / 310 → 108 / 116 → 113 / 116 | 445 / 491 → 437 / 517 → 461 / 473 | 16 → 25 → 47 |
+
+- **Coste del código nuevo sin textos:** +1 ms por instantánea automática y ~+0,6 ms por catálogo manual de 12 (dos búsquedas por vivienda); en la pasada del vigilante, **+10–12 %** con 5 y 20 enlaces automáticos (1.000–2.000).
+- **Con textos largos en todo:** la instantánea de 24 viviendas pasa de 38 KB a **~190–245 KB** y la pasada de 20 enlaces automáticos sube un 30–38 % sobre C1. La instantánea solo viaja al lector cuando cambia la huella; la pasada del vigilante solo la recalcula para comparar.
+- **Referencias** (no puertas): con 1.000 y 2.000, 5 enlaces automáticos quedan **por debajo de 50 ms** en las tres fases (con 2.000 y textos en todo, 48–49 ms, justo debajo) y 20 enlaces **por debajo de 300 ms** (165–196 ms). Con 10.000, igual que en PR-B y C1, 20 automáticos superan los 300 ms en las tres fases; la diferencia de C2 queda dentro del ruido del equipo.
+- **Hallazgo y corrección durante la medición:** la primera versión de 0197 añadía una función SQL por vivienda (`catalog_item_json_c`). Medido: ~30 % más lenta que unir el texto y la historia en la misma consulta de la lista (con 1.000, 5 enlaces y textos en todo: 53 → 41 ms). La instantánea usa ahora dos `LEFT JOIN LATERAL` (mismo JSON, comprobado) y la función desaparece; la suite SQL completa sigue en verde.
+- El stub de pruebas declara los índices de historias que **ya existen en producción** (0144); antes faltaban y la medición penalizaba C2 con lecturas secuenciales. Sin índices globales nuevos ni disparadores. D13 (≤ 2 s) en vivo sigue **pendiente**.
+
+## Compatibilidad del despliegue y recuperación
+
+- **Tras tu merge:** el despliegue compila, aplica `0197` y cambia de versión. Mientras tanto, el build anterior funciona con la base nueva: la instantánea trae claves de más (`text`, `story` y la clase `k` de las fotos) que el código anterior ignora. Si `0197` fallara, el script de despliegue no cambia de versión y sigue la anterior (`scripts/vps-autodeploy.sh`); el código nuevo necesita sus funciones para la gestión de textos.
+- **Una actualización de más en lectores abiertos:** las viviendas con **historia aprobada** o con **fotos clasificadas** cambian la instantánea, así que esos catálogos cambian de huella una vez tras el despliegue y los lectores abiertos se actualizan solos. Sin historias ni clases, la huella no cambia (probado).
+- **Si se vuelve al build anterior** sin tocar la base: el lector vuelve a la descripción limpia (ignora textos e historias); los textos siguen guardados pero no se pueden editar.
+- **Revertir de verdad:** `git revert` del merge + `rollback-0197.sql` (lo ejecuta una persona). **Antes**, copia de seguridad: `\copy (SELECT * FROM catalog_texts) TO 'catalog_texts_backup.csv' CSV HEADER` (va al principio del archivo). **Se pierden todos los textos de los catálogos**, borradores y publicados; las historias, las descripciones limpias y las fichas no se tocan; la instantánea vuelve a la de C1 y las huellas cambian otra vez. Después, quitar la fila de `schema_migrations`. Probado en el Postgres temporal.
+
+## QA en vivo de Fabricio (tras el merge)
+
+1. Abre un catálogo de QA con su enlace en otra ventana (escritorio) y en el móvil.
+2. **Preparar desde la ficha (IA)** en una vivienda con descripción: es una llamada real al proveedor configurado (la pagas tú, no la estimamos). Comprueba que aparece la propuesta sin guardarse, prueba «Cancelar», y escribe en el texto mientras trabaja: debe ofrecer «Usar la propuesta» sin pisarte.
+3. **Borrador con IA** en otra: revisa los avisos (cifras o elementos que la ficha no dice), corrige o confirma uno a uno, **Guarda** y mira que el lector no cambia. Cierra y reabre el editor: los avisos siguen.
+4. Escribe un teléfono, una web o un precio: «Publicar» queda bloqueado y dice por qué.
+5. **Publica:** el lector cambia en vivo (apertura con tu entrada y puntos, recorrido y detalle). **Retira:** vuelve al nivel anterior y el borrador se conserva.
+6. **Fuente cambiada:** cambia los m² o una característica de esa ficha en el CRM. La gestión dice «Publicado · revisar (cambió …)» y el lector deja de mostrar el texto. Cambia solo el precio: el texto sigue.
+7. **Reserva:** excluye o quita una vivienda con texto: queda en «Textos en reserva»; vuelve a incluirla y recupera su texto. «Borrar texto» pide confirmación.
+8. **Aislamiento:** tras «Preparar», la descripción para clientes de esa ficha y su SmartLink no cambian.
+9. **Recorrido:** a 1440 y 1280 × 720, recorre una vivienda con texto, otra con historia aprobada, otra con descripción limpia y otra sin texto; comprueba los folios del índice, teclado, deslizar, galería, modo desplazamiento y «reducir movimiento». En el móvil (362 y 320), la hoja continua y los plegables.
+10. **D12 entre partes:** con el lector en el recorrido o el detalle de una vivienda, quítala: debe abrir la siguiente con aviso; con la última, el índice; sin ninguna, el estado vacío.
+11. **D13:** 20 ensayos × 2 lectores con `?medir=1`, publicando y retirando textos (algunos «Sin aviso inmediato»). Las cifras de aquí son locales y sintéticas: no sirven como resultado en vivo.
+12. Al terminar, revoca el enlace de QA.
+
+## Pendiente o no demostrado
+
+- La QA en vivo de arriba, incluido D13 (≤ 2 s) en el VPS con 2 lectores y 20 ensayos.
+- El rendimiento con los datos reales (1.632 propiedades, 818 candidatas, 813 con foto) no está medido; el tamaño 1.000 sintético es el más parecido.
+- El coste real de la IA depende del proveedor configurado; no se ha estimado.
+- PDF (importar/exportar): no empezado, como pide el encargo.
+
+## PR, CI y merge (C2)
+
+- **PR:** se abre tras el push; enlace a continuación.
+- **`origin/main` antes del push:** `06d5e88…` (sin cambios desde la base); `0197` libre en `main` y en los 28 PR abiertos.
+- **CI del último commit:** se comprueba tras el push; su resultado está en el PR.
+- **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0197`; el rollback del build no deshace el esquema.
+- Se conservan el worktree y la rama.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.
