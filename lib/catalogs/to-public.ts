@@ -1,3 +1,4 @@
+import { deriveEditorial } from "./editorial";
 import { createHash } from "node:crypto";
 import { ATICO_FLOOR, resolveFloor } from "@/lib/floor";
 import { editionLabel, floorLabel, operationLabel, priceLabel } from "./format";
@@ -62,7 +63,12 @@ export interface InternalItem {
   features_manual: string[] | null;
   floor_override: string | null;
   clean: { src: string | null; description: string | null; features: string[] | null } | null;
-  photos: Array<{ u: string; w: number | null; h: number | null; c: boolean | null }>;
+  /** 0197: clase de la foto (`k`) solo si se conoce. */
+  photos: Array<{ u: string; w: number | null; h: number | null; c: boolean | null; k?: string | null }>;
+  /** 0197 (C2): texto publicado del catálogo, solo si es vigente. */
+  text?: { b: string | null; l: string | null; h: string[] | null } | null;
+  /** 0197 (C2): historia aprobada (huella, entrada, capítulos aprobados). */
+  story?: { h: string | null; p: string | null; ph?: string | null; b: Array<{ c: string; t: string }> | null } | null;
 }
 
 /** Mismo hash que client-description.ts: descripción recortada + NUL +
@@ -101,14 +107,16 @@ export function photoPath(slug: string, idx: number): string {
   return `/p/${encodeURIComponent(slug)}/${idx}.webp`;
 }
 
-function toPublicPhotos(it: InternalItem): { photos: PublicPhoto[]; coverIndex: number } {
+function toPublicPhotos(it: InternalItem): { photos: PublicPhoto[]; coverIndex: number; classes: Array<string | null> } {
   const seen = new Set<string>();
   const photos: PublicPhoto[] = [];
+  const classes: Array<string | null> = [];
   let coverIndex = -1;
   for (const ph of it.photos ?? []) {
     if (!ph || typeof ph.u !== "string" || seen.has(ph.u)) continue;
     seen.add(ph.u);
     const idx = photos.length;
+    classes.push(typeof ph.k === "string" ? ph.k : null);
     if (ph.c && coverIndex < 0) coverIndex = idx;
     photos.push({
       src: photoPath(it.slug, idx),
@@ -117,7 +125,7 @@ function toPublicPhotos(it: InternalItem): { photos: PublicPhoto[]; coverIndex: 
       orientation: orientation(positiveInt(ph.w), positiveInt(ph.h)),
     });
   }
-  return { photos, coverIndex: coverIndex < 0 ? 0 : coverIndex };
+  return { photos, coverIndex: coverIndex < 0 ? 0 : coverIndex, classes };
 }
 
 /** Índice público (el del proxy) de la foto `u` de una vivienda, o -1. */
@@ -163,7 +171,23 @@ export function toPublicItem(it: InternalItem): PublicItem {
     it.title,
     it.description,
   );
-  const { photos, coverIndex } = toPublicPhotos(it);
+  const { photos, coverIndex, classes } = toPublicPhotos(it);
+  const ed = deriveEditorial({
+    description: it.description,
+    features: it.features,
+    features_manual: it.features_manual,
+    bedrooms: it.bedrooms,
+    bathrooms: it.bathrooms,
+    square_meters: it.square_meters,
+    zone: it.zone,
+    subzone: it.subzone,
+    cleanDescription: cleanValid ? (clean!.description ?? "").trim() || null : null,
+    cleanFeatures: cleanValid ? cleanStrings(clean!.features) : [],
+    text: it.text ?? null,
+    story: it.story ?? null,
+    photos: classes.map((k, i) => ({ u: String(i), k })),
+    coverIndex: coverIndex < 0 ? 0 : coverIndex,
+  });
   return {
     key: String(it.key),
     title: String(it.title ?? "").trim() || "Sin título",
@@ -181,8 +205,11 @@ export function toPublicItem(it: InternalItem): PublicItem {
     bathrooms: nonNegativeInt(it.bathrooms),
     squareMeters: positiveInt(it.square_meters),
     floor: floorN === ATICO_FLOOR ? floorLabel(null, true) : floorLabel(floorN),
-    description: cleanValid ? (clean!.description ?? "").trim() || null : null,
-    features: cleanValid ? cleanStrings(clean!.features) : [],
+    description: ed.description,
+    features: ed.features,
+    lead: ed.lead,
+    highlights: ed.highlights,
+    sections: ed.sections.map((x) => ({ heading: x.heading, text: x.text, photo: x.photo })),
     photos,
     coverIndex,
   };

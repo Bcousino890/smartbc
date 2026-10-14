@@ -10,28 +10,51 @@ import {
   galleryStep,
   goTo,
   initialState,
+  journeyGroups,
+  journeyTruncated,
   openGallery,
+  openingFolio,
   pageIndex,
   pagesOf,
   samePage,
+  setLayout,
   step,
   updateDelay,
+  type ItemPart,
   type PageRef,
+  type ReaderLayout,
   type ReaderState,
 } from "@/lib/catalogs/reader-state";
 import { SyncClient, type Connectivity, type EventSourceLike, type FetchStateResult } from "@/lib/catalogs/sync-client";
 import { Gallery } from "./gallery";
-import { ClosingPage, CoverPage, IndexPage, IntroPage, PhotoPage, StatePage, TextPage, type PhotoUrl } from "./pages";
+import {
+  ClosingPage,
+  CoverPage,
+  DescriptionPage,
+  DetailFactsPage,
+  IndexPage,
+  IntroPage,
+  ItemSheetPage,
+  JourneyPhotoPage,
+  JourneyTextPage,
+  OpeningPage,
+  PhotoPage,
+  StatePage,
+  type PhotoUrl,
+} from "./pages";
 import styles from "./reader.module.css";
 
-// Lector del catálogo compartido (BCP-01 T8/T9/T10). Páginas o modo
+// Lector del catálogo compartido (BCP-01 T8/T9/T10; C2 Z6). Páginas o modo
 // desplazamiento, teclado, deslizar, índice, galería, «reducir movimiento»,
-// actualizaciones en vivo con D12 y, con ?medir=1, la medición de D13.
+// actualizaciones en vivo con D12 y, con ?medir=1, la medición de D13. En
+// doble página cada vivienda tiene varias partes (apertura, recorrido,
+// detalle); en una página, una hoja continua.
 
 type Action =
   | { type: "goto"; page: PageRef }
   | { type: "step"; delta: 1 | -1 }
   | { type: "seen"; page: PageRef }
+  | { type: "layout"; layout: ReaderLayout }
   | { type: "apply"; next: PublicCatalogState }
   | { type: "gallery"; key: string; photo: number }
   | { type: "galleryStep"; delta: 1 | -1 }
@@ -46,6 +69,8 @@ function reducer(state: ReaderState, a: Action): ReaderState {
       return step(state, a.delta);
     case "seen":
       return samePage(state.page, a.page) ? state : { ...state, page: a.page };
+    case "layout":
+      return setLayout(state, a.layout);
     case "apply":
       return applyUpdate(state, a.next);
     case "gallery":
@@ -60,9 +85,24 @@ function reducer(state: ReaderState, a: Action): ReaderState {
 }
 
 const MODE_KEY = "bcp-lector-modo";
+/** La misma condición que la doble página del CSS. */
+const SPREAD_QUERY = "(min-width: 900px) and (min-height: 620px)";
+
+function pageRef(p: PageRef): string {
+  return p.kind === "item" ? `item:${p.key}:${p.part}` : p.kind;
+}
 
 function pageId(p: PageRef): string {
-  return p.kind === "item" ? `pg-item-${p.key}` : `pg-${p.kind}`;
+  return p.kind === "item" ? `pg-item-${p.key}-${p.part}` : `pg-${p.kind}`;
+}
+
+function parsePageRef(raw: string): PageRef {
+  if (raw.startsWith("item:")) {
+    const rest = raw.slice(5);
+    const at = rest.lastIndexOf(":");
+    return { kind: "item", key: rest.slice(0, at), part: rest.slice(at + 1) as ItemPart };
+  }
+  return { kind: raw } as PageRef;
 }
 
 function usePhotoUrl(photoBase: string): PhotoUrl {
@@ -134,7 +174,15 @@ export function CatalogReader({
     };
     sync();
     mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
+    // Composición: doble página o una página (girar, redimensionar).
+    const lq = window.matchMedia(SPREAD_QUERY);
+    const syncLayout = () => dispatch({ type: "layout", layout: lq.matches ? "spread" : "single" });
+    syncLayout();
+    lq.addEventListener("change", syncLayout);
+    return () => {
+      mq.removeEventListener("change", sync);
+      lq.removeEventListener("change", syncLayout);
+    };
   }, []);
 
   // ── Actualizaciones en vivo: se aplican al terminar un paso de página en
@@ -274,7 +322,7 @@ export function CatalogReader({
         document.getElementById(pageId(page))?.scrollIntoView({ behavior: lowMotionRef.current ? "auto" : "smooth", block: "start" });
         return;
       }
-      markTurn(pageIndex(s.catalog, page) >= pageIndex(s.catalog, s.page) ? 1 : -1);
+      markTurn(pageIndex(s.catalog, page, s.layout) >= pageIndex(s.catalog, s.page, s.layout) ? 1 : -1);
       dispatch({ type: "goto", page });
       window.scrollTo({ top: 0 });
     },
@@ -284,8 +332,8 @@ export function CatalogReader({
   const stepBy = useCallback(
     (delta: 1 | -1) => {
       const s = stateRef.current;
-      const pages = pagesOf(s.catalog);
-      const j = pageIndex(s.catalog, s.page) + delta;
+      const pages = pagesOf(s.catalog, s.layout);
+      const j = pageIndex(s.catalog, s.page, s.layout) + delta;
       if (j < 0 || j >= pages.length) return;
       go(pages[j]);
     },
@@ -310,7 +358,7 @@ export function CatalogReader({
       // Dentro de un texto que se desplaza por dentro, Av/Re Pág desplazan el
       // texto (no pasan de página); las flechas ← → siguen pasando página.
       if ((e.key === "PageDown" || e.key === "PageUp") && t?.closest("[data-scroll-region]")) return;
-      const pages = pagesOf(s.catalog);
+      const pages = pagesOf(s.catalog, s.layout);
       if (e.key === "ArrowRight" || e.key === "PageDown") stepBy(1);
       else if (e.key === "ArrowLeft" || e.key === "PageUp") stepBy(-1);
       else if (e.key === "Home") go(pages[0]);
@@ -330,15 +378,13 @@ export function CatalogReader({
       (entries) => {
         const best = entries.filter((x) => x.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (!best) return;
-        const raw = (best.target as HTMLElement).dataset.pageRef ?? "";
-        const page: PageRef = raw.startsWith("item:") ? { kind: "item", key: raw.slice(5) } : ({ kind: raw } as PageRef);
-        dispatch({ type: "seen", page });
+        dispatch({ type: "seen", page: parsePageRef((best.target as HTMLElement).dataset.pageRef ?? "") });
       },
       { threshold: [0.35, 0.6] },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [scrollMode, state.catalog]);
+  }, [scrollMode, state.catalog, state.layout]);
 
   // D12 en modo desplazamiento: lleva a la vivienda siguiente.
   useEffect(() => {
@@ -360,15 +406,14 @@ export function CatalogReader({
     }, 0);
   }
 
-  const pages = useMemo(() => pagesOf(state.catalog), [state.catalog]);
-  const current = pageIndex(state.catalog, state.page);
-  const firstItemPage = 3;
+  const pages = useMemo(() => pagesOf(state.catalog, state.layout), [state.catalog, state.layout]);
+  const current = pageIndex(state.catalog, state.page, state.layout);
+  const folioOf = (p: PageRef) => pageIndex(state.catalog, p, state.layout) + 1;
 
   function renderSpread(p: PageRef, animate: boolean) {
     const c = state.catalog;
     const anim = animate ? (dir === 1 ? styles.anim : styles.animBack) : "";
-    const ref = p.kind === "item" ? `item:${p.key}` : p.kind;
-    const common = { id: pageId(p), "data-page-ref": ref };
+    const common = { id: pageId(p), "data-page-ref": pageRef(p) };
     if (p.kind === "cover") {
       return (
         <div key={`cover-${animate}`} {...common} className={`${styles.spread} ${anim}`}>
@@ -380,7 +425,11 @@ export function CatalogReader({
       return (
         <div key={`index-${animate}`} {...common} className={`${styles.spread} ${c.intro ? styles.two : ""} ${anim}`}>
           {c.intro ? <IntroPage catalog={c} /> : null}
-          <IndexPage catalog={c} firstItemPage={firstItemPage} onOpen={(key) => go({ kind: "item", key })} />
+          <IndexPage
+            catalog={c}
+            folioOf={(key) => openingFolio(c, key, state.layout)}
+            onOpen={(key) => go({ kind: "item", key, part: "open" })}
+          />
         </div>
       );
     }
@@ -394,23 +443,56 @@ export function CatalogReader({
     const i = c.items.findIndex((it) => it.key === p.key);
     const item = c.items[i];
     if (!item) return null;
+    const gallery = (photo: number) => dispatch({ type: "gallery", key: item.key, photo });
+    const folio = folioOf(p);
+    const key = `item-${p.key}-${p.part}-${state.layout}-${animate}`;
+    const photoSizes = "(min-width: 900px) and (min-height: 620px) 45vh, 100vw";
+
+    if (state.layout === "single") {
+      return (
+        <div key={key} {...common} className={`${styles.spread} ${styles.two} ${anim}`} data-part="sheet">
+          <PhotoPage item={item} index={i} url={url} sizes={photoSizes} onOpenGallery={gallery} />
+          <ItemSheetPage catalog={c} item={item} index={i} folio={folio} url={url} onOpenGallery={gallery} />
+        </div>
+      );
+    }
+    if (p.part === "open") {
+      return (
+        <div key={key} {...common} className={`${styles.spread} ${styles.two} ${anim}`} data-part="open">
+          <PhotoPage item={item} index={i} url={url} sizes={photoSizes} onOpenGallery={gallery} />
+          <OpeningPage catalog={c} item={item} index={i} folio={folio} url={url} onOpenGallery={gallery} />
+        </div>
+      );
+    }
+    if (p.part === "detail") {
+      return (
+        <div key={key} {...common} className={`${styles.spread} ${item.description ? styles.two : ""} ${anim}`} data-part="detail">
+          <DetailFactsPage item={item} index={i} folio={item.description ? null : folio} url={url} onOpenGallery={gallery} />
+          {item.description ? <DescriptionPage item={item} folio={folio} /> : null}
+        </div>
+      );
+    }
+    // Recorrido: la foto alterna de lado en cada doble página.
+    const n = Number(p.part.slice(1));
+    const groups = journeyGroups(item);
+    const group = groups[n - 1] ?? [];
+    const photo = group.map((g) => item.sections[g]?.photo).find((x): x is number => typeof x === "number" && !!item.photos[x]);
+    const last = n === groups.length;
+    const text = (
+      <JourneyTextPage
+        item={item}
+        sections={group}
+        folio={folio}
+        more={last && journeyTruncated(item)}
+        onDetail={last ? () => go({ kind: "item", key: item.key, part: "detail" }) : null}
+      />
+    );
+    const pic = photo !== undefined ? <JourneyPhotoPage item={item} photo={photo} url={url} onOpenGallery={gallery} /> : null;
     return (
-      <div key={`item-${p.key}-${animate}`} {...common} className={`${styles.spread} ${styles.two} ${anim}`}>
-        <PhotoPage
-          item={item}
-          index={i}
-          url={url}
-          sizes="(min-width: 900px) and (min-height: 620px) 45vh, 100vw"
-          onOpenGallery={(photo) => dispatch({ type: "gallery", key: item.key, photo })}
-        />
-        <TextPage
-          catalog={c}
-          item={item}
-          index={i}
-          page={firstItemPage + i}
-          url={url}
-          onOpenGallery={(photo) => dispatch({ type: "gallery", key: item.key, photo })}
-        />
+      <div key={key} {...common} className={`${styles.spread} ${pic ? styles.two : ""} ${anim}`} data-part={p.part}>
+        {pic && n % 2 === 1 ? pic : null}
+        {text}
+        {pic && n % 2 === 0 ? pic : null}
       </div>
     );
   }

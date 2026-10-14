@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/db/admin";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
+import { CLEAN_SCHEMA, cleanSystemPrompt, fallbackClean, parseCleanCompletion } from "./client-text";
 
 // ============================================================================
 // Descripción y características de una ficha, aptas para enseñar al cliente
@@ -19,60 +20,6 @@ import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-const LANGUAGE_NAME: Record<string, string> = {
-  es: "español",
-  en: "inglés",
-  fr: "francés",
-  it: "italiano",
-  de: "alemán",
-  ar: "árabe",
-  tr: "turco",
-  he: "hebreo",
-};
-
-function systemPrompt(language: string) {
-  const lang = LANGUAGE_NAME[language] ?? "español";
-  return `Vas a preparar la descripción y las características de una vivienda para enseñárselas a un cliente de una agencia de personal shopper inmobiliario. El texto original lo escribió OTRA inmobiliaria en un portal.
-
-Devuelve el texto en ${lang} (tradúcelo fielmente si no lo está).
-
-Elimina por completo:
-- Nombres de inmobiliarias, agencias, marcas, agentes o personas, y cualquier frase que hable de ellas ("X Real Estate le presenta…", "nuestra agencia", "nuestro equipo").
-- Datos de contacto: teléfonos, emails, webs, URLs, WhatsApp, horarios de atención, "contáctenos", "llámenos", "pida cita".
-- Referencias o códigos del anuncio ("Ref. 1234", "referencia…").
-- Honorarios, comisiones de agencia y avisos legales del portal o de la agencia.
-
-Reglas estrictas:
-- NO inventes, cambies ni resumas ningún dato de la vivienda (metros, habitaciones, baños, planta, precio, zona, calidades, orientación, reformas…). Quita solo lo de la lista.
-- Si al quitar una frase queda un hueco raro, arréglalo para que se lea con naturalidad.
-- Las características: misma lista, traducida, quitando solo las que nombren agencias, contacto o referencias.
-- Responde en JSON conforme al esquema pedido.`;
-}
-
-const SCHEMA = {
-  type: "object",
-  properties: {
-    description: { type: "string" },
-    features: { type: "array", items: { type: "string" } },
-  },
-  required: ["description", "features"],
-} as const;
-
-const RISKY_SENTENCE =
-  /(inmobiliaria|real\s+estate|agencia|agency|ag[eé]ncia|ref(\.|erencia)\b|reference|contact|llám|llam[ae]\b|whatsapp|www\.|https?:|@|\+?\d[\d\s.-]{7,}\d|honorarios|comisi[oó]n)/i;
-
-function fallbackClean(description: string, features: string[]) {
-  const sentences = description.split(/(?<=[.!?])\s+|\n+/);
-  return {
-    description: sentences
-      .filter((s) => !RISKY_SENTENCE.test(s))
-      .join(" ")
-      .replace(/[ \t]{2,}/g, " ")
-      .trim(),
-    features: features.filter((f) => !RISKY_SENTENCE.test(f)),
-  };
-}
 
 export type ClientDescription = { description: string | null; features: string[] };
 
@@ -115,19 +62,12 @@ export async function getClientDescription(
   for (let attempt = 0; attempt < 2 && !clean; attempt++) {
     try {
       const raw = await aiComplete({
-        system: systemPrompt(language),
+        system: cleanSystemPrompt(language),
         userText: JSON.stringify({ description, features }),
         maxTokens: 4000,
-        jsonSchema: SCHEMA as unknown as Record<string, unknown>,
+        jsonSchema: CLEAN_SCHEMA as unknown as Record<string, unknown>,
       });
-      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as any;
-      if (typeof parsed?.description !== "string" || !Array.isArray(parsed?.features)) {
-        throw new Error("respuesta de la IA sin el formato pedido");
-      }
-      clean = {
-        description: parsed.description.trim(),
-        features: parsed.features.filter((f: unknown) => typeof f === "string" && f.trim()),
-      };
+      clean = parseCleanCompletion(raw);
       fromAi = true;
     } catch (err) {
       if (err instanceof AINotConfiguredError) break;

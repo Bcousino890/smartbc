@@ -107,11 +107,12 @@ export function IntroPage({ catalog }: { catalog: PublicCatalog }) {
 export function IndexPage({
   catalog,
   onOpen,
-  firstItemPage,
+  folioOf,
 }: {
   catalog: PublicCatalog;
   onOpen: (key: string) => void;
-  firstItemPage: number;
+  /** Folio de la apertura de cada vivienda (cuenta todas sus partes). */
+  folioOf: (key: string) => number;
 }) {
   return (
     <section className={`${styles.page} ${styles.indexPage}`} aria-label="Índice">
@@ -139,7 +140,7 @@ export function IndexPage({
                   {it.reserved ? <span className={styles.ixReserved}>Reservada</span> : null}
                 </span>
                 <span className={styles.ixDots} aria-hidden="true" />
-                <span className={styles.ixPage}>{firstItemPage + i}</span>
+                <span className={styles.ixPage}>{folioOf(it.key)}</span>
                 <span className={styles.ixMeta}>
                   <span>{it.place ?? "Zona · sin dato"}</span>
                   <span className={styles.ixPrice}>{it.price}</span>
@@ -213,24 +214,9 @@ export function PhotoPage({
   );
 }
 
-export function TextPage({
-  catalog,
-  item,
-  index,
-  page,
-  url,
-  onOpenGallery,
-}: {
-  catalog: PublicCatalog;
-  item: PublicItem;
-  index: number;
-  page: number;
-  url: PhotoUrl;
-  onOpenGallery: (photo: number) => void;
-}) {
+function ItemHeader({ catalog, item, index }: { catalog: PublicCatalog; item: PublicItem; index: number }) {
   return (
-    <section className={`${styles.page} ${styles.textPage}`} aria-label={item.title}>
-      <ScrollRegion label={item.title}>
+    <>
       <p className={styles.runner}>
         {catalog.title} · {catalog.edition}
       </p>
@@ -245,39 +231,294 @@ export function TextPage({
         {item.price}
         {item.reserved ? <span className={styles.reserved}>Reservada</span> : null}
       </p>
-      <KeyFacts item={item} />
-      {item.description ? (
-        <>
-          <span className={styles.ornament} aria-hidden="true">
-            ✦
-          </span>
-          <p className={styles.desc}>{item.description}</p>
-        </>
+    </>
+  );
+}
+
+/** Entrada breve y hasta tres puntos verificados (literales de la ficha). */
+function LeadAndHighlights({ item }: { item: PublicItem }) {
+  return (
+    <>
+      {item.lead ? (
+        <p className={styles.leadText} data-testid="lead">
+          {item.lead}
+        </p>
       ) : null}
-      {item.features.length ? (
-        <ul className={styles.features} aria-label="Características">
-          {item.features.map((f, i) => (
-            <li key={`${i}-${f}`}>{f}</li>
+      {item.highlights.length ? (
+        <ul className={styles.highlights} aria-label="Puntos destacados" data-testid="highlights">
+          {item.highlights.slice(0, 3).map((h) => (
+            <li key={h}>{h}</li>
           ))}
         </ul>
       ) : null}
-      {item.photos.length > 1 ? (
-        <>
-          <div className={styles.thumbs}>
-            {item.photos.slice(0, 8).map((p, i) => (
-              <button key={p.src} type="button" className={styles.thumb} onClick={() => onOpenGallery(i)} aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url(p.src, 640)} alt="" loading="lazy" decoding="async" />
-              </button>
-            ))}
-          </div>
-          <button type="button" className={styles.galleryOpen} onClick={() => onOpenGallery(0)}>
-            Ver las {item.photos.length} fotos
+    </>
+  );
+}
+
+function Thumbs({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
+  if (item.photos.length <= 1) return null;
+  return (
+    <>
+      <div className={styles.thumbs}>
+        {item.photos.slice(0, 8).map((p, i) => (
+          <button key={p.src} type="button" className={styles.thumb} onClick={() => onOpenGallery(i)} aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url(p.src, 640)} alt="" loading="lazy" decoding="async" />
           </button>
-        </>
-      ) : null}
+        ))}
+      </div>
+      <button type="button" className={styles.galleryOpen} onClick={() => onOpenGallery(0)}>
+        Ver las {item.photos.length} fotos
+      </button>
+    </>
+  );
+}
+
+function Features({ item }: { item: PublicItem }) {
+  if (!item.features.length) return null;
+  return (
+    <ul className={styles.features} aria-label="Características">
+      {item.features.map((f, i) => (
+        <li key={`${i}-${f}`}>{f}</li>
+      ))}
+    </ul>
+  );
+}
+
+/** Ficha completa: todos los datos estructurados, con «sin dato» explícito. */
+function FullFacts({ item }: { item: PublicItem }) {
+  const rows: Array<[string, string | null]> = [
+    ["Operación", item.operation],
+    ["Precio", item.price],
+    ["Zona", item.place],
+    ["Superficie", item.squareMeters === null ? null : `${item.squareMeters.toLocaleString("es-ES")} m²`],
+    ["Dormitorios", item.bedrooms === null ? null : item.bedrooms.toLocaleString("es-ES")],
+    ["Baños", item.bathrooms === null ? null : item.bathrooms.toLocaleString("es-ES")],
+    ["Planta", item.floor.endsWith("sin dato") ? null : item.floor],
+  ];
+  return (
+    <dl className={styles.factList} data-testid="full-facts">
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{v ?? <span className={styles.unknown}>sin dato</span>}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function SectionText({ section }: { section: PublicItem["sections"][number] }) {
+  return (
+    <div className={styles.section} data-testid="journey-section">
+      {section.heading ? <h3 className={styles.sectionHeading}>{section.heading}</h3> : null}
+      <p className={styles.sectionText}>{section.text}</p>
+    </div>
+  );
+}
+
+/** Doble página · apertura (derecha): datos clave, entrada y puntos. */
+export function OpeningPage({
+  catalog,
+  item,
+  index,
+  folio,
+  url,
+  onOpenGallery,
+}: {
+  catalog: PublicCatalog;
+  item: PublicItem;
+  index: number;
+  folio: number;
+  url: PhotoUrl;
+  onOpenGallery: (photo: number) => void;
+}) {
+  return (
+    <section className={`${styles.page} ${styles.textPage}`} aria-label={item.title} data-part="open">
+      <ScrollRegion label={item.title}>
+        <ItemHeader catalog={catalog} item={item} index={index} />
+        <KeyFacts item={item} />
+        {item.lead || item.highlights.length ? (
+          <span className={styles.ornament} aria-hidden="true">
+            ✦
+          </span>
+        ) : null}
+        <LeadAndHighlights item={item} />
+        <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
       </ScrollRegion>
-      <p className={styles.folio}>— {page} —</p>
+      <p className={styles.folio}>— {folio} —</p>
+    </section>
+  );
+}
+
+/** Doble página · recorrido: una o dos secciones breves. */
+export function JourneyTextPage({
+  item,
+  sections,
+  folio,
+  more,
+  onDetail,
+}: {
+  item: PublicItem;
+  sections: number[];
+  folio: number | null;
+  /** Quedan secciones fuera del recorrido: enlace a la descripción completa. */
+  more: boolean;
+  onDetail: (() => void) | null;
+}) {
+  return (
+    <section className={`${styles.page} ${styles.textPage} ${styles.journeyPage}`} aria-label={`${item.title} · recorrido`}>
+      <ScrollRegion label={`${item.title} · recorrido`}>
+        <p className={styles.runner}>{item.title}</p>
+        {sections.map((i) => (
+          <SectionText key={i} section={item.sections[i]} />
+        ))}
+        {more && onDetail ? (
+          <button type="button" className={styles.galleryOpen} onClick={onDetail} data-testid="to-detail">
+            Sigue en la descripción completa →
+          </button>
+        ) : null}
+      </ScrollRegion>
+      {folio !== null ? <p className={styles.folio}>— {folio} —</p> : null}
+    </section>
+  );
+}
+
+export function JourneyPhotoPage({
+  item,
+  photo,
+  url,
+  onOpenGallery,
+}: {
+  item: PublicItem;
+  photo: number;
+  url: PhotoUrl;
+  onOpenGallery: (photo: number) => void;
+}) {
+  return (
+    <section className={`${styles.page} ${styles.photoPage}`} aria-label={`Foto de ${item.title}`}>
+      <FramedPhoto
+        photo={item.photos[photo]}
+        url={url}
+        sizes="(min-width: 900px) and (min-height: 620px) 45vh, 100vw"
+        label={`Ver las fotos de ${item.title}`}
+        onOpen={() => onOpenGallery(photo)}
+      />
+    </section>
+  );
+}
+
+/** Doble página · detalle (izquierda): ficha completa y características. */
+export function DetailFactsPage({
+  item,
+  index,
+  folio,
+  url,
+  onOpenGallery,
+}: {
+  item: PublicItem;
+  index: number;
+  folio: number | null;
+  url: PhotoUrl;
+  onOpenGallery: (photo: number) => void;
+}) {
+  return (
+    <section className={`${styles.page} ${styles.textPage}`} aria-label={`${item.title} · ficha completa`} data-part="detail">
+      <ScrollRegion label={`${item.title} · ficha completa`}>
+        <p className={styles.kicker}>
+          <span className={styles.itemN}>{n2(index)}</span> La vivienda en detalle
+        </p>
+        <h2 className={styles.detailTitle}>{item.title}</h2>
+        <FullFacts item={item} />
+        <Features item={item} />
+        <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
+      </ScrollRegion>
+      {folio !== null ? <p className={styles.folio}>— {folio} —</p> : null}
+    </section>
+  );
+}
+
+/** Doble página · detalle (derecha): la descripción completa, íntegra. */
+export function DescriptionPage({ item, folio }: { item: PublicItem; folio: number }) {
+  return (
+    <section className={`${styles.page} ${styles.textPage}`} aria-label={`${item.title} · descripción completa`}>
+      <ScrollRegion label={`${item.title} · descripción completa`}>
+        <p className={styles.kicker}>Descripción completa</p>
+        <span className={styles.ornament} aria-hidden="true">
+          ✦
+        </span>
+        <p className={styles.desc} data-testid="full-description">
+          {item.description}
+        </p>
+      </ScrollRegion>
+      <p className={styles.folio}>— {folio} —</p>
+    </section>
+  );
+}
+
+/**
+ * Una página (móvil): la vivienda es UNA hoja continua. Apertura, el
+ * recorrido entero alternando con sus fotos, y la ficha completa y la
+ * descripción íntegra plegables.
+ */
+export function ItemSheetPage({
+  catalog,
+  item,
+  index,
+  folio,
+  url,
+  onOpenGallery,
+}: {
+  catalog: PublicCatalog;
+  item: PublicItem;
+  index: number;
+  folio: number;
+  url: PhotoUrl;
+  onOpenGallery: (photo: number) => void;
+}) {
+  return (
+    <section className={`${styles.page} ${styles.textPage}`} aria-label={item.title} data-part="sheet">
+      <ScrollRegion label={item.title}>
+        <ItemHeader catalog={catalog} item={item} index={index} />
+        <KeyFacts item={item} />
+        {item.lead || item.highlights.length ? (
+          <span className={styles.ornament} aria-hidden="true">
+            ✦
+          </span>
+        ) : null}
+        <LeadAndHighlights item={item} />
+        {item.sections.map((sec, i) => (
+          <div key={i} className={styles.sheetSection}>
+            {sec.photo !== null && item.photos[sec.photo] ? (
+              <div className={styles.sheetPhoto}>
+                <FramedPhoto
+                  photo={item.photos[sec.photo]}
+                  url={url}
+                  sizes="100vw"
+                  label={`Ver las fotos de ${item.title}`}
+                  onOpen={() => onOpenGallery(sec.photo!)}
+                />
+              </div>
+            ) : null}
+            <SectionText section={sec} />
+          </div>
+        ))}
+        <details className={styles.fold} data-testid="fold-facts">
+          <summary>Ficha completa</summary>
+          <FullFacts item={item} />
+          <Features item={item} />
+        </details>
+        {item.description ? (
+          <details className={styles.fold} data-testid="fold-description">
+            <summary>Descripción completa</summary>
+            <p className={styles.desc} data-testid="full-description">
+              {item.description}
+            </p>
+          </details>
+        ) : null}
+        <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
+      </ScrollRegion>
+      <p className={styles.folio}>— {folio} —</p>
     </section>
   );
 }

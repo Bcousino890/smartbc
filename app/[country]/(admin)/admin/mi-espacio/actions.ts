@@ -30,6 +30,9 @@ import {
   searchSavedListings,
 } from "@/lib/catalogs/queries";
 import type { CatalogItemView, CoverPhotoOption } from "@/lib/catalogs/types";
+import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
+import { AI_TIMEOUT_MS, checkDraft, draftFromFacts, pendingWarnings, prepareFromSource, type DraftCheck, type DraftProposal } from "@/lib/catalogs/ai-draft";
+import { previewJourney, textSourceFor } from "@/lib/catalogs/texts";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
 import { notifyCatalogChanged } from "@/lib/catalogs/sync-hub-instance";
@@ -500,6 +503,175 @@ export async function listCoverPhotosAction(input: {
     const { data: cat } = await db().from("catalogs").select("id").eq("id", input.catalogId).eq("owner_id", profile.id).maybeSingle();
     if (!cat) return fail("forbidden");
     return { ok: true as const, photos: await listCoverPhotos(input.catalogId, input.propertyId) };
+  }));
+}
+
+// ── Textos del catálogo (ampliación C2, 0197) ──────────────────────────────
+// Todo se queda en el catálogo: nunca properties.description, ni la caché de
+// descripciones limpias, ni historias. La IA solo PROPONE (no guarda ni
+// publica); el dueño guarda el borrador y lo publica tras revisarlo.
+
+/** ¿La vivienda está en el catálogo (o tiene texto en reserva)? Lo comprueba SQL. */
+async function textAllowed(ownerId: string, catalogId: string, propertyId: string): Promise<boolean> {
+  const { data } = await db().rpc("catalog_text_states", { p_actor: ownerId, p_catalog: catalogId });
+  return ((data ?? []) as any[]).some((r) => r.property_id === propertyId);
+}
+
+function aiError(err: unknown): string {
+  if (err instanceof AINotConfiguredError) return "La IA no está configurada (Configuración → IA).";
+  const msg = err instanceof Error ? err.message : "";
+  if (msg === "source_empty") return "La ficha no tiene texto que preparar. Escríbelo a mano o pide un borrador con IA a partir de los datos.";
+  if (/abort|timeout/i.test(msg) || (err instanceof Error && err.name === "TimeoutError")) return "La IA ha tardado demasiado. Inténtalo de nuevo.";
+  return "La IA no ha podido preparar el texto. Inténtalo de nuevo o escríbelo a mano.";
+}
+
+const realAi = (o: Parameters<typeof aiComplete>[0]) => aiComplete(o);
+
+/** «Preparar desde la ficha»: limpia el texto de la ficha. Devuelve una
+ *  PROPUESTA (no guarda nada ni toca la caché compartida). */
+export async function prepareCatalogTextAction(input: {
+  catalogId: string;
+  propertyId: string;
+}): Promise<ActionResult<{ proposal: DraftProposal; check: DraftCheck }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
+    const src = await textSourceFor(input.propertyId);
+    if (!src) return fail("property_not_found");
+    try {
+      const proposal = await prepareFromSource(
+        { description: src.property.description, features: src.property.features ?? [] },
+        realAi,
+        AbortSignal.timeout(AI_TIMEOUT_MS),
+      );
+      return { ok: true as const, proposal, check: checkDraft({ body: proposal.body, lead: proposal.lead, highlights: [] }, src.source) };
+    } catch (err) {
+      return { ok: false as const, error: aiError(err) };
+    }
+  }));
+}
+
+/** «Borrador con IA»: a partir de hechos conocidos. Devuelve una PROPUESTA. */
+export async function draftCatalogTextAction(input: {
+  catalogId: string;
+  propertyId: string;
+}): Promise<ActionResult<{ proposal: DraftProposal; check: DraftCheck }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
+    const src = await textSourceFor(input.propertyId);
+    if (!src) return fail("property_not_found");
+    try {
+      const proposal = await draftFromFacts(src.source, realAi, AbortSignal.timeout(AI_TIMEOUT_MS));
+      return { ok: true as const, proposal, check: checkDraft({ body: proposal.body, lead: proposal.lead, highlights: [] }, src.source) };
+    } catch (err) {
+      return { ok: false as const, error: aiError(err) };
+    }
+  }));
+}
+
+/** Guarda el borrador (con la revisión que se abrió: si cambió, no pisa). */
+export async function saveCatalogTextDraftAction(input: {
+  catalogId: string;
+  propertyId: string;
+  body: string | null;
+  lead: string | null;
+  highlights: string[];
+  origin?: "manual" | "ai_clean" | "ai_draft";
+  expectedRev: number | null;
+} & MeasureOpts): Promise<ActionResult<Saved & { rev: number; check: DraftCheck }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_text_save_draft", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_body: input.body,
+      p_lead: input.lead,
+      p_highlights: Array.isArray(input.highlights) ? input.highlights.slice(0, 3) : [],
+      p_origin: input.origin ?? "manual",
+      p_expected_rev: input.expectedRev,
+    });
+    if (error) return fail(error);
+    const src = await textSourceFor(input.propertyId);
+    const check = src ? checkDraft({ body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) : { blockers: [], warnings: [] };
+    return { ...(await saved(profile.id, input.catalogId, input.expectedRev ?? 0, before, input)), rev: Number(data), check };
+  }));
+}
+
+/** Publica el borrador guardado. Contacto, URL o precio bloquean; los avisos
+ *  (cifras o elementos que no están en la ficha) hay que confirmarlos. */
+export async function publishCatalogTextAction(input: {
+  catalogId: string;
+  propertyId: string;
+  expectedRev: number;
+  confirmed: string[];
+} & MeasureOpts): Promise<ActionResult<Saved & { check: DraftCheck }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const { data: row } = await db()
+      .from("catalog_texts")
+      .select("draft_body, draft_lead, draft_highlights, draft_rev")
+      .eq("catalog_id", input.catalogId)
+      .eq("property_id", input.propertyId)
+      .maybeSingle();
+    if (!row || !(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("text_not_found");
+    if (Number(row.draft_rev) !== Number(input.expectedRev)) return fail("draft_changed");
+    const src = await textSourceFor(input.propertyId);
+    if (!src) return fail("property_not_found");
+    const check = checkDraft({ body: row.draft_body, lead: row.draft_lead, highlights: row.draft_highlights ?? [] }, src.source);
+    if (check.blockers.length) return fail(check.blockers[0].code);
+    if (pendingWarnings(check, Array.isArray(input.confirmed) ? input.confirmed : []).length) return fail("text_unconfirmed");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_text_publish", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_expected_rev: input.expectedRev,
+    });
+    if (error) return fail(error);
+    return { ...(await saved(profile.id, input.catalogId, data, before, input)), check };
+  }));
+}
+
+/** Retira lo publicado (el borrador se conserva). */
+export async function withdrawCatalogTextAction(input: { catalogId: string; propertyId: string } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_text_withdraw", { p_actor: profile.id, p_catalog: input.catalogId, p_property: input.propertyId });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Borra el texto (borrador y publicado). Solo a petición expresa. */
+export async function deleteCatalogTextAction(input: { catalogId: string; propertyId: string } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_text_delete", { p_actor: profile.id, p_catalog: input.catalogId, p_property: input.propertyId });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Vista previa del recorrido con el texto del editor (sin guardar). */
+export async function previewCatalogTextAction(input: {
+  catalogId: string;
+  propertyId: string;
+  body: string | null;
+  lead: string | null;
+  highlights: string[];
+}): Promise<ActionResult<{ preview: NonNullable<Awaited<ReturnType<typeof previewJourney>>>; check: DraftCheck }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
+    const preview = await previewJourney(input.propertyId, { body: input.body, lead: input.lead, highlights: input.highlights ?? [] });
+    const src = await textSourceFor(input.propertyId);
+    if (!preview || !src) return fail("property_not_found");
+    return { ok: true as const, preview, check: checkDraft({ body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) };
   }));
 }
 

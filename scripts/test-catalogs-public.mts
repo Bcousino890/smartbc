@@ -19,6 +19,10 @@ import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
 import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
+import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
+import { deriveEditorial, highlightCandidates, leadFrom, type EditorialInput } from "../lib/catalogs/editorial.ts";
+import { textBlocker } from "../lib/catalogs/text-rules.ts";
+import { checkDraft, draftFromFacts, draftUserText, pendingWarnings, prepareFromSource, type AiFn, type DraftSource } from "../lib/catalogs/ai-draft.ts";
 import {
   coverPhotoOf,
   clientDescriptionSrc,
@@ -33,12 +37,20 @@ import { SyncHub, HUB_CHECK_MS, HUB_HEARTBEAT_MS, type HubEvent, type TokenState
 import { SyncClient, type EventSourceLike, type FetchStateResult } from "../lib/catalogs/sync-client.ts";
 import {
   applyUpdate,
+  goTo,
+  itemParts,
+  journeyGroups,
+  journeyTruncated,
+  openingFolio,
+  pageIndex,
+  setLayout,
   initialState,
   openGallery,
   pagesOf,
   step,
   updateDelay,
   PAGE_TURN_MS,
+  REMOVED_LAST_NOTICE,
   REMOVED_NOTICE,
 } from "../lib/catalogs/reader-state.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
@@ -167,6 +179,9 @@ function pubCatalog(keys: string[], title = "Catálogo"): PublicCatalog {
       floor: "Planta · sin dato",
       description: null,
       features: [],
+      lead: null,
+      highlights: [],
+      sections: [],
       photos: [{ src: `/p/${key}/0.webp`, width: null, height: null, orientation: "unknown" as const }, { src: `/p/${key}/1.webp`, width: null, height: null, orientation: "unknown" as const }],
       coverIndex: 0,
     })),
@@ -289,6 +304,147 @@ async function liveTests() {
     const c3 = normalizeCriteria({ operation: "sale", price_min: 1 });
     check("con rango, sin precio no entra; sin rango sí (al final)", c3.ok && !autoSelect(props, c3.criteria).ids.includes("c") && d.ok && autoSelect(props, { ...d.criteria, operation: "sale" }).ids.at(-1) === "c");
     check("búsqueda manual: sin foto obligatoria", d.ok && candidates(props, d.criteria, { requirePhoto: false }).some((x) => x.id === "d") && !candidates(props, d.criteria, { requirePhoto: true }).some((x) => x.id === "d"));
+  }
+
+  section("Ampliación C2 · huella de la historia extraída del motor (Z2)");
+  {
+    // La fórmula que tenía engine.ts en línea, copiada tal cual como referencia.
+    const sha = (x: string) => createHash("sha256").update(x).digest("hex");
+    const facts = { bedrooms: 3, bathrooms: 2, squareMeters: 142, features: ["Ascensor", "Terraza", "Trastero"] };
+    const description = "  Ático con terraza. Salón doble con chimenea.  ";
+    const inline = sha(JSON.stringify([4.1, description.trim(), facts.bedrooms, facts.bathrooms, facts.squareMeters, facts.features]));
+    const input = { description, ...facts };
+    check("misma huella que la fórmula en línea de engine.ts (versión 4.1)", ENGINE_VERSION === 4.1 && storySourceHash(input) === inline);
+    const nulls = { description: null, bedrooms: null, bathrooms: null, squareMeters: null, features: [] as string[] };
+    check("con datos vacíos también coincide", storySourceHash(nulls) === sha(JSON.stringify([4.1, "", null, null, null, []])));
+    const v2 = sha(JSON.stringify([2, description.trim(), 3, 2, 142, facts.features]));
+    const v1 = sha(JSON.stringify([description.trim(), 3, 2, 142, facts.features]));
+    check("vigente con cualquier versión conocida del motor (4.1, 4, 3, 2 y la primera)", isStorySourceCurrent(v2, input) && isStorySourceCurrent(v1, input)
+      && isStorySourceCurrent(storySourceHash(input, 4), input) && isStorySourceCurrent(storySourceHash(input, 3), input));
+    check("no vigente si cambia la fuente o la huella es otra", !isStorySourceCurrent(inline, { ...input, bedrooms: 4 })
+      && !isStorySourceCurrent(inline, { ...input, features: ["Ascensor"] }) && !isStorySourceCurrent("otra", input) && !isStorySourceCurrent(null, input));
+    check("engine.ts usa el módulo extraído (sin fórmula propia)", (() => {
+      const src = readFileSync("lib/services/story/engine.ts", "utf8");
+      return src.includes('from "./source-hash"') && !/JSON\.stringify\(\[ENGINE_VERSION/.test(src);
+    })());
+  }
+
+  section("Ampliación C2 · recorrido editorial (Z3)");
+  {
+    const CLEAN = "Piso exterior y muy luminoso en una finca señorial. Cocina reformada con salida a un patio tranquilo. " +
+      "Los tres dormitorios dan a la calle y el principal tiene baño en suite. El salón se abre a un balcón corrido.";
+    const base = (o: Partial<EditorialInput> = {}): EditorialInput => ({
+      description: "Texto del portal. Llame al 600 123 456.", features: ["Ascensor"], features_manual: ["Trastero"],
+      bedrooms: 3, bathrooms: 2, square_meters: 110, zone: "Madrid", subzone: "Delicias",
+      cleanDescription: CLEAN, cleanFeatures: ["Ascensor", "Terraza de 20 m²", "Calefacción central", "Llame al 600 111 222"],
+      text: null, story: null,
+      photos: [{ u: "0" }, { u: "1", k: "kitchen" }, { u: "2", k: "living_room" }, { u: "3", k: "terrace_outdoor" }, { u: "4" }],
+      coverIndex: 0, ...o,
+    });
+    const storyHash = storySourceHash({ description: "Texto del portal. Llame al 600 123 456.", bedrooms: 3, bathrooms: 2, squareMeters: 110, features: ["Ascensor", "Trastero"] });
+    const story = { h: storyHash, p: "Un piso con luz de la mañana a la tarde.", b: [
+      { c: "kitchen", t: "Cocina reformada con salida a un patio tranquilo y despensa original." },
+      { c: "living", t: "El salón se abre a un balcón corrido sobre la calle, con techos altos." },
+      { c: "building", t: "Portería." },
+      { c: "outdoor", t: "Terraza de 20 m² orientada al sur, con vistas despejadas." },
+    ] };
+
+    const c = deriveEditorial(base());
+    check("nivel limpio: entrada = 1–2 primeras frases literales (≤ 45 palabras)", c.level === "clean"
+      && c.lead === "Piso exterior y muy luminoso en una finca señorial. Cocina reformada con salida a un patio tranquilo.", c.lead ?? "");
+    check("nivel limpio: secciones SIN títulos y con fotos en su orden (sin la de portada)", c.sections.length === 1
+      && c.sections[0].heading === null && c.sections[0].photo === 1 && c.sections[0].text.startsWith("Los tres dormitorios"));
+    check("descripción completa íntegra, carácter a carácter", c.description === CLEAN);
+    check("puntos verificados: literales, de la lista cerrada, sin contacto (máx. 3)",
+      JSON.stringify(c.highlights) === JSON.stringify(["Ascensor", "Terraza de 20 m²", "Calefacción central"]), JSON.stringify(c.highlights));
+    check("detalle: características limpias + manuales, sin contacto y sin duplicados",
+      JSON.stringify(c.features) === JSON.stringify(["Ascensor", "Terraza de 20 m²", "Calefacción central", "Trastero"]), JSON.stringify(c.features));
+
+    const st = deriveEditorial(base({ story }));
+    check("historia vigente: entrada = la aprobada; capítulos con su título", st.level === "story" && st.lead === story.p
+      && JSON.stringify(st.sections.map((x) => x.heading)) === JSON.stringify(["Cocina y comedor", "Salón y luz", "Vida al aire libre"]), JSON.stringify(st.sections.map((x) => x.heading)));
+    check("historia: foto de la clase de cada capítulo (sin repetir, sin la portada)",
+      JSON.stringify(st.sections.map((x) => x.photo)) === JSON.stringify([1, 2, 3]), JSON.stringify(st.sections.map((x) => x.photo)));
+    check("historia: el micro-capítulo pasa al detalle", !st.sections.some((x) => x.text === "Portería.") && st.features.includes("Portería"));
+    check("historia: la descripción completa sigue siendo la limpia vigente", st.description === CLEAN);
+
+    const stale = deriveEditorial(base({ story, bedrooms: 4 }));
+    check("historia con la fuente cambiada: no se usa (vuelve el nivel limpio)", stale.level === "clean" && !stale.sections.some((x) => x.heading));
+
+    const tx = deriveEditorial(base({ story, text: { b: "Una vivienda pensada para vivir con calma. Tiene una cocina amplia y luminosa. " + "Frase de relleno. ".repeat(80), l: "Calma y luz en Delicias", h: ["Terraza de 20 m²", "Inventado"] } }));
+    check("texto del catálogo vigente: manda sobre la historia y la limpia", tx.level === "text" && tx.lead === "Calma y luz en Delicias");
+    check("texto: los puntos elegidos valen solo si siguen siendo candidatos", JSON.stringify(tx.highlights) === JSON.stringify(["Terraza de 20 m²"]));
+    check("texto: sin título inventado y descripción completa íntegra", tx.sections.every((x) => x.heading === null) && tx.sections.length > 1
+      && tx.description?.startsWith("Una vivienda pensada") === true && tx.description?.endsWith("Frase de relleno.") === true);
+    check("texto sin entrada propia: la entrada son sus primeras frases y no se repiten en las secciones",
+      (() => { const r = deriveEditorial(base({ text: { b: "Primera frase corta. Segunda frase corta. Tercera frase.", l: null, h: [] } }));
+        return r.lead === "Primera frase corta. Segunda frase corta." && r.sections.length === 1 && r.sections[0].text === "Tercera frase."; })());
+
+    const facts = deriveEditorial(base({ cleanDescription: null, cleanFeatures: [] }));
+    check("sin texto: solo datos y fotos (sin secciones ni entrada inventadas)", facts.level === "facts" && facts.lead === null
+      && facts.sections.length === 0 && facts.description === null && JSON.stringify(facts.highlights) === JSON.stringify(["Trastero"]));
+    const leak = deriveEditorial(base({ cleanDescription: "Piso muy luminoso con vistas. Más información en www.agencia.com o en el 600 123 456. Cocina amplia." }));
+    check("privacidad: ninguna sección ni entrada con contacto, URL o agencia", !JSON.stringify(leak.sections).match(/agencia|600 123|www\./) && !(leak.lead ?? "").match(/www\./));
+    const long = "Frase larga de una descripción real con detalles de la vivienda y su entorno. ".repeat(40).trim();
+    const lg = deriveEditorial(base({ cleanDescription: long }));
+    check("descripción de 3.000 caracteres: íntegra en el detalle y repartida sin perder texto", lg.description === long
+      && long.length >= 3000 && (lg.lead + " " + lg.sections.map((x) => x.text).join(" ")).replace(/\s+/g, " ") === long.replace(/\s+/g, " "));
+    check("ninguna sección vacía", [c, st, tx, lg].every((r) => r.sections.every((x) => x.text.trim().length > 0)));
+    check("entrada: una primera frase de > 45 palabras no se recorta (sin entrada)", leadFrom(("palabra ").repeat(50) + ".").lead === null);
+    check("candidatos: deduplicados sin tildes", JSON.stringify(highlightCandidates(["Calefacción", "calefaccion"], [])) === JSON.stringify(["Calefacción"]));
+    const pubC = toPublicCatalog(snap([item({ text: { b: "Texto propio del catálogo. Con dos frases.", l: null, h: [] },
+      story: { h: "x", p: "Entrada", b: [{ c: "living", t: "Salón." }] } })]));
+    check("contrato público con texto e historia: sin claves prohibidas, UUID ni huellas internas",
+      findForbiddenKeys(pubC, FORBIDDEN_PUBLIC_KEYS).length === 0 && !UUID_RE.test(JSON.stringify(pubC))
+      && !/"(h|b|l|p|ph|story|level)":/.test(JSON.stringify(pubC)) && pubC.items[0].description === "Texto propio del catálogo. Con dos frases.");
+    check("bloqueos de publicación iguales a SQL (contacto, URL, correo, precio; años y m² no)",
+      textBlocker("Llame al 600 123 456") === "text_has_contact" && textBlocker("www.x.es") === "text_has_contact" && textBlocker("a@b.com") === "text_has_contact"
+      && textBlocker("Por 590.000 €") === "text_has_price" && textBlocker("1.500 euros al mes") === "text_has_price"
+      && textBlocker("Reformado entre 1990-2000, con 120 m² y 3 dormitorios.") === null);
+  }
+
+  section("Ampliación C2 · borradores con IA inyectada y comprobación (Z4)");
+  {
+    const calls: Array<Parameters<AiFn>[0]> = [];
+    const fake = (replies: string[]): AiFn => async (o) => {
+      calls.push(o);
+      const r = replies.shift();
+      if (r === undefined) throw new Error("sin respuesta");
+      return r;
+    };
+    const p1 = await prepareFromSource({ description: "Piso exterior. Llame a Inmo Sol al 600 123 456.", features: ["Ascensor"] },
+      fake([JSON.stringify({ description: "Piso exterior.", features: ["Ascensor"] })]));
+    check("preparar desde la ficha: propuesta limpia (no guarda nada)", p1.body === "Piso exterior." && p1.origin === "ai_clean" && p1.lead === null);
+    check("preparar: misma limpieza que la descripción para clientes, en español y sin fotos",
+      /Elimina por completo/.test(calls[0].system) && /español/.test(calls[0].system) && !("images" in calls[0]));
+    const p2 = await prepareFromSource({ description: "x", features: [] }, fake(["{cortado", JSON.stringify({ description: "Texto bueno.", features: [] })]));
+    check("preparar: reintenta una vez si la IA devuelve un JSON cortado", p2.body === "Texto bueno.");
+    let threw = "";
+    try { await prepareFromSource({ description: "", features: [] }, fake([])); } catch (e) { threw = (e as Error).message; }
+    check("preparar: ficha sin texto → error sin llamar a la IA", threw === "source_empty");
+    const slow: AiFn = (o) => new Promise((_, rej) => o.signal?.addEventListener("abort", () => rej(new Error("aborted"))));
+    let aborted = "";
+    // Con un temporizador normal (AbortSignal.timeout no mantiene vivo el proceso de pruebas).
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 30);
+    try { await prepareFromSource({ description: "x", features: [] }, slow, ctl.signal); } catch (e) { aborted = (e as Error).message; }
+    clearTimeout(timer);
+    check("tiempo máximo / cancelación: la llamada se corta y no reintenta", aborted === "aborted");
+    const src: DraftSource = { title: "Piso en Delicias", operation: "Venta", place: "Delicias, Madrid", bedrooms: 3, bathrooms: 2, squareMeters: 110,
+      floor: "Planta 3.ª", features: ["Ascensor", "Terraza"], cleanDescription: "Piso exterior con terraza." };
+    const ut = draftUserText(src);
+    check("borrador con IA: solo hechos conocidos, sin precio ni fotos", !/precio|€|price|foto|photo|http/i.test(ut) && /"dormitorios":3/.test(ut) && /Terraza/.test(ut));
+    const d = await draftFromFacts(src, fake([JSON.stringify({ lead: "Luz y terraza en Delicias.", body: "Piso exterior de 110 m² con terraza." })]));
+    check("borrador con IA: propuesta con entrada y cuerpo (no publica ni guarda)", d.origin === "ai_draft" && d.lead === "Luz y terraza en Delicias.");
+    const ok = checkDraft({ body: d.body, lead: d.lead, highlights: ["Terraza"] }, src);
+    check("comprobación: sin avisos cuando todo sale de la ficha", ok.blockers.length === 0 && ok.warnings.length === 0, JSON.stringify(ok));
+    const bad = checkDraft({ body: "Piso de 140 m² con piscina y garaje. Llame al 600 123 456. Por 590.000 €.", lead: null, highlights: [] }, src);
+    check("comprobación: contacto y precio bloquean", bad.blockers.some((b) => b.code === "text_has_contact") && bad.blockers.some((b) => b.code === "text_has_price"));
+    check("comprobación: cifra y elementos que no están en la ficha → avisos con id estable",
+      ["number:140", "feature:piscina", "feature:garaje"].every((id) => bad.warnings.some((w) => w.id === id)), JSON.stringify(bad.warnings.map((w) => w.id)));
+    const w = checkDraft({ body: "Piso de 140 m² con piscina.", lead: null, highlights: [] }, src);
+    check("avisos: hay que confirmarlos uno a uno", pendingWarnings(w, ["number:140"]).map((x) => x.id).join() === "feature:piscina"
+      && pendingWarnings(w, ["number:140", "feature:piscina"]).length === 0);
   }
 
   section("Ampliación C1 · ajustes del automático y explicación (solo gestión)");
@@ -683,19 +839,19 @@ async function liveTests() {
 
   section("T8 · estado del lector (D12)");
   {
-    const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b" });
+    const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b", part: "open" });
     check("páginas: portada, índice, 3 viviendas, cierre", pagesOf(s0.catalog).length === 6);
     const s1 = applyUpdate(s0, pubState("B", ["a", "c"]));
     check("se quita la que leo → pasa a la siguiente", s1.page.kind === "item" && s1.page.key === "c" && s1.notice === REMOVED_NOTICE);
-    const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c" }), pubState("B", ["a", "b"]));
+    const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c", part: "open" }), pubState("B", ["a", "b"]));
     check("se quita la última → vuelve al índice", s2.page.kind === "index" && !!s2.notice);
-    const s3 = applyUpdate(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a" }), pubState("B", []));
+    const s3 = applyUpdate(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a", part: "open" }), pubState("B", []));
     check("no queda ninguna → índice vacío", s3.page.kind === "index" && s3.catalog.items.length === 0);
-    const s4 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "a" }), pubState("B", ["c", "b", "a"]));
+    const s4 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "a", part: "open" }), pubState("B", ["c", "b", "a"]));
     check("reordenar no me mueve de la vivienda", s4.page.kind === "item" && s4.page.key === "a" && s4.notice === null);
-    const s5 = applyUpdate(initialState(pubState("A", ["a", "b", "c", "d"]), { kind: "item", key: "b" }), pubState("B", ["a", "d"]));
+    const s5 = applyUpdate(initialState(pubState("A", ["a", "b", "c", "d"]), { kind: "item", key: "b", part: "open" }), pubState("B", ["a", "d"]));
     check("se quitan la actual y la siguiente → la siguiente que queda", s5.page.kind === "item" && s5.page.key === "d");
-    const g0 = openGallery(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a" }), "a", 1);
+    const g0 = openGallery(initialState(pubState("A", ["a", "b"]), { kind: "item", key: "a", part: "open" }), "a", 1);
     const g1 = applyUpdate(g0, pubState("B", ["a", "b"].concat("z")));
     check("galería abierta: cambio aplicado al momento y conserva la foto", g1.gallery?.key === "a" && g1.gallery.photo === 1 && g1.fingerprint === "B");
     const g2 = applyUpdate(g0, pubState("C", ["b"]));
@@ -703,6 +859,61 @@ async function liveTests() {
     const same = applyUpdate(s0, pubState("A", ["a", "b", "c"], "2100-01-01T00:00:00Z"));
     check("misma huella con nueva caducidad → solo cambia la caducidad", same.page === s0.page && same.expiresAt.startsWith("2100"));
     check("paso de página en el borde no se sale", step(initialState(pubState("A", ["a"])), -1).page.kind === "cover");
+  }
+
+  section("Z6 · lector por partes (doble página) y D12 desde cualquier parte");
+  {
+    const sec = (n: number) => Array.from({ length: n }, (_, i) => ({ heading: null, text: `Sección ${i + 1}.`, photo: i % 2 ? null : 1 }));
+    const withParts = (fp: string, spec: Array<[string, number, boolean]>): PublicCatalogState => {
+      const st = pubState(fp, spec.map(([k]) => k));
+      st.catalog.items = st.catalog.items.map((it, i) => ({
+        ...it,
+        sections: sec(spec[i][1]),
+        description: spec[i][2] ? "Texto completo." : null,
+      }));
+      return st;
+    };
+    const items = (st: PublicCatalogState) => st.catalog.items;
+    const A = withParts("A", [["a", 2, true], ["b", 5, true], ["c", 0, false]]);
+    check("partes: a = apertura + 2 recorridos + detalle", itemParts(items(A)[0], "spread").join() === "open,j1,j2,detail");
+    check("partes: 5 secciones → 3 dobles páginas de dos (máx. 3)", journeyGroups(items(A)[1]).map((g) => g.length).join() === "2,2,1" && itemParts(items(A)[1], "spread").length === 5);
+    const many = { ...items(A)[1], sections: sec(9) };
+    check("9 secciones → 3 dobles páginas y el resto en la descripción", journeyGroups(many).length === 3 && journeyTruncated(many));
+    check("solo datos sin descripción ni características → solo apertura", itemParts(items(A)[2], "spread").join() === "open");
+    check("una página → una hoja por vivienda", itemParts(items(A)[1], "single").join() === "open" && pagesOf(A.catalog, "single").length === 6);
+    check("folios: portada 1, índice 2, a abre en 3, b en 7, c en 12, cierre 13",
+      openingFolio(A.catalog, "a", "spread") === 3 && openingFolio(A.catalog, "b", "spread") === 7 && openingFolio(A.catalog, "c", "spread") === 12 && pagesOf(A.catalog, "spread").length === 13);
+    check("folios en una página: a 3, b 4, c 5", [openingFolio(A.catalog, "a", "single"), openingFolio(A.catalog, "b", "single"), openingFolio(A.catalog, "c", "single")].join() === "3,4,5");
+
+    let s = initialState(A, { kind: "item", key: "a", part: "open" }, "spread");
+    s = step(s, 1);
+    check("→ desde la apertura va al primer recorrido", s.page.kind === "item" && s.page.part === "j1");
+    s = step(step(s, 1), 1);
+    check("→ recorre hasta el detalle", s.page.kind === "item" && s.page.key === "a" && s.page.part === "detail");
+    s = step(s, 1);
+    check("→ desde el detalle abre la siguiente vivienda", s.page.kind === "item" && s.page.key === "b" && s.page.part === "open");
+
+    for (const part of ["open", "j1", "j2", "detail"] as const) {
+      const r = applyUpdate(initialState(A, { kind: "item", key: "a", part }, "spread"), withParts("B", [["b", 5, true], ["c", 0, false]]));
+      check(`D12 desde «${part}» → apertura de la siguiente con aviso`, r.page.kind === "item" && r.page.key === "b" && r.page.part === "open" && r.notice === REMOVED_NOTICE);
+    }
+    const lastGone = applyUpdate(initialState(A, { kind: "item", key: "c", part: "open" }, "spread"), withParts("B", [["a", 2, true], ["b", 5, true]]));
+    check("D12 desde la última → índice", lastGone.page.kind === "index" && lastGone.notice === REMOVED_LAST_NOTICE);
+    const fromJourney = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", []));
+    check("D12 sin viviendas desde un recorrido → índice vacío", fromJourney.page.kind === "index" && fromJourney.catalog.items.length === 0);
+
+    const shorter = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", [["a", 2, true], ["b", 1, true], ["c", 0, false]]));
+    check("el recorrido se acorta → se queda en la última parte que existe antes", shorter.page.kind === "item" && shorter.page.key === "b" && shorter.page.part === "j1" && shorter.notice === null);
+    const noDetail = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withParts("B", [["a", 0, false], ["b", 5, true], ["c", 0, false]]));
+    check("desaparece el detalle → apertura de la misma vivienda", noDetail.page.kind === "item" && noDetail.page.key === "a" && noDetail.page.part === "open");
+    const moved = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), withParts("B", [["c", 0, false], ["b", 5, true], ["a", 2, true]]));
+    check("reordenar mantiene vivienda y parte", moved.page.kind === "item" && moved.page.key === "b" && moved.page.part === "j2" && moved.notice === null);
+    check("reordenar cambia el folio de la parte", pageIndex(moved.catalog, moved.page, "spread") + 1 === 6);
+
+    const turned = setLayout(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), "single");
+    check("pasar a una página conserva la vivienda (su hoja)", turned.page.kind === "item" && turned.page.key === "b" && turned.page.part === "open");
+    const jump = goTo(initialState(A, { kind: "cover" }, "spread"), { kind: "item", key: "c", part: "detail" });
+    check("ir a una parte que no existe → la anterior que existe", jump.page.kind === "item" && jump.page.part === "open");
   }
   {
     const d1 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });

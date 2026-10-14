@@ -108,6 +108,9 @@ export type AICompleteOpts = {
   fileMediaType?: string;
   maxTokens?: number;
   jsonSchema?: Record<string, unknown>; // si se da, se pide salida JSON conforme al esquema
+  // Opcional (BCP-01 C2): corta la llamada (tiempo máximo o cancelación). Sin
+  // él, el comportamiento es exactamente el de antes.
+  signal?: AbortSignal;
   // Por defecto, si se piden imágenes y NINGUNA se pudo preparar (descarga o
   // decodificación fallida), aiComplete sigue igualmente solo con el texto —
   // aceptable para casos tolerantes (p.ej. describir un inmueble con menos
@@ -229,6 +232,7 @@ export async function aiComplete(opts: AICompleteOpts): Promise<string> {
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: opts.signal,
     });
     if (!res.ok) {
       throw new Error(`IA ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
@@ -281,6 +285,7 @@ export async function aiComplete(opts: AICompleteOpts): Promise<string> {
       "X-Title": "SmartBC Idealista",
     },
     body: JSON.stringify(body),
+    signal: opts.signal,
   });
   if (!res.ok) {
     throw new Error(`IA ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);

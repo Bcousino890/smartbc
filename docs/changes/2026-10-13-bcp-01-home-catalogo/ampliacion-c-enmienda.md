@@ -77,3 +77,17 @@ El tamaño sintético más pequeño de PR-B («2.000») tiene 1.680 candidatas (
 ## 7. Plan C2 (después del merge de C1 y su QA)
 
 Z1 `0197_catalog_texts.sql` (borrador/publicado por catálogo y vivienda, huella de la fuente sin precio, estados A–D e historia, instantánea con el texto vigente) · Z2 `lib/services/story/source-hash.ts` · Z3 `lib/catalogs/editorial.ts` (prioridad de §5, entrada, destacados, privacidad) · Z4 IA a demanda con comprobación determinista (IA falsa en pruebas; coste aclarado antes de activarla) · Z5 gestión del texto · Z6 lector con varias dobles páginas y hoja continua en móvil · Z7 medición y resultado. Su plan detallado se revisa con estas reglas antes de empezar.
+
+## 8. C2 — reglas consolidadas al implementar (rama `fabri/bcp-01-c2`)
+
+Aprobadas por Fabricio al encargar C2; sustituyen a lo que §5 dejaba abierto.
+
+- **Proveedor de IA:** se reutiliza el proveedor y el modelo ya configurados (Configuración → IA; hoy DeepSeek, financiado por el equipo). No se cambia la configuración global, no se añade proveedor ni dependencia y **no se promete un coste por llamada** (los comentarios antiguos del repo no sirven de precio). Los agentes nunca hacen llamadas reales ni usan datos de producción: en las pruebas la IA es falsa e inyectada.
+- **IA solo al pulsar:** «Preparar desde la ficha (IA)» y «Borrador con IA» devuelven una **propuesta**; nada se guarda ni se publica sin el dueño. Tiempo máximo 60 s y «Cancelar»; una respuesta tardía no pisa lo editado (se ofrece «Usar la propuesta»).
+- **Aislamiento:** «Preparar» reutiliza la misma limpieza que la descripción para clientes (extraída a `client-text.ts`, sin cambiar a quien ya la usaba) pero **no escribe** en `property_client_descriptions`. Nada de C2 toca `properties.description`, las historias globales ni otras cachés compartidas; las historias aprobadas y la descripción limpia solo se **leen** como respaldo (prueba SQL).
+- **Prioridad pública:** texto del catálogo publicado y vigente → historia aprobada vigente → descripción limpia vigente → solo datos y fotos.
+- **Vigencia:** la huella de la fuente cubre texto de la ficha, características (también manuales), m², dormitorios, baños, planta y operación; **no** el precio ni la disponibilidad. Si cambia, el texto deja de verse, se conserva, la gestión dice qué cambió y el lector baja de nivel.
+- **Comprobación al publicar:** contacto (teléfono, correo, web) y precio **bloquean** (en TS y otra vez en SQL); cifras y elementos que la ficha no dice son **avisos** que se corrigen o se confirman uno a uno.
+- **Reserva y borrado:** quitar o excluir una vivienda deja su texto en reserva; solo «Borrar texto» (con confirmación) lo elimina.
+- **Recorrido C · Boutique:** apertura ligera (foto, título, precio, datos clave, entrada breve y hasta 3 puntos verificados), secciones breves alternando con fotos (hasta 3 dobles páginas), detalle con la ficha completa y la descripción íntegra; en móvil, una hoja continua con la ficha y la descripción plegables. Sin títulos temáticos inventados: solo los capítulos de una historia aprobada llevan título.
+- **Medición:** 50 ms (5 enlaces) y 300 ms (20 enlaces) son referencias, no prueba de D13 ni puerta del 10 %.

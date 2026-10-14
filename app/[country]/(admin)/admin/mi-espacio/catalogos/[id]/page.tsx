@@ -3,8 +3,16 @@ import { CatalogManager } from "@/components/admin/catalogs/catalog-manager";
 import { requireHomeOwnerPage } from "@/lib/catalogs/owner";
 import { getCatalogShare } from "@/lib/catalogs/public-data";
 import { getCatalogDetail, listOwnerCatalogs } from "@/lib/catalogs/queries";
+import { listCatalogTexts } from "@/lib/catalogs/texts";
 import { isUuid } from "@/lib/catalogs/validate";
 import {
+  deleteCatalogTextAction,
+  draftCatalogTextAction,
+  prepareCatalogTextAction,
+  previewCatalogTextAction,
+  publishCatalogTextAction,
+  saveCatalogTextDraftAction,
+  withdrawCatalogTextAction,
   addCatalogAdAction,
   adjustCatalogAction,
   clearCatalogAdjustmentAction,
@@ -49,6 +57,7 @@ export default async function CatalogPage({
   if (!catalog) notFound();
   const numberLabel = (await listOwnerCatalogs(profile.id)).find((c) => c.id === id)?.numberLabel ?? null;
   const share = await getCatalogShare(profile.id, id);
+  const texts = await listCatalogTexts(profile.id, id);
   return (
     <div className="mx-auto max-w-[1600px] px-4 lg:px-8">
       <header className="pt-7 md:pt-9">
@@ -61,6 +70,7 @@ export default async function CatalogPage({
         numberLabel={numberLabel}
         share={share}
         measureMode={medir === "1"}
+        texts={texts}
         shareActions={{ create: createShareAction, renew: renewShareAction, revoke: revokeShareAction }}
         actions={{
           updateMeta: updateCatalogMetaAction,
@@ -85,6 +95,15 @@ export default async function CatalogPage({
           adjust: adjustCatalogAction,
           clearAdjustment: clearCatalogAdjustmentAction,
           cover: { set: setCatalogCoverAction, photos: listCoverPhotosAction },
+          texts: {
+            prepare: prepareCatalogTextAction,
+            draft: draftCatalogTextAction,
+            save: saveCatalogTextDraftAction,
+            publish: publishCatalogTextAction,
+            withdraw: withdrawCatalogTextAction,
+            remove: deleteCatalogTextAction,
+            preview: previewCatalogTextAction,
+          },
         }}
       />
     </div>
