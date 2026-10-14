@@ -212,6 +212,7 @@ export function toPublicItem(it: InternalItem): PublicItem {
     sections: ed.sections.map((x) => ({ heading: x.heading, text: x.text, photo: x.photo })),
     photos,
     coverIndex,
+    mosaic: ed.mosaic,
   };
 }
 

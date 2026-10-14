@@ -20,7 +20,7 @@ import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts"
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
-import { deriveEditorial, highlightCandidates, leadFrom, type EditorialInput } from "../lib/catalogs/editorial.ts";
+import { deriveEditorial, highlightCandidates, leadFrom, JOURNEY_EXCLUDED_CLASSES, type EditorialInput } from "../lib/catalogs/editorial.ts";
 import { textBlocker } from "../lib/catalogs/text-rules.ts";
 import { checkDraft, draftFromFacts, draftUserText, pendingWarnings, prepareFromSource, type AiFn, type DraftSource } from "../lib/catalogs/ai-draft.ts";
 import {
@@ -28,6 +28,7 @@ import {
   clientDescriptionSrc,
   findForbiddenKeys,
   toPublicCatalog,
+  toPublicItem,
   type InternalItem,
   type InternalSnapshot,
 } from "../lib/catalogs/to-public.ts";
@@ -184,6 +185,7 @@ function pubCatalog(keys: string[], title = "Catálogo"): PublicCatalog {
       sections: [],
       photos: [{ src: `/p/${key}/0.webp`, width: null, height: null, orientation: "unknown" as const }, { src: `/p/${key}/1.webp`, width: null, height: null, orientation: "unknown" as const }],
       coverIndex: 0,
+      mosaic: [],
     })),
   };
 }
@@ -401,6 +403,47 @@ async function liveTests() {
       textBlocker("Llame al 600 123 456") === "text_has_contact" && textBlocker("www.x.es") === "text_has_contact" && textBlocker("a@b.com") === "text_has_contact"
       && textBlocker("Por 590.000 €") === "text_has_price" && textBlocker("1.500 euros al mes") === "text_has_price"
       && textBlocker("Reformado entre 1990-2000, con 120 m² y 3 dormitorios.") === null);
+  }
+
+  section("E1 · fotos del recorrido y mosaico (T1)");
+  {
+    // Resultados EXPLÍCITOS escritos a mano (plan E1 §5).
+    // Fotos: 0 portada · 1 floor_plan · 2 sin clase · 3 street_context · 4 other · 5 living_room · 6 sin clase · 7 sin clase
+    const PH = [{ u: "0" }, { u: "1", k: "floor_plan" }, { u: "2" }, { u: "3", k: "street_context" }, { u: "4", k: "other" }, { u: "5", k: "living_room" }, { u: "6" }, { u: "7" }];
+    const sentence = (n: number) => `Frase número ${n} de la descripción limpia, escrita para la prueba con calma y detalle suficiente.`;
+    const CLEAN = Array.from({ length: 16 }, (_, i) => sentence(i + 1)).join(" ");
+    const input = (o: Partial<EditorialInput> = {}): EditorialInput => ({
+      description: "Texto del portal.", features: ["Ascensor"], features_manual: null, bedrooms: 3, bathrooms: 2, square_meters: 110,
+      zone: "Madrid", subzone: "Goya", cleanDescription: CLEAN, cleanFeatures: ["Ascensor"], text: null, story: null,
+      photos: PH, coverIndex: 0, ...o,
+    });
+    check("las clases excluidas son exactamente floor_plan, street_context y other", JOURNEY_EXCLUDED_CLASSES.join() === "floor_plan,street_context,other");
+    const clean = deriveEditorial(input());
+    const want = [2, 5, 6, 7].slice(0, clean.sections.length);
+    check("recorrido de la descripción limpia: se salta 1, 3 y 4; usa 2, 5, 6… en su orden",
+      clean.level === "clean" && clean.sections.length >= 2 && JSON.stringify(clean.sections.map((x) => x.photo)) === JSON.stringify(want), JSON.stringify(clean.sections.map((x) => x.photo)));
+    const text = deriveEditorial(input({ text: { b: CLEAN, l: "Entrada propia.", h: [] } }));
+    check("recorrido del texto del catálogo: misma exclusión", JSON.stringify(text.sections.map((x) => x.photo)) === JSON.stringify([2, 5, 6, 7].slice(0, text.sections.length)));
+    // Una clase poco fiable no llega a la derivación (0197 solo añade k fiable): se comporta como sin clase.
+    const unreliable = deriveEditorial(input({ photos: [{ u: "0" }, { u: "1" }, { u: "2", k: "floor_plan" }] }));
+    check("foto sin clase fiable sigue siendo elegible", unreliable.sections[0]?.photo === 1);
+    check("con texto o descripción, mosaico vacío", clean.mosaic.length === 0 && text.mosaic.length === 0);
+    const facts = deriveEditorial(input({ cleanDescription: null, cleanFeatures: [] }));
+    check("solo datos: mosaico [2, 5, 6, 7] (sin portada ni clases excluidas, máx. 4)", facts.level === "facts" && JSON.stringify(facts.mosaic) === "[2,5,6,7]", JSON.stringify(facts.mosaic));
+    const many = deriveEditorial(input({ cleanDescription: null, cleanFeatures: [], photos: Array.from({ length: 34 }, (_, i) => ({ u: String(i) })), coverIndex: 3 }));
+    check("34 fotos, portada la 3: mosaico [0, 1, 2, 4]", JSON.stringify(many.mosaic) === "[0,1,2,4]", JSON.stringify(many.mosaic));
+    const few = deriveEditorial(input({ cleanDescription: null, cleanFeatures: [], photos: [{ u: "0" }, { u: "1", k: "other" }] }));
+    check("solo una foto adicional y es «other»: mosaico vacío", few.mosaic.length === 0);
+    // Historia: la foto de cada capítulo sigue siendo la de su clase (sin cambios).
+    const hash = storySourceHash({ description: "Texto del portal.", bedrooms: 3, bathrooms: 2, squareMeters: 110, features: ["Ascensor"] });
+    const st = deriveEditorial(input({ story: { h: hash, p: "Entrada.", b: [{ c: "living", t: "El salón da a dos balcones sobre la calle arbolada del barrio." }, { c: "barrio", t: "El barrio reúne mercado, colegios, librerías y comercio de toda la vida a pocos minutos a pie de la vivienda, con dos líneas de metro cerca." }] } }));
+    check("historia: capítulo con foto de su clase (5) y capítulo sin clase sin foto", st.level === "story" && st.sections[0].photo === 5 && st.sections[1].photo === null);
+    // Galería: la exclusión no quita fotos del contrato.
+    const pub = toPublicItem(item({ photos: [
+      { u: "a0", w: 1600, h: 1067, c: true }, { u: "a1", w: 1600, h: 1067, c: false, k: "floor_plan" }, { u: "a2", w: 1600, h: 1067, c: false, k: "other" }, { u: "a3", w: 1600, h: 1067, c: false },
+    ] }));
+    check("la galería conserva las 4 fotos (también plano y «other»)", pub.photos.length === 4);
+    check("el contrato añade solo «mosaic» (índices) y ninguna clase", Array.isArray(pub.mosaic) && !/"k":|floor_plan|"other"/.test(JSON.stringify(pub)));
   }
 
   section("Ampliación C2 · borradores con IA inyectada y comprobación (Z4)");
