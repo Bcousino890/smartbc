@@ -972,7 +972,7 @@ async function liveTests() {
     const A = mk({ lead: W(96, "Entrada"), sections: [sec(9, "La vivienda", null), sec(8, "Salón y luz", 13), sec(16, "La finca", null)], description: null, features: [] });
     const la = itemLayout(A);
     check("(a) entrada larga fuera de la apertura", !la.introInOpening);
-    check("(a) una doble página: [entrada, cap. 1] | [cap. 2, cap. 3 + foto 13]", slots(la) === "[E,s0] | [s1,s2+f13]", slots(la));
+    check("(a) una doble página: [entrada] | [caps. 1–3 + foto 13] (los capítulos breves no se quedan solos)", slots(la) === "[E] | [s0,s1,s2+f13]", slots(la));
     check("(a) partes: apertura y j1 (sin detalle)", itemParts(A, "spread").join() === "open,j1" && la.detail === null);
 
     // (b) tipo Peñalver: entrada corta; capítulos de 11 (foto 1), 20 y 45 palabras; con una característica.
@@ -986,13 +986,13 @@ async function liveTests() {
     const C8 = Array.from({ length: 8 }, (_, i) => sec(40, `Capítulo ${i + 1}`, i === 2 ? 3 : null, `Cap${i + 1}`));
     const C = mk({ lead: W(20, "Entrada"), sections: C8, description: null, features: [] });
     const lc = itemLayout(C);
-    check("(c) 8 capítulos: [1,2] | [3,4 + foto 3] ‖ [5,6,7] | [8]", slots(lc) === "[s0,s1] | [s2,s3+f3] ‖ [s4,s5,s6] | [s7]", slots(lc));
-    check("(c) partes: apertura, j1, j2 (sin detalle)", itemParts(C, "spread").join() === "open,j1,j2");
+    check("(c) 8 capítulos: [1,2] | [3 + foto 3] ‖ [4,5] | [6,7] ‖ [8]", slots(lc) === "[s0,s1] | [s2+f3] ‖ [s3,s4] | [s5,s6] ‖ [s7]", slots(lc));
+    check("(c) partes: apertura, j1, j2, j3 (sin detalle)", itemParts(C, "spread").join() === "open,j1,j2,j3");
 
     // (d) 7 capítulos con una descripción limpia distinta.
     const D = mk({ lead: null, sections: C8.slice(0, 7), description: "Descripción limpia distinta de la historia.", features: [] });
     const ld = itemLayout(D);
-    check("(d) 7 capítulos: [1,2] | [3,4 + foto 3] ‖ [5,6,7] compuesta", slots(ld) === "[s0,s1] | [s2,s3+f3] ‖ [s4,s5,s6]", slots(ld));
+    check("(d) 7 capítulos: [1,2] | [3 + foto 3] ‖ [4,5] | [6,7]", slots(ld) === "[s0,s1] | [s2+f3] ‖ [s3,s4] | [s5,s6]", slots(ld));
     check("(d) partes: apertura, j1, j2 y detalle con la descripción", itemParts(D, "spread").join() === "open,j1,j2,detail" && ld.detail?.description === true && ld.detail?.story === false);
 
     // (e) 9 capítulos de 120 palabras: no caben → 3 dobles páginas (caps. 1–6) y «La historia completa».

@@ -1394,7 +1394,7 @@
 
 /* Foto pequeña dentro de una página de recorrido. */
 .inlinePhoto {
-  width: 72%;
+  width: 62%;
   margin: var(--s2) auto var(--s6);
 }
 
@@ -1466,10 +1466,23 @@
   .introBlock {
     font-size: max(16px, 1.12em);
   }
-  .composedPage .sectionText {
-    font-size: max(16.5px, 1.05em);
-  }
   .continueLink {
     font-size: max(12px, 0.7em);
   }
+}
+
+@media (min-width: 900px) and (min-height: 620px) {
+  /* Ficha breve en doble página: mosaico contenido para que quepa con los datos. */
+  .brief .mosaic {
+    max-width: 19em;
+    gap: 0.5em;
+    margin-top: var(--s4);
+  }
+}
+
+/* E1 · En una zona que se desplaza (flex en columna), ningún hijo se encoge:
+   el título corrido y los marcos (overflow: hidden) llegaban a medir 0 de alto
+   cuando el contenido llenaba la página. */
+.textScroll > * {
+  flex-shrink: 0;
 }

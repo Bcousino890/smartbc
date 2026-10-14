@@ -15,9 +15,10 @@ import type { PublicItem } from "./public-contract";
 //      el renderizado real a 15 px (1280 × 720 y 1440 × 900).
 //   3. Las páginas se llenan en orden; una página lleva como mucho una foto,
 //      la primera de sus bloques.
-//   4. Nada escaso: una página no se cierra con menos de TINY_WORDS (el bloque
-//      siguiente se une a ella), y una última página escasa se une a la
-//      anterior si cabe con un margen (lo que sobre se desplaza dentro).
+//   4. Nada escaso (por palabras reales): una página no se cierra con menos de
+//      TINY_WORDS (el bloque siguiente se une a ella) y una última página
+//      escasa se une a la anterior salvo que choquen dos fotos; lo que no
+//      quepa se desplaza dentro de la página, con su banda.
 //   5. Un bloque más largo que una página ocupa la suya y se desplaza dentro.
 //   6. Las páginas se emparejan de dos en dos; una página suelta con foto da
 //      [foto grande | texto] y sin foto, una página de texto compuesta sola.
@@ -30,9 +31,16 @@ import type { PublicItem } from "./public-contract";
 
 export const LEAD_OPENING_MAX_WORDS = 45;
 export const TINY_WORDS = 25;
-export const HEADING_COST = 10;
-export const C_TEXT = 165;
-export const C_PHOTO = 100;
+// Calibrado en el navegador (E1 · T6) a 1280 × 720 con el texto a 15 px:
+// unas 7 palabras por línea y 19 líneas útiles por página de texto. Un título
+// ocupa unas 2 líneas; la foto pequeña, unas 7,5; cada bloque deja de media
+// media línea sin llenar. La entrada (Fraunces cursiva, 16 px) cabe un 15 %
+// menos por línea.
+export const HEADING_COST = 15;
+export const BLOCK_COST = 4;
+export const INTRO_FACTOR = 1.15;
+export const C_TEXT = 125;
+export const C_PHOTO = 70;
 export const MAX_JOURNEY_SPREADS = 3;
 
 export type JourneyBlock =
@@ -44,6 +52,8 @@ export interface JourneyPage {
   /** Primera foto de sus bloques (o null). */
   photo: number | null;
   weight: number;
+  /** Palabras reales (la regla de «nada escaso» mira palabras, no peso). */
+  words: number;
 }
 
 export type JourneySlot =
@@ -70,7 +80,8 @@ export function countWords(text: string | null | undefined): number {
 }
 
 function weight(b: JourneyBlock): number {
-  return b.words + (b.kind === "section" && b.heading ? HEADING_COST : 0);
+  if (b.kind === "intro") return Math.round(b.words * INTRO_FACTOR) + BLOCK_COST;
+  return b.words + BLOCK_COST + (b.heading ? HEADING_COST : 0);
 }
 
 function blockPhoto(b: JourneyBlock): number | null {
@@ -96,7 +107,7 @@ export function journeyBlocks(item: PublicItem): JourneyBlock[] {
 /** Reparte los bloques en páginas de texto (reglas 2–5). */
 export function packPages(blocks: JourneyBlock[]): JourneyPage[] {
   const pages: JourneyPage[] = [];
-  let cur: JourneyPage = { blocks: [], photo: null, weight: 0 };
+  let cur: JourneyPage = { blocks: [], photo: null, weight: 0, words: 0 };
   for (const b of blocks) {
     const w = weight(b);
     const bp = blockPhoto(b);
@@ -104,15 +115,16 @@ export function packPages(blocks: JourneyBlock[]): JourneyPage[] {
     const fits = cur.weight + w <= capacity(nextPhoto);
     // Segunda foto en la misma página: abre página nueva si la actual ya
     // tiene contenido suficiente (cada foto de capítulo se ve).
-    const secondPhoto = cur.photo !== null && bp !== null && cur.weight >= TINY_WORDS;
+    const secondPhoto = cur.photo !== null && bp !== null && cur.words >= TINY_WORDS;
     // Regla 4: nunca se cierra una página escasa; el bloque siguiente se une
     // a ella aunque no quepa entero (la página se desplaza por dentro).
-    if (cur.blocks.length && (!fits || secondPhoto) && cur.weight >= TINY_WORDS) {
+    if (cur.blocks.length && (!fits || secondPhoto) && cur.words >= TINY_WORDS) {
       pages.push(cur);
-      cur = { blocks: [], photo: null, weight: 0 };
+      cur = { blocks: [], photo: null, weight: 0, words: 0 };
     }
     cur.blocks.push(b);
     cur.weight += w;
+    cur.words += b.words;
     cur.photo = cur.photo ?? bp;
   }
   if (cur.blocks.length) pages.push(cur);
@@ -121,11 +133,15 @@ export function packPages(blocks: JourneyBlock[]): JourneyPage[] {
     const last = pages[pages.length - 1];
     const prev = pages[pages.length - 2];
     const lastPhoto = last.photo;
-    if (last.weight < TINY_WORDS && (lastPhoto === null || prev.photo === null)) {
-      const merged = prev.weight + last.weight;
-      if (merged <= capacity(prev.photo ?? lastPhoto) + TINY_WORDS) {
-        pages.splice(pages.length - 2, 2, { blocks: [...prev.blocks, ...last.blocks], photo: prev.photo ?? lastPhoto, weight: merged });
-      }
+    // Siempre que no choquen dos fotos: mejor una página que se desplaza un
+    // poco que una página con una frase suelta.
+    if (last.words < TINY_WORDS && (lastPhoto === null || prev.photo === null)) {
+      pages.splice(pages.length - 2, 2, {
+        blocks: [...prev.blocks, ...last.blocks],
+        photo: prev.photo ?? lastPhoto,
+        weight: prev.weight + last.weight,
+        words: prev.words + last.words,
+      });
     }
   }
   return pages;

@@ -285,12 +285,18 @@ function Features({ item }: { item: PublicItem }) {
   );
 }
 
-/** Ficha completa: todos los datos estructurados, con «sin dato» explícito. */
-function FullFacts({ item }: { item: PublicItem }) {
+/** Ficha completa: todos los datos estructurados, con «sin dato» explícito.
+ *  En la ficha breve, operación, precio y zona ya están en la cabecera de la
+ *  misma página y no se repiten. */
+function FullFacts({ item, compact = false }: { item: PublicItem; compact?: boolean }) {
   const rows: Array<[string, string | null]> = [
-    ["Operación", item.operation],
-    ["Precio", item.price],
-    ["Zona", item.place],
+    ...(compact
+      ? []
+      : ([
+          ["Operación", item.operation],
+          ["Precio", item.price],
+          ["Zona", item.place],
+        ] as Array<[string, string | null]>)),
     ["Superficie", item.squareMeters === null ? null : `${item.squareMeters.toLocaleString("es-ES")} m²`],
     ["Dormitorios", item.bedrooms === null ? null : item.bedrooms.toLocaleString("es-ES")],
     ["Baños", item.bathrooms === null ? null : item.bathrooms.toLocaleString("es-ES")],
@@ -345,7 +351,7 @@ function Mosaic({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl;
 function BriefBody({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
   return (
     <div className={styles.brief} data-testid="brief">
-      <FullFacts item={item} />
+      <FullFacts item={item} compact />
       <Features item={item} />
       <Mosaic item={item} url={url} onOpenGallery={onOpenGallery} />
       <GalleryLink item={item} onOpenGallery={onOpenGallery} />
