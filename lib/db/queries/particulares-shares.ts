@@ -1,5 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
+import { resolveShareLocation } from "@/lib/particulares/share-location";
+import { nominatimLookup } from "@/lib/geo/nominatim-queue";
 import { randomToken } from "@/lib/tokens";
 import {
   sanitizeParticularDescriptionForSharing,
@@ -94,7 +96,7 @@ const PUBLIC_PARTICULAR_COLUMNS =
 // la descripción) y así no se paga la IA dos veces por visita.
 export async function getParticularByShareToken(
   token: string,
-  opts: { sanitizeIfMissing?: boolean } = {},
+  opts: { sanitizeIfMissing?: boolean; includeLocation?: boolean } = {},
 ): Promise<{ shareId: string; particular: Record<string, unknown> } | null> {
   const supabase = createAdminClient();
 
@@ -118,13 +120,23 @@ export async function getParticularByShareToken(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const partRes = await (supabase as any)
     .from("particulares")
-    .select(PUBLIC_PARTICULAR_COLUMNS)
+    .select(opts.includeLocation ? `${PUBLIC_PARTICULAR_COLUMNS}, address, location_precision` : PUBLIC_PARTICULAR_COLUMNS)
     .eq("id", share.particular_id)
     .maybeSingle();
   if (partRes.error) throw new Error(partRes.error.message);
   if (!partRes.data) return null;
 
-  const particular = partRes.data as Record<string, unknown>;
+  // These fields are server-only inputs for geocoding, not public fields.
+  const { address, location_precision, ...particular } = partRes.data as Record<string, unknown>;
+  if (opts.includeLocation) {
+    particular.location = await resolveShareLocation({
+      address: typeof address === "string" ? address : null,
+      location_precision: typeof location_precision === "string" ? location_precision : null,
+      latitude: typeof particular.latitude === "number" ? particular.latitude : null,
+      longitude: typeof particular.longitude === "number" ? particular.longitude : null,
+      zone: typeof particular.zone === "string" ? particular.zone : null,
+    }, nominatimLookup);
+  }
 
   if (share.sanitized_description) {
     // Camino normal: la descripción ya se limpió al crear el enlace.

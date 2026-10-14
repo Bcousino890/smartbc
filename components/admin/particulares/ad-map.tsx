@@ -7,7 +7,9 @@ import { buildMosaic } from "@/lib/geo/tile-math";
 // Mapa del anuncio con SU PIN. Mosaico propio de teselas OpenStreetMap (sin
 // clave, nunca un proveedor que la pida). Sin coordenadas las pide al servidor.
 export type AdMapProps = {
-  particularId: string;
+  particularId?: string;
+  /** Datos ya resueltos en servidor para enlaces públicos; nunca llama a la API admin. */
+  resolvedLocation?: { point: Pt | null; estimate: Pt | null };
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
@@ -37,7 +39,7 @@ function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: n
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export function AdMap({ particularId, latitude, longitude, address, zone, precision, className, height = 224 }: AdMapProps) {
+export function AdMap({ particularId, resolvedLocation, latitude, longitude, address, zone, precision, className, height = 224 }: AdMapProps) {
   const given: Pt | null =
     isNum(latitude) && isNum(longitude) ? { lat: latitude, lng: longitude, precision: precision ?? "approximate" } : null;
   const [fetched, setFetched] = useState<Pt | null>(null);
@@ -48,7 +50,7 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
   const [w, setW] = useState(0);
 
   useEffect(() => {
-    if (given || (!address && !zone)) return;
+    if (resolvedLocation || !particularId || given || (!address && !zone)) return;
     const ctl = new AbortController();
     setState("loading");
     fetch(`/api/admin/particulares/${encodeURIComponent(particularId)}/geocode`, { signal: ctl.signal })
@@ -63,11 +65,11 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
         if (e?.name !== "AbortError") setState("none");
       });
     return () => ctl.abort();
-  }, [given, particularId, address, zone]);
+  }, [given, particularId, address, zone, resolvedLocation]);
 
   useEffect(() => {
     setEstimate(null);
-    if (!given || precision !== "approximate" || (!address && !zone)) return;
+    if (resolvedLocation || !particularId || !given || precision !== "approximate" || (!address && !zone)) return;
     const ctl = new AbortController();
     fetch(`/api/admin/particulares/${encodeURIComponent(particularId)}/geocode?estimate=1`, { signal: ctl.signal })
       .then((r) => (r.ok ? r.json() : null))
@@ -77,7 +79,7 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
       .catch(() => {});
     return () => ctl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [particularId, precision, address, zone, latitude, longitude]);
+  }, [particularId, precision, address, zone, latitude, longitude, resolvedLocation]);
 
   useEffect(() => {
     const el = wrap.current;
@@ -88,9 +90,10 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
     return () => ro.disconnect();
   }, []);
 
-  const pt = given ?? fetched;
+  const pt = resolvedLocation ? resolvedLocation.point : given ?? fetched;
+  const addressPoint = resolvedLocation ? resolvedLocation.estimate : estimate;
   // Con dos puntos (portal aproximado + dirección) se centra en el medio y se acerca lo que quepa.
-  const second = pt && estimate && metersBetween(pt, estimate) > 15 ? estimate : null;
+  const second = pt && addressPoint && metersBetween(pt, addressPoint) > 15 ? addressPoint : null;
   const mosaic = useMemo(() => {
     if (!pt || !w) return null;
     if (!second) return buildMosaic({ lat: pt.lat, lng: pt.lng, zoom: ZOOM[pt.precision], width: w, height });

@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/queries/particulares-shares";
 import { ParticularHero } from "./particular-hero";
 import { LanguageSelect } from "./language-select";
+import type { ShareLocation } from "@/lib/particulares/share-location";
 import { ParticularLocation } from "./particular-location";
 
 // Enlace temporal de UN particular (anuncio scrapeado, no ficha nuestra).
@@ -33,8 +34,7 @@ type PublicParticular = {
   operation: "rent" | "sale" | null;
   price: number | null;
   zone: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  location: ShareLocation | null;
   bedrooms: number | null;
   bathrooms: number | null;
   square_meters: number | null;
@@ -79,7 +79,7 @@ export default async function ParticularSharePage({
   // sanitizeIfMissing: los enlaces creados antes de la migración 0157 no
   // tienen descripción limpia guardada; se limpia y se persiste aquí, en el
   // render, para que tampoco ellos enseñen el texto crudo del portal.
-  const resolved = await getParticularByShareToken(token, { sanitizeIfMissing: true });
+  const resolved = await getParticularByShareToken(token, { sanitizeIfMissing: true, includeLocation: true });
 
   if (!resolved) {
     return <UnavailableView />;
@@ -203,7 +203,7 @@ export default async function ParticularSharePage({
           </section>
         )}
 
-        <ParticularLocation zone={p.zone} latitude={p.latitude} longitude={p.longitude} />
+        <ParticularLocation location={p.location} />
 
         <footer className="mt-8 pb-4 text-center crm-meta text-ink/45">
           © {new Date().getFullYear()} Benjamín Cousiño Propiedades · Madrid
