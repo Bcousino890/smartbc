@@ -303,6 +303,9 @@ async function seed(): Promise<Map<string, Share>> {
     // (j) un capítulo más largo que una página.
     withStory(qaBase("fxQaLargo00j", "Piso con un capítulo largo", classed(690, [null, null])), null,
       [{ c: "overview", t: words(30, "Una vivienda tranquila") }, { c: "barrio", t: words(300, "El barrio de Goya reúne") }]),
+    // (k) capítulos breves sin ninguna foto de su clase: página de texto compuesta.
+    withStory(qaBase("fxQaSinFoto0k", "Piso sin foto adecuada", classed(710, [null, null, null])), null,
+      [{ c: "building", t: words(20, "Edificio clásico con portería física") }, { c: "barrio", t: words(45, "A pocos minutos a pie del mercado") }]),
   ];
   return new Map<string, Share>([
     [FIXTURE_TOKENS.qa, { snapshot: snap("Casos de la QA", "Viviendas sintéticas para comprobar el recorrido adaptativo.", qaItems), expiresAt: far, revoked: false, archived: false }],

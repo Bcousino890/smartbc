@@ -1486,3 +1486,10 @@
 .textScroll > * {
   flex-shrink: 0;
 }
+
+@media (min-width: 900px) and (min-height: 620px) {
+  /* Foto pequeña vertical: misma altura aproximada que una horizontal. */
+  .inlinePhoto .framePortrait {
+    width: 44%;
+  }
+}
