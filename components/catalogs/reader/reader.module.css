@@ -537,7 +537,8 @@
   padding: 1.6em 0 4em;
 }
 
-.scrollCue {
+.scrollCue,
+.cueBand {
   display: none;
 }
 
@@ -583,12 +584,18 @@
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 4em), transparent);
     mask-image: linear-gradient(to bottom, #000 calc(100% - 4em), transparent);
   }
+  /* E1 (L3): banda propia bajo la zona que se desplaza. */
+  .cueBand {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: max(32px, 2.6em);
+    margin: 0 3em;
+    border-top: 1px solid var(--rule);
+  }
   .root .scrollCue {
     display: block;
-    position: absolute;
-    left: 50%;
-    bottom: 0;
-    transform: translateX(-50%);
     padding: 0.5em 1em;
     border: 0;
     border-radius: 999px;
@@ -1203,4 +1210,93 @@
   min-width: 44px;
   height: 44px;
   padding: 0 14px;
+}
+
+/* ── E1 (L2) · Letra mínima en doble página ────────────────────────────────
+   La página escala con la altura de la ventana (--pw); en 1280 × 720 el texto
+   corrido bajaba a 11 px. Suelos: recorrido y descripción 15 px, entrada
+   16 px, datos clave 13 px y textos auxiliares 12 px. Los títulos conservan
+   su escala. Una página (móvil) ya está por encima y no cambia. */
+@media (min-width: 900px) and (min-height: 620px) {
+  .sectionText,
+  .introBody {
+    font-size: max(15px, 0.98em);
+  }
+  .desc {
+    font-size: max(15px, 0.94em);
+  }
+  .leadText {
+    font-size: max(16px, 1.18em);
+  }
+  .facts,
+  .factList {
+    font-size: max(13px, 0.9em);
+  }
+  .unit {
+    font-size: max(12px, 0.78em);
+  }
+  /* Auxiliares: cada pieza conserva su proporción y no baja de 12 px. */
+  .kicker {
+    font-size: max(12px, 0.66em);
+  }
+  .runner {
+    font-size: max(12px, 0.75em);
+  }
+  .folio {
+    font-size: max(12px, 0.72em);
+  }
+  .caption {
+    font-size: max(12px, 0.95em);
+  }
+  .plate {
+    font-size: max(12px, 0.68em);
+  }
+  .galleryOpen {
+    font-size: max(12px, 0.7em);
+  }
+  .features li {
+    font-size: max(12px, 0.78em);
+  }
+  .highlights li {
+    font-size: max(12px, 0.78em);
+  }
+  .ixN {
+    font-size: max(12px, 0.9em);
+  }
+  .ixPage {
+    font-size: max(12px, 1em);
+  }
+  .ixMeta {
+    font-size: max(12px, 0.78em);
+  }
+  .ixReserved {
+    font-size: max(12px, 0.62em);
+  }
+  .reserved {
+    font-size: max(12px, 0.42em);
+  }
+  .contactRole {
+    font-size: max(12px, 0.66em);
+  }
+  .contactNumber {
+    font-size: max(12px, 1.05em);
+  }
+  .callButton {
+    font-size: max(12px, 0.95em);
+  }
+  .closingFoot {
+    font-size: max(12px, 0.75em);
+  }
+  .introSign {
+    font-size: max(12px, 0.95em);
+  }
+  .lede {
+    font-size: max(12px, 1em);
+  }
+  .noPhoto {
+    font-size: max(12px, 1em);
+  }
+  .root .scrollCue {
+    font-size: max(12px, 0.7em);
+  }
 }
