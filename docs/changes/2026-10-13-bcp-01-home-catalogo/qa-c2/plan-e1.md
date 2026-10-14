@@ -1,6 +1,6 @@
 # BCP-01 · Plan de E1 «Lector: correcciones y composición adaptativa»
 
-**Estado: BORRADOR — pendiente de aprobación para ejecutarse.** Este documento no autoriza implementar, instalar, hacer push ni abrir el PR. Decisiones de origen: [enmienda §0](enmienda.md) (D-QA1–D-QA10, aprobadas el 14 de octubre de 2026). Evidencia: [informe](informe.md).
+**Estado: APROBADO PARA EJECUTARSE (14 de octubre de 2026) con tres correcciones obligatorias**, ya incorporadas: orden de commits en el que cada cambio de API llega con sus consumidores (§4), verificación independiente (§5) y aislamiento del entorno (§2.1). Registro: [enmienda §0, D-QA11](enmienda.md). Decisiones de origen: [enmienda §0](enmienda.md) (D-QA1–D-QA10, aprobadas el 14 de octubre de 2026). Evidencia: [informe](informe.md).
 
 ## 1. Alcance
 
@@ -26,19 +26,43 @@
 
 ## 2. Base, rama y preparación del entorno
 
-Pasos de entorno que **la aprobación de este plan autorizaría** (§5 de `docs/workflow/README.md`). Nada más.
+- **Base:** `origin/main` = `36aff9aab45e8d8479cca46c5a48aaf2f35c4771`, comprobado con `git ls-remote` al empezar. Respecto a `11f4bc1` solo añade un arreglo de particulares que no toca ningún archivo de E1.
+- **Rama y worktree:** `fabri/bcp-01-e1` en `/Users/fabriirguez/SMARTBC/wt/bcp-01-e1`. El checkout original y el stash no se tocan.
+- **Expediente:** los commits de documentación de `fabri/bcp-01-c2-qa` se trajeron con cherry-pick (T0).
+- **Dependencias:** Node 22 y `npm ci` con el `package-lock.json` existente. Sin dependencias nuevas.
+- **Navegador:** el Chromium de Playwright ya está en la caché local. Si faltara, se pediría permiso antes de descargarlo.
+- **No hace falta:** Postgres, credenciales, VPS, producción ni IA real.
 
-| # | Paso | Comando | Efecto |
-| --- | --- | --- | --- |
-| P1 | Fijar la base | `git fetch origin` y `git ls-remote origin refs/heads/main` | Red, lectura de GitHub. Si `main` ya no es `11f4bc1`, se anota el SHA nuevo y se comprueba que no toque los archivos de §4 (si los toca, se avisa antes de seguir). |
-| P2 | Worktree aislado | `git worktree add -b fabri/bcp-01-e1 /Users/fabriirguez/SMARTBC/wt/bcp-01-e1 <SHA>` | Local. No toca el `main` local, el stash ni otras ramas. |
-| P3 | Traer el expediente | `git cherry-pick` de los commits de documentación de `fabri/bcp-01-c2-qa` (informe, enmienda, maquetas y este plan) | Local. Así el PR de E1 lleva su registro de aprobación. |
-| P4 | Dependencias | Node 22 (`/opt/homebrew/opt/node@22`) y `npm ci` | **Instalación:** descarga paquetes del registro npm y puede ejecutar sus scripts. Sin dependencias nuevas: el `package-lock.json` no cambia. |
-| P5 | Navegador de pruebas | Chromium de Playwright que ya está en la caché local | Si faltara, `npx playwright install chromium` descargaría el navegador. **Se pediría permiso antes.** |
-| P6 | Servidor de fixtures | `sh scripts/dev-fixtures.sh` (127.0.0.1:3137) | Local, datos sintéticos. Se niega a arrancar con `.env.local`/`.env.development*`; Supabase apunta a un puerto cerrado. No lee ni copia `.env*`. |
-| P7 | Compilación de comprobación | `npm run build` con claves ficticias y `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:9` | Como la CI. **Puede usar la red** durante el prerender (páginas públicas `/web/*`, servicio público de tipo de cambio). Next carga el `.env.production` **versionado** del repo, igual que la CI; no se abre ni se imprime. |
+### 2.1 Aislamiento del servidor de fixtures y de la compilación
 
-**No hace falta:** Postgres temporal (E1 no toca SQL), credenciales, VPS, admin ni base de datos de producción, ni IA real. Nada escribe en cachés compartidas ni en fichas.
+Next carga solo los `.env*` de la carpeta del proyecto, y el repo versiona `.env.production` y `.env.example`. Por eso el servidor de fixtures y la compilación **no se ejecutan en el worktree**, sino en una copia temporal sin esos archivos y con un entorno mínimo explícito:
+
+1. **Copia aislada** en el scratchpad (`e1-iso/app`):
+   - `rsync -a --delete` del worktree **excluyendo** `.git`, `node_modules`, `.next` y cualquier archivo `.env*`, en cualquier carpeta;
+   - `node_modules` clonado del worktree con `cp -cR`, una copia APFS sin coste de espacio y sin descargar nada.
+   - Ningún archivo `.env*` se abre, se imprime ni se copia.
+2. **Entorno mínimo explícito** con `env -i`. Solo estas variables:
+   - `PATH` (Node 22 y `/usr/bin:/bin`);
+   - `HOME` y `TMPDIR` de una carpeta temporal propia;
+   - `NEXT_TELEMETRY_DISABLED=1`;
+   - `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:9` (puerto cerrado);
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` con valores ficticios;
+   - en el servidor, `CATALOG_FIXTURES=1` y `PORT=3137`.
+
+   No se hereda ninguna variable del terminal ni ninguna credencial.
+3. **Comprobación antes de arrancar cualquier servidor o compilación**, que se repite tras cada sincronización:
+   - (a) `find` sin `.env*` en la copia (fuera de `node_modules`): solo se listan nombres;
+   - (b) con el mismo entorno, `node` lista las variables de `process.env`, y solo deben aparecer las permitidas;
+   - (c) con el mismo entorno, el propio cargador de Next (`@next/env`, `loadEnvConfig`) se ejecuta sobre la copia para el modo `development` y el `production`, y debe informar de **0 archivos cargados**;
+   - (d) el registro del servidor o de la compilación no contiene ninguna línea `Environments:`, que es la que imprime Next cuando carga un `.env`.
+
+   Si alguna comprobación falla, no se arranca nada y se informa.
+4. **Red:**
+   - el servidor de fixtures solo escucha en `127.0.0.1`;
+   - los navegadores de prueba usan un proxy a un puerto cerrado;
+   - la compilación puede intentar llamadas públicas durante el prerender (la página `/web` pide un tipo de cambio); las de Supabase van al puerto cerrado;
+   - no se conecta a servicios reales de la aplicación.
+5. **Pruebas puras** (`npm run test:*`, `tsc`): Node no carga `.env`. También se ejecutan con `env -i` y el mismo entorno mínimo.
 
 ## 3. Diseño técnico: contratos y propiedad del estado
 
@@ -52,6 +76,7 @@ mosaic: number[];
 ```
 
 - Solo se rellena cuando no hay ni texto ni capítulos que mostrar (nivel «solo datos y fotos»).
+- **Literales tipados que hay que actualizar en el mismo commit:** `pubCatalog` de `scripts/test-catalogs-public.mts` y cualquier otro objeto `PublicItem` construido a mano (comprobado con `tsc`).
 - No expone clases de foto, niveles ni diagnósticos.
 - La instantánea SQL y la huella no cambian.
 
@@ -110,7 +135,7 @@ Una página (móvil): una hoja por vivienda como hoy, con el recorrido entero. L
 
 ### 3.4 Estado del lector (`lib/catalogs/reader-state.ts`)
 - `ItemPart` sigue siendo `open | j1 | j2 | j3 | detail`.
-- `itemParts()` pasa a leer `itemLayout()`. `journeyGroups`/`journeyTruncated`/`hasDetail` se sustituyen por la composición; se actualizan sus pruebas.
+- `itemParts()` pasa a leer `itemLayout()`. `journeyGroups`/`journeyTruncated`/`hasDetail` desaparecen **en el mismo commit** en el que `catalog-reader.tsx`, `pages.tsx` y las pruebas pasan a usar `itemLayout()` (T4).
 - `clampPage`, `applyUpdate` (D12), `setLayout`, `pagesOf` y `openingFolio` mantienen su contrato. Al reagrupar tras un cambio en vivo, se queda la parte anterior que exista.
 
 ### 3.5 Propiedad del estado en la interfaz
@@ -121,127 +146,58 @@ Una página (móvil): una hoja por vivienda como hoy, con el recorrido entero. L
 | Cargando / cargada / error de cada foto | Nuevo `components/catalogs/reader/reader-image.tsx` (estado local, una clave por `src`) | `onLoad`/`onError` y comprobación de `img.complete` al montar (foto ya en caché antes de hidratar). **Ningún reintento automático**: en error se queda en error. |
 | Composición por vivienda | `itemLayout(item)` | Se calcula, no se guarda |
 
-## 4. Tareas (en orden de dependencias)
+## 4. Tareas (secuencia revisada, correcta en dependencias)
 
-Cada tarea es un commit. Ninguna se considera hecha sin su verificación en verde.
+Cada tarea es un commit que compila y pasa sus pruebas: `npx tsc --noEmit` y `npm run test:catalogs-public`, más lo indicado en cada una. **Un cambio de API llega siempre en el mismo commit que sus consumidores.** Ninguna tarea se da por hecha sin su verificación.
 
-### T0 · Expediente
-- **Archivos:** `qa-c2/*` traídos por cherry-pick (P3).
-- **Verificación:** `git log` muestra los commits de documentación sobre la base.
-- **Commit:** los de origen, sin cambios.
+| Tarea | Contenido | Archivos | Depende de | Verificación propia |
+| --- | --- | --- | --- | --- |
+| **T0** | Expediente y este plan corregido | `qa-c2/*`, `ampliacion-c-enmienda.md`, `result.md` | — | `git log` |
+| **T1** | Clases excluidas del recorrido automático y `mosaic` (servidor), con todos sus literales tipados | `lib/catalogs/editorial.ts`, `public-contract.ts`, `to-public.ts`, `scripts/test-catalogs-public.mts` (sección «E1 · fotos» y `mosaic: []` en `pubCatalog`) | T0 | Pruebas con **resultados explícitos**: índices exactos del recorrido y del mosaico en casos escritos a mano; clases sin confianza siguen entrando; la galería conserva todas; sin claves prohibidas |
+| **T2** | Señal en banda propia y letra mínima en doble página | `components/catalogs/reader/scroll-region.tsx`, `reader.module.css` | T0 | `tsc`; las medidas se toman en T6 |
+| **T3** | Estados de las fotos (marcos, miniaturas, mosaico y galería; caché antes de hidratar; «reducir movimiento»; sin reintentos) | `components/catalogs/reader/reader-image.tsx` (nuevo), `pages.tsx`, `gallery.tsx`, `reader.module.css` | T0 | `tsc`; los estados se prueban en el navegador en T6 |
+| **T4** | **Composición y sus consumidores, juntos:** `journey-layout.ts`, partes y D12 en `reader-state.ts`, páginas (apertura con enlace, recorrido, página de texto compuesta, detalle con «La historia completa», ficha breve en doble y una página) y `renderSpread` | `lib/catalogs/journey-layout.ts` (nuevo), `lib/catalogs/reader-state.ts`, `components/catalogs/reader/pages.tsx`, `catalog-reader.tsx`, `reader.module.css`, `scripts/test-catalogs-public.mts` (secciones Z6 adaptadas y «E1 · composición») | T1, T2, T3 | `tsc`, `test:catalogs-public`, `test:catalogs`; pruebas con **partes, folios y D12 explícitos** para viviendas sintéticas escritas a mano; completitud contra los capítulos de origen (§5); invariantes aleatorias como complemento |
+| **T5** | Fixtures sintéticas de E1 (token `fixtureQaToken00000000000010`, viviendas a–j de abajo) | `lib/catalogs/fixture-store.ts` | T4 | `tsc`; el estado público del token responde en la copia aislada (§2.1) |
+| **T6** | Navegador, calibración y regresiones | `lib/catalogs/journey-layout.ts` (solo si la calibración cambia constantes, con el motivo) | T5 | Matriz de §6; regresiones de §7; suites, `tsc`, compilación aislada, lint de migraciones y tipografía |
+| **T7** | Resultado y entrega | `result.md`, `qa-c2/capturas-e1/` | T6 | Push de `fabri/bcp-01-e1`, PR, CI en verde en el último commit |
 
-### T1 · Clases excluidas y mosaico (servidor, puro)
-- **Archivos:**
-  - `lib/catalogs/editorial.ts` (exclusión en `alternatePhotos`, `mosaic`);
-  - `lib/catalogs/public-contract.ts` (`mosaic`);
-  - `lib/catalogs/to-public.ts` (pasar `mosaic`);
-  - `scripts/test-catalogs-public.mts` (sección «E1 · fotos»).
-- **Pruebas:**
-  - las tres clases nunca entran en el recorrido de texto ni de limpia y siguen en `photos` (galería);
-  - una foto sin clase sí entra;
-  - el nivel historia no cambia;
-  - mosaico ≤ 4, en orden, sin portada ni clases excluidas, y vacío cuando hay texto;
-  - el contrato no gana claves prohibidas (`FORBIDDEN_PUBLIC_KEYS`).
-- **Verificación:** `npm run test:catalogs-public`, `npx tsc --noEmit`.
+Fixtures de T5:
+- (a) tipo Reforma: entrada de 96 palabras y capítulos de 9, 8 y 16 palabras, uno con foto de su clase;
+- (b) tipo Peñalver: 11, 20 y 45 palabras, una foto de clase;
+- (c) historia de 8 capítulos sin limpia ni características;
+- (d) 7 capítulos con una limpia distinta;
+- (e) 9 capítulos (uno repetido, solo para el límite) con un micro-capítulo;
+- (f) descripción limpia con fotos `floor_plan`, `street_context` y `other` (corregidas a mano) delante de una sin clase y de otra `other` con confianza 0,6;
+- (g)–(i) solo datos con 1, 3 y 34 fotos;
+- (j) un capítulo más largo que una página.
 
-### T2 · Composición del recorrido y partes del lector (puro)
-- **Depende de** T1.
-- **Archivos:**
-  - `lib/catalogs/journey-layout.ts` (nuevo);
-  - `lib/catalogs/reader-state.ts`;
-  - `scripts/test-catalogs-public.mts`: sección «E1 · composición». Incluye la reproducción [`reproduccion-integridad.mts`](reproduccion-integridad.mts) convertida en prueba, y se adaptan las de Z6 que usaban `journeyGroups`.
-- **Pruebas:**
-  - **L1** con historias de 6, 7, 8 y 9 capítulos, sin limpia, con limpia distinta y con o sin características: cada capítulo aprobado y seguro es accesible en `spread` (recorrido o detalle) y en `single`;
-  - las reglas 1–9 de §3.3;
-  - en 300 viviendas aleatorias: orden conservado, cada bloque una vez, como mucho 3 dobles páginas y ninguna página escasa salvo que sea todo el contenido;
-  - casos Reforma y Peñalver sintéticos (§3 de la enmienda);
-  - folios e índice;
-  - D12 desde cada parte;
-  - reagrupar tras un cambio en vivo: la entrada crece o encoge, aparece o desaparece una foto, se retira un texto;
-  - cambio de composición.
-- **Verificación:** `npm run test:catalogs-public`, `npx tsc --noEmit`.
-
-### T3 · Señal en banda propia y letra mínima (CSS)
-- **Archivos:**
-  - `components/catalogs/reader/scroll-region.tsx` (la señal va en una fila propia bajo la zona desplazable y solo existe si hay más contenido);
-  - `components/catalogs/reader/reader.module.css`.
-- **Suelos de letra** en doble página, con `max()` sobre el tamaño de cada pieza:
-  - recorrido y descripción ≥ 15 px;
-  - entrada ≥ 16 px;
-  - datos clave ≥ 13 px;
-  - auxiliares ≥ 12 px: título corrido, kicker, folio, pie de lámina, enlaces de galería, características, ficha completa e índice.
-- **Sin cambios:** la escala de títulos y la composición de una página.
-- **Verificación:** `npx tsc --noEmit`. La medición en el navegador va en T7.
-
-### T4 · Estados de las fotos
-- **Archivos:**
-  - `components/catalogs/reader/reader-image.tsx` (nuevo);
-  - `components/catalogs/reader/pages.tsx` (`FramedPhoto`, miniaturas y mosaico);
-  - `components/catalogs/reader/gallery.tsx`;
-  - `reader.module.css`.
-- **Comportamiento:**
-  - **cargando:** tono del papel y «Cargando foto…» en marcos grandes; solo el tono en miniaturas. Animación suave solo sin «reducir movimiento» (`prefers-reduced-motion` y `.lowMotion`);
-  - **error:** «Foto no disponible» y, en la galería, «Esta foto no se puede mostrar»; las flechas siguen pasando a las demás. Sin reintentos.
-- **Verificación:** `npx tsc --noEmit`. Los estados se prueban en el navegador en T7.
-
-### T5 · Fixtures sintéticas de E1
-- **Archivos:** `lib/catalogs/fixture-store.ts`, con el token nuevo `fixtureQaToken00000000000010`. Viviendas:
-  - (a) tipo Reforma: entrada de 96 palabras y capítulos de 9, 8 y 16 palabras, uno con foto de su clase;
-  - (b) tipo Peñalver: 11, 20 y 45 palabras, una foto de clase;
-  - (c) historia de 8 capítulos sin limpia ni características;
-  - (d) historia de 7 con una limpia distinta;
-  - (e) historia de 9 capítulos (un capítulo repetido, solo para probar el límite);
-  - (f) descripción limpia con fotos `floor_plan`, `street_context` y `other` delante de una sin clase;
-  - (g)–(i) solo datos con 1, 3 y 34 fotos (algunas de clases excluidas);
-  - (j) un capítulo más largo que una página.
-- **Sin cambios:** las fixtures existentes (`journey`, `journey12`, `journey24`, `one`…). Las de 12 y 24 ya traen un texto de 6.000 caracteres.
-- **Verificación:** `npx tsc --noEmit`; el estado público del token nuevo cumple las pruebas de T1 y T2 (comprobación rápida con `fetch`).
-
-### T6 · Páginas del lector con la composición nueva
-- **Depende de** T2, T3 y T4.
-- **Archivos:** `components/catalogs/reader/pages.tsx` y `components/catalogs/reader/catalog-reader.tsx` (`renderSpread` a partir de `itemLayout`).
-  - **Apertura:** con la entrada larga fuera, lleva el enlace «Sigue · La vivienda →».
-  - **Recorrido:** dobles páginas `[texto | texto]`, `[foto | texto]` y página de texto compuesta.
-  - **Detalle:** «La historia completa» y «Descripción de la ficha».
-  - **Ficha breve** en doble página y en una página.
-- **Sin cambios:** teclado, deslizar, galería, modo desplazamiento, «reducir movimiento», `data-page-ref`, identificadores de página y avisos.
-- **Verificación:** `npx tsc --noEmit`, `npm run test:catalogs-public`, `npm run test:catalogs`.
-
-### T7 · Verificación en el navegador, calibración y regresiones
-- **Depende de** T5 y T6.
-- **Archivos:** `lib/catalogs/journey-layout.ts`, solo si la calibración ajusta `C_TEXT`/`C_PHOTO`, en el mismo commit y con el motivo.
-- **Navegador:** Playwright contra `/dev-fixtures` y el lector (P6), con Chrome sin red externa (proxy a un puerto cerrado), como en C1/C2. Matriz de §6.
-- **Regresiones del lector y de la gestión:** fase 2, PR-A, PR-B, índice, enlace, C1, C2 y mediciones 20 × 2 sintéticas de fase 2, C1 y C2. Los cambios de expectativa previstos están en §7; cada uno se justifica en el resultado.
-- **Verificación completa:**
-  - `npm run test:catalogs-public`, `test:catalogs` y `test:smartlink`;
-  - las demás regresiones de la CI (`test:particulares`, `test:idealista`, `test:lead-merge`, `test:zinto-v2`) y `test:viewing-collections`, `test:client-shortlist`, `test:portal-links`;
-  - `npx tsc --noEmit`, `npm run build` (P7), `python3 scripts/lint-migrations.py` y `npm run test:typography` (mismas 15 infracciones que la base).
-
-### T8 · Resultado
-- **Archivos:**
-  - `docs/changes/2026-10-13-bcp-01-home-catalogo/result.md`: sección «E1», con commits, criterios y evidencia, constantes calibradas, cambios de expectativa y lo no demostrado;
-  - capturas en `qa-c2/capturas-e1/` (JPEG).
-- **Después, solo con la aprobación de este plan:** push de `fabri/bcp-01-e1`, PR con el aviso de posible despliegue y CI en verde en el último commit. **El merge lo hace Fabricio.**
+**No cambian:** `journey`, `journey12`, `journey24`, `one` y demás.
 
 ## 5. Criterios de aceptación y su prueba
 
+**Verificación independiente (corrección 2).** Los números esperados **no** se calculan con `itemLayout`:
+- las pruebas puras y las de navegador usan **resultados explícitos escritos a mano** para viviendas representativas: partes de cada vivienda (`open`, `j1`…, `detail`), total de páginas, folios del índice y parte a la que lleva D12;
+- la completitud se comprueba **contra los capítulos de origen**: el texto de cada capítulo aprobado y seguro tal como está definido en la fixture, escrito también en la prueba, nunca contra las secciones ya derivadas;
+- si la calibración de T6 cambia las constantes, los valores explícitos se recalculan a mano y el cambio se anota en el resultado;
+- las comprobaciones aleatorias de invariantes (orden, una vez, como mucho 3 dobles páginas, sin páginas escasas) solo complementan.
+
 | Criterio | Cómo se demuestra |
 | --- | --- |
-| **L1** Ningún capítulo aprobado y seguro sin acceso (6–9 capítulos, sin limpia o con una distinta) en páginas, desplazamiento de escritorio y móvil | T2 (puro) y T7: en el navegador se recogen todos los textos visibles o desplazables de cada vivienda (c, d, e) y se comparan con los capítulos del estado público |
-| Prioridad de fuentes, fuente cambiada, privacidad, micro-capítulos y descripción del catálogo íntegra | Pruebas Z3/Z5/Z6 existentes sin cambios de expectativa, más las de T1 y T2 |
-| **L2** A 1280 × 720 y 1440 × 900 en doble página: recorrido y descripción ≥ 15 px, entrada ≥ 16 px, datos clave ≥ 13 px, auxiliares ≥ 12 px | T7: `getComputedStyle` sobre cada clase de texto en todas las páginas de `qa`, `journey`, `journey12` y `journey24` |
-| **L3** La señal nunca se cruza con un control ni con texto visible | T7: cajas de la señal frente a botones, enlaces y líneas de texto, en la apertura de (a) y en el detalle de 6.000 caracteres |
-| **L4** Cargando, error, «reducir movimiento» y sin bucles | T7: retraso de 3 s en las fotos de una vivienda (`page.route`) → «Cargando foto…»; respuesta 404 → «Foto no disponible», galería navegable y **una sola petición** por foto fallida; con `reducedMotion: "reduce"`, `animation-name: none`; sin errores de JS |
-| **DQ1** Agrupación y encaje renderizado | T2 (reglas) y T7: en los viewports de L2, ninguna página de recorrido de (a), (b), (c) y `journey` necesita desplazarse salvo el bloque largo (j), que se desplaza con su banda; ninguna página escasa; Reforma → 1 doble página de recorrido |
-| **DQ2** Entrada larga íntegra al inicio del recorrido, con enlace | T2 y T7: la entrada de (a) no está en la apertura, aparece entera en j1 y «Sigue · La vivienda →» lleva a j1 |
-| **DQ3** Página de texto compuesta, sin foto sustituta | T7: los grupos sin foto de clase no muestran ninguna imagen; composición centrada |
-| **DQ4** Clases excluidas fuera del recorrido y dentro de la galería | T1 y T7 con (f) |
-| **DQ6** Ficha breve con 1, 3 y 34 fotos y acceso a la galería; nunca «Sin descripción» ni diagnósticos | T7 con (g)–(i), en doble página y en una página; el texto visible no contiene «Sin descripción», «nivel» ni «diagnóstico» |
-| Índice, folios, teclado, deslizar, galería y D12 tras reagrupar o con cambios en vivo | T2 (puro) y T7: recorrido completo, D12 desde recorrido y detalle, entrada que se acorta o crece en vivo (operación `text` de las fixtures) |
-| Sin desbordes con 1, 12 y 24 viviendas y 6.000 caracteres, a 1280 × 720, 1440 × 900, 362 y 320 px | T7: recorrido de todas las páginas, como en C2 |
-| Seguridad entre 900 × 620 y 1280 × 720 (doble página fuera de los viewports aprobados) | T7 a 1024 × 640: nada recortado; lo que no cabe se desplaza con su banda |
+| **L1** Ningún capítulo aprobado y seguro sin acceso (6–9 capítulos, sin limpia o con una distinta) en páginas, desplazamiento de escritorio y móvil | T4 (puro) y T6: en el navegador se recogen todos los textos visibles o desplazables de cada vivienda (c, d, e) y se comparan con los capítulos del estado público |
+| Prioridad de fuentes, fuente cambiada, privacidad, micro-capítulos y descripción del catálogo íntegra | Pruebas Z3/Z5/Z6 existentes sin cambios de expectativa, más las de T1 y T4 |
+| **L2** A 1280 × 720 y 1440 × 900 en doble página: recorrido y descripción ≥ 15 px, entrada ≥ 16 px, datos clave ≥ 13 px, auxiliares ≥ 12 px | T6: `getComputedStyle` sobre cada clase de texto en todas las páginas de `qa`, `journey`, `journey12` y `journey24` |
+| **L3** La señal nunca se cruza con un control ni con texto visible | T6: cajas de la señal frente a botones, enlaces y líneas de texto, en la apertura de (a) y en el detalle de 6.000 caracteres |
+| **L4** Cargando, error, «reducir movimiento» y sin bucles | T6: retraso de 3 s en las fotos de una vivienda (`page.route`) → «Cargando foto…»; respuesta 404 → «Foto no disponible», galería navegable y **una sola petición** por foto fallida; con `reducedMotion: "reduce"`, `animation-name: none`; sin errores de JS |
+| **DQ1** Agrupación y encaje renderizado | T4 (reglas) y T6: en los viewports de L2, ninguna página de recorrido de (a), (b), (c) y `journey` necesita desplazarse salvo el bloque largo (j), que se desplaza con su banda; ninguna página escasa; Reforma → 1 doble página de recorrido |
+| **DQ2** Entrada larga íntegra al inicio del recorrido, con enlace | T4 y T6: la entrada de (a) no está en la apertura, aparece entera en j1 y «Sigue · La vivienda →» lleva a j1 |
+| **DQ3** Página de texto compuesta, sin foto sustituta | T6: los grupos sin foto de clase no muestran ninguna imagen; composición centrada |
+| **DQ4** Clases excluidas fuera del recorrido y dentro de la galería | T1 y T6 con (f) |
+| **DQ6** Ficha breve con 1, 3 y 34 fotos y acceso a la galería; nunca «Sin descripción» ni diagnósticos | T6 con (g)–(i), en doble página y en una página; el texto visible no contiene «Sin descripción», «nivel» ni «diagnóstico» |
+| Índice, folios, teclado, deslizar, galería y D12 tras reagrupar o con cambios en vivo | T4 (puro) y T6: recorrido completo, D12 desde recorrido y detalle, entrada que se acorta o crece en vivo (operación `text` de las fixtures) |
+| Sin desbordes con 1, 12 y 24 viviendas y 6.000 caracteres, a 1280 × 720, 1440 × 900, 362 y 320 px | T6: recorrido de todas las páginas, como en C2 |
+| Seguridad entre 900 × 620 y 1280 × 720 (doble página fuera de los viewports aprobados) | T6 a 1024 × 640: nada recortado; lo que no cabe se desplaza con su banda |
 
-## 6. Matriz de navegador (T7)
+## 6. Matriz de navegador (T6)
 
 | Viewport | Fixtures | Comprobaciones |
 | --- | --- | --- |
@@ -254,7 +210,7 @@ Las capturas para la QA de Fabricio salen de esta matriz.
 
 ## 7. Regresiones: cambios de expectativa previstos
 
-Cambiará el número de páginas en doble página de algunas fixtures, porque cambian la agrupación (DQ1), la entrada larga (DQ2), el detalle de las historias (L1) y la ficha breve (DQ6). Se recalcularán **de forma independiente** desde el estado público con `itemLayout` (como en C2) y se comprobará que el índice dice lo mismo que el contador. Afecta a:
+Cambiará el número de páginas en doble página de algunas fixtures, porque cambian la agrupación (DQ1), la entrada larga (DQ2), el detalle de las historias (L1) y la ficha breve (DQ6). Los valores nuevos se calculan **a mano** desde las reglas de §3.3 y el contenido de cada fixture (no con `itemLayout`), se escriben de forma explícita en la prueba y se comprueba además que el índice dice lo mismo que el contador. Afecta a:
 - el lector de fase 2, PR-A y C2, en sus recuentos y folios;
 - C2, en las pruebas que buscaban `j3` o el enlace «Sigue en la descripción completa».
 
@@ -277,12 +233,12 @@ Ninguna regresión se debilita: cada número o selector cambiado se lista en el 
 
 | Riesgo | Mitigación |
 | --- | --- |
-| Constantes de capacidad mal calibradas con textos reales | Calibración renderizada en T7 con los casos más largos; el desplazamiento dentro de la página evita recortes; las constantes y su motivo quedan en el resultado |
+| Constantes de capacidad mal calibradas con textos reales | Calibración renderizada en T6 con los casos más largos; el desplazamiento dentro de la página evita recortes; las constantes y su motivo quedan en el resultado |
 | Cambio de recuentos que confunda a lectores con el enlace abierto | Igual que en C2: una actualización al desplegar; D12 conserva la vivienda |
 | Una foto sin clasificar (mapa o aviso) sigue entrando | Límite aprobado de D-QA4; lo resuelve E3 |
 | Estado de imagen con fotos ya en caché antes de hidratar | Comprobación de `img.complete` al montar; prueba con navegación de vuelta a una página ya vista |
 
 ## 11. Fase y siguiente paso
 
-- **Fase actual:** decisiones DQ1–DQ8 aprobadas y registradas ([enmienda §0](enmienda.md)). Este plan de E1 está en **borrador, pendiente de aprobación para ejecutarse**. No se ha cambiado la aplicación, no hay push ni PR, y E2/E3/PDF no han empezado.
-- **Siguiente paso:** Fabricio aprueba o corrige este plan. Con la aprobación se ejecutan P1–P7 y las tareas T0–T8 en orden; después, push de la rama, PR y CI. El merge, la QA en vivo y D13 los hace Fabricio.
+- **Fase actual:** E1 aprobado para ejecutarse; implementación en curso según §4.
+- **Siguiente paso:** al terminar T7, revisión del PR por Fabricio, merge (suyo), QA en vivo y D13. E2, E3 y PDF no empiezan.
