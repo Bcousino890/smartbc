@@ -634,7 +634,7 @@ Rama `fabri/bcp-01-c2`, base `06d5e88b913e860ae33d4afb61ac0c4b3dbc4053` (merge d
 | `78a3b74` | Z6 · lector por partes: apertura, recorrido y detalle; hoja continua en móvil |
 | `ab19832` | Z5 · corrección: el editor conservaba mal los avisos al guardar (hallado en las pruebas de navegador) |
 | `269ba73` | Z7 · medición C1/C2 e instantánea en una sola consulta |
-| siguiente | este resultado, la enmienda §8 y las capturas |
+| `62cf21d` | este resultado, la enmienda §8 y las capturas |
 
 ## Qué hay
 
@@ -708,7 +708,7 @@ Postgres 16.13 temporal en un Mac (Apple M2, 8 GB, macOS 26.5), datos sintético
 
 ## PR, CI y merge (C2)
 
-- **PR:** se abre tras el push; enlace a continuación.
+- **PR:** [#316](https://github.com/Bcousino890/smartbc/pull/316), `fabri/bcp-01-c2` → `main`.
 - **`origin/main` antes del push:** `06d5e88…` (sin cambios desde la base); `0197` libre en `main` y en los 28 PR abiertos.
 - **CI del último commit:** se comprueba tras el push; su resultado está en el PR.
 - **Merge:** lo decide Fabricio. Puede desplegar y aplicar `0197`; el rollback del build no deshace el esquema.
