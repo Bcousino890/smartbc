@@ -42,6 +42,8 @@ export const INTRO_FACTOR = 1.15;
 export const C_TEXT = 125;
 export const C_PHOTO = 70;
 export const MAX_JOURNEY_SPREADS = 3;
+/** Sitio del enlace «Sigue en…» de la última página de un recorrido truncado. */
+export const MORE_COST = 10;
 
 export type JourneyBlock =
   | { kind: "intro"; words: number }
@@ -170,6 +172,22 @@ export function itemLayout(item: PublicItem): ItemLayout {
   const all = pairSpreads(packPages(journeyBlocks(item)));
   const spreads = all.slice(0, MAX_JOURNEY_SPREADS);
   const truncated = all.length > spreads.length;
+  // Recorrido truncado: la última página lleva el enlace «Sigue en…». Si no
+  // cabe, cede su último bloque (está íntegro en el detalle, que en ese caso
+  // trae la historia completa o la descripción completa).
+  if (truncated) {
+    const lastSpread = spreads[spreads.length - 1];
+    const slot = lastSpread.slots[lastSpread.slots.length - 1];
+    if (slot.kind === "text") {
+      const page = slot.page;
+      const cap = capacity(slot.inlinePhoto);
+      while (page.blocks.length > 1 && page.weight + MORE_COST > cap) {
+        const b = page.blocks.pop()!;
+        page.weight -= weight(b);
+        page.words -= b.words;
+      }
+    }
+  }
   const story = truncated && item.sections.some((s) => !!s.heading);
   const description = !!item.description;
   const features = item.features.length > 0;

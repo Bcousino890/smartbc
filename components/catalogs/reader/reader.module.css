@@ -1493,3 +1493,13 @@
     width: 44%;
   }
 }
+
+@media (min-width: 900px) and (min-height: 620px) {
+  /* Los botones del lector heredan la letra (.root button { font: inherit }),
+     así que su propia clase no fijaba el tamaño: en doble página bajaban a
+     ~11 px. Mismo suelo de 12 px que el resto de textos auxiliares. */
+  .root .galleryOpen,
+  .root .continueLink {
+    font-size: max(12px, 0.7em);
+  }
+}

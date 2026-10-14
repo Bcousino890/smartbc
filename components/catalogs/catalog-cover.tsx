@@ -24,13 +24,17 @@ export interface CatalogCoverData {
 export function CatalogCover({
   data,
   className,
+  readable = false,
 }: {
   data: CatalogCoverData;
   className?: string;
+  /** E1 · En el lector, los textos auxiliares no bajan de 12 px (la miniatura
+   *  de la HOME conserva su escala). */
+  readable?: boolean;
 }) {
   const left = ["Selección privada", data.numberLabel].filter(Boolean).join(" · ");
   return (
-    <div className={`${styles.frame}${className ? ` ${className}` : ""}`}>
+    <div className={`${styles.frame}${readable ? ` ${styles.readable}` : ""}${className ? ` ${className}` : ""}`}>
     <div className={`${catalogFontVariables} ${styles.cover}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className={styles.logo} src="/logo.png" alt="Benjamín Cousiño Propiedades" width={3282} height={519} decoding="async" />

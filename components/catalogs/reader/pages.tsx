@@ -76,6 +76,7 @@ export function CoverPage({ catalog, url }: { catalog: PublicCatalog; url: Photo
     <section className={`${styles.page} ${styles.coverPage}`} aria-label="Portada">
       <div className={styles.coverInner}>
         <CatalogCover
+          readable
           data={{
             title: catalog.title,
             subtitle: null,
