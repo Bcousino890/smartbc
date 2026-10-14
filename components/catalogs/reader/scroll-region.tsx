@@ -62,15 +62,22 @@ export function ScrollRegion({
       >
         {children}
       </div>
-      {more ? (
-        <button
-          type="button"
-          className={styles.scrollCue}
-          data-testid="scroll-cue"
-          onClick={() => ref.current?.scrollBy({ top: (ref.current?.clientHeight ?? 300) * 0.8, behavior: "smooth" })}
-        >
-          {cue}
-        </button>
+      {/* E1 (L3): la señal vive en SU banda, debajo de la zona que se desplaza,
+          reservada mientras el texto se desplace (sin saltos al llegar al
+          final). Nunca se superpone a texto ni a controles. */}
+      {state.scrollable ? (
+        <div className={styles.cueBand} data-testid="scroll-cue-band">
+          {more ? (
+            <button
+              type="button"
+              className={styles.scrollCue}
+              data-testid="scroll-cue"
+              onClick={() => ref.current?.scrollBy({ top: (ref.current?.clientHeight ?? 300) * 0.8, behavior: "smooth" })}
+            >
+              {cue}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

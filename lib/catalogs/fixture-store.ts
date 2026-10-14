@@ -25,6 +25,9 @@ export const FIXTURE_TOKENS = {
   // C2: 12 y 24 viviendas con los cuatro niveles mezclados y textos largos.
   journey12: "fixtureJourney12Token0000008",
   journey24: "fixtureJourney24Token0000009",
+  // E1: casos de la QA de C2 (entrada larga, capítulos breves, historias de
+  // 7–9 capítulos, clases de foto excluidas, ficha breve y capítulo largo).
+  qa: "fixtureQaToken00000000000010",
 } as const;
 
 // Títulos como los de las fichas reales: varios ocupan dos líneas en el índice.
@@ -240,7 +243,72 @@ async function seed(): Promise<Map<string, Share>> {
   };
   const journey12 = await journeySeries(12, "fxJ12");
   const journey24 = await journeySeries(24, "fxJ24");
+  // ── E1 · casos de la QA (plan E1 §4, viviendas a–j) ──────────────────────
+  const words = (n: number, lead: string) => `${lead} ` + Array.from({ length: n - lead.split(" ").length }, (_, i) => ["luz", "calma", "madera", "balcón", "patio", "techos", "finca", "barrio"][i % 8]).join(" ") + ".";
+  const classed = (hue: number, classes: Array<string | null>) =>
+    classes.map((k, i) => ({ u: `fx-qa-${hue}-${i}`, w: 1600, h: 1067, c: i === 0, ...(k ? { k } : {}) }));
+  const withStory = (it: InternalItem, prelude: string | null, blocks: Array<{ c: string; t: string }>): InternalItem => ({
+    ...it,
+    story: {
+      h: storySourceHash({
+        description: it.description, bedrooms: it.bedrooms, bathrooms: it.bathrooms,
+        squareMeters: it.square_meters === null ? null : Number(it.square_meters),
+        features: [...(it.features ?? []), ...(it.features_manual ?? [])],
+      }),
+      p: prelude,
+      b: blocks,
+    },
+  });
+  const qaBase = (key: string, title: string, photosList: InternalItem["photos"], over: Partial<InternalItem> = {}) =>
+    item({ key, slug: `fx-qa-${key.slice(-2)}`, title, subzone: "Goya", price: 1100000, bedrooms: 3, bathrooms: 2, square_meters: 106, description: "Piso en Goya.", features: ["Ascensor"], photos: photosList, ...over });
+  /** Textos de los capítulos, exportados para que las pruebas los comparen con lo que se ve. */
+  const EIGHT = ["overview", "living", "kitchen", "private", "outdoor", "finishes", "building", "barrio"].map((c, i) => ({
+    c, t: words(40, `Capítulo ${i + 1} de la historia aprobada:`),
+  }));
+  const qaItems: InternalItem[] = [
+    // (a) tipo Reforma: entrada de 96 palabras; capítulos de 9, 8 y 16 palabras (el de salón con su foto).
+    withStory(qaBase("fxQaReforma0a", "Piso para reformar en Goya", classed(510, [null, "kitchen", "bedroom", "living_room", null, null])),
+      words(96, "Esta vivienda, en un edificio de principios del siglo XX, se presenta"),
+      [
+        { c: "overview", t: "Piso exterior a reformar. Primera planta de la finca." },
+        { c: "living", t: "Salón con dos balcones. Luz de mañana." },
+        { c: "building", t: "Finca de principios del siglo XX con portería y ascensor, en una calle tranquila del barrio." },
+      ]),
+    // (b) tipo Peñalver: entrada corta; 11 (con foto), 20 y 45 palabras.
+    withStory(qaBase("fxQaPenalver0b", "Piso en Conde de Peñalver", classed(530, [null, "living_room", null, null])),
+      words(30, "Un piso clásico de Lista"),
+      [
+        { c: "living", t: "El salón da a la calle. Dos balcones y suelos de madera." },
+        { c: "building", t: words(20, "Edificio clásico con portería física, ascensor y una escalera") },
+        { c: "barrio", t: words(45, "A pocos minutos a pie del mercado, de colegios y del comercio") },
+      ]),
+    // (c) historia de 8 capítulos, sin descripción limpia ni características.
+    withStory(qaBase("fxQaOcho000c", "Ático con ocho capítulos", classed(550, [null, "kitchen", "living_room", "bedroom", "terrace_outdoor", null, null])), words(20, "Un ático para vivir"), EIGHT),
+    // (d) 7 capítulos con una descripción limpia distinta.
+    withStory(await withClean(qaBase("fxQaSiete00d", "Piso con siete capítulos", classed(570, [null, "kitchen", null, null])), "Piso en Goya.", ["Ascensor"]),
+      null, EIGHT.slice(0, 7)),
+    // (e) 9 capítulos largos (uno repetido, solo para probar el límite) y un
+    // micro-capítulo: el recorrido no alcanza y el detalle trae la historia completa.
+    withStory(qaBase("fxQaNueve00e", "Piso con nueve capítulos", classed(590, [null, null, null])), null,
+      [...EIGHT.map((b, i) => ({ c: b.c, t: words(120, `Capítulo ${i + 1} de la historia aprobada:`) })),
+        { c: "living", t: words(120, "Capítulo 9 de la historia aprobada:") }, { c: "building", t: "Portería." }]),
+    // (f) descripción limpia con fotos de clases excluidas delante de una sin clase.
+    // La 5 representa una clase de la IA con confianza 0,6: la instantánea (0197) no la incluye.
+    await withClean(qaBase("fxQaClases0f", "Piso con plano y mapa", classed(610, [null, "floor_plan", "street_context", "other", null, null, "living_room"])),
+      longText(1600), ["Ascensor", "Terraza"]),
+    // (g)–(i) solo datos y fotos: 1, 3 y 34 fotos (algunas de clases excluidas).
+    qaBase("fxQaDatos1g0", "Estudio con una foto", classed(630, [null]), { description: null, features: null }),
+    qaBase("fxQaDatos3h0", "Piso con tres fotos", classed(650, [null, "other", null]), { description: null, features: null }),
+    qaBase("fxQaDatos34i", "Piso con treinta y cuatro fotos", classed(670, Array.from({ length: 34 }, (_, i) => (i === 1 ? "floor_plan" : i === 2 ? "other" : null))), { description: null, features: null }),
+    // (j) un capítulo más largo que una página.
+    withStory(qaBase("fxQaLargo00j", "Piso con un capítulo largo", classed(690, [null, null])), null,
+      [{ c: "overview", t: words(30, "Una vivienda tranquila") }, { c: "barrio", t: words(300, "El barrio de Goya reúne") }]),
+    // (k) capítulos breves sin ninguna foto de su clase: página de texto compuesta.
+    withStory(qaBase("fxQaSinFoto0k", "Piso sin foto adecuada", classed(710, [null, null, null])), null,
+      [{ c: "building", t: words(20, "Edificio clásico con portería física") }, { c: "barrio", t: words(45, "A pocos minutos a pie del mercado") }]),
+  ];
   return new Map<string, Share>([
+    [FIXTURE_TOKENS.qa, { snapshot: snap("Casos de la QA", "Viviendas sintéticas para comprobar el recorrido adaptativo.", qaItems), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.journey12, { snapshot: snap("Doce recorridos", "Doce viviendas con textos largos, historias, descripciones y solo datos.", journey12), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.journey24, { snapshot: snap("Veinticuatro recorridos", "El máximo de un catálogo automático, con textos largos.", journey24), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.main, { snapshot: snap("Salamanca y Chamberí", "Cuatro viviendas elegidas para una búsqueda concreta: luz, silencio y buena comunicación.", base), expiresAt: far, revoked: false, archived: false }],

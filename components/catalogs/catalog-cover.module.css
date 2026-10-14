@@ -169,3 +169,12 @@
   text-transform: none;
   color: var(--ink);
 }
+
+/* E1 · Portada dentro del lector: los textos auxiliares no bajan de 12 px. */
+.readable .kickers,
+.readable .sign {
+  font-size: max(12px, 0.6em);
+}
+.readable .noPhoto {
+  font-size: max(12px, 0.55em);
+}

@@ -91,3 +91,7 @@ Aprobadas por Fabricio al encargar C2; sustituyen a lo que §5 dejaba abierto.
 - **Reserva y borrado:** quitar o excluir una vivienda deja su texto en reserva; solo «Borrar texto» (con confirmación) lo elimina.
 - **Recorrido C · Boutique:** apertura ligera (foto, título, precio, datos clave, entrada breve y hasta 3 puntos verificados), secciones breves alternando con fotos (hasta 3 dobles páginas), detalle con la ficha completa y la descripción íntegra; en móvil, una hoja continua con la ficha y la descripción plegables. Sin títulos temáticos inventados: solo los capítulos de una historia aprobada llevan título.
 - **Medición:** 50 ms (5 enlaces) y 300 ms (20 enlaces) son referencias, no prueba de D13 ni puerta del 10 %.
+
+## 9. QA de C2 tras el despliegue (14 de octubre de 2026)
+
+Reproducción de los problemas del lector y propuesta de reorganización del gestor, **pendientes de aprobación**: [informe](qa-c2/informe.md), [enmienda con decisiones DQ1–DQ8 y criterios](qa-c2/enmienda.md) y [maquetas](qa-c2/maquetas/). **Aprobado el 14 de octubre de 2026:** DQ1–DQ8, la dirección de las maquetas y el orden E1 → E2 → E3, con las precisiones D-QA1–D-QA10 de la [enmienda §0](qa-c2/enmienda.md). Plan de E1 en borrador: [`qa-c2/plan-e1.md`](qa-c2/plan-e1.md).

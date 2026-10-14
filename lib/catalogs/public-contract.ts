@@ -57,6 +57,9 @@ export interface PublicItem {
   photos: PublicPhoto[];
   /** Índice de la foto de portada dentro de photos (0 si no hay marca). */
   coverIndex: number;
+  /** E1 · Ficha breve: hasta 4 fotos adicionales elegibles (índices en
+   *  photos). [] si la vivienda tiene texto o secciones. */
+  mosaic: number[];
 }
 
 export interface PublicCatalog {

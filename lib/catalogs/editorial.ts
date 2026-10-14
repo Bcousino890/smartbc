@@ -69,6 +69,20 @@ export interface Editorial {
   /** Características verificadas para el detalle (limpias + manuales + datos
    *  rescatados de los micro-capítulos de la historia). */
   features: string[];
+  /** E1 · Ficha breve (sin texto ni secciones): hasta 4 fotos adicionales
+   *  elegibles (índices en photos, en su orden, sin la de apertura ni las
+   *  clases excluidas). [] en cualquier otro caso. */
+  mosaic: number[];
+}
+
+/** E1 (D-QA4) · Clases que el recorrido automático NO usa solas. Solo cuentan
+ *  las clases fiables (corregidas a mano, o de la IA con confianza ≥ 0,75: la
+ *  regla de 0197). Una foto sin clase sigue siendo elegible. */
+export const JOURNEY_EXCLUDED_CLASSES: readonly string[] = ["floor_plan", "street_context", "other"];
+export const MOSAIC_MAX = 4;
+
+function eligible(p: EditorialPhoto): boolean {
+  return !p.k || !JOURNEY_EXCLUDED_CLASSES.includes(p.k);
 }
 
 const LEAD_MAX_WORDS = 45;
@@ -114,14 +128,14 @@ function alternatePhotos(sections: EditorialSection[], photos: EditorialPhoto[],
   let next = 0;
   return sections.map((s) => {
     if (s.photo !== null) return s;
-    while (next < photos.length && used.has(next)) next++;
+    while (next < photos.length && (used.has(next) || !eligible(photos[next]))) next++;
     if (next >= photos.length) return s;
     used.add(next);
     return { ...s, photo: next++ };
   });
 }
 
-export function deriveEditorial(it: EditorialInput): Editorial {
+function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
   const manual = (it.features_manual ?? []).filter((f) => typeof f === "string" && f.trim() && isPublicSafe(f)).map((f) => f.trim());
   const features: string[] = [];
   const seenF = new Set<string>();
@@ -224,4 +238,14 @@ export function deriveEditorial(it: EditorialInput): Editorial {
 
   // 4 · Solo datos y fotos.
   return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features };
+}
+
+export function deriveEditorial(it: EditorialInput): Editorial {
+  const ed = deriveText(it);
+  // Ficha breve (D-QA6): sin texto ni secciones que mostrar.
+  const brief = ed.sections.length === 0 && !ed.description;
+  const mosaic = brief
+    ? it.photos.map((p, i) => ({ p, i })).filter(({ p, i }) => i !== it.coverIndex && eligible(p)).slice(0, MOSAIC_MAX).map(({ i }) => i)
+    : [];
+  return { ...ed, mosaic };
 }

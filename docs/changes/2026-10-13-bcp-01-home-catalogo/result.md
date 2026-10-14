@@ -717,3 +717,198 @@ Postgres 16.13 temporal en un Mac (Apple M2, 8 GB, macOS 26.5), datos sintético
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# QA de C2 tras el despliegue
+
+Fabricio fusionó #316. La reproducción de la QA y la propuesta de correcciones y reorganización están en [`qa-c2/`](qa-c2/informe.md). Hay cuatro defectos confirmados: un capítulo de historia inaccesible en escritorio a partir del 7.º (reproducido con datos sintéticos), letra de 11 px en doble página a 1280 × 720, la señal de desplazamiento sobre un botón y fotos sin estado de carga o error. Decisiones DQ1–DQ8 aprobadas el 14 de octubre de 2026 ([enmienda §0](qa-c2/enmienda.md)); plan de E1 en borrador, pendiente de aprobación para ejecutarse ([`plan-e1.md`](qa-c2/plan-e1.md)). Sin cambios en la aplicación.
+
+# E1 · Lector: correcciones y composición adaptativa
+
+## Base y commits
+
+Rama `fabri/bcp-01-e1`, base `origin/main` = `36aff9aab45e8d8479cca46c5a48aaf2f35c4771`, comprobada con `git ls-remote` al empezar. Respecto a `11f4bc1` (C2 fusionado) solo añade un arreglo de particulares que no toca ningún archivo de E1. Worktree `/Users/fabriirguez/SMARTBC/wt/bcp-01-e1`; el checkout original y el stash no se tocaron. Plan aprobado con correcciones: [`qa-c2/plan-e1.md`](qa-c2/plan-e1.md); decisiones: [`qa-c2/enmienda.md`](qa-c2/enmienda.md) §0 (D-QA1–D-QA11).
+
+| Commit | Tarea |
+| --- | --- |
+| `6b3975a`, `d12398a` | Informe, enmienda, maquetas y plan (traídos de `fabri/bcp-01-c2-qa`) |
+| `aa895a7`, `b2aafad` | T0 · plan corregido (dependencias, verificación independiente, aislamiento) y D-QA11 |
+| `d3a9704` | T1 · clases excluidas del recorrido automático y `mosaic` |
+| `f6c072b` | T2 · señal en banda propia y letra mínima en doble página |
+| `e6d4a5a` | T3 · estados de carga y error de las fotos |
+| `a90ae3f` | T4 · composición adaptativa y sus consumidores (API y consumidores en el mismo commit) |
+| `59975c6` | T5 · fixtures sintéticas de la QA |
+| `97e7f3b`, `cd1dcc0`, `9ea42bc`, `65be14f` | T6 · calibración renderizada y arreglos que encontró la matriz de navegador |
+| `fa34a03` | T7 · este resultado y las capturas |
+
+## Qué hay
+
+- **L1 · Ningún capítulo sin acceso.** Si el recorrido de una historia no alcanza en sus 3 dobles páginas, el detalle trae **«La historia completa»**: todos los capítulos aprobados y seguros, en orden y con su título. Si hay descripción limpia, va después como «Descripción de la ficha». En móvil todo sigue en la hoja.
+- **L2 · Letra mínima en doble página:**
+  - recorrido y descripción completa ≥ 15 px;
+  - entrada ≥ 16 px;
+  - datos clave ≥ 13 px;
+  - todo texto auxiliar ≥ 12 px, incluidos los botones y la portada.
+- **L3 · La señal tiene su banda.** «Sigue leyendo ↓» va en una banda propia bajo la zona que se desplaza y nunca tapa texto ni controles.
+- **L4 · Fotos con estado:**
+  - cargando: tono del papel y «Cargando foto…» en marcos grandes;
+  - error: «Foto no disponible», y en la galería «Esta foto no se puede mostrar», que deja pasar a las demás;
+  - sin reintentos;
+  - sin animación con «reducir movimiento».
+- **Composición del recorrido** (`lib/catalogs/journey-layout.ts`, pura y determinista):
+  - se agrupa por extensión, con capacidad calibrada en pantalla;
+  - nada escaso: ninguna página se cierra con menos de 25 palabras, y un recorrido entero de menos de 25 va en la apertura;
+  - entrada de más de 45 palabras: íntegra al principio del recorrido, con «Sigue · La vivienda →» (D-QA2);
+  - página de texto compuesta cuando no hay foto adecuada (D-QA3);
+  - como mucho 3 dobles páginas; lo demás, íntegro en el detalle.
+- **D-QA4:** el recorrido automático (texto y descripción limpia) se salta las fotos con clase fiable `floor_plan`, `street_context` u `other`. Una foto sin clase sigue siendo elegible. La galería no pierde ninguna.
+- **D-QA6 · Ficha breve:**
+  - datos completos (operación, precio y zona en su cabecera; superficie, dormitorios, baños y planta en la ficha) y características;
+  - mosaico adaptable de hasta 4 fotos elegibles, que abren la galería, más «Ver las N fotos»;
+  - nunca «Sin descripción» ni diagnósticos.
+- **Contrato público:** solo gana `mosaic` (índices). Sin clases de foto, niveles ni diagnósticos. Sin migración, sin SQL y sin cambio de huella.
+
+## Límites calibrados (`journey-layout.ts`)
+
+Medidos en el navegador a 1280 × 720 y 1440 × 900 con el texto a 15 px:
+
+| Constante | Valor | Por qué |
+| --- | --- | --- |
+| `C_TEXT` / `C_PHOTO` | 125 / 70 palabras-equivalentes | Unas 7 palabras por línea y 19 líneas útiles por página; la foto pequeña (62 % del ancho; vertical al 44 %) ocupa unas 7,5 líneas |
+| `HEADING_COST` / `BLOCK_COST` | 15 / 4 | Un título ≈ 2 líneas; cada bloque deja de media media línea |
+| `INTRO_FACTOR` | 1,15 | La entrada (Fraunces cursiva, 16 px) cabe un 15 % menos por línea |
+| `TINY_WORDS` | 25 palabras reales | Regla de «nada escaso» (mide palabras, no peso) |
+| `LEAD_OPENING_MAX_WORDS` | 45 | D-QA2 |
+| `MORE_COST` | 10 | Sitio del enlace «Sigue en…» en la última página de un recorrido truncado |
+| `MAX_JOURNEY_SPREADS` | 3 | Se mantiene |
+
+**Resultado:**
+- a 1440 × 900 no se desplaza ninguna página de recorrido salvo el capítulo de 300 palabras;
+- a 1280 × 720 se desplazan dentro de su página, con su banda, solo los bloques más largos que una página (capítulos de 120 y 300 palabras) y los detalles largos.
+
+En el rango de 900 × 620 a 1280 × 720, fuera de los viewports aprobados, lo que no cabe se desplaza con su banda y nada se recorta (comprobado a 1024 × 640).
+
+**Decisiones de implementación** (Claude, plan §8). Al calibrar aparecieron tres reglas más, todas para no dejar páginas escasas:
+- «nada escaso» mide palabras reales;
+- una cola escasa se une siempre a la página anterior salvo que choquen dos fotos;
+- un recorrido de menos de 25 palabras va a la apertura.
+
+## Verificaciones (locales, datos sintéticos, entorno aislado)
+
+**Aislamiento (plan §2.1).** El servidor de fixtures y la compilación corrieron en una copia temporal sin ningún `.env*`, con `env -i` y solo variables ficticias, con Supabase en `127.0.0.1:9`. Antes de arrancar se verificó:
+- 0 archivos `.env*` en la copia;
+- solo las variables permitidas, más `__CF_USER_TEXT_ENCODING`, que añade macOS;
+- `@next/env` informa de 0 archivos cargados en desarrollo y en producción.
+
+Los registros no contienen ninguna línea `Environments:`. Ningún `.env` se abrió, imprimió ni copió.
+
+| Comprobación | Resultado |
+| --- | --- |
+| `npm run test:catalogs-public` (en CI) | **262 en verde**. Nuevas: «E1 · fotos» (índices exactos del recorrido y del mosaico), «E1 · composición» (casos a–l con dobles páginas, partes y folios **calculados a mano**; L1 contra los **capítulos de origen** con 6–9 capítulos, sin limpia, con limpia distinta y con características, y el micro-capítulo como característica; 300 viviendas aleatorias como complemento). Z6 reescrita con valores explícitos |
+| `test:catalogs`, `tsc`, `test:smartlink`, `test:particulares`, `test:idealista`, `test:lead-merge`, `test:zinto-v2`, `test:viewing-collections`, `test:client-shortlist`, `test:portal-links`, `lint-migrations` | En verde |
+| `test:typography` | Las mismas 15 infracciones que la base, todas en archivos ajenos a E1 |
+| Compilación aislada (`npm run build`) | Correcta. Sin `.env` cargados; las llamadas a Supabase fallan contra el puerto cerrado, como se espera |
+| Matriz E1 en el navegador (1280 × 720, 1440 × 900, 1024 × 640, 362 y 320 px) | **153 en verde** (tabla siguiente) |
+| Regresiones del lector y de la gestión | Lector 52, índice 187, PR-A 54, PR-B 40, enlace 10, C1 31 y C2 186 en verde. Mediciones sintéticas 20 × 2: fase 2, C1 y C2 **PASA** (máximos 0,29, 0,21 y 0,20 s). Local y sintético: no demuestra D13 |
+
+**Matriz E1** (token `qa` de 11 viviendas, más `journey`, `journey12`, `journey24` y `one`):
+- **Doble página (1280 × 720 y 1440 × 900):**
+  - 32 páginas y folios del índice 3, 5, 7, 12, 16, 21, 25, 26, 27, 28 y 30, **calculados a mano**;
+  - cada página es la parte esperada y lleva su folio;
+  - letra mínima en todas;
+  - la señal nunca se cruza con texto ni controles;
+  - sin desbordes y nada recortado;
+  - el recorrido cabe salvo los bloques largos.
+- **Contenido:**
+  - (a) entrada íntegra en j1 con su enlace;
+  - L1 con las historias de 8 y 9 capítulos comparadas con su **texto de origen**, en páginas y en modo desplazamiento;
+  - «La historia completa» con «Portería» como característica;
+  - (f) el recorrido usa exactamente las fotos 4, 5 y 6 y la galería conserva las 7;
+  - ficha breve con 1, 3 y 34 fotos (0, 1 y 4 de mosaico), y el mosaico abre la galería en su foto;
+  - página compuesta sin fotos;
+  - capítulo largo con su banda.
+- **Navegación:** teclado, Inicio/Fin, modo desplazamiento, «reducir movimiento» y sin errores de JS.
+- **En vivo:**
+  - un texto de una frase vuelve a la apertura de la misma vivienda;
+  - D12 desde recorrido y desde detalle (7 / 27);
+  - el índice tras reordenar;
+  - reordenar mantiene la parte;
+  - estrechar la ventana conserva la vivienda.
+- **Fotos (L4), con y sin «reducir movimiento»:**
+  - red lenta: «Cargando foto…», con animación solo sin «reducir movimiento»;
+  - error: «Foto no disponible» y galería navegable;
+  - **una sola petición** por foto fallida;
+  - al volver a una página, las fotos quedan cargadas en 130–220 ms.
+- **Series:**
+  - `one` = 5 páginas y `journey` = 12, calculados a mano;
+  - `journey12` y `journey24` recorridos enteros sin desbordes a 1280 × 720, 1440 × 900 y 1024 × 640;
+  - la última vivienda del índice abre en su folio;
+  - el texto de 5.938 caracteres llega íntegro al detalle.
+- **Una página (362 y 320):**
+  - `qa` en 14 hojas, sin desbordes en ningún token;
+  - los 9 capítulos de origen en la hoja;
+  - ficha breve con los datos a la vista y 4 fotos;
+  - la barra no tapa el final.
+
+**Cambios de expectativa en las regresiones**, recalculados a mano y nunca con `itemLayout`:
+- **`lector.mjs`** (token `main`): de 13 a **12** páginas, porque el Ático (una frase de 9 palabras) pasa a la apertura. Piso señorial abre en la **5** y lo comprueba también el índice. `one` pasa de 6 a **5**.
+- **`c2.mjs`** (token `journey`): de 13 a **12** páginas, con folios 3, 8 y 11:
+  - los cuatro capítulos breves de la historia en una doble página;
+  - «Conserje» en el detalle (página 10);
+  - la ficha breve de la vivienda 3 (11);
+  - la foto del recorrido es ahora la pequeña dentro de la página;
+  - el texto de una frase en vivo vuelve a la apertura (3 / 9);
+  - D12 desde un recorrido da 3 / 7.
+- **Totales de `journey12`/`journey24` en doble página:** ya no se fijan a mano, porque dependen del reparto de fotos de cada vivienda. Se comprueba que el índice y el contador coinciden y se recorren todas las páginas.
+- **Prueba «vuelta a una foto en caché»:** con respuestas interceptadas no se puede verificar la caché de forma fiable. Se comprueba que las fotos no se atascan en «cargando».
+
+Ninguna comprobación se quitó ni se relajó para pasar. Cada cambio de expectativa está en esta lista, con su motivo.
+
+**Incidencias de entorno, no de E1:**
+- una primera compilación de `/dev-fixtures/mi-espacio` superó los 30 s de PR-A (repetida en verde);
+- el servidor de desarrollo de Next se reinició una vez al acercarse a su umbral de memoria tras horas de pruebas (C2 repetida en verde, el entorno aislado se mantuvo).
+
+Capturas en [`qa-c2/capturas-e1/`](qa-c2/capturas-e1/) (JPEG): apertura y recorrido con entrada larga, historia completa, fotos del recorrido sin clases excluidas, ficha breve, capítulo largo, página compuesta, 24 viviendas, foto cargando y foto con error, D12 y hojas a 362 y 320 px. La insignia «N» es la de desarrollo de Next.
+
+## Recuperación
+
+- E1 es solo código: sin migración, sin cambios de datos y sin cambio de huella. Fusionar puede desplegar, como cualquier merge a `main`.
+- **Revertir:** `git revert` del merge en rama y PR, que fusiona Fabricio. Vuelve el lector de C2 tal cual y no se pierde ningún dato. El campo `mosaic` deja de enviarse.
+- **Lectores abiertos durante el despliegue:** siguen con su versión hasta recargar; el campo de más no les afecta. Con la versión nueva, el número de páginas de algunos catálogos cambia y D12 conserva la vivienda.
+
+## QA en vivo de Fabricio (tras el merge)
+
+1. Abre el catálogo de QA a 1280 × 720 y a 1440 × 900:
+   - el texto del recorrido se lee bien (unos 15 px);
+   - ninguna página tiene una frase suelta;
+   - «Sigue leyendo» no tapa nada.
+2. **Reforma en Goya:**
+   - la apertura ya no lleva la entrada de 96 palabras;
+   - «Sigue · La vivienda →» lleva a la entrada íntegra y los capítulos breves comparten página con su foto.
+3. **Espartinas y Conde de Peñalver:** sin páginas sueltas de texto escaso; donde no hay foto de su clase, página de texto compuesta.
+4. **Goya 1.000.000 €:**
+   - si la foto-mapa tiene clase `street_context`, `other` o `floor_plan` fiable, ya no aparece en el recorrido;
+   - si no está clasificada, sigue apareciendo (límite aprobado de D-QA4; lo resuelve E3).
+   - La apertura seguirá usando la portada de la ficha (el aviso de reportaje pendiente) hasta E3 o hasta que se cambie la portada en el CRM.
+5. **Viviendas sin descripción:** ficha breve con datos completos y mosaico; tocar una foto abre la galería.
+6. **Diego de León:** el recorrido muestra sus 6 capítulos y, si no cabe, el detalle trae «La historia completa».
+7. **Fotos:** con red lenta (por ejemplo, el móvil con poca cobertura) se ve «Cargando foto…» en vez de marcos vacíos.
+8. En el móvil real, recorre dos o tres viviendas: hoja continua, ficha breve y galería.
+9. **D13:** 20 ensayos × 2 lectores en el VPS con `?medir=1` (sigue pendiente; lo de aquí es sintético).
+
+## Pendiente o no demostrado
+
+- QA en vivo, D13 en el VPS y QA en dispositivos reales.
+- **Ruta de imagen ya cargada antes de hidratar.** Se trata con `img.complete` al montar, pero el lector siempre arranca en la portada, así que no se ha podido ejercitar con las fixtures.
+- **Mapas y avisos sin clasificar:** pueden seguir entrando en el recorrido hasta E3.
+- **E2 (gestor), E3 (fotos por catálogo) y PDF:** no empezados.
+
+## PR, CI y merge (E1)
+
+- PR: [#317](https://github.com/Bcousino890/smartbc/pull/317), `fabri/bcp-01-e1` → `main`.
+- `origin/main` antes del push: `36aff9a…`, sin cambios desde la base.
+- CI del último commit: se comprueba tras el push; su resultado está en el PR.
+- Merge: lo decide Fabricio. Puede desplegar; no hay migración.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.

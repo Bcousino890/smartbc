@@ -5,8 +5,9 @@
 // Páginas lógicas: portada · índice (con la introducción) · las partes de cada
 // vivienda · cierre. Las partes dependen de la composición:
 //   · «spread» (doble página, desde 900 × 620): apertura, de 0 a 3 dobles
-//     páginas del recorrido («j1»…«j3») y el detalle (datos completos y
-//     descripción íntegra) si hay algo que enseñar ahí;
+//     páginas del recorrido («j1»…«j3», composición de journey-layout.ts) y
+//     el detalle (datos completos, descripción íntegra y, si el recorrido no
+//     alcanza, la historia completa) si hay algo que enseñar ahí;
 //   · «single» (una página): UNA hoja continua por vivienda («open») con el
 //     recorrido entero y el detalle plegable.
 // Los folios y el índice cuentan estas páginas lógicas.
@@ -23,6 +24,7 @@
 // cierra y se aplica D12.
 // ============================================================================
 
+import { itemLayout } from "./journey-layout";
 import type { PublicCatalog, PublicCatalogState, PublicItem } from "./public-contract";
 
 export type ReaderLayout = "spread" | "single";
@@ -55,41 +57,18 @@ export const PAGE_TURN_MS = 380;
 export const REMOVED_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección.";
 export const REMOVED_LAST_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección. Vuelves al índice.";
 
-/** Como mucho tres dobles páginas de recorrido por vivienda. */
-export const MAX_JOURNEY_SPREADS = 3;
 const JOURNEY_PARTS: ItemPart[] = ["j1", "j2", "j3"];
 
 /**
- * Secciones (índices en item.sections) de cada doble página del recorrido:
- * una por doble página con hasta 3 secciones; dos con más. Lo que no cabe
- * sigue íntegro en la descripción completa del detalle.
+ * Partes de una vivienda. En doble página salen de la composición pura del
+ * recorrido (journey-layout.ts, E1): apertura, de 0 a 3 dobles páginas de
+ * recorrido y el detalle si hay algo que enseñar ahí. En una página, una hoja.
  */
-export function journeyGroups(item: PublicItem): number[][] {
-  const n = item.sections?.length ?? 0;
-  if (n === 0) return [];
-  const per = n > MAX_JOURNEY_SPREADS ? 2 : 1;
-  const groups: number[][] = [];
-  for (let i = 0; i < n && groups.length < MAX_JOURNEY_SPREADS; i += per) {
-    groups.push(Array.from({ length: Math.min(per, n - i) }, (_, k) => i + k));
-  }
-  return groups;
-}
-
-/** ¿Quedan secciones fuera del recorrido de la doble página? */
-export function journeyTruncated(item: PublicItem): boolean {
-  const shown = journeyGroups(item).reduce((a, g) => a + g.length, 0);
-  return shown < (item.sections?.length ?? 0);
-}
-
-/** El detalle existe si hay descripción completa o características. */
-export function hasDetail(item: PublicItem): boolean {
-  return !!item.description || item.features.length > 0;
-}
-
 export function itemParts(item: PublicItem, layout: ReaderLayout): ItemPart[] {
   if (layout === "single") return ["open"];
-  const parts: ItemPart[] = ["open", ...JOURNEY_PARTS.slice(0, journeyGroups(item).length)];
-  if (hasDetail(item)) parts.push("detail");
+  const lay = itemLayout(item);
+  const parts: ItemPart[] = ["open", ...JOURNEY_PARTS.slice(0, lay.spreads.length)];
+  if (lay.detail) parts.push("detail");
   return parts;
 }
 

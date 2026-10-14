@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { PublicItem } from "@/lib/catalogs/public-contract";
 import { photoProps, type PhotoUrl } from "./pages";
+import { ReaderImage } from "./reader-image";
 import styles from "./reader.module.css";
 
 // Galería a pantalla completa (BCP-01 T8). Teclado (← → Esc) lo gestiona el
@@ -51,8 +52,7 @@ export function Gallery({
           if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - s.y)) onStep(dx < 0 ? 1 : -1);
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img key={p.src} {...photoProps(p, url, "100vw")} alt={`Foto ${photo + 1} de ${item.photos.length}`} />
+        <ReaderImage key={p.src} variant="gallery" {...photoProps(p, url, "100vw")} alt={`Foto ${photo + 1} de ${item.photos.length}`} />
       </div>
       <div className={styles.lbBottom}>
         <button type="button" onClick={() => onStep(-1)} disabled={!many} aria-label="Foto anterior">

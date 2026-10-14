@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BCP-01 · Maquetas del gestor de catálogos</title>
+<!-- MAQUETA ESTÁTICA con datos sintéticos. No es código de la aplicación.
+     Paleta y tipografía del admin (Lato 300/400/700, crema, oro, tinta). -->
+<style>
+@font-face { font-family: Lato; font-weight: 300; src: url(fuentes/lato-300.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 400; src: url(fuentes/lato-400.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 700; src: url(fuentes/lato-700.woff2) format("woff2"); }
+:root { --cream: #fbf8f3; --cream2: #f5f0e8; --cream3: #ede5d5; --gold: #c9a96e; --golddk: #a88a52; --ink: #0a0a0a; --navy: #1b2a4a; --line: rgba(201,169,110,.28); --muted: rgba(10,10,10,.58); }
+* { box-sizing: border-box; }
+body { margin: 0; background: #e9e4dc; font-family: Lato, Arial, sans-serif; color: var(--ink); }
+.doc { padding: 24px; display: grid; gap: 28px; }
+.label { font: 700 13px Lato; letter-spacing: .08em; text-transform: uppercase; color: #6b5a3e; margin: 0 0 6px; }
+.note { font: 13px/1.45 Lato; color: #4a4036; max-width: 1440px; margin: 0 0 8px; }
+.frame { position: relative; overflow: hidden; background: var(--cream); font-size: 14px; line-height: 1.43; }
+.d1440 { width: 1440px; height: 900px; }
+.m362 { width: 362px; height: 800px; }
+.tag { position: absolute; top: 8px; right: 8px; z-index: 20; font: 700 11px Lato; letter-spacing: .06em; text-transform: uppercase; background: var(--navy); color: #fff; padding: 4px 8px; border-radius: 4px; }
+/* Admin shell */
+.side { position: absolute; inset: 0 auto 0 0; width: 64px; background: var(--navy); }
+.side i { display: block; width: 22px; height: 22px; margin: 22px auto; border-radius: 6px; background: rgba(255,255,255,.18); }
+.main { position: absolute; inset: 0 0 0 64px; display: flex; flex-direction: column; }
+.top { padding: 18px 32px 0; }
+.crumb { font-size: 13px; color: var(--muted); }
+.head { display: flex; align-items: flex-end; gap: 16px; margin-top: 6px; }
+.h1 { font: 400 26px/1.15 Lato; letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+.meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-size: 12px; white-space: nowrap; }
+.chip.active { background: rgba(201,169,110,.18); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(201,169,110,.55); background: #fff; font: 400 14px Lato; color: var(--ink); white-space: nowrap; }
+.btn.gold { background: var(--gold); border-color: var(--gold); color: #fff; font-weight: 700; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn[disabled] { opacity: .45; }
+.btn.sm { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.spacer { flex: 1; }
+.tabs { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--line); }
+.tabs span { padding: 10px 16px; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs span.on { color: var(--ink); font-weight: 700; border-color: var(--gold); }
+.tabs b { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.body { flex: 1; display: flex; min-height: 0; }
+.pane { flex: 1; min-width: 0; padding: 16px 32px; overflow: hidden; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.crit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.crit .chip { background: var(--cream2); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+.seg span { padding: 6px 12px; font-size: 13px; color: var(--muted); }
+.seg span.on { background: rgba(201,169,110,.18); color: var(--ink); font-weight: 700; }
+.search { flex: 1; min-width: 200px; max-width: 320px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 0 10px; display: flex; align-items: center; color: var(--muted); font-size: 13px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 13.5px; }
+th { text-align: left; font: 400 12px Lato; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; background: var(--cream2); border-bottom: 1px solid var(--line); }
+td { padding: 6px 10px; border-bottom: 1px solid rgba(201,169,110,.15); vertical-align: middle; white-space: nowrap; }
+tr.sel td { background: rgba(201,169,110,.12); }
+td .t { display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+td .z { display: block; font-size: 12px; color: var(--muted); }
+.th { width: 46px; height: 32px; border-radius: 4px; display: block; }
+.num { color: var(--muted); font-variant-numeric: tabular-nums; width: 28px; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.g { background: #2e7d4f; } .a { background: #c47f17; } .r { background: #b3402a; } .n { background: #9aa0a6; } .b { background: #2f6db3; }
+.via { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--cream2); }
+.via.inc { background: #fff1d6; color: #7a5208; }
+.kebab { color: var(--muted); font-size: 18px; }
+/* Panel lateral */
+.panel { width: 560px; flex: none; border-left: 1px solid var(--line); background: #fff; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(10,10,10,.06); }
+.panel.narrow { width: 440px; }
+.ph { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
+.ph .row { display: flex; align-items: flex-start; gap: 10px; }
+.ph h2 { font: 700 17px/1.3 Lato; margin: 0; }
+.ph .ref { font-size: 12px; color: var(--muted); }
+.pb { flex: 1; overflow: hidden; padding: 14px 20px; display: grid; gap: 14px; align-content: start; }
+.pf { padding: 12px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; background: var(--cream); }
+.lab { font: 400 12px Lato; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+.field { border: 1px solid rgba(201,169,110,.45); border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 1.5; background: #fff; }
+.field.dirty { border-color: #c47f17; box-shadow: 0 0 0 3px rgba(196,127,23,.12); }
+.disc { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; background: var(--cream); }
+.disc b { font-weight: 700; }
+.warn { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px; border-radius: 8px; background: #fff6e5; color: #6b4a07; font-size: 13px; }
+.block { padding: 7px 10px; border-radius: 8px; background: #fdecea; color: #8a2a1c; font-size: 13px; }
+.box { width: 15px; height: 15px; border: 1.5px solid #8a6a2a; border-radius: 3px; flex: none; margin-top: 2px; background: #fff; }
+.box.on { background: var(--gold); border-color: var(--gold); }
+.hl { display: flex; flex-wrap: wrap; gap: 6px; }
+.hl span { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+.hl span.on { background: rgba(201,169,110,.2); border-color: var(--gold); }
+.aibar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.aibar small { width: 100%; font-size: 12px; color: var(--muted); }
+.strip { display: flex; gap: 6px; }
+.strip i { width: 62px; height: 42px; border-radius: 4px; display: block; position: relative; }
+.strip i.off { opacity: .35; outline: 2px dashed #b3402a; outline-offset: 1px; }
+.dec { border: 1.5px dashed #2f6db3; border-radius: 10px; padding: 10px; background: #f3f7fc; }
+.dec .lab { color: #2f6db3; }
+.unsaved { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #8a5a07; }
+.toast { position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px; background: var(--ink); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 13px; display: flex; gap: 14px; align-items: center; }
+.toast u { color: var(--gold); text-decoration: none; font-weight: 700; }
+.card { border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.ph-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.ph-grid i { aspect-ratio: 3/2; border-radius: 4px; display: block; }
+.ph-grid i.on { outline: 3px solid var(--gold); outline-offset: 1px; }
+.cover { aspect-ratio: 3/4; width: 100%; max-width: 380px; border-radius: 6px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; color: #fff; padding: 22px; }
+.cover h3 { font: 400 28px/1.1 Georgia, serif; margin: 0; }
+.cover p { margin: 6px 0 0; font: italic 14px Georgia, serif; opacity: .9; }
+.radio { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }
+.radio i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #8a6a2a; display: inline-block; }
+.radio i.on { box-shadow: inset 0 0 0 3px #fff; background: var(--gold); border-color: var(--gold); }
+details.sec2 { border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+/* Móvil */
+.m362 .mtop { padding: 10px 14px 0; background: var(--cream); }
+.m362 .mtabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); margin-top: 10px; }
+.m362 .mtabs span { text-align: center; padding: 9px 0; font-size: 12.5px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.m362 .mtabs span.on { color: var(--ink); font-weight: 700; border-color: var(--gold); }
+.mlist { padding: 8px 12px 90px; display: grid; gap: 8px; }
+.mcard { display: grid; grid-template-columns: 58px 1fr; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.mcard .th { width: 58px; height: 42px; }
+.mcard b { display: block; font-size: 13.5px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mcard small { font-size: 12px; color: var(--muted); }
+.mbar { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+.mbar .btn { flex: 1; }
+.mhead { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: #fff; }
+.mbody { padding: 12px 14px 110px; display: grid; gap: 12px; }
+.banner { margin: 8px 12px 0; padding: 9px 11px; border-radius: 8px; background: #fff6e5; color: #6b4a07; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="doc" id="doc"></div>
+<script>
+const STREETS = ["Calle de Goya", "José Ortega y Gasset", "Calle Alcalá", "Calle de Ayala", "Calle Padilla", "Calle Espartinas", "Conde de Peñalver", "General Díaz Porlier", "Paseo de la Castellana", "Príncipe de Vergara", "Calle de Velázquez", "Calle de Lagasca", "Claudio Coello", "Calle de Hermosilla", "Calle de Juan Bravo", "Don Ramón de la Cruz", "Calle de Jorge Juan", "Calle de Villanueva", "Calle de Serrano", "Núñez de Balboa", "Calle de Castelló", "Calle de Lista"];
+const ZONES = ["Goya", "Lista", "Castellana", "Recoletos", "Almagro"];
+// Qué ve el cliente y estado del texto (sintético, reparto parecido a la QA).
+const LEVEL = ["clean", "story", "facts", "clean", "facts", "story", "story", "story", "clean", "text", "facts", "facts", "clean", "story", "text", "facts", "clean", "facts", "story", "clean", "facts", "clean"];
+const LV = { text: "Texto del catálogo", story: "Historia aprobada", clean: "Descripción limpia", facts: "Solo datos y fotos" };
+const STATE = { 3: ["a", "Cambios sin guardar"], 9: ["g", "Publicado"], 14: ["r", "Revisar · cambió los m²"], 12: ["b", "Borrador sin publicar"], 16: ["b", "Borrador sin publicar"] };
+const props = STREETS.map((s, i) => ({
+  n: i + 1, ref: `BC-${1480 + i * 3}`, title: `${i % 6 === 5 ? "Ático" : "Piso"} en ${s}`, zone: ZONES[i % 5],
+  price: (950000 + i * 11500).toLocaleString("es-ES") + " €", m2: 74 + (i * 7) % 90, d: 2 + i % 3, b: 1 + i % 3,
+  via: i === 6 ? ["inc", "Incluida a mano · fuera de zona"] : i === 17 ? ["inc", "Incluida a mano"] : null,
+  level: LEVEL[i], hue: 15 + i * 13,
+}));
+props[6].zone = "Guindalera";
+const thumb = (h) => `<i class="th" style="background:linear-gradient(hsl(${h},35%,80%),hsl(${h},30%,45%))"></i>`;
+const stateCell = (p, i) => {
+  if (STATE[i]) return `<span class="st"><span class="dot ${STATE[i][0]}"></span>${STATE[i][1]}</span>`;
+  return p.level === "facts" ? `<span class="st"><span class="dot n"></span>Sin descripción</span>` : `<span class="st" style="color:var(--muted)">Sin texto propio</span>`;
+};
+const shell = (tab, inner) => `<div class="side">${"<i></i>".repeat(7)}</div><div class="main"><div class="top"><div class="crumb">Mi espacio › Catálogos</div>
+  <div class="head"><div><h1 class="h1">Salamanca · selección de octubre</h1><div class="meta"><span class="chip active">Activo</span> · Automático · 22 viviendas · enlace válido hasta el 13 dic</div></div><span class="spacer"></span><span class="btn">Vista previa ↗</span><span class="btn gold">Compartir</span><span class="btn ghost">⋯</span></div>
+  <div class="tabs">${[["Viviendas", "22"], ["Contenido", "1 por revisar"], ["Diseño", ""], ["Compartir", ""]].map(([t, b]) => `<span class="${t === tab ? "on" : ""}">${t}${b ? `<b>· ${b}</b>` : ""}</span>`).join("")}</div></div><div class="body">${inner}</div></div>`;
+
+const frames = [];
+function frame(id, title, note, html, cls = "d1440") {
+  frames.push(`<section><p class="label">${title}</p><p class="note">${note}</p><div class="frame ${cls}" id="${id}"><span class="tag">Propuesta</span>${html}</div></section>`);
+}
+
+// G1 · Viviendas
+const rowsV = props.slice(0, 18).map((p, i) => `<tr class="${i === 6 ? "sel" : ""}"><td class="num">${p.n}</td><td>${thumb(p.hue)}</td><td><span class="t">${p.title}</span><span class="z">${p.ref} · ${p.zone}</span></td><td>${p.price}</td><td>${p.m2} m² · ${p.d} dorm. · ${p.b} ${p.b === 1 ? "baño" : "baños"}</td><td>${p.via ? `<span class="via inc">${p.via[1]}</span>` : `<span class="via">Coincide</span>`}</td><td class="kebab">⋯</td></tr>`).join("");
+frame("g1", "G1 · Viviendas · 1440 × 900 · 22 viviendas",
+  "Lista compacta: una fila por vivienda, sin párrafos repetidos. Criterios resumidos con «Modificar criterios»; vistas «En el catálogo / Coincidencias / Excluidas» de la misma lista. Los motivos («por qué está») se ven al abrir una vivienda, en el panel. Las reglas del automático, el máximo, inclusiones y exclusiones no cambian.",
+  shell("Viviendas", `<div class="pane"><div class="crit"><span class="lab" style="margin:0 6px 0 0">Criterios</span><span class="chip">Venta</span><span class="chip">Salamanca</span><span class="chip">Chamberí · Almagro</span><span class="chip">800.000 – 1.200.000 €</span><span class="chip">Máx. 24</span><span class="chip">Precio ascendente</span><span class="spacer"></span><span class="btn sm">Modificar criterios</span><span class="btn sm ghost">Pasar a manual…</span></div>
+  <div class="bar" style="margin-top:12px"><span class="seg"><span class="on">En el catálogo · 22</span><span>Coincidencias · 64</span><span>Excluidas · 2</span></span><span class="meta" style="margin:0">22 en el catálogo · 64 coinciden · 2 incluidas a mano · 2 excluidas</span><span class="spacer"></span><div class="search">Buscar por referencia, calle o barrio</div><span class="btn sm">Incluir una vivienda</span></div>
+  <table><thead><tr><th>#</th><th></th><th>Vivienda</th><th>Precio</th><th>Datos</th><th>Selección</th><th></th></tr></thead><tbody>${rowsV}</tbody></table></div>
+  <div class="panel narrow"><div class="ph"><div class="row"><div style="flex:1"><div class="ref">${props[6].ref} · ${props[6].zone} · posición 7 de 22</div><h2>${props[6].title}</h2></div><span class="btn sm ghost">✕</span></div></div>
+  <div class="pb"><div><div class="lab">Por qué está en el catálogo</div><div class="disc"><b>Incluida a mano.</b> No cumple la zona: Guindalera no está en Salamanca ni en Chamberí · Almagro.<br>Operación: venta ✓ · Precio: 1.019.000 € ✓</div></div>
+  <div><div class="lab">Acciones</div><div class="bar"><span class="btn sm">Quitar inclusión</span><span class="btn sm">Excluir</span><span class="btn sm ghost">Abrir ficha en el CRM ↗</span></div></div>
+  <div><div class="lab">Texto que ve el cliente</div><div class="disc">Historia aprobada · <u>Abrir en Contenido</u></div></div>
+  <div><div class="lab">Portada del catálogo</div><div class="disc">No es la vivienda de portada · <u>Elegir en Diseño</u></div></div></div></div>`));
+
+// G2 · Contenido con el editor abierto
+const rowsC = props.map((p, i) => `<tr class="${i === 3 ? "sel" : ""}"><td class="num">${p.n}</td><td>${thumb(p.hue)}</td><td><span class="t" style="max-width:240px">${p.title}</span><span class="z">${p.ref}</span></td><td style="color:var(--muted)">${LV[p.level]}</td><td>${stateCell(p, i)}</td></tr>`).join("");
+frame("g2", "G2 · Contenido · editor lateral abierto, cambios sin guardar y avisos de IA · 1440 × 900",
+  "La misma lista con dos columnas: qué ve hoy el cliente y el estado del texto. Filtros por estado. Un solo editor, en panel lateral: cerrar o cambiar de vivienda no tira lo escrito (la fila queda «Cambios sin guardar»). «Guardar borrador» y «Publicar» siguen separados; los avisos de la IA se confirman uno a uno y los bloqueos impiden publicar. El bloque azul depende de una decisión (DQ5).",
+  shell("Contenido", `<div class="pane"><div class="bar"><span class="seg"><span class="on">Todas · 22</span><span>Por revisar · 1</span><span>Borradores · 2</span><span>Cambios sin guardar · 1</span><span>Sin descripción · 7</span></span><span class="spacer"></span><div class="search">Buscar vivienda</div></div>
+  <table><thead><tr><th>#</th><th></th><th>Vivienda</th><th>Qué ve el cliente</th><th>Texto</th></tr></thead><tbody>${rowsC}</tbody></table></div>
+  <div class="panel"><div class="ph"><div class="row"><div style="flex:1"><div class="ref">${props[3].ref} · 4 de 22 · <span class="unsaved"><span class="dot a"></span>Cambios sin guardar</span></div><h2>${props[3].title}</h2></div><span class="btn sm ghost">‹</span><span class="btn sm ghost">›</span><span class="btn sm ghost">✕</span></div>
+  <div class="disc" style="margin-top:10px"><b>Qué ve el cliente:</b> la descripción limpia de la ficha. Si publicas un texto, verá el tuyo. <u>Ver por qué ▸</u></div></div>
+  <div class="pb"><div><div class="lab"><span>Entrada · opcional</span><span>62 / 280</span></div><div class="field">Un piso exterior y luminoso en una finca clásica de Ayala.</div></div>
+  <div><div class="lab"><span>Texto completo</span><span>148 palabras · 912 / 6.000</span></div><div class="field dirty" style="height:108px;overflow:hidden">Vivienda exterior con salón amplio de dos balcones a la calle, cocina independiente con office y tres dormitorios, el principal con baño en suite. La finca, de 1925, tiene portería física y ascensor. <b style="background:#fff1d6;font-weight:400">Dispone de piscina comunitaria</b> y trastero en la planta baja. Está a cinco minutos a pie del metro de Goya y del mercado de la Paz…</div></div>
+  <div><div class="lab">Puntos verificados · hasta 3, literales de la ficha</div><div class="hl"><span class="on">Ascensor</span><span class="on">Portero físico</span><span>Trastero</span><span>Calefacción central</span></div></div>
+  <div class="aibar"><span class="btn sm">Preparar desde la ficha (IA)</span><span class="btn sm">Borrador con IA</span><span class="btn sm ghost">Ver recorrido</span><small>La IA solo trabaja cuando pulsas, con el proveedor ya configurado. Propone; nada se guarda ni se publica sin ti.</small></div>
+  <div style="display:grid;gap:6px"><div class="lab">Revisión antes de publicar</div><div class="warn"><span class="box"></span><span>«piscina» no aparece en la ficha: comprueba que es cierto. <i>Corrígelo o marca «lo he comprobado».</i></span></div><div class="warn"><span class="box on"></span><span>La cifra «1925» no aparece en los datos de la ficha. <i>Comprobado.</i></span></div></div>
+  <div class="dec"><div class="lab"><span>Fotos del recorrido · solo este catálogo</span><span>Decisión DQ5</span></div><div class="strip">${[0, 1, 2, 3, 4, 5].map((k) => `<i class="${k === 2 ? "off" : ""}" style="background:linear-gradient(hsl(${60 + k * 20},30%,80%),hsl(${60 + k * 20},28%,45%))"></i>`).join("")}</div><div style="font-size:12px;color:#2f6db3;margin-top:6px">Foto 3 marcada «No usar en este catálogo» (p. ej. un mapa). La ficha del CRM no cambia.</div></div></div>
+  <div class="pf"><span class="btn gold">Guardar borrador</span><span class="btn" disabled title="Guarda el borrador antes de publicar">Publicar</span><span style="font-size:12px;color:var(--muted)">Guarda el borrador y revisa 1 aviso antes de publicar</span></div></div>`));
+
+// G3 · Diseño
+frame("g3", "G3 · Diseño · 1440 × 900",
+  "Título, introducción y portada (vivienda y foto) juntos, con su vista previa al lado. Mismas reglas de portada de C1: vivienda de la lista efectiva, foto suya y los mismos respaldos y avisos.",
+  shell("Diseño", `<div class="pane"><div class="grid2" style="grid-template-columns:1.3fr 1fr"><div style="display:grid;gap:14px;align-content:start"><div class="card"><div class="lab">Título</div><div class="field">Salamanca · selección de octubre</div><div class="lab" style="margin-top:12px">Introducción</div><div class="field" style="height:84px">Una selección pensada para vuestra búsqueda: luz, finca clásica y buena comunicación en Salamanca y Almagro.</div><div style="margin-top:12px"><span class="btn gold sm">Guardar título e introducción</span></div></div>
+  <div class="card"><div class="lab">Portada</div><div class="bar"><div class="field" style="flex:1">BC-1495 · Piso en Calle Padilla</div><span class="btn sm ghost">Volver a la portada automática</span></div><div class="lab" style="margin-top:12px">Foto · 12 de esta vivienda</div><div class="ph-grid">${Array.from({ length: 12 }, (_, k) => `<i class="${k === 2 ? "on" : ""}" style="background:linear-gradient(hsl(${30 + k * 9},32%,82%),hsl(${30 + k * 9},28%,42%))"></i>`).join("")}</div><div style="font-size:12.5px;color:var(--muted);margin-top:8px">Si esta vivienda sale del catálogo, la portada vuelve sola a la primera con foto y te avisamos aquí.</div></div></div>
+  <div><div class="lab">Vista previa de la portada</div><div class="cover" style="background:linear-gradient(rgba(0,0,0,.05),rgba(0,0,0,.55)),linear-gradient(hsl(48,32%,82%),hsl(48,28%,42%))"><p style="font-style:normal;letter-spacing:.2em;font:12px Lato;text-transform:uppercase">Otoño 2026</p><h3>Salamanca · selección de octubre</h3><p>Preparado por Fabricio Andree</p></div><div style="margin-top:10px"><span class="btn sm">Abrir la vista previa completa ↗</span></div></div></div></div>`));
+
+// G4 · Compartir
+frame("g4", "G4 · Compartir · 1440 × 900",
+  "Contacto que ve el cliente, enlace con su caducidad, renovar y revocar. Los anuncios de origen pasan a un bloque secundario «Organización interna» (el cliente nunca los ve). En modo medición (?medir=1) el panel de medición sigue aquí.",
+  shell("Compartir", `<div class="pane"><div class="grid2"><div class="card"><div class="lab">Quién firma la selección</div><div><span class="radio"><i class="on"></i>Asesor</span><span class="radio"><i></i>Asesora</span></div><div class="lab" style="margin-top:12px">Nombre</div><div class="field">Fabricio Andree</div><div class="lab" style="margin-top:12px">Teléfono</div><div class="field">+34 641 457 123</div><div style="font-size:12.5px;color:var(--muted);margin-top:8px">Solo cambia lo que se muestra en este catálogo; no da acceso a Mi espacio a nadie.</div><div style="margin-top:12px"><span class="btn gold sm">Guardar contacto</span></div></div>
+  <div class="card"><div class="lab">Enlace para el cliente</div><div class="bar"><div class="field" style="flex:1;color:var(--muted)">portal.bcousinoprop.com/seleccion/••••••••</div><span class="btn sm">Copiar</span></div><div class="meta" style="margin-top:8px">Caduca el 13 de diciembre de 2026 · 2 lectores conectados ahora</div><div class="bar" style="margin-top:12px"><span class="lab" style="margin:0">Duración</span><div class="field" style="width:80px">60</div><span>días</span><span class="btn sm">Renovar</span><span class="spacer"></span><span class="btn sm" style="color:#b3402a;border-color:#e3b3a8">Revocar enlace</span></div></div></div>
+  <details class="sec2" open style="margin-top:20px"><summary style="padding:12px 14px;list-style:none;display:flex;justify-content:space-between"><span class="lab" style="margin:0">Organización interna · anuncios de origen (1)</span><span class="meta" style="margin:0">El cliente nunca ve este bloque</span></summary><div style="padding:0 14px 14px"><div class="disc" style="display:flex;justify-content:space-between"><span><b>BC-1501</b> Ático con terraza en Goya · 108123456 · <i>Clientes de Londres</i></span><u style="color:#b3402a">Quitar</u></div><div class="bar" style="margin-top:8px"><div class="search" style="max-width:none">Buscar en Fichas guardadas o pegar el enlace del anuncio</div><span class="btn sm">Asociar</span></div></div></details></div>`));
+
+// Móvil
+const mcards = props.slice(0, 9).map((p, i) => `<div class="mcard">${thumb(p.hue)}<div><b>${p.title}</b><small>${p.price} · ${i === 3 ? '<span class="unsaved"><span class="dot a"></span>Cambios sin guardar</span>' : p.level === "facts" ? "Sin descripción" : LV[p.level]}</small></div></div>`).join("");
+frame("gm1", "GM1 · Contenido en móvil (362 px)",
+  "Cuatro secciones en una barra sin desplazamiento horizontal. Tarjetas compactas con el estado. Si se sale del editor con cambios sin guardar, se conservan y un aviso permite volver.",
+  `<div class="mtop"><div class="crumb">‹ Mi espacio</div><div style="display:flex;gap:8px;align-items:center;margin-top:4px"><b style="font-size:16px;flex:1">Salamanca · octubre</b><span class="btn sm">Vista previa</span></div><div class="mtabs"><span>Viviendas</span><span class="on">Contenido</span><span>Diseño</span><span>Compartir</span></div></div><div class="banner"><span class="dot a"></span><span style="flex:1">Cambios sin guardar en «${props[3].title}»</span><u>Seguir</u></div><div class="mlist">${mcards}</div>`, "m362");
+frame("gm2", "GM2 · Editor en pantalla propia (362 px)",
+  "El editor ocupa la pantalla y vuelve a la lista con «‹ Contenido». Acciones fijas abajo; la página reserva su altura para que nunca tapen un campo, un aviso ni un botón.",
+  `<div class="mhead"><span>‹ Contenido</span><span class="spacer"></span><span class="unsaved"><span class="dot a"></span>Sin guardar</span></div><div class="mbody"><div><div class="ref" style="font-size:12px;color:var(--muted)">${props[3].ref} · 4 de 22</div><b style="font-size:16px">${props[3].title}</b></div><div class="disc"><b>Qué ve el cliente:</b> descripción limpia. <u>Por qué ▸</u></div><div><div class="lab">Entrada</div><div class="field">Un piso exterior y luminoso en una finca clásica de Ayala.</div></div><div><div class="lab"><span>Texto completo</span><span>148 pal.</span></div><div class="field dirty" style="height:120px;overflow:hidden">Vivienda exterior con salón amplio de dos balcones a la calle, cocina independiente con office y tres dormitorios… Dispone de piscina comunitaria…</div></div><div class="warn"><span class="box"></span><span>«piscina» no aparece en la ficha: comprueba que es cierto.</span></div><div class="aibar"><span class="btn sm">Preparar (IA)</span><span class="btn sm">Borrador con IA</span></div></div><div class="mbar"><span class="btn gold">Guardar borrador</span><span class="btn" disabled>Publicar</span></div>`, "m362");
+frame("gm3", "GM3 · Viviendas en móvil (362 px)",
+  "Criterios en una línea con «Modificar»; la lista y sus vistas, sin tabla. Abrir una vivienda enseña sus motivos y acciones en una hoja propia.",
+  `<div class="mtop"><div class="crumb">‹ Mi espacio</div><div style="display:flex;gap:8px;align-items:center;margin-top:4px"><b style="font-size:16px;flex:1">Salamanca · octubre</b><span class="btn sm">Vista previa</span></div><div class="mtabs"><span class="on">Viviendas</span><span>Contenido</span><span>Diseño</span><span>Compartir</span></div></div><div style="padding:10px 12px 0"><div class="disc" style="display:flex;gap:8px;align-items:center"><span style="flex:1">Venta · Salamanca, Almagro · 0,8–1,2 M€ · máx. 24</span><u>Modificar</u></div><div class="seg" style="margin-top:8px;display:flex"><span class="on" style="flex:1;text-align:center">Catálogo · 22</span><span style="flex:1;text-align:center">Coinciden · 64</span><span style="flex:1;text-align:center">Excluidas · 2</span></div></div><div class="mlist">${props.slice(0, 8).map((p) => `<div class="mcard">${thumb(p.hue)}<div><b>${p.n}. ${p.title}</b><small>${p.price}${p.via ? " · " + p.via[1] : ""}</small></div></div>`).join("")}</div>`, "m362");
+
+document.getElementById("doc").innerHTML = frames.join("");
+</script>
+</body>
+</html>

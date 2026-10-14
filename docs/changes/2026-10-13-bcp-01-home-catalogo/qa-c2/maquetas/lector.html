@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BCP-01 · Maquetas del lector (QA de C2)</title>
+<!-- MAQUETA ESTÁTICA con datos sintéticos. No es código de la aplicación.
+     Tipografía real del lector (Fraunces + Karla, OFL) copiada del build. -->
+<style>
+@font-face { font-family: Fraunces; font-style: normal; font-weight: 100 900; src: url(fuentes/fraunces.woff2) format("woff2"); }
+@font-face { font-family: Fraunces; font-style: italic; font-weight: 100 900; src: url(fuentes/fraunces-italic.woff2) format("woff2"); }
+@font-face { font-family: Karla; font-weight: 200 800; src: url(fuentes/karla.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 400; src: url(fuentes/lato-400.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 700; src: url(fuentes/lato-700.woff2) format("woff2"); }
+:root {
+  --desk: #d8cdbd; --paper: #f4ede1; --ink: #2b2118; --accent: #9b4a2e; --muted: #7a6a58; --mat: #fbf7f0;
+  --rule: rgba(155, 74, 46, 0.35); --display: Fraunces, Georgia, serif; --text: Karla, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #e9e4dc; font-family: Lato, Arial, sans-serif; color: #1a1a1a; }
+.doc { padding: 24px; display: grid; gap: 28px; }
+.label { font: 700 13px Lato, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #6b5a3e; margin: 0 0 6px; }
+.note { font: 13px/1.45 Lato, sans-serif; color: #4a4036; max-width: 1280px; margin: 0 0 8px; }
+.note b { color: #1a1a1a; }
+/* ── Marco de escritorio 1280 × 720 ─────────────────────────────── */
+.frame { position: relative; overflow: hidden; background: var(--desk); color: var(--ink); font-family: var(--text); font-variant-numeric: tabular-nums; }
+.d1280 { width: 1280px; height: 720px; }
+.m362 { width: 362px; }
+.spread { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; box-shadow: 0 2px 4px rgba(60,40,20,.15), 0 20px 50px rgba(60,40,20,.25); }
+.page { position: relative; width: 431px; height: 610px; overflow: hidden; background: radial-gradient(ellipse at 25% 15%, rgba(255,255,255,.55), transparent 60%), radial-gradient(ellipse at 85% 95%, rgba(150,110,70,.12), transparent 55%), var(--paper); }
+.page.l { box-shadow: inset -18px 0 26px -22px rgba(0,0,0,.35); }
+.page.r { box-shadow: inset 18px 0 26px -22px rgba(0,0,0,.25); }
+.capsule { position: absolute; left: 50%; transform: translateX(-50%); top: 642px; display: flex; gap: 6px; align-items: center; padding: 4px 10px; background: rgba(251,247,240,.94); border-radius: 999px; box-shadow: 0 4px 18px rgba(60,40,20,.25); font: 13px Karla, sans-serif; }
+.capsule span { padding: 12px 10px; }
+.capsule .sep { width: 1px; height: 20px; background: var(--rule); padding: 0; }
+.folio { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font: italic 12px var(--display); color: var(--muted); }
+.runner { font: italic 12px var(--display); color: var(--muted); text-align: center; margin: 0 0 18px; }
+.kicker { font: 500 11px/1.4 var(--text); letter-spacing: .26em; text-transform: uppercase; color: var(--accent); margin: 0; text-align: center; }
+.kicker i { font: italic 13px var(--display); letter-spacing: 0; margin-right: 4px; }
+.title { font: 400 27px/1.15 var(--display); margin: 8px auto; text-align: center; max-width: 13em; }
+.price { font: italic 400 25px var(--display); color: var(--accent); text-align: center; margin: 0; }
+.facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin: 18px 0 8px; padding: 0; list-style: none; font-size: 14px; }
+.facts strong { font-weight: 600; } .facts .u { font-size: .8em; color: var(--muted); margin-left: 2px; } .facts .nd { font-style: italic; color: var(--muted); }
+.orn { display: block; text-align: center; color: var(--accent); margin: 14px 0; font-size: 13px; }
+.lead { font: italic 400 17px/1.5 var(--display); text-align: center; margin: 0 auto; max-width: 21em; }
+.hl { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 6px; justify-items: center; }
+.hl li { font: 500 12px var(--text); letter-spacing: .12em; text-transform: uppercase; }
+.hl li::before { content: "✦"; color: var(--accent); margin-right: 8px; }
+.inner { position: absolute; inset: 40px 40px 54px; display: flex; flex-direction: column; }
+.center { justify-content: center; }
+.sec h3 { font: italic 400 21px/1.2 var(--display); color: var(--accent); margin: 0 0 8px; text-align: center; }
+.sec p { font: 400 15px/1.7 var(--text); margin: 0; }
+.sec + .sec { margin-top: 22px; }
+.pre { font: italic 400 16px/1.6 var(--display); margin: 0 0 22px; }
+.photo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 32px 56px; }
+.fr { width: 100%; aspect-ratio: 3/2; background: var(--mat); box-shadow: 0 0 0 9px var(--mat), 0 14px 26px rgba(60,40,20,.22); overflow: hidden; }
+.fr.v { width: 64%; aspect-ratio: 2/3; }
+.fr svg { width: 100%; height: 100%; display: block; }
+.cap { margin: 22px 0 0; font: italic 13px/1.4 var(--display); color: var(--muted); text-align: center; }
+.cap b { font: 500 10px var(--text); letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-right: 6px; font-style: normal; }
+.thumbs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 18px; }
+.thumbs i { width: 52px; height: 38px; background: var(--mat); box-shadow: 0 0 0 3px var(--mat), 0 3px 7px rgba(60,40,20,.2); overflow: hidden; display: block; }
+.thumbs i svg { width: 100%; height: 100%; display: block; }
+.gal { display: block; text-align: center; font: 500 11px var(--text); letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin-top: 12px; }
+.next { margin-top: auto; text-align: center; font: 500 11px var(--text); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.cols { columns: 2; column-gap: 40px; }
+.cols .sec { break-inside: avoid; }
+.wide { width: 862px; }
+.mosaic { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.mosaic i { aspect-ratio: 3/2; background: var(--mat); box-shadow: 0 0 0 4px var(--mat), 0 6px 12px rgba(60,40,20,.18); display: block; overflow: hidden; }
+.mosaic svg { width: 100%; height: 100%; display: block; }
+dl.ff { margin: 10px 0 0; font-size: 14px; width: 100%; }
+dl.ff div { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+dl.ff dt { color: var(--muted); } dl.ff dd { margin: 0; font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 14px; }
+.chips span { font-size: 12px; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 11px; }
+.scroll { overflow: hidden; -webkit-mask-image: linear-gradient(#000 calc(100% - 46px), transparent); mask-image: linear-gradient(#000 calc(100% - 46px), transparent); }
+.cueband { height: 34px; display: flex; align-items: center; justify-content: center; font: 500 11px var(--text); letter-spacing: .18em; text-transform: uppercase; color: var(--accent); border-top: 1px solid var(--rule); margin-top: 6px; }
+.tag { position: absolute; top: 10px; right: 10px; z-index: 5; font: 700 11px Lato, sans-serif; letter-spacing: .06em; text-transform: uppercase; background: #1b2a4a; color: #fff; padding: 4px 8px; border-radius: 4px; }
+/* Estados de imagen */
+.loading { position: relative; background: linear-gradient(110deg, #f3ece0 30%, #faf5ec 50%, #f3ece0 70%); }
+.loading::after { content: "Cargando foto…"; position: absolute; inset: auto 0 14px; text-align: center; font: italic 13px var(--display); color: var(--muted); }
+.thumbs i.loading::after { content: none; }
+.failed { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: #efe7da; color: var(--muted); font: italic 14px var(--display); text-align: center; padding: 10px; }
+.failed small { font: 500 10px var(--text); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); font-style: normal; }
+/* Móvil (una página) */
+.m362 { background: var(--desk); padding: 14px 10px 70px; }
+.sheet { background: radial-gradient(ellipse at 25% 8%, rgba(255,255,255,.55), transparent 50%), var(--paper); padding: 22px 20px 40px; }
+.sheet .fr { box-shadow: 0 0 0 7px var(--mat), 0 10px 20px rgba(60,40,20,.2); }
+.sheet .title { font-size: 30px; } .sheet .price { font-size: 26px; }
+.sheet .sec p { font-size: 16px; }
+.fold { border-top: 1px solid var(--rule); margin-top: 20px; padding: 14px 0 0; display: flex; justify-content: space-between; font: 500 12px var(--text); letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+.mnav { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: var(--mat); border-top: 1px solid rgba(155,74,46,.2); display: flex; align-items: center; justify-content: center; gap: 14px; font: 13px Karla, sans-serif; }
+</style>
+</head>
+<body>
+<div class="doc" id="doc"></div>
+<script>
+// Fotos sintéticas (como las de /dev-fixtures): degradado y ventanas.
+let phN = 0;
+function ph(h, label, v) {
+  const w = v ? 1000 : 1500, H = v ? 1500 : 1000, id = "g" + (++phN);
+  return `<svg viewBox="0 0 ${w} ${H}" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${h},35%,84%)"/><stop offset="1" stop-color="hsl(${h},30%,42%)"/></linearGradient></defs><rect width="${w}" height="${H}" fill="url(#${id})"/>${[0,1,2,3,4].map(i=>`<rect x="${w*.22+i*w*.12}" y="${H*.3}" width="${w*.06}" height="${H*.55}" fill="rgba(255,255,255,.45)"/>`).join("")}<rect y="${H*.8}" width="${w}" height="${H*.2}" fill="rgba(40,30,20,.25)"/><text x="${w*.05}" y="${H*.09}" font-family="Arial" font-size="${H*.05}" fill="#fff">${label}</text></svg>`;
+}
+const cap = (n, t) => `<p class="cap"><b>Lámina ${n}</b>${t}</p>`;
+const facts = (m, d, b, f) => `<ul class="facts"><li><strong>${m}</strong><span class="u">m²</span></li><li><strong>${d}</strong><span class="u">dorm.</span></li><li><strong>${b}</strong><span class="u">baños</span></li><li>${f ? `<strong>${f}</strong>` : `<span class="nd">Planta · sin dato</span>`}</li></ul>`;
+const thumbs = (h, n) => `<div class="thumbs">${Array.from({length: n}, (_, i) => `<i>${ph(h + i * 7, "", false)}</i>`).join("")}</div>`;
+const capsule = (c) => `<div class="capsule"><span>←</span><span>${c}</span><span>→</span><span class="sep"></span><span>Índice</span><span>Desplazar</span></div>`;
+
+const frames = [];
+function frame(id, title, note, html, cls = "d1280", tag = "Propuesta") {
+  frames.push(`<section><p class="label">${title}</p><p class="note">${note}</p><div class="frame ${cls}" id="${id}">${tag ? `<span class="tag">${tag}</span>` : ""}${html}</div></section>`);
+}
+
+// R1 · Apertura ligera: la entrada larga (96 palabras) ya no se mete en la apertura.
+const PRELUDIO = "Esta vivienda, en un edificio de principios del siglo XX, se presenta como un lienzo en blanco para quien quiere imprimir su estilo. Su amplitud y el cuidado de las zonas comunes invitan a imaginar una vida en armonía con la arquitectura de antaño. La distribución se organiza en torno a un salón-comedor generoso que nace de un amplio vestíbulo, y la cocina, independiente, respeta la estructura original como base para una reforma a medida.";
+frame("r1", "R1 · Apertura ligera con una entrada larga · 1280 × 720",
+  "Hoy, una entrada de historia de 96 palabras desborda la apertura y la señal «Sigue leyendo» se superpone a «Ver las 23 fotos». <b>Propuesta:</b> si la entrada supera unas 45 palabras, la apertura enseña solo foto, título, precio y datos; la entrada completa abre el recorrido (R2). Ningún texto se recorta.",
+  `<div class="spread"><div class="page l"><div class="photo"><div class="fr">${ph(30, "Escalera de la finca")}</div>${cap("16", "Piso para reformar en Goya")}</div></div>
+   <div class="page r"><div class="inner center"><p class="runner">Barrio de Salamanca · Otoño 2026</p><p class="kicker"><i>16</i> Venta · Salamanca</p><h2 class="title">Piso para reformar en Goya</h2><p class="price">1.140.000 €</p>${facts(106, 3, 2, null)}${thumbs(30, 8)}<span class="gal">Ver las 23 fotos</span><p class="next" style="margin-top:28px">Sigue · La vivienda →</p></div><span class="folio">— 50 —</span></div></div>${capsule("50 / 62")}`);
+
+// R2 · Recorrido agrupado: capítulos breves juntos, con su foto.
+frame("r2", "R2 · Recorrido agrupado por extensión · 1280 × 720",
+  "Hoy, tres capítulos de 9, 8 y 16 palabras ocupan tres dobles páginas, dos sin foto (página 51: una sola frase). <b>Propuesta:</b> las secciones se agrupan por extensión, no por número. La entrada larga ocupa su página; los capítulos breves comparten la otra con la única foto de su clase. Texto a 15 px (hoy 11 px). Comprobado en esta maqueta: entrada y capítulos juntos en una sola página NO caben a 15 px.",
+  `<div class="spread"><div class="page l"><div class="inner center"><p class="runner">Piso para reformar en Goya</p><span class="orn">✦</span><p class="pre" style="font-size:17px;text-align:left">${PRELUDIO}</p></div><span class="folio">— 51 —</span></div>
+   <div class="page r"><div class="inner"><div class="fr" style="width:72%;margin:4px auto 26px">${ph(28, "Salón con balcones")}</div>
+   <div class="sec"><h3>La vivienda</h3><p>Piso exterior a reformar, situado en la primera planta.</p></div>
+   <div class="sec" style="margin-top:16px"><h3>Salón y luz</h3><p>El salón da a la calle a través de dos balcones.</p></div>
+   <div class="sec" style="margin-top:16px"><h3>La finca</h3><p>Finca de principios del siglo XX con portería y ascensor, en una calle tranquila del barrio.</p></div></div><span class="folio">— 52 —</span></div></div>${capsule("51 / 62")}`);
+
+// R3 · Sin ninguna foto adecuada: página tipográfica centrada.
+const PEN = [
+  ["La finca", "Edificio clásico con portería física, ascensor y una escalera de madera restaurada que conserva la barandilla original."],
+  ["Vivir en Lista", "A pocos minutos a pie del mercado de la Paz, de colegios y del comercio de toda la vida del barrio de Lista, con dos líneas de metro cerca."],
+];
+frame("r3", "R3 · Capítulos sin ninguna foto adecuada: página tipográfica · 1280 × 720",
+  "Con la agrupación por extensión (R2), los capítulos breves de Peñalver o Espartinas comparten página con la foto de su clase que sí existe. Si NINGUNA foto corresponde a esos capítulos, no se pone una que no corresponda (ni mapas ni avisos): una página tipográfica centrada, con letra algo mayor, y acceso a la galería, que sigue entera. Si el dueño elige fotos para el recorrido (DQ5), se usan esas.",
+  `<div class="spread"><div class="page l" style="box-shadow:none"><div class="inner center" style="inset:48px 54px 58px"><p class="runner">Piso en venta en Conde de Peñalver</p><span class="orn">✦</span>${PEN.map(([h, t]) => `<div class="sec" style="text-align:center"><h3>${h}</h3><p style="font-size:16.5px">${t}</p></div>`).join("")}<span class="orn" style="margin-top:22px">✦</span><span class="gal">Ver las 28 fotos</span></div><span class="folio">— 29 —</span></div></div>${capsule("29 / 58")}`);
+
+// R4 · Ficha breve: solo datos y fotos, sin texto inventado.
+frame("r4", "R4 · Ficha breve (solo datos y fotos) · 1280 × 720",
+  "Fallback aprobado: sin descripción vigente no se inventa texto. Hoy la página derecha queda medio vacía. <b>Propuesta:</b> ficha completa y un mosaico de cuatro fotos de la galería (en su orden, sin la de portada) que abren la galería. Sin la palabra «Sin descripción» ante el cliente.",
+  `<div class="spread"><div class="page l"><div class="photo"><div class="fr">${ph(200, "Salón")}</div>${cap("06", "Piso en Calle de Goya")}</div></div>
+   <div class="page r"><div class="inner"><p class="kicker"><i>06</i> Venta · Goya</p><h2 class="title" style="font-size:24px">Piso en Calle de Goya</h2><p class="price" style="font-size:22px">1.070.000 €</p>
+   <dl class="ff"><div><dt>Superficie</dt><dd>74 m²</dd></div><div><dt>Dormitorios</dt><dd>2</dd></div><div><dt>Baños</dt><dd>3</dd></div><div><dt>Planta</dt><dd>Planta 1</dd></div></dl>
+   <div class="mosaic">${[210, 220, 230, 240].map((h, i) => `<i>${ph(h, ["Cocina", "Dormitorio", "Baño", "Terraza"][i])}</i>`).join("")}</div><span class="gal">Ver las 34 fotos</span></div><span class="folio">— 21 —</span></div></div>${capsule("21 / 62")}`);
+
+// R5 · Historia completa en el detalle (7 capítulos): ninguno queda sin acceso.
+const CAPS = ["La vivienda", "Salón y luz", "Cocina y comedor", "Zona privada", "Vivir al aire libre", "Acabados", "Vivir en Lista"];
+frame("r5", "R5 · Detalle con la historia completa (7 capítulos) · 1280 × 720",
+  "Defecto reproducido con datos sintéticos: en escritorio, a partir del 7.º capítulo de una historia aprobada no hay forma de leerlo (el recorrido enseña 6 y el detalle trae la descripción limpia o nada). <b>Corrección:</b> el detalle reúne todos los capítulos aprobados en su orden; la señal de desplazamiento va en su propia banda y nunca tapa un control.",
+  `<div class="spread"><div class="page l"><div class="inner"><p class="kicker"><i>20</i> La vivienda en detalle</p><h2 class="title" style="font-size:22px">Piso en Diego de León</h2>
+   <dl class="ff"><div><dt>Operación</dt><dd>Venta</dd></div><div><dt>Precio</dt><dd>1.170.000 €</dd></div><div><dt>Zona</dt><dd>Lista, Madrid</dd></div><div><dt>Superficie</dt><dd>128 m²</dd></div><div><dt>Dormitorios</dt><dd>3</dd></div><div><dt>Baños</dt><dd>2</dd></div><div><dt>Planta</dt><dd>Planta 4</dd></div></dl>
+   <div class="chips"><span>Conserje</span><span>Ascensor</span></div></div><span class="folio"></span></div>
+   <div class="page r"><div class="inner" style="bottom:48px"><p class="kicker">La historia completa</p><span class="orn">✦</span><div class="scroll" style="flex:1">${CAPS.map((h, i) => `<div class="sec"><h3 style="font-size:18px">${h}</h3><p>Capítulo aprobado ${i + 1}: texto íntegro de la historia, sin recortar, con la misma redacción que se aprobó en la ficha.</p></div>`).join("")}</div><div class="cueband">Sigue leyendo ↓</div></div><span class="folio">— 61 —</span></div></div>${capsule("61 / 62")}`, "d1280", "Corrección");
+
+// R6 · Estados de imagen.
+frame("r6", "R6 · Estados de una foto: cargando, no disponible y sin foto adecuada · 1280 × 720",
+  "Hoy, con red lenta, el marco y las miniaturas son rectángulos vacíos; si una foto fallara, quedaría igual. <b>Corrección:</b> «Cargando foto…» mientras llega; «Foto no disponible» si falla (la galería sigue abierta a las demás); y cuando no hay foto adecuada, la composición no dibuja marco (R3).",
+  `<div class="spread"><div class="page l"><div class="photo"><div class="fr loading"></div>${cap("05", "Piso en Calle Alcalá")}</div></div>
+   <div class="page r"><div class="inner center"><p class="kicker"><i>05</i> Venta · Goya</p><h2 class="title">Piso en Calle Alcalá</h2><p class="price">1.050.000 €</p>${facts(81, 2, 2, "Planta 3")}
+   <div class="thumbs"><i class="loading" style="box-shadow:0 0 0 3px var(--mat)"></i><i>${ph(40, "")}</i><i class="failed" style="font-size:9px;gap:0"><small style="font-size:7px;letter-spacing:.05em">No disp.</small></i><i>${ph(60, "")}</i><i>${ph(70, "")}</i><i class="loading"></i></div>
+   <span class="gal">Ver las 18 fotos</span>
+   <div style="display:flex;gap:14px;margin-top:22px;justify-content:center"><div class="fr failed" style="width:170px;aspect-ratio:3/2">Foto no disponible<small>Ver las demás</small></div></div></div><span class="folio">— 10 —</span></div></div>${capsule("10 / 62")}`, "d1280", "Corrección");
+
+// Móvil.
+frame("m1", "M1 · Una página (362 px): recorrido agrupado",
+  "En una página no hay pérdida (todo el recorrido fluye en una hoja) y el texto ya mide 15,7 px. Se aplica la misma agrupación: la entrada larga abre el recorrido y los capítulos breves comparten bloque con su foto.",
+  `<div class="sheet"><div class="fr">${ph(30, "Escalera de la finca")}</div>${cap("16", "Piso para reformar en Goya")}<p class="kicker" style="margin-top:18px"><i>16</i> Venta · Salamanca</p><h2 class="title">Piso para reformar en Goya</h2><p class="price">1.140.000 €</p>${facts(106, 3, 2, null)}<span class="orn">✦</span><p class="pre" style="font-size:17px">${PRELUDIO}</p><div class="fr" style="margin:6px 0 20px">${ph(28, "Salón con balcones")}</div><div class="sec"><h3>La vivienda</h3><p>Piso exterior a reformar, situado en la primera planta.</p></div><div class="sec"><h3>Salón y luz</h3><p>El salón da a la calle a través de dos balcones.</p></div><div class="sec"><h3>La finca</h3><p>Finca de principios del siglo XX con portería y ascensor, en una calle tranquila del barrio.</p></div><div class="fold"><span>Ficha completa</span><span>+</span></div>${thumbs(30, 8)}<span class="gal">Ver las 23 fotos</span></div><div class="mnav"><span>←</span><span>18 / 23</span><span>→</span><span>Índice</span><span>Desplazar</span></div>`, "m362");
+frame("m2", "M2 · Una página (362 px): ficha breve",
+  "Solo datos y fotos, sin texto inventado: ficha completa visible (no plegada, porque es todo lo que hay) y mosaico de fotos que abre la galería.",
+  `<div class="sheet"><div class="fr">${ph(200, "Salón")}</div>${cap("06", "Piso en Calle de Goya")}<p class="kicker" style="margin-top:18px"><i>06</i> Venta · Goya</p><h2 class="title">Piso en Calle de Goya</h2><p class="price">1.070.000 €</p><dl class="ff"><div><dt>Superficie</dt><dd>74 m²</dd></div><div><dt>Dormitorios</dt><dd>2</dd></div><div><dt>Baños</dt><dd>3</dd></div><div><dt>Planta</dt><dd>Planta 1</dd></div></dl><div class="mosaic">${[210, 220, 230, 240].map((h, i) => `<i>${ph(h, ["Cocina", "Dormitorio", "Baño", "Terraza"][i])}</i>`).join("")}</div><span class="gal">Ver las 34 fotos</span></div><div class="mnav"><span>←</span><span>8 / 23</span><span>→</span><span>Índice</span><span>Desplazar</span></div>`, "m362");
+
+document.getElementById("doc").innerHTML = frames.join("");
+for (const m of document.querySelectorAll(".m362")) m.style.position = "relative";
+</script>
+</body>
+</html>
