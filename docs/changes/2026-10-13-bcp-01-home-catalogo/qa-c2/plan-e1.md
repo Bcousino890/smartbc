@@ -94,7 +94,7 @@ mosaic: number[];
   - la descripción completa: el texto del catálogo íntegro y la limpia íntegra.
 
 ### 3.3 Composición del recorrido (nuevo, puro: `lib/catalogs/journey-layout.ts`)
-Lo usan `reader-state.ts` (partes, folios, D12) y las páginas. Es determinista: **no depende de mediciones en el navegador**, así que el índice, los folios y D12 son estables entre lectores y tras cada actualización. El encaje real se comprueba con pruebas renderizadas (T7) que calibran sus constantes.
+Lo usan `reader-state.ts` (partes, folios, D12) y las páginas. Es determinista: **no depende de mediciones en el navegador**, así que el índice, los folios y D12 son estables entre lectores y tras cada actualización. El encaje real se comprueba con pruebas renderizadas (T6) que calibran sus constantes.
 
 ```ts
 export type JourneyBlock =
@@ -118,7 +118,7 @@ Reglas, cada una con prueba propia:
 1. **Orden y completitud.** Los bloques conservan su orden, ningún bloque se parte y cada bloque aparece **una sola vez** en el recorrido. Lo que no cabe en las 3 dobles páginas va al detalle (L1).
 2. **Peso.** Peso de un bloque = palabras + coste de su título. Capacidad de una página de texto = `C_TEXT`, o `C_PHOTO` si la página lleva su foto pequeña.
    - Valores iniciales tomados de las maquetas a 15 px: `C_TEXT ≈ 165` y `C_PHOTO ≈ 100`.
-   - Se calibran en T7 con el renderizado real y quedan anotados en el resultado.
+   - Se calibran en T6 con el renderizado real y quedan anotados en el resultado.
 3. **Llenado.** Las páginas se llenan en orden. La foto de una página es la primera foto de sus bloques; cada foto se usa una vez.
 4. **Nada escaso.** Una página de menos de unas 25 palabras se une a la vecina si cabe. Si no cabe y es todo el contenido, se queda.
 5. **Bloque largo.** Un bloque más largo que una página ocupa su página y **se desplaza dentro** de ella (L3). Nada se recorta.
