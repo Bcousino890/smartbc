@@ -73,11 +73,13 @@ export async function createParticularShareLink(params: {
 
 // Columnas públicas del particular — LÍMITE DE PRIVACIDAD, no una lista de
 // conveniencia. El destinatario de /a/{token} es SIEMPRE alguien de fuera
-// del equipo: nunca añadir aquí phone, owner_name, address, latitude,
-// longitude, source_url, external_id, particular_reference, assigned_to,
+// del equipo: nunca añadir aquí phone, owner_name, address,
+// source_url, external_id, particular_reference, assigned_to,
 // assigned_name ni nada de particulares_contacts.
+// Las coordenadas del anuncio se comparten para su mapa de ubicación,
+// siempre identificado como aproximado (no garantizan el portal exacto).
 const PUBLIC_PARTICULAR_COLUMNS =
-  "operation, price, zone, bedrooms, bathrooms, square_meters, description, features, photos, cover_url, portal";
+  "operation, price, zone, latitude, longitude, bedrooms, bathrooms, square_meters, description, features, photos, cover_url, portal";
 
 // Resolver un token a los datos públicos de su particular. Pública (sin
 // auth) — se usa en /a/[token]. Devuelve null si el token no existe o si

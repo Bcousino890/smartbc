@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/queries/particulares-shares";
 import { ParticularHero } from "./particular-hero";
 import { LanguageSelect } from "./language-select";
+import { ParticularLocation } from "./particular-location";
 
 // Enlace temporal de UN particular (anuncio scrapeado, no ficha nuestra).
 // Completamente aparte de /c (SmartLinks de `properties`) y /v (Viewing
@@ -32,6 +33,8 @@ type PublicParticular = {
   operation: "rent" | "sale" | null;
   price: number | null;
   zone: string | null;
+  latitude: number | null;
+  longitude: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
   square_meters: number | null;
@@ -199,6 +202,8 @@ export default async function ParticularSharePage({
             </p>
           </section>
         )}
+
+        <ParticularLocation zone={p.zone} latitude={p.latitude} longitude={p.longitude} />
 
         <footer className="mt-8 pb-4 text-center crm-meta text-ink/45">
           © {new Date().getFullYear()} Benjamín Cousiño Propiedades · Madrid

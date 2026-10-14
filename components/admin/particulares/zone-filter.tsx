@@ -88,6 +88,13 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   // sentada es justo el caso de uso, cerrar en cada clic lo haría inútil.
   function toggle(v: string) {
     const next = new Set(selected);
+    // Elegir un barrio dentro de un distrito seleccionado acota la búsqueda.
+    // Al elegir el distrito, eliminamos los barrios redundantes de la URL.
+    const group = groups.find((g) => v === `d:${g.district}` || g.zones.some((z) => v === `z:${z.name}`));
+    if (group && v.startsWith("z:")) next.delete(`d:${group.district}`);
+    if (group && v.startsWith("d:")) {
+      for (const z of group.zones) next.delete(`z:${z.name}`);
+    }
     if (next.has(v)) next.delete(v);
     else next.add(v);
     onChange([...next].join(SEP));
@@ -160,13 +167,14 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                 <div key={g.district} className="mb-1">
                   <button
                     type="button"
+                    aria-pressed={districtOn}
                     onClick={() => toggle(districtKey)}
                     className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition hover:bg-gold/10 ${
                       districtOn ? "bg-gold/15 text-ink" : "text-ink/85"
                     }`}
                   >
                     <Box on={districtOn} />
-                    <span className="truncate">{g.district}</span>
+                    <span className="truncate">Todo {g.district}</span>
                     <span className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal text-ink/45">
                       {g.total}
                       {g.missingPhone > 0 && (
@@ -176,20 +184,20 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                       )}
                     </span>
                   </button>
-                  {g.zones.length > 1 &&
+                  {g.zones.length > 0 &&
                     g.zones.map((z) => {
                       const zoneKey = `z:${z.name}`;
-                      // Si el distrito entero está marcado, sus barrios ya
-                      // entran: se muestran marcados y en gris para que no
-                      // parezca que hay que marcarlos uno a uno.
+                      // El distrito incluye todos sus barrios; pulsar uno
+                      // permite acotar la selección a ese barrio.
                       const zoneOn = selected.has(zoneKey) || districtOn;
                       return (
                         <button
                           key={z.name}
                           type="button"
+                          aria-pressed={zoneOn}
+                          title={districtOn ? `Filtrar solo ${z.name}` : undefined}
                           onClick={() => toggle(zoneKey)}
-                          disabled={districtOn}
-                          className={`flex w-full items-center gap-2 rounded-md py-1 pl-4 pr-2 text-left text-xs transition hover:bg-gold/10 disabled:cursor-default disabled:opacity-55 disabled:hover:bg-transparent ${
+                          className={`flex w-full items-center gap-2 rounded-md py-1 pl-4 pr-2 text-left text-xs transition hover:bg-gold/10 ${
                             selected.has(zoneKey) ? "bg-gold/15 text-ink" : "text-ink/65"
                           }`}
                         >
