@@ -720,6 +720,7 @@
 }
 
 .thumb {
+  position: relative;
   width: 3.6em;
   height: 2.7em;
   padding: 0;
@@ -1298,5 +1299,71 @@
   }
   .root .scrollCue {
     font-size: max(12px, 0.7em);
+  }
+}
+
+/* ── E1 (L4) · Estados de las fotos ───────────────────────────────────────
+   Cargando: tono del papel (y «Cargando foto…» en marcos grandes). Error:
+   «Foto no disponible», sin el icono roto. La animación solo existe si no se
+   pide «reducir movimiento». */
+.imgHidden {
+  visibility: hidden;
+}
+
+.imgLoading,
+.imgError {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.9em;
+  text-align: center;
+  pointer-events: none;
+  font: italic max(12px, 0.85em) / 1.3 var(--display);
+  color: var(--muted);
+}
+
+.imgLoading {
+  background: linear-gradient(110deg, #f1e9dc 30%, #f8f2e8 50%, #f1e9dc 70%) 0 0 / 300% 100%;
+}
+
+.imgError {
+  align-items: center;
+  background: #efe7da;
+}
+
+.imgLoadingQuiet {
+  padding: 0;
+}
+
+.imgErrorThumb {
+  font-size: 12px;
+  padding: 0;
+}
+
+.lbStage .imgLoading,
+.lbStage .imgError {
+  background: transparent;
+  color: rgba(244, 237, 225, 0.75);
+  align-items: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .imgLoading {
+    animation: imgPulse 1.6s ease-in-out infinite;
+  }
+}
+
+.lowMotion .imgLoading {
+  animation: none;
+}
+
+@keyframes imgPulse {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
   }
 }

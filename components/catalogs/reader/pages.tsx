@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { shareExpiryLabel } from "@/lib/catalogs/share";
+import { ReaderImage } from "./reader-image";
 import { ScrollRegion } from "./scroll-region";
 import styles from "./reader.module.css";
 
@@ -54,8 +55,7 @@ export function FramedPhoto({
   const fits = f.ratio !== null && ratio !== null && Math.abs(ratio / f.ratio - 1) <= 0.2;
   const cls = `${styles.frame} ${f.cls} ${fits ? styles.fitCover : styles.fitContain}`;
   const img = (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img {...photoProps(photo, url, sizes)} alt="" decoding="async" />
+    <ReaderImage variant="frame" {...photoProps(photo, url, sizes)} alt="" decoding="async" />
   );
   return onOpen ? (
     <button type="button" className={cls} onClick={onOpen} aria-label={label}>
@@ -262,8 +262,7 @@ function Thumbs({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl;
       <div className={styles.thumbs}>
         {item.photos.slice(0, 8).map((p, i) => (
           <button key={p.src} type="button" className={styles.thumb} onClick={() => onOpenGallery(i)} aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url(p.src, 640)} alt="" loading="lazy" decoding="async" />
+            <ReaderImage variant="thumb" src={url(p.src, 640)} alt="" loading="lazy" decoding="async" />
           </button>
         ))}
       </div>
