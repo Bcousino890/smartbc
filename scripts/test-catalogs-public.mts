@@ -40,8 +40,6 @@ import {
   applyUpdate,
   goTo,
   itemParts,
-  journeyGroups,
-  journeyTruncated,
   openingFolio,
   pageIndex,
   setLayout,
@@ -54,6 +52,7 @@ import {
   REMOVED_LAST_NOTICE,
   REMOVED_NOTICE,
 } from "../lib/catalogs/reader-state.ts";
+import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_MAX_WORDS, MAX_JOURNEY_SPREADS, TINY_WORDS } from "../lib/catalogs/journey-layout.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
 import type { PublicCatalog, PublicCatalogState } from "../lib/catalogs/public-contract.ts";
 
@@ -906,23 +905,24 @@ async function liveTests() {
 
   section("Z6 · lector por partes (doble página) y D12 desde cualquier parte");
   {
-    const sec = (n: number) => Array.from({ length: n }, (_, i) => ({ heading: null, text: `Sección ${i + 1}.`, photo: i % 2 ? null : 1 }));
-    const withParts = (fp: string, spec: Array<[string, number, boolean]>): PublicCatalogState => {
+    // E1: valores EXPLÍCITOS calculados a mano con las reglas de journey-layout
+    // (C_TEXT 165, una sección de 100 palabras sin título ni foto por página).
+    const W = (n: number, tag: string) => `${tag} ` + Array.from({ length: n - 1 }, () => "palabra").join(" ") + ".";
+    const secs = (spec: number[]) => spec.map((w, i) => ({ heading: null, text: W(w, `S${i + 1}`), photo: null }));
+    const withParts = (fp: string, spec: Array<[string, number[], boolean]>): PublicCatalogState => {
       const st = pubState(fp, spec.map(([k]) => k));
-      st.catalog.items = st.catalog.items.map((it, i) => ({
-        ...it,
-        sections: sec(spec[i][1]),
-        description: spec[i][2] ? "Texto completo." : null,
-      }));
+      st.catalog.items = st.catalog.items.map((it, i) => ({ ...it, sections: secs(spec[i][1]), description: spec[i][2] ? "Texto completo." : null }));
       return st;
     };
     const items = (st: PublicCatalogState) => st.catalog.items;
-    const A = withParts("A", [["a", 2, true], ["b", 5, true], ["c", 0, false]]);
-    check("partes: a = apertura + 2 recorridos + detalle", itemParts(items(A)[0], "spread").join() === "open,j1,j2,detail");
-    check("partes: 5 secciones → 3 dobles páginas de dos (máx. 3)", journeyGroups(items(A)[1]).map((g) => g.length).join() === "2,2,1" && itemParts(items(A)[1], "spread").length === 5);
-    const many = { ...items(A)[1], sections: sec(9) };
-    check("9 secciones → 3 dobles páginas y el resto en la descripción", journeyGroups(many).length === 3 && journeyTruncated(many));
-    check("solo datos sin descripción ni características → solo apertura", itemParts(items(A)[2], "spread").join() === "open");
+    const H100 = (n: number) => Array.from({ length: n }, () => 100);
+    const A = withParts("A", [["a", H100(4), true], ["b", H100(6), true], ["c", [], false]]);
+    check("partes: a (4 × 100) = apertura + 2 recorridos + detalle", itemParts(items(A)[0], "spread").join() === "open,j1,j2,detail");
+    check("partes: b (6 × 100) = 3 recorridos + detalle", itemParts(items(A)[1], "spread").join() === "open,j1,j2,j3,detail");
+    const many = { ...items(A)[1], sections: secs(H100(9)) };
+    check("9 × 100 → 3 dobles páginas (secciones 1–6) y el resto íntegro en la descripción",
+      itemParts(many, "spread").join() === "open,j1,j2,j3,detail" && itemLayout(many).truncated && sectionsInJourney(itemLayout(many)).join() === "0,1,2,3,4,5");
+    check("solo datos sin descripción ni características → solo apertura (ficha breve)", itemParts(items(A)[2], "spread").join() === "open" && itemLayout(items(A)[2]).brief);
     check("una página → una hoja por vivienda", itemParts(items(A)[1], "single").join() === "open" && pagesOf(A.catalog, "single").length === 6);
     check("folios: portada 1, índice 2, a abre en 3, b en 7, c en 12, cierre 13",
       openingFolio(A.catalog, "a", "spread") === 3 && openingFolio(A.catalog, "b", "spread") === 7 && openingFolio(A.catalog, "c", "spread") === 12 && pagesOf(A.catalog, "spread").length === 13);
@@ -937,27 +937,138 @@ async function liveTests() {
     check("→ desde el detalle abre la siguiente vivienda", s.page.kind === "item" && s.page.key === "b" && s.page.part === "open");
 
     for (const part of ["open", "j1", "j2", "detail"] as const) {
-      const r = applyUpdate(initialState(A, { kind: "item", key: "a", part }, "spread"), withParts("B", [["b", 5, true], ["c", 0, false]]));
+      const r = applyUpdate(initialState(A, { kind: "item", key: "a", part }, "spread"), withParts("B", [["b", H100(6), true], ["c", [], false]]));
       check(`D12 desde «${part}» → apertura de la siguiente con aviso`, r.page.kind === "item" && r.page.key === "b" && r.page.part === "open" && r.notice === REMOVED_NOTICE);
     }
-    const lastGone = applyUpdate(initialState(A, { kind: "item", key: "c", part: "open" }, "spread"), withParts("B", [["a", 2, true], ["b", 5, true]]));
+    const lastGone = applyUpdate(initialState(A, { kind: "item", key: "c", part: "open" }, "spread"), withParts("B", [["a", H100(4), true], ["b", H100(6), true]]));
     check("D12 desde la última → índice", lastGone.page.kind === "index" && lastGone.notice === REMOVED_LAST_NOTICE);
     const fromJourney = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", []));
     check("D12 sin viviendas desde un recorrido → índice vacío", fromJourney.page.kind === "index" && fromJourney.catalog.items.length === 0);
 
-    const shorter = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", [["a", 2, true], ["b", 1, true], ["c", 0, false]]));
-    check("el recorrido se acorta → se queda en la última parte que existe antes", shorter.page.kind === "item" && shorter.page.key === "b" && shorter.page.part === "j1" && shorter.notice === null);
-    const noDetail = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withParts("B", [["a", 0, false], ["b", 5, true], ["c", 0, false]]));
+    const shorter = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", [["a", H100(4), true], ["b", [100], true], ["c", [], false]]));
+    check("el recorrido se acorta (1 sección) → se queda en j1 de la misma vivienda", shorter.page.kind === "item" && shorter.page.key === "b" && shorter.page.part === "j1" && shorter.notice === null);
+    const noDetail = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withParts("B", [["a", [], false], ["b", H100(6), true], ["c", [], false]]));
     check("desaparece el detalle → apertura de la misma vivienda", noDetail.page.kind === "item" && noDetail.page.key === "a" && noDetail.page.part === "open");
-    const moved = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), withParts("B", [["c", 0, false], ["b", 5, true], ["a", 2, true]]));
+    const moved = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), withParts("B", [["c", [], false], ["b", H100(6), true], ["a", H100(4), true]]));
     check("reordenar mantiene vivienda y parte", moved.page.kind === "item" && moved.page.key === "b" && moved.page.part === "j2" && moved.notice === null);
-    check("reordenar cambia el folio de la parte", pageIndex(moved.catalog, moved.page, "spread") + 1 === 6);
+    check("reordenar cambia el folio de la parte (c 3, b 4–5, j2 = 6)", pageIndex(moved.catalog, moved.page, "spread") + 1 === 6);
 
     const turned = setLayout(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), "single");
     check("pasar a una página conserva la vivienda (su hoja)", turned.page.kind === "item" && turned.page.key === "b" && turned.page.part === "open");
     const jump = goTo(initialState(A, { kind: "cover" }, "spread"), { kind: "item", key: "c", part: "detail" });
     check("ir a una parte que no existe → la anterior que existe", jump.page.kind === "item" && jump.page.part === "open");
   }
+
+  section("E1 · composición del recorrido (T4)");
+  {
+    const W = (n: number, tag: string) => `${tag} ` + Array.from({ length: n - 1 }, () => "palabra").join(" ") + ".";
+    const base = pubCatalog(["x"]).items[0];
+    const photos = Array.from({ length: 16 }, (_, i) => ({ src: `/p/x/${i}.webp`, width: null, height: null, orientation: "unknown" as const }));
+    const mk = (o: Partial<typeof base>) => ({ ...base, photos, ...o });
+    const sec = (words: number, heading: string | null, photo: number | null, tag = "C") => ({ heading, text: W(words, tag), photo });
+    const slots = (lay: ReturnType<typeof itemLayout>) => lay.spreads.map((sp) => sp.slots.map((sl) => sl.kind === "photo" ? `foto${sl.photo}` : `[${sl.page.blocks.map((b) => b.kind === "intro" ? "E" : `s${b.index}`).join(",")}${sl.inlinePhoto !== null ? `+f${sl.inlinePhoto}` : ""}]`).join(" | ")).join(" ‖ ");
+
+    // (a) tipo Reforma: entrada de 96 palabras y capítulos de 9, 8 y 16 palabras (el 2.º con foto 13).
+    const A = mk({ lead: W(96, "Entrada"), sections: [sec(9, "La vivienda", null), sec(8, "Salón y luz", 13), sec(16, "La finca", null)], description: null, features: [] });
+    const la = itemLayout(A);
+    check("(a) entrada larga fuera de la apertura", !la.introInOpening);
+    check("(a) una doble página: [entrada, cap. 1] | [cap. 2, cap. 3 + foto 13]", slots(la) === "[E,s0] | [s1,s2+f13]", slots(la));
+    check("(a) partes: apertura y j1 (sin detalle)", itemParts(A, "spread").join() === "open,j1" && la.detail === null);
+
+    // (b) tipo Peñalver: entrada corta; capítulos de 11 (foto 1), 20 y 45 palabras; con una característica.
+    const B = mk({ lead: W(30, "Entrada"), sections: [sec(11, "La vivienda", 1), sec(20, "La finca", null), sec(45, "Vivir en Lista", null)], description: null, features: ["Conserje"] });
+    const lb = itemLayout(B);
+    check("(b) entrada corta en la apertura", lb.introInOpening);
+    check("(b) una doble página: [cap. 1, cap. 2 + foto 1] | [cap. 3]", slots(lb) === "[s0,s1+f1] | [s2]", slots(lb));
+    check("(b) partes: apertura, j1 y detalle (por la característica)", itemParts(B, "spread").join() === "open,j1,detail" && lb.detail?.story === false);
+
+    // (c) historia de 8 capítulos de 40 palabras (el 3.º con foto 3), sin limpia ni características.
+    const C8 = Array.from({ length: 8 }, (_, i) => sec(40, `Capítulo ${i + 1}`, i === 2 ? 3 : null, `Cap${i + 1}`));
+    const C = mk({ lead: W(20, "Entrada"), sections: C8, description: null, features: [] });
+    const lc = itemLayout(C);
+    check("(c) 8 capítulos: [1,2] | [3,4 + foto 3] ‖ [5,6,7] | [8]", slots(lc) === "[s0,s1] | [s2,s3+f3] ‖ [s4,s5,s6] | [s7]", slots(lc));
+    check("(c) partes: apertura, j1, j2 (sin detalle)", itemParts(C, "spread").join() === "open,j1,j2");
+
+    // (d) 7 capítulos con una descripción limpia distinta.
+    const D = mk({ lead: null, sections: C8.slice(0, 7), description: "Descripción limpia distinta de la historia.", features: [] });
+    const ld = itemLayout(D);
+    check("(d) 7 capítulos: [1,2] | [3,4 + foto 3] ‖ [5,6,7] compuesta", slots(ld) === "[s0,s1] | [s2,s3+f3] ‖ [s4,s5,s6]", slots(ld));
+    check("(d) partes: apertura, j1, j2 y detalle con la descripción", itemParts(D, "spread").join() === "open,j1,j2,detail" && ld.detail?.description === true && ld.detail?.story === false);
+
+    // (e) 9 capítulos de 120 palabras: no caben → 3 dobles páginas (caps. 1–6) y «La historia completa».
+    const E = mk({ lead: null, sections: Array.from({ length: 9 }, (_, i) => sec(120, `Capítulo ${i + 1}`, null, `Largo${i + 1}`)), description: null, features: [] });
+    const le = itemLayout(E);
+    check("(e) recorrido con los capítulos 1–6 y el resto en el detalle", sectionsInJourney(le).join() === "0,1,2,3,4,5" && le.truncated && le.spreads.length === MAX_JOURNEY_SPREADS);
+    check("(e) detalle con la historia completa", le.detail?.story === true && itemParts(E, "spread").join() === "open,j1,j2,j3,detail");
+
+    // (f) cola escasa: 160 + 10 palabras → una sola página (la de 10 no queda sola).
+    const F = mk({ lead: null, sections: [sec(160, null, null), sec(10, null, null)], description: "x", features: [] });
+    check("(f) cola de 10 palabras unida a la página anterior", slots(itemLayout(F)) === "[s0,s1]", slots(itemLayout(F)));
+    // (f2) una sección corta seguida de una larga: la corta no se queda sola.
+    const F2 = mk({ lead: null, sections: [sec(10, null, null), sec(160, null, null)], description: "x", features: [] });
+    check("(f2) 10 + 160 palabras → misma página", slots(itemLayout(F2)) === "[s0,s1]", slots(itemLayout(F2)));
+    // (g) bloque más largo que una página: su página, sin partirse.
+    const G = mk({ lead: null, sections: [sec(300, null, null)], description: "x", features: [] });
+    check("(g) 300 palabras → una página compuesta sola", slots(itemLayout(G)) === "[s0]");
+    // (h) ficha breve.
+    const Hh = mk({ lead: null, sections: [], description: null, features: [], mosaic: [1, 2] });
+    check("(h) solo datos → ficha breve, sin recorrido ni detalle", itemLayout(Hh).brief && itemParts(Hh, "spread").join() === "open");
+    // (i) umbral de la entrada: 45 palabras se queda; 46 sale.
+    check("(i) entrada de 45 palabras en la apertura; de 46, en el recorrido",
+      itemLayout(mk({ lead: W(LEAD_OPENING_MAX_WORDS, "E"), sections: [], description: "x" })).introInOpening
+      && !itemLayout(mk({ lead: W(LEAD_OPENING_MAX_WORDS + 1, "E"), sections: [], description: "x" })).introInOpening);
+    // (j) página suelta con foto → [foto grande | texto].
+    check("(j) página suelta con foto → foto grande y texto", slots(itemLayout(mk({ lead: null, sections: [sec(30, null, 2)], description: "x" }))) === "foto2 | [s0]");
+
+    // L1 · completitud contra los CAPÍTULOS DE ORIGEN (no contra la composición):
+    // historias de 6–9 capítulos, sin limpia / con limpia distinta / con
+    // características, por deriveEditorial → toPublic → composición.
+    const facts = { description: "Piso exterior en Goya.", bedrooms: 3, bathrooms: 2, squareMeters: 110, features: ["Ascensor"] };
+    const CH = ["overview", "living", "kitchen", "private", "outdoor", "finishes", "building", "barrio", "living"];
+    for (const n of [6, 7, 8, 9]) {
+      for (const variant of ["sin limpia", "limpia distinta", "con características"] as const) {
+        const source = Array.from({ length: n }, (_, i) => ({ c: CH[i], t: `Capítulo aprobado ${i + 1} de ${n}: ${W(70 + i * 7, "texto")}` }));
+        const micro = { c: "building", t: "Portería." };
+        const ed = deriveEditorial({
+          description: facts.description, features: facts.features, features_manual: variant === "con características" ? ["Terraza"] : null,
+          bedrooms: 3, bathrooms: 2, square_meters: 110, zone: "Madrid", subzone: "Goya",
+          cleanDescription: variant === "limpia distinta" ? "Una descripción limpia distinta de la historia." : null,
+          cleanFeatures: variant === "limpia distinta" ? ["Ascensor"] : [], text: null,
+          story: { h: storySourceHash({ ...facts, features: [...facts.features, ...(variant === "con características" ? ["Terraza"] : [])] }), p: "Entrada.", b: [...source, micro] },
+          photos: Array.from({ length: 12 }, (_, i) => ({ u: String(i) })), coverIndex: 0,
+        });
+        const item = mk({ lead: ed.lead, sections: ed.sections, description: ed.description, features: ed.features, mosaic: ed.mosaic });
+        const lay = itemLayout(item);
+        const reach = new Set(sectionsInJourney(lay).map((i) => item.sections[i].text));
+        if (lay.detail?.story) item.sections.forEach((x) => reach.add(x.text));
+        const missingDesktop = source.filter((c) => !reach.has(c.t)).length;
+        const missingMobile = source.filter((c) => !item.sections.some((x) => x.text === c.t)).length;
+        check(`L1 · historia de ${n} capítulos, ${variant}: todos accesibles en escritorio y en móvil; «Portería» en las características`,
+          ed.level === "story" && missingDesktop === 0 && missingMobile === 0 && item.features.includes("Portería"), `escritorio ${missingDesktop} · móvil ${missingMobile}`);
+      }
+    }
+
+    // Invariantes aleatorias (complemento, no oráculo).
+    let seed = 7;
+    const rnd = (k: number) => { seed = (seed * 48271) % 2147483647; return seed % k; };
+    let ok = true;
+    let why = "";
+    for (let t = 0; t < 300 && ok; t++) {
+      const n = rnd(12);
+      const it = mk({ lead: rnd(3) ? W(1 + rnd(90), "E") : null, sections: Array.from({ length: n }, (_, i) => sec(1 + rnd(150), rnd(2) ? `T${i}` : null, rnd(3) === 0 ? 1 + rnd(15) : null, `R${t}x${i}`)), description: rnd(2) ? "d" : null, features: [] });
+      const lay = itemLayout(it);
+      const shown = sectionsInJourney(lay);
+      const pages = packPages(journeyBlocks(it));
+      if (shown.some((v, i) => v !== i)) { ok = false; why = `orden ${shown}`; }
+      if (lay.spreads.length > MAX_JOURNEY_SPREADS) { ok = false; why = "más de 3"; }
+      if (!lay.truncated && shown.length !== n) { ok = false; why = "falta una sección sin truncar"; }
+      if (lay.truncated && !lay.detail) { ok = false; why = "truncado sin detalle"; }
+      const tiny = pages.filter((p, i) => p.weight < TINY_WORDS && !(pages.length === 1 || i === pages.length - 1));
+      if (tiny.length) { ok = false; why = "página escasa en medio"; }
+    }
+    check("300 viviendas aleatorias: orden, cada sección una vez, ≤ 3 dobles páginas, sin páginas escasas en medio", ok, why);
+  }
+
   {
     const d1 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });
     const d2 = updateDelay({ now: 1300, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });

@@ -1367,3 +1367,109 @@
     background-position: 0 0;
   }
 }
+
+/* ── E1 · Composición adaptativa del recorrido ─────────────────────────── */
+
+/* Entrada larga (D-QA2): abre el recorrido, íntegra. */
+.introBlock {
+  font: italic 400 1.12em/1.6 var(--display);
+  text-align: left;
+  max-width: 25em;
+  width: 100%;
+  margin: 0 0 var(--s6);
+  overflow-wrap: anywhere;
+}
+
+/* Enlace de la apertura a la entrada larga. */
+.continueLink {
+  margin-top: var(--s8);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  background: none;
+  font: 500 0.7em var(--text);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Foto pequeña dentro de una página de recorrido. */
+.inlinePhoto {
+  width: 72%;
+  margin: var(--s2) auto var(--s6);
+}
+
+/* Página de texto compuesta (D-QA3): sola en su doble página, sin foto. */
+.composedPage .textScroll {
+  justify-content: safe center;
+}
+
+.composedPage .section {
+  text-align: center;
+}
+
+.storyFull {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.subKicker {
+  margin-top: var(--s8);
+}
+
+/* Ficha breve (D-QA6): datos completos, características y mosaico. */
+.brief {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--s4);
+}
+
+.mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6em;
+  width: 100%;
+  max-width: 24em;
+  margin-top: var(--s6);
+}
+
+.mosaic1 {
+  grid-template-columns: 1fr;
+  max-width: 18em;
+}
+
+.mosaic3 .mosaicTile:first-child {
+  grid-column: 1 / -1;
+}
+
+.mosaicTile {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--mat);
+  box-shadow: 0 0 0 0.25em var(--mat), 0 0.4em 0.9em rgba(60, 40, 20, 0.18);
+}
+
+.mosaicTile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 900px) and (min-height: 620px) {
+  .introBlock {
+    font-size: max(16px, 1.12em);
+  }
+  .composedPage .sectionText {
+    font-size: max(16.5px, 1.05em);
+  }
+  .continueLink {
+    font-size: max(12px, 0.7em);
+  }
+}

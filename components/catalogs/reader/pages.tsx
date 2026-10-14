@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
+import type { ItemLayout, JourneyPage } from "@/lib/catalogs/journey-layout";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { shareExpiryLabel } from "@/lib/catalogs/share";
 import { ReaderImage } from "./reader-image";
@@ -316,65 +317,158 @@ function SectionText({ section }: { section: PublicItem["sections"][number] }) {
   );
 }
 
-/** Doble página · apertura (derecha): datos clave, entrada y puntos. */
+function GalleryLink({ item, onOpenGallery }: { item: PublicItem; onOpenGallery: (photo: number) => void }) {
+  if (item.photos.length <= 1) return null;
+  return (
+    <button type="button" className={styles.galleryOpen} onClick={() => onOpenGallery(0)}>
+      Ver las {item.photos.length} fotos
+    </button>
+  );
+}
+
+/** E1 (D-QA6) · Mosaico adaptable de hasta 4 fotos elegibles de la galería. */
+function Mosaic({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
+  const tiles = item.mosaic.filter((i) => item.photos[i]).slice(0, 4);
+  if (!tiles.length) return null;
+  return (
+    <div className={`${styles.mosaic} ${styles[`mosaic${tiles.length}`] ?? ""}`} data-testid="mosaic">
+      {tiles.map((i) => (
+        <button key={i} type="button" className={styles.mosaicTile} onClick={() => onOpenGallery(i)} aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
+          <ReaderImage variant="thumb" src={url(item.photos[i].src, 640)} alt="" loading="lazy" decoding="async" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** E1 (D-QA6) · Ficha breve: datos completos, características y mosaico. */
+function BriefBody({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
+  return (
+    <div className={styles.brief} data-testid="brief">
+      <FullFacts item={item} />
+      <Features item={item} />
+      <Mosaic item={item} url={url} onOpenGallery={onOpenGallery} />
+      <GalleryLink item={item} onOpenGallery={onOpenGallery} />
+    </div>
+  );
+}
+
+/** Doble página · apertura (derecha): datos clave, entrada y puntos; o la
+ *  ficha breve. Una entrada larga (D-QA2) no va aquí: abre el recorrido. */
 export function OpeningPage({
   catalog,
   item,
   index,
   folio,
   url,
+  layout,
   onOpenGallery,
+  onContinue,
 }: {
   catalog: PublicCatalog;
   item: PublicItem;
   index: number;
   folio: number;
   url: PhotoUrl;
+  layout: ItemLayout;
   onOpenGallery: (photo: number) => void;
+  /** Ir a la primera doble página del recorrido (null si no hay). */
+  onContinue: (() => void) | null;
 }) {
+  const showLead = layout.introInOpening;
   return (
     <section className={`${styles.page} ${styles.textPage}`} aria-label={item.title} data-part="open">
       <ScrollRegion label={item.title}>
         <ItemHeader catalog={catalog} item={item} index={index} />
-        <KeyFacts item={item} />
-        {item.lead || item.highlights.length ? (
-          <span className={styles.ornament} aria-hidden="true">
-            ✦
-          </span>
-        ) : null}
-        <LeadAndHighlights item={item} />
-        <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
+        {layout.brief ? (
+          <>
+            {showLead ? <LeadAndHighlights item={item} /> : <LeadAndHighlights item={{ ...item, lead: null }} />}
+            <BriefBody item={item} url={url} onOpenGallery={onOpenGallery} />
+          </>
+        ) : (
+          <>
+            <KeyFacts item={item} />
+            {(showLead && item.lead) || item.highlights.length ? (
+              <span className={styles.ornament} aria-hidden="true">
+                ✦
+              </span>
+            ) : null}
+            {showLead ? <LeadAndHighlights item={item} /> : <LeadAndHighlights item={{ ...item, lead: null }} />}
+            <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
+            {!showLead && onContinue ? (
+              <button type="button" className={styles.continueLink} onClick={onContinue} data-testid="to-journey">
+                Sigue · La vivienda →
+              </button>
+            ) : null}
+          </>
+        )}
       </ScrollRegion>
       <p className={styles.folio}>— {folio} —</p>
     </section>
   );
 }
 
-/** Doble página · recorrido: una o dos secciones breves. */
+/** Doble página · recorrido: los bloques de una página (entrada larga y
+ *  secciones), con su foto pequeña si la lleva. Sin foto adecuada y sola en
+ *  su doble página, es una página de texto compuesta (D-QA3). */
 export function JourneyTextPage({
   item,
-  sections,
+  page,
+  inlinePhoto,
+  composed,
   folio,
   more,
-  onDetail,
+  url,
+  onOpenGallery,
 }: {
   item: PublicItem;
-  sections: number[];
+  page: JourneyPage;
+  inlinePhoto: number | null;
+  /** Sola en su doble página y sin foto: composición tipográfica centrada. */
+  composed: boolean;
   folio: number | null;
-  /** Quedan secciones fuera del recorrido: enlace a la descripción completa. */
-  more: boolean;
-  onDetail: (() => void) | null;
+  /** Quedan secciones fuera del recorrido: enlace al detalle. */
+  more: { label: string; onClick: () => void } | null;
+  url: PhotoUrl;
+  onOpenGallery: (photo: number) => void;
 }) {
   return (
-    <section className={`${styles.page} ${styles.textPage} ${styles.journeyPage}`} aria-label={`${item.title} · recorrido`}>
+    <section
+      className={`${styles.page} ${styles.textPage} ${styles.journeyPage} ${composed ? styles.composedPage : ""}`}
+      aria-label={`${item.title} · recorrido`}
+      data-composed={composed ? "true" : undefined}
+    >
       <ScrollRegion label={`${item.title} · recorrido`}>
         <p className={styles.runner}>{item.title}</p>
-        {sections.map((i) => (
-          <SectionText key={i} section={item.sections[i]} />
-        ))}
-        {more && onDetail ? (
-          <button type="button" className={styles.galleryOpen} onClick={onDetail} data-testid="to-detail">
-            Sigue en la descripción completa →
+        {composed ? (
+          <span className={styles.ornament} aria-hidden="true">
+            ✦
+          </span>
+        ) : null}
+        {inlinePhoto !== null && item.photos[inlinePhoto] ? (
+          <div className={styles.inlinePhoto}>
+            <FramedPhoto
+              photo={item.photos[inlinePhoto]}
+              url={url}
+              sizes="(min-width: 900px) and (min-height: 620px) 30vh, 100vw"
+              label={`Ver las fotos de ${item.title}`}
+              onOpen={() => onOpenGallery(inlinePhoto)}
+            />
+          </div>
+        ) : null}
+        {page.blocks.map((b) =>
+          b.kind === "intro" ? (
+            <p key="intro" className={styles.introBlock} data-testid="journey-intro">
+              {item.lead}
+            </p>
+          ) : (
+            <SectionText key={b.index} section={item.sections[b.index]} />
+          ),
+        )}
+        {composed ? <GalleryLink item={item} onOpenGallery={onOpenGallery} /> : null}
+        {more ? (
+          <button type="button" className={styles.galleryOpen} onClick={more.onClick} data-testid="to-detail">
+            {more.label}
           </button>
         ) : null}
       </ScrollRegion>
@@ -437,18 +531,35 @@ export function DetailFactsPage({
   );
 }
 
-/** Doble página · detalle (derecha): la descripción completa, íntegra. */
-export function DescriptionPage({ item, folio }: { item: PublicItem; folio: number }) {
+/** Doble página · detalle (derecha): la descripción completa, íntegra. Si el
+ *  recorrido de una historia no alcanza, «La historia completa» (L1) con
+ *  todos los capítulos, y después la descripción de la ficha si la hay. */
+export function DescriptionPage({ item, folio, story }: { item: PublicItem; folio: number; story: boolean }) {
+  const label = story ? "La historia completa" : "Descripción completa";
   return (
-    <section className={`${styles.page} ${styles.textPage}`} aria-label={`${item.title} · descripción completa`}>
-      <ScrollRegion label={`${item.title} · descripción completa`}>
-        <p className={styles.kicker}>Descripción completa</p>
+    <section className={`${styles.page} ${styles.textPage}`} aria-label={`${item.title} · ${label.toLowerCase()}`}>
+      <ScrollRegion label={`${item.title} · ${label.toLowerCase()}`}>
+        <p className={styles.kicker}>{label}</p>
         <span className={styles.ornament} aria-hidden="true">
           ✦
         </span>
-        <p className={styles.desc} data-testid="full-description">
-          {item.description}
-        </p>
+        {story ? (
+          <div className={styles.storyFull} data-testid="story-full">
+            {item.lead ? <p className={styles.introBlock}>{item.lead}</p> : null}
+            {item.sections.map((sec, i) => (
+              <div key={i} className={styles.section} data-testid="story-chapter">
+                {sec.heading ? <h3 className={styles.sectionHeading}>{sec.heading}</h3> : null}
+                <p className={styles.sectionText}>{sec.text}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {story && item.description ? <p className={`${styles.kicker} ${styles.subKicker}`}>Descripción de la ficha</p> : null}
+        {item.description ? (
+          <p className={styles.desc} data-testid="full-description">
+            {item.description}
+          </p>
+        ) : null}
       </ScrollRegion>
       <p className={styles.folio}>— {folio} —</p>
     </section>
@@ -458,7 +569,7 @@ export function DescriptionPage({ item, folio }: { item: PublicItem; folio: numb
 /**
  * Una página (móvil): la vivienda es UNA hoja continua. Apertura, el
  * recorrido entero alternando con sus fotos, y la ficha completa y la
- * descripción íntegra plegables.
+ * descripción íntegra plegables. Ficha breve: datos desplegados y mosaico.
  */
 export function ItemSheetPage({
   catalog,
@@ -466,6 +577,7 @@ export function ItemSheetPage({
   index,
   folio,
   url,
+  layout,
   onOpenGallery,
 }: {
   catalog: PublicCatalog;
@@ -473,49 +585,59 @@ export function ItemSheetPage({
   index: number;
   folio: number;
   url: PhotoUrl;
+  layout: ItemLayout;
   onOpenGallery: (photo: number) => void;
 }) {
   return (
     <section className={`${styles.page} ${styles.textPage}`} aria-label={item.title} data-part="sheet">
       <ScrollRegion label={item.title}>
         <ItemHeader catalog={catalog} item={item} index={index} />
-        <KeyFacts item={item} />
-        {item.lead || item.highlights.length ? (
-          <span className={styles.ornament} aria-hidden="true">
-            ✦
-          </span>
-        ) : null}
-        <LeadAndHighlights item={item} />
-        {item.sections.map((sec, i) => (
-          <div key={i} className={styles.sheetSection}>
-            {sec.photo !== null && item.photos[sec.photo] ? (
-              <div className={styles.sheetPhoto}>
-                <FramedPhoto
-                  photo={item.photos[sec.photo]}
-                  url={url}
-                  sizes="100vw"
-                  label={`Ver las fotos de ${item.title}`}
-                  onOpen={() => onOpenGallery(sec.photo!)}
-                />
-              </div>
+        {layout.brief ? (
+          <>
+            <LeadAndHighlights item={item} />
+            <BriefBody item={item} url={url} onOpenGallery={onOpenGallery} />
+          </>
+        ) : (
+          <>
+            <KeyFacts item={item} />
+            {item.lead || item.highlights.length ? (
+              <span className={styles.ornament} aria-hidden="true">
+                ✦
+              </span>
             ) : null}
-            <SectionText section={sec} />
-          </div>
-        ))}
-        <details className={styles.fold} data-testid="fold-facts">
-          <summary>Ficha completa</summary>
-          <FullFacts item={item} />
-          <Features item={item} />
-        </details>
-        {item.description ? (
-          <details className={styles.fold} data-testid="fold-description">
-            <summary>Descripción completa</summary>
-            <p className={styles.desc} data-testid="full-description">
-              {item.description}
-            </p>
-          </details>
-        ) : null}
-        <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
+            <LeadAndHighlights item={item} />
+            {item.sections.map((sec, i) => (
+              <div key={i} className={styles.sheetSection}>
+                {sec.photo !== null && item.photos[sec.photo] ? (
+                  <div className={styles.sheetPhoto}>
+                    <FramedPhoto
+                      photo={item.photos[sec.photo]}
+                      url={url}
+                      sizes="100vw"
+                      label={`Ver las fotos de ${item.title}`}
+                      onOpen={() => onOpenGallery(sec.photo!)}
+                    />
+                  </div>
+                ) : null}
+                <SectionText section={sec} />
+              </div>
+            ))}
+            <details className={styles.fold} data-testid="fold-facts">
+              <summary>Ficha completa</summary>
+              <FullFacts item={item} />
+              <Features item={item} />
+            </details>
+            {item.description ? (
+              <details className={styles.fold} data-testid="fold-description">
+                <summary>Descripción completa</summary>
+                <p className={styles.desc} data-testid="full-description">
+                  {item.description}
+                </p>
+              </details>
+            ) : null}
+            <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
+          </>
+        )}
       </ScrollRegion>
       <p className={styles.folio}>— {folio} —</p>
     </section>

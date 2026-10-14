@@ -10,8 +10,6 @@ import {
   galleryStep,
   goTo,
   initialState,
-  journeyGroups,
-  journeyTruncated,
   openGallery,
   openingFolio,
   pageIndex,
@@ -25,6 +23,7 @@ import {
   type ReaderLayout,
   type ReaderState,
 } from "@/lib/catalogs/reader-state";
+import { itemLayout } from "@/lib/catalogs/journey-layout";
 import { SyncClient, type Connectivity, type EventSourceLike, type FetchStateResult } from "@/lib/catalogs/sync-client";
 import { Gallery } from "./gallery";
 import {
@@ -448,11 +447,12 @@ export function CatalogReader({
     const key = `item-${p.key}-${p.part}-${state.layout}-${animate}`;
     const photoSizes = "(min-width: 900px) and (min-height: 620px) 45vh, 100vw";
 
+    const lay = itemLayout(item);
     if (state.layout === "single") {
       return (
         <div key={key} {...common} className={`${styles.spread} ${styles.two} ${anim}`} data-part="sheet">
           <PhotoPage item={item} index={i} url={url} sizes={photoSizes} onOpenGallery={gallery} />
-          <ItemSheetPage catalog={c} item={item} index={i} folio={folio} url={url} onOpenGallery={gallery} />
+          <ItemSheetPage catalog={c} item={item} index={i} folio={folio} url={url} layout={lay} onOpenGallery={gallery} />
         </div>
       );
     }
@@ -460,39 +460,60 @@ export function CatalogReader({
       return (
         <div key={key} {...common} className={`${styles.spread} ${styles.two} ${anim}`} data-part="open">
           <PhotoPage item={item} index={i} url={url} sizes={photoSizes} onOpenGallery={gallery} />
-          <OpeningPage catalog={c} item={item} index={i} folio={folio} url={url} onOpenGallery={gallery} />
+          <OpeningPage
+            catalog={c}
+            item={item}
+            index={i}
+            folio={folio}
+            url={url}
+            layout={lay}
+            onOpenGallery={gallery}
+            onContinue={lay.spreads.length ? () => go({ kind: "item", key: item.key, part: "j1" }) : null}
+          />
         </div>
       );
     }
     if (p.part === "detail") {
+      const right = !!item.description || !!lay.detail?.story;
       return (
-        <div key={key} {...common} className={`${styles.spread} ${item.description ? styles.two : ""} ${anim}`} data-part="detail">
-          <DetailFactsPage item={item} index={i} folio={item.description ? null : folio} url={url} onOpenGallery={gallery} />
-          {item.description ? <DescriptionPage item={item} folio={folio} /> : null}
+        <div key={key} {...common} className={`${styles.spread} ${right ? styles.two : ""} ${anim}`} data-part="detail">
+          <DetailFactsPage item={item} index={i} folio={right ? null : folio} url={url} onOpenGallery={gallery} />
+          {right ? <DescriptionPage item={item} folio={folio} story={!!lay.detail?.story} /> : null}
         </div>
       );
     }
-    // Recorrido: la foto alterna de lado en cada doble página.
+    // Recorrido (E1): la doble página n de la composición pura.
     const n = Number(p.part.slice(1));
-    const groups = journeyGroups(item);
-    const group = groups[n - 1] ?? [];
-    const photo = group.map((g) => item.sections[g]?.photo).find((x): x is number => typeof x === "number" && !!item.photos[x]);
-    const last = n === groups.length;
-    const text = (
-      <JourneyTextPage
-        item={item}
-        sections={group}
-        folio={folio}
-        more={last && journeyTruncated(item)}
-        onDetail={last ? () => go({ kind: "item", key: item.key, part: "detail" }) : null}
-      />
-    );
-    const pic = photo !== undefined ? <JourneyPhotoPage item={item} photo={photo} url={url} onOpenGallery={gallery} /> : null;
+    const spread = lay.spreads[n - 1];
+    if (!spread) return null;
+    const last = n === lay.spreads.length;
+    const more =
+      last && lay.truncated && lay.detail
+        ? {
+            label: lay.detail.story ? "Sigue en la historia completa →" : "Sigue en la descripción completa →",
+            onClick: () => go({ kind: "item", key: item.key, part: "detail" }),
+          }
+        : null;
+    const composed = spread.slots.length === 1;
     return (
-      <div key={key} {...common} className={`${styles.spread} ${pic ? styles.two : ""} ${anim}`} data-part={p.part}>
-        {pic && n % 2 === 1 ? pic : null}
-        {text}
-        {pic && n % 2 === 0 ? pic : null}
+      <div key={key} {...common} className={`${styles.spread} ${composed ? "" : styles.two} ${anim}`} data-part={p.part}>
+        {spread.slots.map((slot, k) =>
+          slot.kind === "photo" ? (
+            <JourneyPhotoPage key={`ph${k}`} item={item} photo={slot.photo} url={url} onOpenGallery={gallery} />
+          ) : (
+            <JourneyTextPage
+              key={`tx${k}`}
+              item={item}
+              page={slot.page}
+              inlinePhoto={slot.inlinePhoto}
+              composed={composed}
+              folio={k === spread.slots.length - 1 ? folio : null}
+              more={k === spread.slots.length - 1 ? more : null}
+              url={url}
+              onOpenGallery={gallery}
+            />
+          ),
+        )}
       </div>
     );
   }
