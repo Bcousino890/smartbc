@@ -11,6 +11,7 @@ import type { SelectionActions } from "./selection-panel";
 import type { SearchAction } from "./property-search";
 import type { AdActions } from "./ads-panel";
 import type { CoverActions } from "./cover-picker";
+import type { PhotoActions } from "./manager/catalog-photos-block";
 import { textDraftKey, type TextActions } from "./catalog-texts-panel";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { criteriaSummary } from "@/lib/catalogs/criteria";
@@ -75,6 +76,8 @@ export interface CatalogManagerActions {
   adjust: (i: { catalogId: string; propertyId: string; kind: "include" | "exclude" } & M) => Promise<Res>;
   clearAdjustment: (i: { catalogId: string; propertyId: string } & M) => Promise<Res>;
   cover: CoverActions;
+  /** E3 · fotos por catálogo. */
+  photos: PhotoActions;
   /** Ampliación C2 */
   texts: TextActions;
 }
@@ -140,6 +143,11 @@ export function CatalogManager({
         setMode: (i: Parameters<SelectionActions["setMode"]>[0]) => actions.selection.setMode({ ...i, ...mo }),
       } satisfies SelectionActions,
       cover: { ...actions.cover, set: (i: Parameters<CoverActions["set"]>[0]) => actions.cover.set({ ...i, ...mo }) } satisfies CoverActions,
+      photos: {
+        ...actions.photos,
+        setExcluded: (i: Parameters<PhotoActions["setExcluded"]>[0]) => actions.photos.setExcluded({ ...i, ...mo }),
+        setOpening: (i: Parameters<PhotoActions["setOpening"]>[0]) => actions.photos.setOpening({ ...i, ...mo }),
+      } satisfies PhotoActions,
       texts: {
         ...actions.texts,
         save: (i: Parameters<TextActions["save"]>[0]) => actions.texts.save({ ...i, ...mo }),
@@ -474,6 +482,9 @@ export function CatalogManager({
             if (!onLocalAdd) router.refresh();
           }}
           message={section === "contenido" && vivienda ? messageEl : null}
+          photoActions={wrapped.photos}
+          photoRun={run}
+          refreshKey={`${catalog.version}|${catalog.cover.chosenPropertyId ?? ""}|${catalog.cover.chosenPhotoId ?? ""}`}
         />
       </section>
 

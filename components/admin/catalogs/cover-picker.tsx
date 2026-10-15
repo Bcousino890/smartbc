@@ -10,6 +10,8 @@ import type { FormDraft } from "./manager/use-form-draft";
 // quiere, una de sus fotos; no cambia el orden. Si la vivienda sale de la
 // lista o la foto desaparece, el lector usa la regla de respaldo y aquí se
 // avisa. Las fotos se ven por el proxy neutro (sin URL de almacenamiento).
+// E3: solo se ofrecen las fotos que se USAN en este catálogo, y el respaldo es
+// la foto de apertura efectiva de la vivienda en este catálogo (E3-3).
 // E2: la vivienda elegida sin confirmar vive en el almacén de borradores del
 // gestor (`form`); elegir una foto guarda al momento, como antes.
 
@@ -71,9 +73,9 @@ export function CoverPicker({
       </h3>
       <p className="text-xs text-ink/60" data-testid="cover-current">
         {cover.chosenPropertyId
-          ? `Elegida: ${chosenTitle ?? "una vivienda que ya no está en el catálogo"}${cover.chosenPhotoId ? " (foto concreta)" : " (su foto de portada)"}.`
-          : "Automática: la primera vivienda con foto."}{" "}
-        No cambia el orden de la lista.
+          ? `Elegida: ${chosenTitle ?? "una vivienda que ya no está en el catálogo"}${cover.chosenPhotoId ? " (foto concreta)" : " (su foto de apertura en este catálogo)"}.`
+          : "Automática: la foto de apertura de la primera vivienda con foto."}{" "}
+        No cambia el orden de la lista. Solo se ofrecen las fotos que se usan en este catálogo.
       </p>
       {cover.warnings.map((w) => (
         <p key={w} className="rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="cover-warning">
@@ -99,7 +101,7 @@ export function CoverPicker({
       </label>
       {form.edited ? (
         <p className="text-xs font-semibold text-amber-800" data-testid="cover-unsaved">
-          Vivienda elegida sin confirmar: elige una de sus fotos o «Usar su foto de portada».
+          Vivienda elegida sin confirmar: elige una de sus fotos o «Usar su foto de apertura».
         </p>
       ) : null}
       {error ? (
@@ -111,7 +113,7 @@ export function CoverPicker({
         busy && !photos ? (
           <p className="text-xs text-ink/50">Cargando fotos…</p>
         ) : photos && photos.length === 0 ? (
-          <p className="text-xs text-amber-900">Esta vivienda no tiene fotos: la portada usaría la primera vivienda con foto.</p>
+          <p className="text-xs text-amber-900">Esta vivienda no tiene fotos en uso en este catálogo: la portada usaría la apertura de la primera vivienda con foto.</p>
         ) : photos ? (
           <ul className="grid grid-cols-3 gap-2" aria-label="Fotos de la vivienda" data-testid="cover-photos">
             {photos.map((ph, i) => {
@@ -122,7 +124,7 @@ export function CoverPicker({
                     type="button"
                     onClick={() => choose(ph.id)}
                     disabled={pending}
-                    aria-label={`Usar la foto ${i + 1} como portada${ph.isCover ? " (portada de la vivienda)" : ""}`}
+                    aria-label={`Usar la foto ${i + 1} como portada${ph.isCover ? " (portada en el CRM)" : ""}`}
                     aria-pressed={selected}
                     className={`block aspect-[3/4] w-full overflow-hidden rounded-md border-2 bg-cream-200 ${selected ? "border-gold" : "border-transparent"}`}
                   >
@@ -142,7 +144,7 @@ export function CoverPicker({
           disabled={pending || !propertyId}
           className="rounded-lg border border-gold/40 px-3 py-1.5 text-xs text-ink/80 hover:bg-white disabled:opacity-50"
         >
-          Usar su foto de portada
+          Usar su foto de apertura
         </button>
         {cover.chosenPropertyId ? (
           <button
