@@ -78,6 +78,7 @@ export type NextActionKind =
   | "shortlist_unopened"
   | "application_in_review"
   | "missing_preferences"
+  | "incomplete_brief"
   | "no_advisor";
 
 /**

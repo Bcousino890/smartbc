@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Loader2, TrendingDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, ExternalLink, Loader2, PhoneCall, TrendingDown } from "lucide-react";
+import { addPortalLinks } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
+import { parsePortalUrl } from "@/lib/portal-links/portals";
 import type { SuggestedParticular } from "@/lib/db/queries/suggested-particulares";
 
 type State =
@@ -18,8 +21,62 @@ const eur = (n: number, rent: boolean) =>
  * encargo. Complementa a "Propiedades sugeridas" (catálogo propio). Si el rol
  * no puede ver particulares la API responde 403 y el bloque no se pinta.
  */
-export function SuggestedParticularesBlock({ clientId, clientName }: { clientId: string; clientName: string }) {
+export function SuggestedParticularesBlock({
+  clientId,
+  clientName,
+  existingUrlKeys,
+  canAdd,
+}: {
+  clientId: string;
+  clientName: string;
+  /** `url_key` de los anuncios que ya están en su lista para llamar. */
+  existingUrlKeys?: Set<string>;
+  /** Puede mandar anuncios a la lista para llamar (permiso de colecciones). */
+  canAdd?: boolean;
+}) {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const router = useRouter();
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const inList = (p: SuggestedParticular) => {
+    if (added.has(p.id)) return true;
+    const key = p.sourceUrl ? parsePortalUrl(p.sourceUrl)?.urlKey : null;
+    return Boolean(key && existingUrlKeys?.has(key));
+  };
+
+  async function addToCallList(p: SuggestedParticular) {
+    if (!p.sourceUrl) return;
+    setBusy(p.id);
+    setError(null);
+    try {
+      const res = await addPortalLinks(clientId, [
+        {
+          url: p.sourceUrl,
+          title: p.title,
+          price: p.price,
+          operation: p.operation,
+          zone: p.zone,
+          bedrooms: p.bedrooms,
+          bathrooms: p.bathrooms,
+          squareMeters: p.squareMeters,
+          imageUrl: p.coverUrl,
+          notes: `Sugerido por el encargo (${p.matchScore}% de encaje)`,
+        },
+      ]);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setAdded((prev) => new Set(prev).add(p.id));
+      router.refresh();
+    } catch {
+      setError("No se pudo añadir. Inténtalo de nuevo.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +85,9 @@ export function SuggestedParticularesBlock({ clientId, clientName }: { clientId:
         const res = await fetch(`/api/admin/clientes/${clientId}/suggested-particulares`);
         const json = await res.json().catch(() => ({}));
         if (cancelled) return;
-        if (!res.ok || json.reason === "no_preferences") return setState({ kind: "hidden" });
+        if (!res.ok || json.reason === "no_preferences" || json.reason === "not_available") {
+          return setState({ kind: "hidden" });
+        }
         setState({ kind: "ready", suggestions: json.suggestions ?? [], excluded: json.excluded ?? [] });
       } catch {
         if (!cancelled) setState({ kind: "hidden" });
@@ -45,13 +104,19 @@ export function SuggestedParticularesBlock({ clientId, clientName }: { clientId:
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
       <div className="flex items-center gap-2">
-        <h2 className="crm-label-sm text-ink/50">Anuncios de portales que encajan</h2>
+        <h2 className="crm-label-sm text-ink/50">Encontradas en portales</h2>
         {state.kind === "ready" && state.suggestions.length > 0 && (
           <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold-dark">
             {state.suggestions.length}
           </span>
         )}
       </div>
+
+      <p className="mt-1 text-xs text-ink/50">
+        Anuncios de Idealista, Fotocasa y otros portales que encajan con su encargo. Añádelos a su lista
+        para llamar y siguen el mismo camino: llamada, ficha y selección.
+      </p>
+      {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
 
       {state.kind === "loading" && (
         <div className="mt-4 flex h-16 items-center justify-center text-ink/45">
@@ -96,6 +161,7 @@ export function SuggestedParticularesBlock({ clientId, clientName }: { clientId:
                   {p.squareMeters ? ` · ${p.squareMeters} m²` : ""}
                   {p.zone ? ` · ${p.zone}` : ""}
                   {p.portal ? ` · ${PORTAL[p.portal] ?? p.portal}` : ""}
+                  {p.advertiser === "professional" ? " · Agencia" : p.advertiser === "particular" ? " · Particular" : ""}
                 </p>
                 {p.priceDropPct ? (
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-emerald-700">
@@ -108,16 +174,35 @@ export function SuggestedParticularesBlock({ clientId, clientName }: { clientId:
                 {p.matchWarnings.length > 0 && (
                   <p className="mt-0.5 text-xs text-amber-700">{p.matchWarnings.slice(0, 2).join(" · ")}</p>
                 )}
-                {p.sourceUrl && (
-                  <a
-                    href={p.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-gold-dark hover:underline"
-                  >
-                    Ver anuncio <ExternalLink size={11} />
-                  </a>
-                )}
+                <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                  {p.sourceUrl && canAdd && (
+                    inList(p) ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                        <Check size={12} /> En su lista para llamar
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => addToCallList(p)}
+                        className="inline-flex items-center gap-1 rounded-md bg-ink px-2.5 py-1 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                      >
+                        {busy === p.id ? <Loader2 size={11} className="animate-spin" /> : <PhoneCall size={11} />}
+                        Añadir a su lista para llamar
+                      </button>
+                    )
+                  )}
+                  {p.sourceUrl && (
+                    <a
+                      href={p.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-gold-dark hover:underline"
+                    >
+                      Ver anuncio <ExternalLink size={11} />
+                    </a>
+                  )}
+                </div>
               </div>
             </article>
           ))}

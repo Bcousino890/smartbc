@@ -40,7 +40,7 @@ export type ExcludedSummary = Array<{ label: string; count: number }>;
 // dos ramas devolvían [] y por eso un error de relación pasó meses sin que
 // nadie lo notara: el bloque de la ficha simplemente decía "no hay resultados".
 export type SuggestedPropertiesResult =
-  | { ok: true; suggestions: SuggestedProperty[]; excluded?: ExcludedSummary }
+  | { ok: true; suggestions: SuggestedProperty[]; total?: number; excluded?: ExcludedSummary }
   | { ok: false; reason: "no_preferences" }
   | { ok: false; reason: "error"; message: string };
 
@@ -302,6 +302,7 @@ export async function getSuggestedProperties(
   return {
     ok: true,
     suggestions: suggestions.slice(0, opts?.limit ?? 10),
+    total: suggestions.length,
     excluded: [...excludedCounts.entries()]
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),

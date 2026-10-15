@@ -255,7 +255,9 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
   }
 
   // ── Precio ──
-  const price = effectivePrice(p, op);
+  // Un precio de 0 o negativo es "sin precio" ("a consultar"), no una ganga.
+  const rawPrice = effectivePrice(p, op);
+  const price = rawPrice !== null && Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null;
   if (brief.minPrice !== null || brief.maxPrice !== null) {
     if (price === null) return { excluded: true, reason: "price" };
     const flex = brief.maxPriceFlexPct ?? 0;

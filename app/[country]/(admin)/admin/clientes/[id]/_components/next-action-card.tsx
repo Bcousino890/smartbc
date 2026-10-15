@@ -20,6 +20,9 @@ import { useTn } from "./plural";
 import { cn } from "@/lib/utils";
 import { Panel } from "./ui";
 
+/** Acciones que se resuelven abriendo el encargo, no cambiando de pestaña. */
+export const BRIEF_KINDS = new Set<NextAction["kind"]>(["missing_preferences", "incomplete_brief"]);
+
 const DOT: Record<NextAction["urgency"], string> = {
   now: "bg-rose-500",
   soon: "bg-amber-500",
@@ -67,7 +70,7 @@ export function NextActionCard({
                 onClick={() => onGo(head)}
                 className="mt-2.5 inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
               >
-                {t(`cc.next.cta.${head.tab}`)}
+                {BRIEF_KINDS.has(head.kind) ? t("cc.next.cta.brief") : t(`cc.next.cta.${head.tab}`)}
                 <ArrowRight size={12} strokeWidth={2} className="text-gold" />
               </button>
             </div>

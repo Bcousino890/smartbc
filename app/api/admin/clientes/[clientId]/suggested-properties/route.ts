@@ -60,6 +60,7 @@ export async function GET(
     return NextResponse.json({
       ok: true,
       suggestions: result.suggestions,
+      total: result.total ?? result.suggestions.length,
       excluded: result.excluded ?? [],
       alertsEnabled,
     });

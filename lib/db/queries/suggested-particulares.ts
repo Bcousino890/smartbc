@@ -26,13 +26,14 @@ export type SuggestedParticular = {
 };
 
 export type SuggestedParticularesResult =
-  | { ok: true; suggestions: SuggestedParticular[]; excluded: ExcludedSummary }
+  | { ok: true; suggestions: SuggestedParticular[]; total: number; excluded: ExcludedSummary }
   | { ok: false; reason: "no_preferences" }
   | { ok: false; reason: "error"; message: string };
 
 const COLUMNS =
   "id, portal, source_url, title, address, zone, price, operation, bedrooms, bathrooms, square_meters, " +
-  "cover_url, latitude, longitude, attrs, has_lift, condition, floor, floor_num, advertiser_type, price_drop_pct, detected_at";
+  "cover_url, latitude, longitude, attrs, has_lift, condition, floor, floor_num, advertiser_type, price_drop_pct, detected_at, " +
+  "taken_down_at, fraud_status";
 
 const CANDIDATE_LIMIT = 600;
 
@@ -67,6 +68,9 @@ export async function getSuggestedParticulares(
     .select(COLUMNS)
     .eq("is_active", true)
     .is("duplicate_of", null)
+    .is("taken_down_at", null)
+    // Sin precio no se puede cruzar con un presupuesto: fuera, no "dentro del presupuesto".
+    .gt("price", 0)
     // Solo la operación propia de la fila: el precio que se compara es el de
     // esta fila, y `link_ops` incluye copias ya dadas de baja.
     .eq("operation", op);
@@ -101,6 +105,11 @@ export async function getSuggestedParticulares(
   const suggestions: SuggestedParticular[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of (data ?? []) as any[]) {
+    // Sospechoso o confirmado de fraude (migración 0191): nunca se sugiere.
+    if (r.fraud_status) {
+      excludedCounts.set("Posible fraude", (excludedCounts.get("Posible fraude") ?? 0) + 1);
+      continue;
+    }
     // `has_lift` es un booleano tri-estado: se traduce al texto que entiende el detector.
     const features: string[] = [...(Array.isArray(r.attrs) ? r.attrs : [])];
     if (r.has_lift === true) features.push("Ascensor");
@@ -151,6 +160,7 @@ export async function getSuggestedParticulares(
   return {
     ok: true,
     suggestions: suggestions.slice(0, opts?.limit ?? 12),
+    total: suggestions.length,
     excluded: [...excludedCounts.entries()]
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),

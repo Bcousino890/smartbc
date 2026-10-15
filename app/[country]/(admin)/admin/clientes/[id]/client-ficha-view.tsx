@@ -62,8 +62,9 @@ import { CommandHeader } from "./_components/command-header";
 import { CommandTabs } from "./_components/command-tabs";
 import { EditClientDialog } from "./_components/edit-client-dialog";
 import { EditPreferencesDialog } from "./_components/edit-preferences-dialog";
-import type { BriefProfile } from "@/lib/clients/brief";
-import { NextActionCard } from "./_components/next-action-card";
+import { briefGaps, type BriefProfile } from "@/lib/clients/brief";
+import { BRIEF_KINDS, NextActionCard } from "./_components/next-action-card";
+import { MatchesCard } from "./_components/matches-card";
 import { ShortlistStatusCard, ViewingDayCard } from "./_components/overview-cards";
 import { PortalLinksCard } from "./_components/portal-links-card";
 import { PropertiesJumpBar } from "./_components/properties-jump-bar";
@@ -201,6 +202,11 @@ export function ClientFichaView({
   );
 
   const clientName = `${client.firstName} ${client.lastName}`.trim();
+  const portalUrlKeys = useMemo(() => new Set(links.map((l) => l.url_key)), [links]);
+  const essentialGaps = useMemo(
+    () => (cc.prefs ? briefGaps(cc.prefs.brief).filter((g) => g.level === "essential").map((g) => g.label) : []),
+    [cc.prefs],
+  );
 
   const counts: Partial<Record<CommandTab, number | null>> = {
     overview: cc.nextActions.length,
@@ -278,7 +284,19 @@ export function ClientFichaView({
               <div className="space-y-5">
                 <NextActionCard
                   actions={cc.nextActions}
-                  onGo={(a) => goTab(a.tab, a.anchor)}
+                  onGo={(a) =>
+                    BRIEF_KINDS.has(a.kind) && cc.canEditClient ? setEditPrefs(true) : goTab(a.tab, a.anchor)
+                  }
+                />
+                <MatchesCard
+                  clientId={client.id}
+                  clientName={client.firstName || clientName}
+                  country={country}
+                  hasPreferences={Boolean(cc.prefs)}
+                  essentialGaps={essentialGaps}
+                  canEdit={cc.canEditClient}
+                  onEditBrief={() => setEditPrefs(true)}
+                  onGo={(anchor) => goTab("properties", anchor)}
                 />
                 <ClientBrief
                   prefs={cc.prefs}
@@ -360,6 +378,7 @@ export function ClientFichaView({
                     ]
                   : []),
                 { id: "cc-suggested", label: t("cc.properties.section.suggested"), count: null },
+                { id: "cc-suggested-portales", label: "Encontradas en portales", count: null },
                 {
                   id: "cc-favorites",
                   label: t("cc.properties.section.favorites"),
@@ -424,7 +443,12 @@ export function ClientFichaView({
             </div>
 
             <div id="cc-suggested-portales" className="scroll-mt-28">
-              <SuggestedParticularesBlock clientId={client.id} clientName={clientName} />
+              <SuggestedParticularesBlock
+                clientId={client.id}
+                clientName={clientName}
+                existingUrlKeys={portalUrlKeys}
+                canAdd={Boolean(portalLinks?.canCreate)}
+              />
             </div>
 
             <div id="cc-favorites" className="scroll-mt-28">

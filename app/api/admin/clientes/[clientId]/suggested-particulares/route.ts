@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSuggestedParticulares } from "@/lib/db/queries/suggested-particulares";
 import { requirePermission } from "@/lib/auth/guard";
+import { createAdminClient } from "@/lib/db/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,19 @@ export async function GET(
     if (!gate2.ok) return gate2.response;
 
     const { clientId } = await params;
+
+    // Los anuncios scrapeados son solo de España: a un cliente de otro país
+    // no se le cruzan (vacío explícito, no un error).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: client } = await admin.from("profiles").select("role, country").eq("id", clientId).maybeSingle();
+    if (!client || client.role !== "client") {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+    if (client.country && client.country !== "es") {
+      return NextResponse.json({ ok: true, suggestions: [], total: 0, excluded: [], reason: "not_available" });
+    }
+
     const result = await getSuggestedParticulares(clientId);
 
     if (!result.ok) {
@@ -28,7 +42,7 @@ export async function GET(
       }
       return NextResponse.json({ error: result.message, reason: "error" }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, suggestions: result.suggestions, excluded: result.excluded });
+    return NextResponse.json({ ok: true, suggestions: result.suggestions, total: result.total, excluded: result.excluded });
   } catch (error) {
     console.error("Error in suggested particulares endpoint:", error);
     return NextResponse.json(

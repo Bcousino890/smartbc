@@ -130,6 +130,10 @@ export function ClientBrief({
       : null,
   );
   add(
+    "Zona en el mapa",
+    b.polygons.length ? `${b.polygons.length} ${b.polygons.length === 1 ? "área dibujada" : "áreas dibujadas"}` : null,
+  );
+  add(
     t("clientes.ficha.preferences.budget"),
     price(b.minPrice, b.maxPrice) &&
       `${price(b.minPrice, b.maxPrice)}${b.maxPriceFlexPct ? ` (+${b.maxPriceFlexPct} %)` : ""}`,
@@ -224,6 +228,15 @@ export function ClientBrief({
             <p className={essential.length ? "mt-1" : undefined}>
               Falta preguntar: {recommended.map((g) => g.label).join(" · ")}
             </p>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="mt-1.5 font-semibold underline underline-offset-2"
+            >
+              Completar ahora
+            </button>
           )}
         </div>
       )}

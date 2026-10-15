@@ -408,5 +408,11 @@ const ev = (b: BriefInput, p: MatchProperty) => evaluateMatch(b, p);
   check("una fila vieja sin la columna da cero áreas", briefFromRow({ operation: "rent" }).polygons.length === 0);
 }
 
+console.log("\nPrecio sin dato");
+{
+  check("precio 0 con presupuesto: fuera, no «dentro del presupuesto»", evaluateMatch(brief({ maxPrice: 2000 }), prop({ price: 0 })).excluded === true);
+  check("precio 0 sin presupuesto: no rompe", evaluateMatch(brief({}), prop({ price: 0 })).excluded === false);
+}
+
 console.log(failures ? `\n✗ ${failures} fallo(s)` : "\n✓ Todo en verde");
 process.exit(failures ? 1 : 0);
