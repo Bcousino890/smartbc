@@ -53,6 +53,8 @@ type PropertyRow = {
   description?: string | null;
   zone: string;
   subzone: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   bedrooms: number;
   bathrooms: number;
   square_meters: number | null;
@@ -160,6 +162,8 @@ export async function getSuggestedProperties(
       description,
       zone,
       subzone,
+      latitude,
+      longitude,
       bedrooms,
       bathrooms,
       square_meters,
@@ -222,7 +226,19 @@ export async function getSuggestedProperties(
   // minúsculas ("chamberi"). El patrón es permisivo a propósito; la
   // comparación exacta la hace `evaluateMatch` justo después.
   const patterns = [...new Set([...brief.zones, ...brief.subzones].map(zoneLikePattern))].filter(Boolean);
-  if (patterns.length && !brief.zonesFlexible) {
+  if (brief.polygons.length && !brief.zonesFlexible) {
+    // Zona dibujada: se trae lo que cae en su caja envolvente (el recorte
+    // exacto lo hace `evaluateMatch`) y lo que no tiene ubicación, que se
+    // compara por nombre. Sustituye al filtro por nombre de zona.
+    const pts = brief.polygons.flat();
+    const lats = pts.map((q) => q[1]);
+    const lngs = pts.map((q) => q[0]);
+    const pad = 0.0005;
+    groups.push(
+      `or(latitude.is.null,and(latitude.gte.${Math.min(...lats) - pad},latitude.lte.${Math.max(...lats) + pad},` +
+        `longitude.gte.${Math.min(...lngs) - pad},longitude.lte.${Math.max(...lngs) + pad}))`,
+    );
+  } else if (patterns.length && !brief.zonesFlexible) {
     groups.push(
       `or(${patterns.flatMap((p) => [`zone.ilike."${p}"`, `subzone.ilike."${p}"`]).join(",")})`,
     );

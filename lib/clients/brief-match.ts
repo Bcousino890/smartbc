@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { ATICO_FLOOR, floorLabel, resolveFloor } from "../floor";
+import { isPointInAnyPolygon } from "../zone-polygon";
 import {
   FEATURES,
   FEATURE_LABEL,
@@ -30,6 +31,9 @@ import {
 export type MatchProperty = {
   zone: string | null;
   subzone: string | null;
+  /** Ubicación exacta, si se conoce: permite comparar con la zona dibujada. */
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   bedrooms: number | null;
   bathrooms: number | null;
   square_meters: number | null;
@@ -268,8 +272,25 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
   }
 
   // ── Zona ──
+  // La zona dibujada en el mapa manda sobre los nombres cuando la propiedad
+  // tiene ubicación. Sin coordenadas no se descarta por el dibujo (no saberlo
+  // no es decir que no): se compara por nombre y se avisa.
   const wanted = [...brief.zones, ...brief.subzones].map(fold);
-  if (wanted.length) {
+  const polygons = brief.polygons ?? [];
+  const lat = p.latitude === null || p.latitude === undefined ? NaN : Number(p.latitude);
+  const lng = p.longitude === null || p.longitude === undefined ? NaN : Number(p.longitude);
+  const hasPoint = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  if (polygons.length && hasPoint) {
+    if (isPointInAnyPolygon([lng, lat], polygons)) {
+      reasons.unshift("Dentro de la zona que busca");
+      component(25, 25);
+    } else if (!brief.zonesFlexible) {
+      return { excluded: true, reason: "zone" };
+    } else {
+      warnings.push("Fuera de la zona que marcó en el mapa (está abierto a otras)");
+      component(25, 5);
+    }
+  } else if (wanted.length) {
     const zone = p.zone ? fold(p.zone) : null;
     const sub = p.subzone ? fold(p.subzone) : null;
     const hitSub = sub !== null && brief.subzones.map(fold).includes(sub);
@@ -288,6 +309,10 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
         component(25, 25);
       }
     }
+    if (polygons.length) warnings.push("Sin ubicación exacta para comprobar la zona del mapa");
+  } else if (polygons.length) {
+    warnings.push("Sin ubicación exacta para comprobar la zona del mapa");
+    component(25, 10);
   }
 
   // ── Tamaño ──

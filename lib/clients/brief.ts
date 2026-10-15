@@ -22,6 +22,8 @@
 // Component), las server actions y el matcher.
 // ============================================================================
 
+import type { ZonePolygon } from "../zone-polygon";
+
 export type BriefOperation = "rent" | "sale";
 
 export type Option<K extends string = string> = { key: K; label: string };
@@ -303,6 +305,8 @@ export type BriefInput = {
   zones: string[];
   subzones: string[];
   zonesFlexible: boolean;
+  /** Zonas dibujadas a mano en el mapa, [lng, lat]. Mandan sobre los nombres de zona. */
+  polygons: ZonePolygon[];
   minPrice: number | null;
   maxPrice: number | null;
   maxPriceFlexPct: number | null;
@@ -349,6 +353,7 @@ export const EMPTY_BRIEF: BriefInput = {
   zones: [],
   subzones: [],
   zonesFlexible: false,
+  polygons: [],
   minPrice: null,
   maxPrice: null,
   maxPriceFlexPct: null,
@@ -456,6 +461,34 @@ const int = (v: number | null | undefined, max?: number): number | null => {
 
 const text = (v: string | null | undefined): string | null => v?.trim() || null;
 
+/** Máximo de zonas dibujadas por encargo y de vértices por zona. */
+export const MAX_POLYGONS = 8;
+export const MAX_POLYGON_POINTS = 200;
+
+/**
+ * Deja solo anillos válidos: ≥3 puntos finitos dentro de rango [lng, lat],
+ * redondeados a 5 decimales (~1 m). Lo que llega de la BD o de un formulario
+ * manipulado nunca debe romper el match.
+ */
+export function cleanPolygons(v: unknown): ZonePolygon[] {
+  if (!Array.isArray(v)) return [];
+  const out: ZonePolygon[] = [];
+  for (const ring of v) {
+    if (!Array.isArray(ring) || ring.length < 3 || ring.length > MAX_POLYGON_POINTS) continue;
+    const pts: ZonePolygon = [];
+    for (const pt of ring) {
+      if (!Array.isArray(pt) || pt.length !== 2) break;
+      const [lng, lat] = pt as [unknown, unknown];
+      if (typeof lng !== "number" || typeof lat !== "number") break;
+      if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || Math.abs(lat) > 90) break;
+      pts.push([Math.round(lng * 1e5) / 1e5, Math.round(lat * 1e5) / 1e5]);
+    }
+    if (pts.length === ring.length) out.push(pts);
+    if (out.length >= MAX_POLYGONS) break;
+  }
+  return out;
+}
+
 export type BriefValidation = { ok: true } | { ok: false; error: string };
 
 /** Lo que no tiene sentido guardar. El resto de combinaciones se admite. */
@@ -506,6 +539,7 @@ export function buildPreferencesPayload(b: BriefInput): Record<string, unknown> 
     zones: cleanList(b.zones),
     subzones: cleanList(b.subzones),
     zones_flexible: b.zonesFlexible,
+    search_polygons: cleanPolygons(b.polygons),
     min_price: num(b.minPrice),
     max_price: num(b.maxPrice),
     max_price_flex_pct: int(b.maxPriceFlexPct, 50),
@@ -568,6 +602,7 @@ export function briefFromRow(r: Row | null | undefined): BriefInput {
     zones: arr(r.zones),
     subzones: arr(r.subzones),
     zonesFlexible: r.zones_flexible === true,
+    polygons: cleanPolygons(r.search_polygons),
     minPrice: n(r.min_price),
     maxPrice: n(r.max_price),
     maxPriceFlexPct: n(r.max_price_flex_pct),
@@ -621,7 +656,7 @@ export function briefGaps(b: BriefInput): BriefGap[] {
   const add = (field: string, label: string, level: BriefGap["level"]) =>
     gaps.push({ field, label, level });
 
-  if (b.zones.length === 0 && b.subzones.length === 0) add("zones", "Zonas", "essential");
+  if (b.zones.length === 0 && b.subzones.length === 0 && b.polygons.length === 0) add("zones", "Zonas", "essential");
   if (b.maxPrice === null) add("maxPrice", "Presupuesto máximo", "essential");
   if (b.minBedrooms === null) add("minBedrooms", "Dormitorios", "essential");
   if (b.propertyTypes.length === 0) add("propertyTypes", "Tipo de vivienda", "recommended");

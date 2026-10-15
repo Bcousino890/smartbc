@@ -50,6 +50,7 @@ import { useT } from "@/lib/i18n/provider";
 import { useTn } from "./_components/plural";
 import { PageFooter } from "@/components/ui/page-footer";
 import { SuggestedPropertiesBlock } from "@/components/admin/clientes/suggested-properties-block";
+import { SuggestedParticularesBlock } from "@/components/admin/clientes/suggested-particulares-block";
 import { SelectedPropertiesBlock } from "@/components/admin/viewing-collections/selected-properties-block";
 import { ViewingItinerariesBlock } from "@/components/admin/viewing-collections/viewing-itineraries-block";
 import { PortalLinksBlock } from "@/components/admin/clientes/portal-links/portal-links-block";
@@ -420,6 +421,10 @@ export function ClientFichaView({
                 selectedPropertyIds={selectedPropertyIds}
                 canAddToSelection={Boolean(viewingCollections?.canCreate)}
               />
+            </div>
+
+            <div id="cc-suggested-portales" className="scroll-mt-28">
+              <SuggestedParticularesBlock clientId={client.id} clientName={clientName} />
             </div>
 
             <div id="cc-favorites" className="scroll-mt-28">

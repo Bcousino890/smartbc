@@ -115,6 +115,13 @@ export default function ZoneDrawMap({ initialPolygons, onChange }: ZoneDrawMapPr
       drawnItems.current!.addLayer(polyLayer);
     }
 
+    // Con zonas ya dibujadas (p.ej. editar un encargo), encuadrarlas: si no, el
+    // mapa se abre en Madrid y la zona puede quedar fuera de la vista.
+    if (drawnItems.current.getLayers().length > 0) {
+      const bounds = drawnItems.current.getBounds();
+      if (bounds.isValid()) map.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+    }
+
     return () => {
       map.current?.remove();
       map.current = null;

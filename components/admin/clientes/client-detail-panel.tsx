@@ -342,6 +342,9 @@ function EncargoBlock({ brief, fichaHref }: { brief: BriefInput | null; fichaHre
     ]);
     const where = [...brief.zones, ...brief.subzones];
     if (where.length) rows.push(["Zonas", where.join(", ") + (brief.zonesFlexible ? " (abierto a otras)" : "")]);
+    if (brief.polygons.length) {
+      rows.push(["Zona en el mapa", `${brief.polygons.length} ${brief.polygons.length === 1 ? "área dibujada" : "áreas dibujadas"}`]);
+    }
     if (brief.minPrice !== null || brief.maxPrice !== null) {
       rows.push([
         "Presupuesto",

@@ -376,5 +376,37 @@ console.log("\nMatch · orientación, puntuación y lo que ve el cliente");
   );
 }
 
+console.log("\nZona dibujada en el mapa");
+const ev = (b: BriefInput, p: MatchProperty) => evaluateMatch(b, p);
+{
+  // Cuadrado de ~1 km alrededor de la Puerta del Sol, en [lng, lat].
+  const square: Array<[number, number]> = [
+    [-3.708, 40.412],
+    [-3.698, 40.412],
+    [-3.698, 40.422],
+    [-3.708, 40.422],
+  ];
+  const inside = prop({ latitude: 40.417, longitude: -3.703, zone: "Otra zona" });
+  const outside = prop({ latitude: 40.45, longitude: -3.7, zone: "Salamanca" });
+  const noCoords = prop({ zone: "Salamanca" });
+  const poly = brief({ polygons: [square] });
+
+  check("dentro del dibujo encaja aunque la zona se llame distinto", !ev(poly, inside).excluded && ev(poly, inside).reasons.includes("Dentro de la zona que busca"));
+  check("fuera del dibujo se descarta aunque la zona coincida por nombre", ev(poly, outside).excluded === true);
+  check("sin ubicación no se descarta: se avisa", !ev(poly, noCoords).excluded && ev(poly, noCoords).warnings.some((w) => /ubicación/i.test(w)));
+  check(
+    "sin ubicación y con otro nombre de zona sí se descarta por nombre",
+    ev(brief({ polygons: [square], zones: ["Chamberí"] }), noCoords).excluded === true,
+  );
+  check("abierto a otras zonas: fuera del dibujo solo avisa", !ev(brief({ polygons: [square], zonesFlexible: true }), outside).excluded);
+  check("coordenadas 0,0 no cuentan como ubicación", !ev(poly, prop({ latitude: 0, longitude: 0 })).excluded);
+  check("el dibujo cuenta como zona en los huecos del encargo", !briefGaps(poly).some((g) => g.field === "zones"));
+
+  const clean = buildPreferencesPayload(brief({ polygons: [square, [[1, 2]], [[0, 0], [1, 1], [Number.NaN, 2]]] as never }));
+  check("solo se guardan anillos válidos", JSON.stringify(clean.search_polygons) === JSON.stringify([square]), clean.search_polygons);
+  check("el dibujo sobrevive al guardado", JSON.stringify(briefFromRow(clean).polygons) === JSON.stringify([square]));
+  check("una fila vieja sin la columna da cero áreas", briefFromRow({ operation: "rent" }).polygons.length === 0);
+}
+
 console.log(failures ? `\n✗ ${failures} fallo(s)` : "\n✓ Todo en verde");
 process.exit(failures ? 1 : 0);

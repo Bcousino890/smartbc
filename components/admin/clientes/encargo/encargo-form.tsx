@@ -18,6 +18,7 @@
 // ============================================================================
 
 import { useState } from "react";
+import { AreaPicker } from "./area-picker";
 import { AlertTriangle, Check, Plus, Star, X } from "lucide-react";
 import {
   briefGaps,
@@ -138,6 +139,9 @@ export function EncargoForm({ value: v, onChange, profile, onProfileChange, coun
           subzones={v.subzones}
           onChange={(zones, subzones) => onChange({ ...v, zones, subzones })}
         />
+        {country === "es" && (
+          <AreaPicker value={v.polygons} onChange={(polygons) => set("polygons", polygons)} disabled={disabled} />
+        )}
         <CheckRow
           checked={v.zonesFlexible}
           onChange={(c) => set("zonesFlexible", c)}
