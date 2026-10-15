@@ -16,6 +16,7 @@ import {
   beginSave,
   contactAdapter,
   criteriaAdapter,
+  criteriaFromRaw,
   criteriaRawOf,
   editDraft,
   editTextDraft,
@@ -159,6 +160,13 @@ function testRaw() {
   // Precio no válido: cuenta como cambio y no se pierde.
   const d5 = editDraft(d4, savedKey, { ...d4.value, freeName: "", pmax: "12a" });
   check("precio no válido: cambio y texto intacto", isEdited(criteriaAdapter, d5) && d5.value.pmax === "12a");
+  // K5: «5.5» ya no se lee como 55: no válido, cuenta como cambio y se conserva tal cual.
+  const d6 = editDraft(d5, savedKey, { ...d5.value, pmax: "5.5" });
+  check("K5 «5.5»: no válido (criteriaFromRaw → null)", criteriaFromRaw(d6.value) === null);
+  check("K5 «5.5»: cambio sin guardar y texto intacto", isEdited(criteriaAdapter, d6) && d6.value.pmax === "5.5");
+  const d7 = editDraft(d6, savedKey, { ...d6.value, pmax: "1.200.000", max: "12.0" });
+  check("K5 máximo «12.0»: no válido y se conserva", criteriaFromRaw(d7.value) === null && d7.value.max === "12.0");
+  check("K5 «1.200.000» y máximo «12»: válido = 1200000", criteriaFromRaw({ ...d7.value, max: "12" })?.price_max === 1200000);
 
   // Teléfono: «600 111 222» frente a +34600111222 guardado.
   const savedContact = contactAdapter.key({ name: "Ana", phone: "+34600111222", role: "asesora" });

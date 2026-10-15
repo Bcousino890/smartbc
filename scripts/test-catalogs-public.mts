@@ -288,6 +288,15 @@ async function liveTests() {
     check("resumen con unidades (venta €)", s.ok && criteriaSummary(s.criteria) === "Salamanca · Justicia · Venta · 900.000–1.500.000 €", s.ok ? criteriaSummary(s.criteria) : "");
     const r = normalizeCriteria({ operation: "rent", price_max: 4000 });
     check("resumen alquiler €/mes", r.ok && criteriaSummary(r.criteria) === "Alquiler · hasta 4.000 €/mes");
+    // K5: formatos de importe aceptados y rechazados, uno a uno (escritos a mano).
+    const pm = (v: unknown) => { const n = normalizeCriteria({ operation: "rent", price_min: v }); return n.ok ? n.criteria.price_min : "bad"; };
+    const okCases: Array<[unknown, number | null]> = [["5000", 5000], ["5.000", 5000], ["1.200.000", 1200000], ["0", 0], [" 5.000 ", 5000], [5000, 5000], [0, 0], ["", null], ["   ", null], [null, null], [undefined, null]];
+    for (const [v, want] of okCases) check(`K5 importe ${JSON.stringify(v)} → ${want}`, pm(v) === want, String(pm(v)));
+    const badCases: unknown[] = ["5.5", "5.50", "5.0000", "12.0", "5,000", "5.000,00", "5 000", "5.000 €", "5k", "-5", "0.500", "12.000.00", "1e3", "0x10", "5.5.5", 5.5, -1, 1_000_000_001, true, {}, []];
+    for (const v of badCases) check(`K5 importe ${JSON.stringify(v)} rechazado (nunca 55 ni otro número)`, pm(v) === "bad", String(pm(v)));
+    const mx = (v: unknown) => { const n = normalizeCriteria({ max: v }); return n.ok ? n.criteria.max : "bad"; };
+    check("K5 máximo: «12», 12 y vacío (12 por defecto)", mx("12") === 12 && mx(12) === 12 && mx(null) === 12 && mx(undefined) === 12);
+    check("K5 máximo: «12.0», «1e1», 2.5, true y «» rechazados", ["12.0", "1e1", 2.5, true, ""].every((v) => mx(v) === "bad"));
     const P = (o: Partial<CandidateProperty> & { id: string }): CandidateProperty => ({
       country: "es", archived_at: null, status: "available", operation: "sale", operations: ["sale"], price: 1000, rent_price: null,
       zone: "Salamanca", subzone: null, created_at: "2026-01-01T00:00:00Z", photo_count: 1, ...o,

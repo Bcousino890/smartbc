@@ -49,11 +49,29 @@ export const DEFAULT_CRITERIA: CatalogCriteria = {
 const OPS = new Set(["sale", "rent", "any"]);
 const SORTS = new Set(["price_asc", "price_desc", "newest"]);
 
+/** K5: un importe escrito es un entero sin separadores («5000») o con el
+ *  punto de miles bien agrupado («5.000», «1.200.000»). Nada más: «5.5»,
+ *  «5,000», «5 000», «5.000 €» o «12.0» no son válidos, porque no se adivina
+ *  (antes «5.5» se leía como 55). */
+const PRICE_PLAIN = /^\d+$/;
+const PRICE_GROUPED = /^[1-9]\d{0,2}(\.\d{3})+$/;
+
 function priceOrNull(v: unknown): number | null | "bad" {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.trim().replace(/\./g, "")) : NaN;
-  if (!Number.isInteger(n) || n < 0 || n > PRICE_LIMIT) return "bad";
-  return n;
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isInteger(v) && v >= 0 && v <= PRICE_LIMIT ? v : "bad";
+  if (typeof v !== "string") return "bad";
+  const t = v.trim();
+  if (t === "") return null;
+  if (!PRICE_PLAIN.test(t) && !PRICE_GROUPED.test(t)) return "bad";
+  const n = Number(t.replace(/\./g, ""));
+  return Number.isSafeInteger(n) && n <= PRICE_LIMIT ? n : "bad";
+}
+
+/** Máximo de viviendas: número entero o texto solo de dígitos («12»). */
+function maxOrBad(v: unknown): number | "bad" {
+  if (v === null || v === undefined) return AUTO_MAX_DEFAULT;
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN;
+  return Number.isInteger(n) && n >= AUTO_MAX_MIN && n <= AUTO_MAX_MAX ? n : "bad";
 }
 
 /** Valida y normaliza. Cualquier error → invalid_criteria (como en SQL). */
@@ -66,8 +84,8 @@ export function normalizeCriteria(input: unknown): { ok: true; criteria: Catalog
   if (!OPS.has(operation)) return bad;
   const sort = (o.sort ?? "price_asc") as string;
   if (!SORTS.has(sort)) return bad;
-  const max = o.max === undefined || o.max === null ? AUTO_MAX_DEFAULT : Number(o.max);
-  if (!Number.isInteger(max) || max < AUTO_MAX_MIN || max > AUTO_MAX_MAX) return bad;
+  const max = maxOrBad(o.max);
+  if (max === "bad") return bad;
   const pmin = priceOrNull(o.price_min);
   const pmax = priceOrNull(o.price_max);
   if (pmin === "bad" || pmax === "bad") return bad;
