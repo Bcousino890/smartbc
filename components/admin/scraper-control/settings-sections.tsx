@@ -15,7 +15,7 @@ import {
   type ScraperPortal,
   type ScraperSettingsPublic,
 } from "@/lib/scrapers/control-types";
-import { FOCUS_RING, SwitchRow } from "../controls";
+import { FOCUS_RING, SwitchRow } from "@/app/[country]/(admin)/admin/particulares/_lista/controls";
 import { BTN_PRIMARY, BTN_SECONDARY, Notice, Section, fmt } from "./shared";
 
 type SaveFn = (u: ScraperControlUpdate) => Promise<string | null>;

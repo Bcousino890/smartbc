@@ -346,7 +346,7 @@ const es: Strings = {
   "admin.nav.correo": "Correo",
   "adminCorreo.title": "Correo",
   "adminCorreo.subtitle": "Tu buzón @bcousinoprop.com, sin salir del CRM.",
-  "admin.nav.sindicacion": "Sindicación",
+  "admin.nav.sindicacion": "Sindicación y scrapers",
   "admin.nav.particulares": "Particulares",
   "admin.nav.scraperIdealista": "Scraper Idealista",
   "admin.nav.publicacion": "Publicación",
@@ -982,9 +982,9 @@ const es: Strings = {
     "Actualizaciones del catálogo",
 
   // Sindicación · Fase 4
-  "sindicacion.title": "Sindicación de agencias",
+  "sindicacion.title": "Sindicación y scrapers",
   "sindicacion.subtitle":
-    "Motor de sincronización con webs colaboradoras. Marca de agua y archivado automático.",
+    "Todo lo automático en un solo sitio: feeds de agencias, portales inmobiliarios (zonas, claves y presupuesto), crawler de particulares y su salud.",
   "sindicacion.stats.activeFeeds": "Feeds activos",
   "sindicacion.stats.activeFeeds.help": "Sobre el total configurado",
   "sindicacion.stats.healthy": "En buen estado",

@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronLeft, ChevronRight, Loader2, Phone, RefreshCw, Radar, LayoutGrid, List, SlidersHorizontal, Wrench, X } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/ui/toast";
@@ -18,7 +19,6 @@ import { ParticularModal } from "./particular-modal";
 import { ParticularCard, type CardLayout } from "./_lista/particular-card";
 import { BAR_BUTTON, FOCUS_RING, SelectField, Segmented } from "./_lista/controls";
 import { FiltersPanel } from "./_lista/filters-panel";
-import { ScraperDialog } from "./_lista/scraper-dialog";
 import { buildChips, countPanelFilters } from "./_lista/filters-model";
 import { fmtNum } from "./_lista/format";
 
@@ -78,7 +78,6 @@ export function ParticularesClient({
   const [verifying, setVerifying] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [scrapersOpen, setScrapersOpen] = useState(false);
   const [layout, setLayout] = useState<CardLayout>("grid");
   const [now, setNow] = useState<number | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -299,7 +298,6 @@ export function ParticularesClient({
       )}
 
       <FiltersPanel open={filtersOpen} onClose={closeFilters} f={f} total={total} busy={busy} currentUserId={currentUserId} />
-      <ScraperDialog open={scrapersOpen} onClose={() => setScrapersOpen(false)} config={scraperConfig} />
 
       {/* Cifras: solo particulares activos, sin copias enlazadas */}
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -381,9 +379,9 @@ export function ParticularesClient({
                   <button role="menuitem" type="button" onClick={handleVerifyPhones} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-ink/5">
                     <Phone size={14} /> Verificar teléfonos
                   </button>
-                  <button role="menuitem" type="button" onClick={() => { setToolsOpen(false); setScrapersOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-ink/5">
-                    <Radar size={14} /> Configuración de scrapers
-                  </button>
+                  <Link role="menuitem" href="/es/admin/sindicacion?tab=portales" onClick={() => setToolsOpen(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-ink/5">
+                    <Radar size={14} /> Scrapers y zonas (Sindicación)
+                  </Link>
                 </div>
               )}
             </div>

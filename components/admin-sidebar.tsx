@@ -59,8 +59,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "agencias",     onlyCountry: "es" },
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
   // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
-  // Estado del scraper y sus frecuencias vive plegado dentro de esta misma
-  // página ("Configuración scraper Idealista"), no como entrada aparte.
+  // La configuración de scrapers (zonas, claves, presupuesto, salud) vive en
+  // Sindicación → pestañas «Portales inmobiliarios», «Particulares» y «Salud».
   { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
   // Antes apuntaba a "properties": el toggle "Publicación" del panel de
   // permisos no controlaba este enlace ni coincidía con el recurso que ya
