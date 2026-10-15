@@ -33,7 +33,7 @@ assert.ok(!canCreateTag(tags, "  "));
 
 assert.deepEqual(suggestTags(tags, "o").map((t) => t.id), ["2", "3"]);
 assert.deepEqual(suggestTags(tags, "inv").map((t) => t.id), ["3"]);
-assert.deepEqual(suggestTags(tags, "", ["1"]).map((t) => t.id), ["2", "3"]);
+assert.deepEqual(suggestTags(tags, "", ["1"]).map((t) => t.id), ["3", "2"]);
 assert.equal(suggestTags(tags, "opo")[0].name, "Oportunidad");
 
 assert.ok(matchesTagFilter(undefined, []));

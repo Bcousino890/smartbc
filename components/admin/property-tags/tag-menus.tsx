@@ -75,7 +75,7 @@ export function TagFilterMenu({
                 >
                   <span
                     className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded border text-[0px]",
+                      "flex h-4 w-4 items-center justify-center rounded border",
                       on ? "border-gold bg-gold" : "border-ink/25 bg-white",
                     )}
                   >
