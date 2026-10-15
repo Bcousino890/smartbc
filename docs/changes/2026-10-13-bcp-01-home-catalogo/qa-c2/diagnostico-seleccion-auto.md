@@ -4,6 +4,11 @@
 
 **Aprobación (15 de octubre de 2026, D-QA14), solo para PLANIFICAR:** Fabricio aprueba DS-1 y DS-2 y el alcance de las correcciones K1–K5, con las precisiones del §0 del plan. No autoriza a implementar, instalar, preparar servicios, ejecutar migraciones, hacer push ni abrir un PR.
 
+**Aprobación de ejecución condicionada (15 de octubre de 2026, D-QA15):**
+- Fabricio autoriza la ejecución y el entorno del plan, con las correcciones de lectura coherente y de fallo seguro (plan §0 bis).
+- El caso del alquiler sin precio principal queda como **prerrequisito sin resolver** (P-ALQ, [`alquiler-sin-precio.md`](alquiler-sin-precio.md)). Mientras no se decida, no se implementa la aplicación, no se hace push y no se abre el PR.
+- T1 ya se ha ejecutado en el Postgres temporal. Confirma con las funciones SQL **reales** lo que este diagnóstico leía en el código (§1, «lo que esto NO demuestra», punto 2): 22 de 22 comprobaciones y la paridad en verde.
+
 **Correcciones a este diagnóstico, pedidas por Fabricio:**
 - La causa de su caso **no está confirmada** (ver arriba).
 - **Error mío en §7:** decía que con K1 «la huella cambia una vez al desplegar». **No es así.** Cambiar solo cómo se proyectan la operación y el precio **no cambia la huella del SQL** (`md5` de la instantánea), porque la instantánea no lleva los criterios. Lo que pasa con los lectores abiertos y con los cambios de operación guardados se resuelve en el plan (§3.4), sin prometer una actualización automática al desplegar.
