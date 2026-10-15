@@ -32,6 +32,12 @@ const config: Config = {
           dark: "#a88a52",
         },
       },
+      keyframes: {
+        zfIn: {
+          from: { opacity: "0", transform: "translateY(-4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
       fontFamily: {
         // Cinzel/Playfair/Inter siguen siendo los tokens de las superficies
         // públicas protegidas (/web, /v, /s, /compartir, /c). NO redefinirlos:
