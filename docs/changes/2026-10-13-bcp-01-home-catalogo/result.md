@@ -1454,3 +1454,38 @@ La QA en producción de este PR no puede ir antes del despliegue. Ni la CI ni la
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# Corrección de la vista previa de criterios («Ver qué entraría»)
+
+Plan aprobado: [`qa-c2/plan-vista-previa.md`](qa-c2/plan-vista-previa.md) (D-QA18). Rama `fabri/bcp-01-vista-previa`, sobre `main` = `8fd4bb8`.
+
+**Qué cambia:**
+- La vista previa solo se enseña con el borrador **exacto** que la pidió, y con el resumen de los criterios con los que se pidió.
+- **Al editar** se oculta y sale una nota. También con A→B→A: volver a los mismos valores no la revive.
+- **Con un error de validación,** solo queda el error.
+- **Mientras se pide,** sale «Calculando…».
+- **Solo cuenta la última petición,** y solo si el borrador no cambió mientras tanto.
+- **No cambia:** lo escrito, las protecciones de E2, los criterios guardados, el modo, los ajustes ni las reglas de selección.
+
+**Verificación (local, sintética, aislada):**
+- `tsc` limpio.
+- `test:catalogs`, `test:catalogs-public` y `test:catalogs-manager` en verde. Esta última tiene la sección nueva «Vista previa de los criterios»: revisión A→B→A, editar tras el resultado, error de validación, respuestas desordenadas, editar mientras se calcula y errores del servidor.
+- **Navegador**, prueba nueva `vista.mjs` a 1440 y 362: **23/23** en cada tamaño. Cubre:
+  - el resumen de lo pedido;
+  - editar tras el resultado;
+  - A→B→A;
+  - «5.5» (solo el error, y lo escrito se conserva);
+  - «Calculando…»;
+  - respuestas desordenadas, con la lenta llegando tarde;
+  - editar mientras se calcula, también A→B→A;
+  - que no hay escrituras, que el borrador sigue sin guardar y exacto, y que el modo sigue en manual.
+- **Regresiones del gestor que usan la vista previa o los criterios,** sin cambiar expectativas:
+  - homes: 56 a 1280 y 57 a 362;
+  - sel: 39 y 39;
+  - saves: 31 y 31;
+  - PR-B: 40.
+- **Compilación aislada** (`next build`): correcta, sin `.env*` cargados.
+
+**No cumple G-ALQ ni resuelve el caso original de Recoletos.**
+
+**Merge:** lo decide y hace Fabricio. Es solo código, sin migración.
