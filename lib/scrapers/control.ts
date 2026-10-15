@@ -41,7 +41,9 @@ import {
 type Db = any;
 
 /** Un latido más viejo que esto = «sin señal» (el mismo umbral del contrato). */
-const STALE_MINUTES = 30;
+// Pisos.com y Habitaclia solo dan señal al acabar cada pasada (2-5 al día, hueco nocturno ~12 h).
+const STALE_MINUTES: Record<ScraperPortal, number> = { idealista: 30, fotocasa: 30, pisos: 14 * 60, habitaclia: 14 * 60 };
+const staleLabel = (m: number) => (m >= 120 ? `${Math.round(m / 60)} horas` : `${m} minutos`);
 
 /** Error de entrada del usuario: la ruta lo convierte en un 400 con el mensaje en español. */
 export class ControlInputError extends Error {}
@@ -162,10 +164,10 @@ function buildHealth(
     light = "rojo";
     headline = "Sin señal";
     alarms.push("El crawler todavía no ha dado ninguna señal de vida.");
-  } else if (minutes > STALE_MINUTES) {
+  } else if (minutes > STALE_MINUTES[portal]) {
     light = "rojo";
     headline = "Sin señal";
-    alarms.push(`Hace más de ${STALE_MINUTES} minutos que no da señales: puede estar parado o caído.`);
+    alarms.push(`Hace más de ${staleLabel(STALE_MINUTES[portal])} que no da señales: puede estar parado o caído.`);
   } else if (reported === "relay_down") {
     light = "rojo";
     headline = "Crawio no responde";
