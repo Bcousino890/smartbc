@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
+import type { CoverRaw } from "@/lib/catalogs/manager-state";
 import type { CatalogCoverState, CatalogItemView, CoverPhotoOption } from "@/lib/catalogs/types";
+import type { FormDraft } from "./manager/use-form-draft";
 
 // Portada elegida (BCP-01 ampliación C1). Una vivienda de la lista y, si se
 // quiere, una de sus fotos; no cambia el orden. Si la vivienda sale de la
 // lista o la foto desaparece, el lector usa la regla de respaldo y aquí se
 // avisa. Las fotos se ven por el proxy neutro (sin URL de almacenamiento).
+// E2: la vivienda elegida sin confirmar vive en el almacén de borradores del
+// gestor (`form`); elegir una foto guarda al momento, como antes.
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 
@@ -23,6 +27,7 @@ export function CoverPicker({
   actions,
   run,
   pending,
+  form,
 }: {
   catalogId: string;
   items: CatalogItemView[];
@@ -30,9 +35,13 @@ export function CoverPicker({
   actions: CoverActions;
   run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
   pending: boolean;
+  /** E2 · la vivienda elegida en el selector (dueño: el almacén del gestor). */
+  form: FormDraft<CoverRaw>;
 }) {
-  const inList = cover.chosenPropertyId && items.some((it) => it.propertyId === cover.chosenPropertyId) ? cover.chosenPropertyId : "";
-  const [propertyId, setPropertyId] = useState<string>(inList || "");
+  const propertyId = form.value.propertyId;
+  const setPropertyId = (v: string) => form.set({ propertyId: v });
+  const photosOf = useRef(actions.photos);
+  photosOf.current = actions.photos;
   const [photos, setPhotos] = useState<CoverPhotoOption[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -43,20 +52,21 @@ export function CoverPicker({
     if (!propertyId) return;
     setError(null);
     start(async () => {
-      const r = await actions.photos({ catalogId, propertyId });
+      const r = await photosOf.current({ catalogId, propertyId });
       if (r.ok) setPhotos(r.photos);
       else setError(r.error);
     });
-  }, [catalogId, propertyId, actions]);
+  }, [catalogId, propertyId]);
 
   function choose(photoId: string | null) {
     if (!propertyId) return;
-    run(() => actions.set({ catalogId, propertyId, photoId }), "Portada elegida.", undefined, undefined, "portada");
+    const k = form.begin({ propertyId });
+    run(() => actions.set({ catalogId, propertyId, photoId }), "Portada elegida.", () => form.ok(k), () => form.fail(k), "portada");
   }
 
   return (
     <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="cp-title" data-testid="cover-picker">
-      <h3 id="cp-title" className="crm-label-sm text-ink/70">
+      <h3 id="cp-title" tabIndex={-1} className="crm-label-sm text-ink/70 focus:outline-none">
         Portada
       </h3>
       <p className="text-xs text-ink/60" data-testid="cover-current">
@@ -87,6 +97,11 @@ export function CoverPicker({
           ))}
         </select>
       </label>
+      {form.edited ? (
+        <p className="text-xs font-semibold text-amber-800" data-testid="cover-unsaved">
+          Vivienda elegida sin confirmar: elige una de sus fotos o «Usar su foto de portada».
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="text-xs text-red-700">
           {error}
@@ -132,7 +147,19 @@ export function CoverPicker({
         {cover.chosenPropertyId ? (
           <button
             type="button"
-            onClick={() => run(() => actions.set({ catalogId, propertyId: null, photoId: null }), "Portada automática.", () => setPropertyId(""), undefined, "portada")}
+            onClick={() => {
+              const k = form.begin({ propertyId: "" });
+              run(
+                () => actions.set({ catalogId, propertyId: null, photoId: null }),
+                "Portada automática.",
+                () => {
+                  setPropertyId("");
+                  form.ok(k);
+                },
+                () => form.fail(k),
+                "portada",
+              );
+            }}
             disabled={pending}
             className="rounded-lg px-3 py-1.5 text-xs text-ink/70 underline disabled:opacity-50"
           >

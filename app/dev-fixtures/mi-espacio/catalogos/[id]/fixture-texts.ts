@@ -148,5 +148,11 @@ export function createFixtureTexts(opts: {
 
   /** Solo pruebas: simula que la ficha cambió (el publicado deja de valer). */
   const changeSource = (propertyId: string) => sourceRev.set(propertyId, (sourceRev.get(propertyId) ?? 0) + 1);
-  return { actions, views, changeSource };
+  /** E2 · solo pruebas: otro guardado del borrador (sube la revisión). */
+  const externalSave = (propertyId: string, body: string) => {
+    remember();
+    const st = store.get(propertyId);
+    store.set(propertyId, { draft: { body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
+  };
+  return { actions, views, changeSource, externalSave };
 }

@@ -6,7 +6,6 @@ import {
   AUTO_MAX_MAX,
   AUTO_MAX_MIN,
   criteriaSummary,
-  normalizeCriteria,
   type CatalogCriteria,
   type CatalogOperation,
   type CatalogSort,
@@ -15,11 +14,16 @@ import {
 import type { CatalogItemView } from "@/lib/catalogs/types";
 import { catalogBarrios, catalogDistricts } from "@/lib/catalogs/zones";
 import { zoneRedundancies } from "@/lib/catalogs/explain";
+import { criteriaFromRaw, type CriteriaRaw } from "@/lib/catalogs/manager-state";
+import type { FormDraft } from "./manager/use-form-draft";
+import { ConflictNote } from "./manager/conflict-note";
 
 // Zonas, precio y modo de un catálogo (BCP-01 ampliación X7, D21). Interfaz
 // del admin (Lato). Los criterios filtran la búsqueda en modo manual y SON la
 // selección en modo automático. No hay buscador público: todo esto vive en la
 // gestión, detrás de la guarda del dueño.
+// E2: controlado. Lo escrito (en bruto, también las zonas a medio elegir) vive
+// en el almacén de borradores del gestor; aquí no hay copia propia.
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 
@@ -68,31 +72,34 @@ function MiniList({ items, empty }: { items: CatalogItemView[]; empty: string })
 export function SelectionPanel({
   catalogId,
   mode,
-  criteria: initial,
   manualCount,
   actions,
   run,
   pending,
-  onCriteriaChange,
+  form,
+  summarize,
 }: {
   catalogId: string;
   mode: "manual" | "auto";
-  criteria: CatalogCriteria;
   manualCount: number;
   actions: SelectionActions;
   /** El «run» del gestor: mensajes, medición y refresco. */
   run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
   pending: boolean;
-  /** Criterios en edición (la búsqueda manual los usa sin guardar). */
-  onCriteriaChange?: (c: CatalogCriteria) => void;
+  /** E2 · el borrador de los criterios (dueño: el almacén del gestor). */
+  form: FormDraft<CriteriaRaw>;
+  /** E2 · resumen legible de unos criterios guardados (para el conflicto). */
+  summarize: (raw: CriteriaRaw) => string;
 }) {
-  const [c, setC] = useState<CatalogCriteria>(initial);
-  const [district, setDistrict] = useState("");
-  const [barrioDistrict, setBarrioDistrict] = useState("");
-  const [barrio, setBarrio] = useState("");
-  const [freeName, setFreeName] = useState("");
-  const [pmin, setPmin] = useState(initial.price_min === null ? "" : String(initial.price_min));
-  const [pmax, setPmax] = useState(initial.price_max === null ? "" : String(initial.price_max));
+  const raw = form.value;
+  const { district, barrioDistrict, barrio, freeName, pmin, pmax } = raw;
+  const c: CatalogCriteria = { operation: raw.operation, zones: raw.zones, sort: raw.sort, max: Number(raw.max), price_min: null, price_max: null };
+  const set = (patch: Partial<CriteriaRaw>) => form.set({ ...raw, ...patch });
+  const setDistrict = (v: string) => set({ district: v });
+  const setBarrio = (v: string) => set({ barrio: v });
+  const setFreeName = (v: string) => set({ freeName: v });
+  const setPmin = (v: string) => set({ pmin: v });
+  const setPmax = (v: string) => set({ pmax: v });
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ items: CatalogItemView[]; total: number; matched?: number } | null>(null);
   const [modePrev, setModePrev] = useState<{
@@ -107,40 +114,37 @@ export function SelectionPanel({
   const unit = c.operation === "rent" ? "€/mes" : "€";
   const priceDisabled = c.operation === "any";
 
-  function update(next: CatalogCriteria) {
-    setC(next);
+  function update(patch: Partial<CriteriaRaw>) {
+    set(patch);
     setPreview(null);
-    onCriteriaChange?.(next);
   }
 
-  function addZone(z: ZoneCriterion) {
-    if (c.zones.some((x) => x.kind === z.kind && x.name.toLowerCase() === z.name.toLowerCase())) return;
-    update({ ...c, zones: [...c.zones, z] });
+  function addZone(z: ZoneCriterion, clear: Partial<CriteriaRaw>) {
+    if (c.zones.some((x) => x.kind === z.kind && x.name.toLowerCase() === z.name.toLowerCase())) return set(clear);
+    update({ zones: [...c.zones, z], ...clear });
   }
 
   /** Criterios del formulario, validados con las mismas reglas que SQL. */
   function current(): CatalogCriteria | null {
-    const n = normalizeCriteria({
-      ...c,
-      price_min: priceDisabled ? null : pmin.trim() || null,
-      price_max: priceDisabled ? null : pmax.trim() || null,
-    });
-    if (!n.ok) {
+    const n = criteriaFromRaw(raw);
+    if (!n) {
       setError("Revisa los criterios: el precio solo con venta o alquiler, mínimo ≤ máximo y entre 1 y 24 viviendas.");
       return null;
     }
     setError(null);
-    return n.criteria;
+    return n;
   }
 
   function save() {
     const crit = current();
     if (!crit) return;
+    // Ajuste 2: se envía ESTA instantánea; lo que se escriba después se conserva.
+    const k = form.begin(raw);
     run(
       () => actions.setCriteria({ catalogId, criteria: crit }),
       mode === "auto" ? "Criterios guardados: la selección se ha actualizado." : "Criterios guardados.",
-      () => update(crit),
-      undefined,
+      () => form.ok(k),
+      () => form.fail(k),
       "criterios",
     );
   }
@@ -201,6 +205,12 @@ export function SelectionPanel({
           : "En manual, estos criterios solo filtran la búsqueda para añadir viviendas. Tú eliges y ordenas."}
       </p>
 
+      {form.conflict ? <ConflictNote saved={summarize(form.conflict.raw)} onDiscard={form.discard} onKeep={form.keepMine} /> : null}
+      {form.edited ? (
+        <p className="text-xs font-semibold text-amber-800" data-testid="criteria-unsaved">
+          Cambios sin guardar en los criterios
+        </p>
+      ) : null}
       <fieldset className="space-y-2">
         <legend className="text-xs text-ink/60">Operación</legend>
         <div className="flex flex-wrap gap-3 text-sm text-ink/80">
@@ -211,7 +221,7 @@ export function SelectionPanel({
                 name="sel-op"
                 value={o.v}
                 checked={c.operation === o.v}
-                onChange={() => update({ ...c, operation: o.v })}
+                onChange={() => update({ operation: o.v })}
                 className="accent-gold"
               />
               {o.label}
@@ -232,7 +242,7 @@ export function SelectionPanel({
               </span>
               <button
                 type="button"
-                onClick={() => update({ ...c, zones: c.zones.filter((x) => x !== z) })}
+                onClick={() => update({ zones: c.zones.filter((x) => x !== z) })}
                 aria-label={`Quitar ${z.name}`}
                 className="ml-1 text-ink/50 hover:text-ink"
               >
@@ -254,10 +264,7 @@ export function SelectionPanel({
             <button
               type="button"
               disabled={!district}
-              onClick={() => {
-                addZone({ kind: "district", name: district });
-                setDistrict("");
-              }}
+              onClick={() => addZone({ kind: "district", name: district }, { district: "" })}
               className="shrink-0 rounded-lg border border-gold/40 px-3 text-sm text-ink/80 disabled:opacity-40"
             >
               Añadir
@@ -267,10 +274,7 @@ export function SelectionPanel({
             <select
               aria-label="Distrito del barrio"
               value={barrioDistrict}
-              onChange={(e) => {
-                setBarrioDistrict(e.target.value);
-                setBarrio("");
-              }}
+              onChange={(e) => set({ barrioDistrict: e.target.value, barrio: "" })}
               className={`${input} min-w-0 flex-1`}
             >
               <option value="">Barrio en…</option>
@@ -291,10 +295,7 @@ export function SelectionPanel({
             <button
               type="button"
               disabled={!barrio}
-              onClick={() => {
-                addZone({ kind: "barrio", name: barrio });
-                setBarrio("");
-              }}
+              onClick={() => addZone({ kind: "barrio", name: barrio }, { barrio: "" })}
               className="shrink-0 rounded-lg border border-gold/40 px-3 text-sm text-ink/80 disabled:opacity-40"
             >
               Añadir
@@ -313,10 +314,7 @@ export function SelectionPanel({
           <button
             type="button"
             disabled={freeName.trim().length < 2}
-            onClick={() => {
-              addZone({ kind: "free", name: freeName.trim() });
-              setFreeName("");
-            }}
+            onClick={() => addZone({ kind: "free", name: freeName.trim() }, { freeName: "" })}
             className="shrink-0 rounded-lg border border-gold/40 px-3 text-sm text-ink/80 disabled:opacity-40"
           >
             Añadir
@@ -360,7 +358,7 @@ export function SelectionPanel({
       <div className="grid grid-cols-2 gap-2">
         <label className="block min-w-0">
           <span className="text-xs text-ink/60">Orden</span>
-          <select value={c.sort} onChange={(e) => update({ ...c, sort: e.target.value as CatalogSort })} className={`${input} mt-1 w-full`}>
+          <select value={c.sort} onChange={(e) => update({ sort: e.target.value as CatalogSort })} className={`${input} mt-1 w-full`}>
             {SORTS.map((o) => (
               <option key={o.v} value={o.v}>
                 {o.label}
@@ -374,8 +372,8 @@ export function SelectionPanel({
             type="number"
             min={AUTO_MAX_MIN}
             max={AUTO_MAX_MAX}
-            value={c.max}
-            onChange={(e) => update({ ...c, max: Number(e.target.value) })}
+            value={raw.max}
+            onChange={(e) => update({ max: e.target.value })}
             className={`${input} mt-1 w-full`}
             data-testid="auto-max"
           />
@@ -411,7 +409,7 @@ export function SelectionPanel({
             <strong>
               {preview.items.length} de {preview.matched ?? preview.total}
             </strong>{" "}
-            coinciden {criteriaSummary(c) ? `· ${criteriaSummary(c)}` : ""}
+            coinciden {criteriaSummary(criteriaFromRaw(raw) ?? c) ? `· ${criteriaSummary(criteriaFromRaw(raw) ?? c)}` : ""}
             {preview.items.some((it) => it.via === "include") ? " · con tus inclusiones" : ""}
           </p>
           <MiniList items={preview.items} empty="Ninguna vivienda encaja con estos criterios." />

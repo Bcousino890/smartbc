@@ -129,6 +129,19 @@ export function FixtureCatalogManager({
   // publicado deja de valer y el lector de prueba vuelve al siguiente nivel).
   useEffect(() => {
     const w = window as unknown as { __fxChangeSource?: (i: number) => Promise<void> };
+    // E2 · solo pruebas: un guardado hecho «en otra pestaña» (conflictos).
+    const x = window as unknown as {
+      __fxExternalMeta?: (title: string) => void;
+      __fxExternalContact?: (name: string) => void;
+      __fxExternalText?: (i: number, body: string) => void;
+    };
+    x.__fxExternalMeta = (title) => setCat((c) => ({ ...c, title }));
+    x.__fxExternalContact = (name) => setCat((c) => ({ ...c, contact: { ...c.contact, name } }));
+    x.__fxExternalText = (i, body) => {
+      const it = catRef.current.items[i];
+      if (it) fxTexts.externalSave(it.propertyId, body);
+      bump((k) => k + 1);
+    };
     w.__fxChangeSource = async (i: number) => {
       const it = catRef.current.items[i];
       if (!it) return;
@@ -205,7 +218,11 @@ export function FixtureCatalogManager({
     });
   let n = 0;
   const actions: CatalogManagerActions = {
-    updateMeta: ({ title, skipNotify }) => live({ op: "title", title: `${title} · ${++n}`, skipNotify }),
+    // E2: como el servidor, lo guardado pasa a ser el valor del catálogo.
+    updateMeta: ({ title, intro, skipNotify }) => {
+      setCat((c) => ({ ...c, title: title.trim(), intro: (intro ?? "").trim() || null }));
+      return live({ op: "title", title: `${title} · ${++n}`, skipNotify });
+    },
     removeProperty: ({ skipNotify }) => live({ op: "remove", key: "__first__", skipNotify }),
     reorder: ({ skipNotify }) => live({ op: "reorder", skipNotify }),
     setStatus: async () => ({ ok: true as const, version: 1 }),
@@ -215,6 +232,7 @@ export function FixtureCatalogManager({
       if (name.trim().length < 2) return { ok: false as const, error: "El nombre del asesor tiene que tener entre 2 y 80 caracteres, sin correos, webs ni teléfonos." };
       if (!/^(\+[1-9]\d{7,14}|[6789]\d{8})$/.test(digits)) return { ok: false as const, error: "El teléfono no es válido. Escríbelo con prefijo (+34 600 000 000) o como móvil español." };
       const e164 = digits.startsWith("+") ? digits : `+34${digits}`;
+      setCat((c) => ({ ...c, contact: { name: name.trim(), phone: e164, role: role === "asesora" ? "asesora" : "asesor" } }));
       return live({ op: "contact", name: name.trim(), phone: e164, role, skipNotify });
     },
     addPropertyById: async ({ propertyId, skipNotify }) => {

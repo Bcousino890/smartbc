@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
-import { formatContactPhone, type ContactRole } from "@/lib/catalogs/contact-format";
+import { formatContactPhone } from "@/lib/catalogs/contact-format";
 import { ContactFields } from "./contact-fields";
 import { MeasurePanel, useHomeMeasure } from "./measure-panel";
 import { SharePanel, type ShareActions, type ShareView } from "./share-panel";
@@ -14,13 +14,33 @@ import { SelectionPanel, type SelectionActions } from "./selection-panel";
 import { PropertySearch, type SearchAction } from "./property-search";
 import { AdsPanel, type AdActions } from "./ads-panel";
 import { CoverPicker, type CoverActions } from "./cover-picker";
-import { CatalogTextsPanel, type TextActions } from "./catalog-texts-panel";
+import { CatalogTextsPanel, textDraftKey, type TextActions } from "./catalog-texts-panel";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
-import type { CatalogCriteria } from "@/lib/catalogs/criteria";
-import type { Section } from "@/lib/catalogs/manager-state";
-import { ManagerHeader, type NoLinkReason } from "./manager/manager-header";
+import { criteriaSummary } from "@/lib/catalogs/criteria";
+import {
+  contactAdapter,
+  coverAdapter,
+  criteriaAdapter,
+  criteriaFromRaw,
+  criteriaRawOf,
+  isEdited,
+  metaAdapter,
+  reconcileTextDraft,
+  textAdapter,
+  type ContactRaw,
+  type CoverRaw,
+  type CriteriaRaw,
+  type MetaRaw,
+  type Section,
+  type TextDraft,
+} from "@/lib/catalogs/manager-state";
+import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
+import { useFormDraft } from "./manager/use-form-draft";
+import { useLeaveGuard } from "./manager/use-leave-guard";
+import { ManagerHeader, type NoLinkReason, type UnsavedEntry } from "./manager/manager-header";
 import { SectionTabs } from "./manager/section-tabs";
 import { useManagerUrl } from "./manager/use-manager-url";
+import { ConflictNote } from "./manager/conflict-note";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
 // llegan inyectadas: en la página real son las acciones de servidor (con la
@@ -105,19 +125,14 @@ export function CatalogManager({
   const router = useRouter();
   const [items, setItems] = useState(catalog.items);
   const [status, setStatus] = useState(catalog.status);
-  const [title, setTitle] = useState(catalog.title);
-  const [intro, setIntro] = useState(catalog.intro ?? "");
   const [reference, setReference] = useState("");
-  const [contactName, setContactName] = useState(catalog.contact.name ?? "");
-  const [contactPhone, setContactPhone] = useState(formatContactPhone(catalog.contact.phone) ?? catalog.contact.phone ?? "");
-  const [contactRole, setContactRole] = useState<ContactRole>(catalog.contact.role);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const [currentShare, setCurrentShare] = useState<ShareView | null>(share);
   const measure = useHomeMeasure(measureMode, currentShare && !currentShare.expired ? currentShare.token : null);
   const skip = measure.skipNotify;
   const auto = catalog.mode === "auto";
-  const { section, navigate } = useManagerUrl();
+  const { section, vivienda, navigate } = useManagerUrl();
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const focusAfter = useRef<string | null>(null);
 
@@ -172,7 +187,28 @@ export function CatalogManager({
     );
     go("compartir", "sp-title");
   }
-  const [draftCriteria, setDraftCriteria] = useState<CatalogCriteria>(catalog.criteria);
+
+  // E2 · valores sin guardar: el almacén es el único dueño (plan §3.4).
+  useDraftsVersion();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const savedCriteria = criteriaRawOf(catalog.criteria);
+  const criteriaForm = useFormDraft<CriteriaRaw>(catalog.id, "criteria", criteriaAdapter, { raw: savedCriteria, key: criteriaAdapter.key(savedCriteria) });
+  const savedMeta: MetaRaw = { title: catalog.title, intro: catalog.intro ?? "" };
+  const metaForm = useFormDraft<MetaRaw>(catalog.id, "meta", metaAdapter, { raw: savedMeta, key: metaAdapter.key(savedMeta) });
+  const savedContact: ContactRaw = {
+    name: catalog.contact.name ?? "",
+    phone: formatContactPhone(catalog.contact.phone) ?? catalog.contact.phone ?? "",
+    role: catalog.contact.role,
+  };
+  const contactForm = useFormDraft<ContactRaw>(catalog.id, "contact", contactAdapter, { raw: savedContact, key: contactAdapter.key(savedContact) });
+  const chosenInList = catalog.cover.chosenPropertyId && catalog.items.some((it) => it.propertyId === catalog.cover.chosenPropertyId) ? catalog.cover.chosenPropertyId : "";
+  const savedCover: CoverRaw = { propertyId: chosenInList };
+  const coverForm = useFormDraft<CoverRaw>(catalog.id, "cover", coverAdapter, { raw: savedCover, key: coverAdapter.key(savedCover) });
+  const { title, intro } = metaForm.value;
+  const { name: contactName, phone: contactPhone, role: contactRole } = contactForm.value;
+  const draftCriteria = criteriaFromRaw(criteriaForm.value) ?? catalog.criteria;
+  const [coverNotice, setCoverNotice] = useState<string | null>(null);
+  const [returned, setReturned] = useState(false);
 
   useEffect(() => setItems(catalog.items), [catalog.items]);
   useEffect(() => setStatus(catalog.status), [catalog.status]);
@@ -268,19 +304,68 @@ export function CatalogManager({
 
   function saveMeta(e: React.FormEvent) {
     e.preventDefault();
-    run(() => wrapped.updateMeta({ catalogId: catalog.id, title, intro }), "Datos guardados.", undefined, undefined, "edición");
+    // Ajuste 2: se envía ESTA instantánea; lo escrito después se conserva.
+    const sent = metaForm.value;
+    const k = metaForm.begin(sent);
+    run(() => wrapped.updateMeta({ catalogId: catalog.id, title: sent.title, intro: sent.intro }), "Datos guardados.", () => metaForm.ok(k), () => metaForm.fail(k), "edición");
   }
 
   function saveContact(e: React.FormEvent) {
     e.preventDefault();
+    const sent = contactForm.value;
+    const k = contactForm.begin(sent);
     run(
-      () => wrapped.setContact({ catalogId: catalog.id, name: contactName, phone: contactPhone, role: contactRole }),
+      () => wrapped.setContact({ catalogId: catalog.id, name: sent.name, phone: sent.phone, role: sent.role }),
       "Contacto guardado. Quien tenga el enlace abierto lo verá al momento.",
-      undefined,
-      undefined,
+      () => contactForm.ok(k),
+      () => contactForm.fail(k),
       "contacto",
     );
   }
+
+  // Textos: cada borrador se reconcilia con la revisión guardada que llega.
+  useEffect(() => {
+    for (const key of draftsStore.draftKeys(catalog.id)) {
+      if (!key.startsWith("text:")) continue;
+      const view = texts.find((t) => textDraftKey(t.propertyId) === key);
+      if (view) draftsStore.updateDraft<TextDraft>(catalog.id, key, (prev) => (prev ? reconcileTextDraft(prev, view) : prev));
+    }
+  }, [catalog.id, texts]);
+
+  // A4: una portada pendiente cuya vivienda sale de la lista se descarta (solo
+  // esa elección), con aviso. La portada guardada sigue con sus respaldos.
+  const coverPending = coverForm.value.propertyId;
+  useEffect(() => {
+    if (!coverPending || items.some((it) => it.propertyId === coverPending)) return;
+    coverForm.discard();
+    setCoverNotice("La vivienda que habías elegido para la portada (sin confirmar) ya no está en el catálogo: se ha descartado esa elección.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverPending, items]);
+
+  // Formularios con cambios sin guardar (D-QA9), con su sitio.
+  const textTitle = (pid: string) => texts.find((t) => t.propertyId === pid)?.title ?? "una vivienda que ya no está";
+  const unsaved: Array<UnsavedEntry & { section: Section }> = [];
+  if (criteriaForm.edited) unsaved.push({ key: "criteria", label: "Criterios", section: "viviendas", go: () => go("viviendas") });
+  if (metaForm.edited) unsaved.push({ key: "meta", label: "Título e introducción", section: "diseno", go: () => go("diseno", "cm-title") });
+  if (coverForm.edited) unsaved.push({ key: "cover", label: "Portada", section: "diseno", go: () => go("diseno", "cp-title") });
+  if (contactForm.edited) unsaved.push({ key: "contact", label: "Contacto", section: "compartir", go: () => go("compartir", "cm-contact-name") });
+  for (const key of draftsStore.draftKeys(catalog.id)) {
+    if (!key.startsWith("text:") || !isEdited(textAdapter, draftsStore.draft<TextDraft>(catalog.id, key))) continue;
+    const pid = key.slice(5);
+    unsaved.push({ key, label: `Texto de «${textTitle(pid)}»`, section: "contenido", go: () => navigate({ seccion: "contenido", vivienda: pid }) });
+  }
+  const marks: Partial<Record<Section, boolean>> = {};
+  for (const u of unsaved) marks[u.section] = true;
+  useLeaveGuard(
+    unsaved.map((u) => u.label),
+    () => draftsStore.discardAll(catalog.id),
+    rootRef,
+  );
+  // A1: si al volver al gestor (en el mismo documento) quedan cambios de antes.
+  useEffect(() => {
+    if (unsaved.length) setReturned(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toggleStatus() {
     const next = status === "active" ? "archived" : "active";
@@ -309,7 +394,7 @@ export function CatalogManager({
   });
 
   return (
-    <div className="mt-4 space-y-4 pb-12">
+    <div ref={rootRef} className="mt-4 space-y-4 pb-12">
       <ManagerHeader
         basePath={basePath}
         title={catalog.title}
@@ -324,8 +409,17 @@ export function CatalogManager({
           setShareNotice(null);
           go("compartir", "sp-title");
         }}
+        unsaved={unsaved}
       />
-      <SectionTabs section={section} onSelect={(s) => go(s)} counts={{ viviendas: items.length }} />
+      <SectionTabs section={section} onSelect={(s) => go(s)} counts={{ viviendas: items.length }} marks={marks} />
+      {returned && unsaved.length ? (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="returned-notice">
+          <span className="min-w-0 flex-1">Tienes cambios sin guardar de antes en este catálogo: {unsaved.map((u) => u.label).join(", ")}.</span>
+          <button type="button" onClick={() => setReturned(false)} className="underline">
+            Entendido
+          </button>
+        </div>
+      ) : null}
 
       {message ? (
         <p
@@ -349,12 +443,12 @@ export function CatalogManager({
           <SelectionPanel
             catalogId={catalog.id}
             mode={catalog.mode}
-            criteria={catalog.criteria}
             manualCount={catalog.manualCount}
             actions={wrapped.selection}
             run={run}
             pending={pending}
-            onCriteriaChange={setDraftCriteria}
+            form={criteriaForm}
+            summarize={(raw) => criteriaSummary(criteriaFromRaw(raw) ?? catalog.criteria) || "todas las zonas y precios"}
           />
 
           {auto ? (
@@ -602,18 +696,27 @@ export function CatalogManager({
             run={run}
             pending={pending}
             storyHref={storyHref}
+            openId={section === "contenido" ? vivienda : null}
+            onOpen={(pid) => navigate({ seccion: "contenido", vivienda: pid })}
+            refresh={() => {
+              if (!onLocalAdd) router.refresh();
+            }}
           />
       </section>
 
       <section {...panel("diseno")} className="min-w-0 focus:outline-none">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="min-w-0 space-y-4">
-              <form onSubmit={saveMeta} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4">
+              <form onSubmit={saveMeta} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="meta-form">
+                {metaForm.conflict ? (
+                  <ConflictNote saved={metaForm.conflict.raw.title} onDiscard={metaForm.discard} onKeep={metaForm.keepMine} />
+                ) : null}
                 <label className="block">
                   <span className="crm-label-sm text-ink/70">Título</span>
                   <input
+                    id="cm-title"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => metaForm.set({ ...metaForm.value, title: e.target.value })}
                     maxLength={160}
                     required
                     className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
@@ -623,7 +726,7 @@ export function CatalogManager({
                   <span className="crm-label-sm text-ink/70">Introducción</span>
                   <textarea
                     value={intro}
-                    onChange={(e) => setIntro(e.target.value)}
+                    onChange={(e) => metaForm.set({ ...metaForm.value, intro: e.target.value })}
                     maxLength={2000}
                     rows={4}
                     className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
@@ -636,7 +739,17 @@ export function CatalogManager({
                 >
                   Guardar
                 </button>
+                {metaForm.edited ? (
+                  <span className="ml-3 text-xs font-semibold text-amber-800" data-testid="meta-unsaved">
+                    Cambios sin guardar
+                  </span>
+                ) : null}
               </form>
+              {coverNotice ? (
+                <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="cover-discarded">
+                  {coverNotice}
+                </p>
+              ) : null}
               <CoverPicker
                 catalogId={catalog.id}
                 items={items}
@@ -644,6 +757,7 @@ export function CatalogManager({
                 actions={wrapped.cover}
                 run={run}
                 pending={pending}
+                form={coverForm}
               />
           </div>
           <div className="min-w-0 space-y-2">
@@ -668,14 +782,21 @@ export function CatalogManager({
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="min-w-0 space-y-4">
             <form onSubmit={saveContact} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="contact-form">
+              {contactForm.conflict ? (
+                <ConflictNote
+                  saved={[contactForm.conflict.raw.name, contactForm.conflict.raw.phone].filter(Boolean).join(" · ")}
+                  onDiscard={contactForm.discard}
+                  onKeep={contactForm.keepMine}
+                />
+              ) : null}
               <ContactFields
                 idPrefix="cm"
                 name={contactName}
                 phone={contactPhone}
                 role={contactRole}
-                onName={setContactName}
-                onPhone={setContactPhone}
-                onRole={setContactRole}
+                onName={(v) => contactForm.set({ ...contactForm.value, name: v })}
+                onPhone={(v) => contactForm.set({ ...contactForm.value, phone: v })}
+                onRole={(v) => contactForm.set({ ...contactForm.value, role: v })}
               />
               <button
                 type="submit"
@@ -684,6 +805,11 @@ export function CatalogManager({
               >
                 Guardar contacto
               </button>
+              {contactForm.edited ? (
+                <span className="ml-3 text-xs font-semibold text-amber-800" data-testid="contact-unsaved">
+                  Cambios sin guardar
+                </span>
+              ) : null}
             </form>
           </div>
           <div className="min-w-0 space-y-4">

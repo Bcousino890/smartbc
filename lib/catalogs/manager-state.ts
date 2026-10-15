@@ -83,12 +83,12 @@ export function beginSave<R>(a: FormAdapter<R>, d: Draft<R>, submitted: R): { dr
 }
 
 /** Respuesta correcta: reconoce SOLO la instantánea enviada. `value` no se toca. */
-export function saveSucceeded<R>(d: Draft<R>, submittedKey: string): Draft<R> {
+export function saveSucceeded<D extends Draft<unknown>>(d: D, submittedKey: string): D {
   return { ...d, start: submittedKey, pending: d.pending === submittedKey ? null : d.pending, conflict: d.conflict?.key === submittedKey ? null : d.conflict };
 }
 
 /** Respuesta con error: lo escrito y la referencia se quedan como estaban. */
-export function saveFailed<R>(d: Draft<R>, submittedKey: string): Draft<R> {
+export function saveFailed<D extends Draft<unknown>>(d: D, submittedKey: string): D {
   return { ...d, pending: d.pending === submittedKey ? null : d.pending };
 }
 
