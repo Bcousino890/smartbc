@@ -1,10 +1,8 @@
 # BCP-01 · E3 «Fotos por catálogo»: especificación y decisiones
 
-**Estado: ESPECIFICACIÓN EN BORRADOR, con decisiones abiertas para Fabricio (§5).** El plan de implementación **no** se ha escrito todavía, porque varias decisiones cambian el diseño: dónde se guarda, cuándo se publica y qué se valida. Este documento no autoriza:
-- implementar;
-- ejecutar migraciones;
-- instalar nada;
-- hacer push ni abrir un PR.
+**Estado: ESPECIFICACIÓN CON DECISIONES APROBADAS (15 de octubre de 2026); PLAN PENDIENTE.** Fabricio decidió E3-1 a E3-7 (§5, registro en [enmienda §0, D-QA13](enmienda.md)). Eso autoriza a **documentar** E3, no a implementarlo. El plan de implementación queda **pendiente**: la prioridad pasa al diagnóstico de la selección automática ([`diagnostico-seleccion-auto.md`](diagnostico-seleccion-auto.md)). Este documento no autoriza implementar, ejecutar migraciones, instalar nada, hacer push ni abrir un PR.
+
+**Requisito técnico abierto (no resuelto en esta especificación).** Un `src` posicional (`/p/{slug}/{idx}`) **no** es una identidad estable de la foto cuando el CRM reordena. El diseño de E3 tiene que resolver la identidad de la foto que se **sirve de verdad**, no solo la que se elige, y comprobarlo con pruebas que miren la foto servida. Eso incluye las limitaciones actuales del proxy: ordena solo por `position` (mientras la instantánea desempata por `position, id`) y guarda cada respuesta 24 h en caché. Mientras eso no esté demostrado, nada de lo escrito en §3.3 y §3.5 se da por resuelto.
 
 Origen: [enmienda §0, D-QA5](enmienda.md), aprobada el 14 de octubre de 2026, que **no** se reabre aquí: «elegir la foto de apertura y excluir fotos por catálogo. «No usar esta foto en este catálogo» la oculta en todo ese catálogo (galería, miniaturas, apertura, recorrido y, donde aplique, portada del catálogo). Las fotos originales del CRM se conservan y siguen disponibles en todo lo demás».
 
@@ -247,17 +245,17 @@ export function effectivePhotos(item: InternalItem): EffectivePhotos;
 | Proxy y caché de 24 h con un CRM que reordena | Riesgo que ya existe; E3 no lo empeora (el `src` sigue la regla de hoy) |
 | Rendimiento de la instantánea | Un `LEFT JOIN LATERAL` como en `0197`; se mide con `perf-catalogs.sh` y se compara con C2 |
 
-## 5. Decisiones para Fabricio
+## 5. Decisiones de Fabricio (aprobadas el 15 de octubre de 2026)
 
-| | Pregunta | Opciones | Mi recomendación | Afecta al diseño |
-| --- | --- | --- | --- | --- |
-| **E3-1** | ¿Qué pasa si se excluyen **todas** las fotos de una vivienda? | **A.** Se permite: la vivienda sigue, con su versión «Sin fotos». **B.** No se puede excluir la última foto que queda | **B.** Al intentarlo, el mensaje dice: «Es la última foto que se ve en este catálogo. Para no enseñar ninguna, quita o excluye la vivienda en Viviendas». Así el automático sigue siendo coherente con su regla de «al menos una foto» sin cambiarla. Si el CRM borra luego las que quedaban, la vivienda se ve «Sin fotos» y el gestor lo avisa | Sí: validación en SQL y mensaje |
-| **E3-2** | ¿Se puede elegir como apertura una foto excluida? | **A.** Hay que volver a usarla primero. **B.** Elegirla la vuelve a usar sola | **A.** El selector de apertura solo ofrece fotos en uso; las excluidas muestran «Volver a usarla». Nada cambia sin pedirlo | Sí: validación |
-| **E3-3** | Orden de respaldo cuando la apertura elegida o la portada del catálogo desaparecen o se excluyen | Ver §3.3 y §3.4 | **Apertura:** elegida → portada del CRM → primera no excluida → ninguna. **Portada del catálogo:** foto elegida → **apertura efectiva de esa vivienda en este catálogo** → apertura de la primera vivienda con fotos → sin foto. El segundo paso cambia un detalle de C1 (antes, la portada del CRM) para que la portada nunca enseñe una foto excluida | Sí |
-| **E3-4** | ¿Los ajustes de fotos se guardan al pulsar o van con el borrador y «Publicar» del texto? | **A.** Al pulsar, cada uno con su mensaje, en vivo como Excluir en Viviendas o la portada en Diseño. **B.** Como borrador, y el cliente los ve al publicar el texto | **A.** Las fotos son una acción del catálogo, no parte del texto: no dependen de tener texto ni de su revisión, y deshacerlas es un clic («Volver a usarla»). **B** añadiría un estado de borrador de fotos al almacén de E2 y otro camino de publicación | **Mucho:** almacén, acciones y publicación |
-| **E3-5** | Si el CRM **reimporta** las fotos (filas nuevas), los ajustes ya no casan y las fotos vuelven a verse | **A.** Se acepta, con aviso en el gestor: «La ficha cambió sus fotos: N ajustes ya no se aplican». **B.** Intentar reconocerlas por URL o contenido | **A.** La URL cambia al realojar y las rutas sincronizadas dependen de la posición, así que reconocerlas podría acabar ocultando **otra** foto. Se avisa y se vuelven a elegir | Sí: datos y avisos |
-| **E3-6** | Una foto excluida sigue existiendo en el proxy público general `/p/{slug}/{idx}` (lo usa también la web). ¿Basta con que el catálogo no la use? | **A.** Sí: es una regla de presentación. **B.** Hace falta que el lector no pueda pedirla: un proxy propio de cada catálogo | **A.** Esas fotos ya son públicas en la web del CRM y D-QA5 habla de «no usarla en este catálogo». **B** sería un cambio grande (rutas, caché, contrato) y no lo pide la decisión aprobada | **Mucho** si se elige B |
-| **E3-7** | Si se excluye la foto que es ahora la **portada del catálogo** | **A.** Se permite, con confirmación, y la portada pasa a su respaldo. **B.** No se permite hasta cambiar la portada | **A**, con el texto: «Esta foto es la portada del catálogo: dejará de serlo y se usará el respaldo». D-QA5 ya dice que la exclusión llega a la portada «donde aplique» | Poco |
+| | Decisión |
+| --- | --- |
+| **E3-1** | **No se puede excluir la última foto** que se ve de una vivienda en el catálogo. Para que la vivienda no aparezca, se quita o se excluye en Viviendas. Si después el CRM borra las fotos que quedaban, la vivienda se ve «Sin fotos» y el gestor lo avisa |
+| **E3-2** | Una foto excluida **tiene que volver a usarse explícitamente** antes de poder elegirla como foto de apertura |
+| **E3-3** | **Respaldos.** *Apertura de una vivienda:* foto elegida en uso → portada del CRM en uso → primera foto en uso → ninguna. *Portada del catálogo:* foto elegida en uso → apertura efectiva de esa vivienda en este catálogo → apertura efectiva de la primera vivienda con fotos → sin foto. El segundo paso cambia el respaldo de C1, que antes era la portada del CRM |
+| **E3-4** | Los ajustes de fotos **se guardan al pulsar**, sin depender del borrador ni de la publicación del texto |
+| **E3-5** | Se acepta que **reimportar** las fotos en el CRM crea identidades nuevas, invalida los ajustes anteriores y puede volver a mostrar fotos excluidas. **El gestor lo avisa** |
+| **E3-6** | La exclusión es una regla de **presentación del catálogo**. No revoca el acceso a la foto por el proxy público general `/p` |
+| **E3-7** | Se puede excluir la foto que es la **portada del catálogo**, tras una confirmación. Después se usa su respaldo |
 
 Lo que decido yo y queda anotado:
 - la identidad por `property_photos.id`;
@@ -269,11 +267,7 @@ Lo que decido yo y queda anotado:
 
 ## 6. Fase y siguiente paso
 
-- **Fase actual:** E3 en especificación. Este documento es un **borrador** con decisiones abiertas. **No hay plan de implementación** todavía: E3-1, E3-2, E3-3, E3-4 y E3-6 cambian el diseño. No se ha cambiado la aplicación, no se ha instalado nada y no hay push ni PR.
-- **Siguiente paso:** Fabricio decide E3-1 a E3-7 (o acepta las recomendaciones). Con eso preparo el **plan de E3 en borrador**:
-  - tareas pequeñas en orden de dependencias;
-  - `0198` con su rollback y sus pruebas en el Postgres 16 temporal (`postgresql@16` de Homebrew, ya en este Mac, en una carpeta propia del scratchpad);
-  - la copia aislada de E1/E2 para el navegador y las fixtures sintéticas;
-  - commits;
-  - y la aprobación de ejecución que necesitaría (incluido `npm ci`).
-- **Fuera:** PDF y D13 en vivo.
+- **Fase actual:** especificación de E3 con decisiones aprobadas. **Plan pendiente**: Fabricio ha puesto antes el diagnóstico de la selección automática.
+- **Antes de escribir el plan,** queda por resolver el requisito técnico de la identidad de la foto servida (al principio de este documento).
+- **Siguiente paso de E3,** cuando Fabricio lo retome: preparar el plan en borrador con `0198`, su rollback y sus pruebas en el Postgres 16 temporal, la copia aislada, las fixtures sintéticas y la aprobación de ejecución que necesite.
+- **Fuera:** PDF (toda exportación futura tendrá que respetar las exclusiones) y D13 en vivo.
