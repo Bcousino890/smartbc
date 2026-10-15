@@ -13,6 +13,14 @@
 - La opción B (§4) **no** se adopta.
 - La causa del caso real de Fabricio (Recoletos · Alquiler · 5.000–7.000) **sigue sin confirmar**.
 
+**G-ALQ sustituida por decisión de Fabricio (D-QA17, 15 de octubre de 2026).** Fabricio no tiene acceso SSH a producción (lo tiene la empresa) y decide no ejecutar las consultas previas. Acepta en bloque, sin revisar las fichas antes del merge:
+- **Sin precio principal válido** (caso 1): el cliente ve «Precio · sin dato», aunque la ficha tenga un importe en `rent_price`.
+- **Dos importes distintos** (caso 2): el cliente ve el precio principal.
+- **Después del despliegue**, las fichas afectadas se detectan en el propio gestor: el aviso ⚠ en la fila y, en el panel de la vivienda, el texto con la cifra secundaria y lo que ve el cliente. Solo aparecen las que estén en algún catálogo.
+- Las corrige una persona en el formulario de la ficha, confirmando el alquiler en la fuente. **Nunca se copia el `rent_price` a ciegas**, y ningún agente toca fichas.
+
+Orden de cierre: Fabricio hace el merge → despliegue automático → QA en producción.
+
 ## 1. El caso
 
 Una vivienda **solo de alquiler** (`operation = 'rent'`) sin precio principal válido (`price` 0 o negativo), pero con un `rent_price` positivo:

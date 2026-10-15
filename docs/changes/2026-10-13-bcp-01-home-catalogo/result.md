@@ -1356,7 +1356,17 @@ Diagnóstico de origen: [`qa-c2/diagnostico-seleccion-auto.md`](qa-c2/diagnostic
 2. En el lector de alquiler, 6.800 €/mes es el alquiler de la dual y **sí** debe verse; lo que no debe verse es su venta.
 3. Tras «Añadir» un barrio, «Barrio en…» se queda elegido. La regla de E2 lo cuenta como cambio sin guardar, así que el aviso de K3 sigue. La prueba lo documenta y comprueba que desaparece al vaciarlo.
 
-## Puerta G-ALQ: PENDIENTE (antes del merge)
+## Puerta G-ALQ: sustituida (D-QA17)
+
+**G-ALQ sustituida por decisión de Fabricio (D-QA17, 15 de octubre de 2026).** Fabricio no tiene acceso SSH a producción (lo tiene la empresa) y decide no ejecutar las consultas previas. Acepta en bloque, sin revisar las fichas antes del merge:
+- **Sin precio principal válido** (caso 1): el cliente ve «Precio · sin dato», aunque la ficha tenga un importe en `rent_price`.
+- **Dos importes distintos** (caso 2): el cliente ve el precio principal.
+- **Después del despliegue**, las fichas afectadas se detectan en el propio gestor: el aviso ⚠ en la fila y, en el panel de la vivienda, el texto con la cifra secundaria y lo que ve el cliente. Solo aparecen las que estén en algún catálogo.
+- Las corrige una persona en el formulario de la ficha, confirmando el alquiler en la fuente. **Nunca se copia el `rent_price` a ciegas**, y ningún agente toca fichas.
+
+Orden de cierre: Fabricio hace el merge → despliegue automático → QA en producción.
+
+### Lo que pedía la puerta original (ya no se exige)
 
 **No se ha cumplido.** Ni las pruebas sintéticas ni ninguna suposición sobre las fichas reales la cumplen. Hace falta lo que aporten Fabricio o su equipo:
 1. las consultas de solo lectura de [`alquiler-sin-precio.md`](qa-c2/alquiler-sin-precio.md) §5 (recuento y referencias de viviendas activas en España);

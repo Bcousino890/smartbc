@@ -49,6 +49,14 @@ Fabricio aprueba **DS-1, DS-2 y el alcance de K1–K5, solo para planificar**. L
 - D-QA15 queda aquí y en el diagnóstico, como D-QA14.
 - La fila de la enmienda (§0) se añade cuando se reconcilie con la rama de E3, que es la que lleva D-QA13. Así no se crea un conflicto.
 
+**G-ALQ sustituida por decisión de Fabricio (D-QA17, 15 de octubre de 2026).** Fabricio no tiene acceso SSH a producción (lo tiene la empresa) y decide no ejecutar las consultas previas. Acepta en bloque, sin revisar las fichas antes del merge:
+- **Sin precio principal válido** (caso 1): el cliente ve «Precio · sin dato», aunque la ficha tenga un importe en `rent_price`.
+- **Dos importes distintos** (caso 2): el cliente ve el precio principal.
+- **Después del despliegue**, las fichas afectadas se detectan en el propio gestor: el aviso ⚠ en la fila y, en el panel de la vivienda, el texto con la cifra secundaria y lo que ve el cliente. Solo aparecen las que estén en algún catálogo.
+- Las corrige una persona en el formulario de la ficha, confirmando el alquiler en la fuente. **Nunca se copia el `rent_price` a ciegas**, y ningún agente toca fichas.
+
+Orden de cierre: Fabricio hace el merge → despliegue automático → QA en producción.
+
 ## 0 ter. P-ALQ decidido: opción A + G-ALQ (D-QA16, 15 de octubre de 2026)
 
 **Regla aprobada para las viviendas de solo alquiler:**
