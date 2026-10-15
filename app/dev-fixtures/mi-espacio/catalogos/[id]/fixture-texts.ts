@@ -76,7 +76,7 @@ export function createFixtureTexts(opts: {
   const actions: TextActions = {
     prepare: async ({ propertyId }) => {
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
-      await wait(700);
+      await wait(Number((globalThis as { __fxAiDelay?: number }).__fxAiDelay ?? 700));
       const s = sourceOf(f.it, f.i);
       if (!s.hasText) return { ok: false as const, error: "La ficha no tiene texto que preparar. Escríbelo a mano o pide un borrador con IA a partir de los datos." };
       const proposal = { body: `${s.description} Los dormitorios dan a un patio tranquilo.`, lead: null, origin: "ai_clean" as const };
@@ -84,7 +84,7 @@ export function createFixtureTexts(opts: {
     },
     draft: async ({ propertyId }) => {
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
-      await wait(700);
+      await wait(Number((globalThis as { __fxAiDelay?: number }).__fxAiDelay ?? 700));
       const proposal = {
         lead: `${f.it.title}: luz y calma.`,
         body: `Una vivienda de ${f.it.squareMeters ?? "—"} m² con ${f.it.bedrooms ?? "—"} dormitorios. Tiene piscina comunitaria.`,

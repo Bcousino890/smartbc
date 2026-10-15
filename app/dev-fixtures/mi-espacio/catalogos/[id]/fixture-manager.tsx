@@ -9,7 +9,7 @@ import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
 import { autoSelect, candidates, isAvailable, sortCandidates, type AdjustmentKind } from "@/lib/catalogs/selection";
 import { explainProperty, INCLUDED_UNAVAILABLE } from "@/lib/catalogs/explain";
-import { fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView } from "@/lib/catalogs/fixtures-selection";
+import { fixtureMaterial, fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView, type FixtureProperty } from "@/lib/catalogs/fixtures-selection";
 import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { createFixtureTexts } from "./fixture-texts";
 
@@ -30,19 +30,70 @@ async function mutate(body: Record<string, unknown>): Promise<{ fingerprint: str
   return { fingerprint: d?.fingerprint ?? null, before: d?.before ?? null };
 }
 
-const byId = new Map(fixtureProperties.map((p) => [p.id, p]));
-const createdAt = new Map(fixtureProperties.map((p) => [p.id, p.created_at]));
+// E2 · instrumentación de prueba: cuenta lo que LLEGA a cada acción (no lo que
+// la interfaz cree haber hecho), guarda el último contenido enviado y permite
+// retrasar o hacer fallar el siguiente guardado. Solo /dev-fixtures.
+type FxWindow = Window & {
+  __fxCalls?: Record<string, number>;
+  __fxLast?: Record<string, unknown>;
+  __fxSaveDelay?: number;
+  __fxFailNext?: boolean;
+};
+const AI_ACTIONS = new Set(["texts.prepare", "texts.draft"]);
+const READ_ACTIONS = new Set(["search", "selection.previewAuto", "selection.previewMode", "texts.preview", "cover.photos", "ads.searchListings"]);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Envuelve un árbol de acciones con funciones estables que llaman a la versión
+ *  actual (ref) y apuntan cada llamada. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function instrument<T>(get: () => T, prefix = ""): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sample = get() as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: any = {};
+  for (const k of Object.keys(sample)) {
+    const name = prefix + k;
+    if (typeof sample[k] === "function") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      out[k] = async (...args: any[]) => {
+        const w = window as FxWindow;
+        w.__fxCalls = { ...(w.__fxCalls ?? {}), [name]: (w.__fxCalls?.[name] ?? 0) + 1 };
+        w.__fxLast = { ...(w.__fxLast ?? {}), [name]: args[0] };
+        if (!AI_ACTIONS.has(name) && !READ_ACTIONS.has(name)) {
+          const delay = Number(w.__fxSaveDelay ?? 0);
+          if (delay > 0) await sleep(delay);
+          if (w.__fxFailNext) {
+            w.__fxFailNext = false;
+            return { ok: false as const, error: "Error de prueba: el guardado ha fallado (fixture)." };
+          }
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (get() as any)[k](...args);
+      };
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      out[k] = instrument(() => (get() as any)[k], `${name}.`);
+    }
+  }
+  return out as T;
+}
+
 const invalid = { ok: false as const, error: "Revisa los criterios: zonas reconocidas, precio con operación (venta o alquiler), mínimo ≤ máximo y entre 1 y 24 viviendas." };
 
 export function FixtureCatalogManager({
   catalog,
   liveToken = null,
   measureMode = false,
+  pool = fixtureProperties,
 }: {
   catalog: CatalogDetail;
   liveToken?: string | null;
   measureMode?: boolean;
+  /** E2 · universo de viviendas (el grande con ?grande=1). */
+  pool?: FixtureProperty[];
 }) {
+  const byId = new Map(pool.map((p) => [p.id, p]));
+  const createdAt = new Map(pool.map((p) => [p.id, p.created_at]));
   const [cat, setCat] = useState<CatalogDetail>(catalog);
   const manualRef = useRef<CatalogItemView[]>(catalog.items);
   // C1: ajustes y portada en memoria, con las mismas reglas que SQL (0196).
@@ -95,7 +146,7 @@ export function FixtureCatalogManager({
     return { ...fixtureView(p, pos), adjustment, explain: explainProperty(p, c, adjustment) };
   };
   const autoItems = (c: CatalogCriteria) => {
-    const r = autoSelect(fixtureProperties, c, [...adjRef.current].map(([propertyId, kind]) => ({ propertyId, kind })));
+    const r = autoSelect(pool, c, [...adjRef.current].map(([propertyId, kind]) => ({ propertyId, kind })));
     return {
       items: r.ids.map((id, i) => ({ ...explained(id, c, (i + 1) * 100), via: r.via[i] })),
       total: r.total,
@@ -141,7 +192,16 @@ export function FixtureCatalogManager({
       const c = { ...c0, ...patch };
       const a = c.mode === "auto" ? autoItems(c.criteria) : null;
       const items = a ? a.items : manualRef.current;
-      return { ...c, items, autoTotal: a ? a.total : null, autoMatched: a ? a.matched : null, adjustments: adjustmentsOf(c.criteria), cover: coverOf(items) };
+      // E2 · material: el sintético del universo; las de la lista manual de
+      // siempre conservan el suyo (escrito a mano en fixtures.ts).
+      const material = Object.fromEntries(
+        items.flatMap((it) => {
+          const p = byId.get(it.propertyId);
+          const m = p ? fixtureMaterial(p) : c0.material[it.propertyId];
+          return m ? [[it.propertyId, m]] : [];
+        }),
+      );
+      return { ...c, items, autoTotal: a ? a.total : null, autoMatched: a ? a.matched : null, adjustments: adjustmentsOf(c.criteria), cover: coverOf(items), material };
     });
   let n = 0;
   const actions: CatalogManagerActions = {
@@ -165,7 +225,7 @@ export function FixtureCatalogManager({
     search: async ({ criteria, text, offset = 0 }) => {
       const n = normalizeCriteria(criteria);
       if (!n.ok) return invalid;
-      const all = sortCandidates(candidates(fixtureProperties, n.criteria, { requirePhoto: false, text }), n.criteria, createdAt);
+      const all = sortCandidates(candidates(pool, n.criteria, { requirePhoto: false, text }), n.criteria, createdAt);
       const inCat = new Set((cat.mode === "auto" ? autoItems(cat.criteria).items : manualRef.current).map((x) => x.propertyId));
       return {
         ok: true as const,
@@ -275,6 +335,12 @@ export function FixtureCatalogManager({
     renew: async ({ days }) => ({ ok: true as const, token: liveToken ?? "fixtureMainToken000000000001", expiresAt: new Date(Date.now() + days * 86_400_000).toISOString() }),
     revoke: async () => ({ ok: true as const }),
   };
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+  const shareRef = useRef(shareActions);
+  shareRef.current = shareActions;
+  const fx = useRef<{ actions: CatalogManagerActions; share: ShareActions } | null>(null);
+  if (!fx.current) fx.current = { actions: instrument(() => actionsRef.current), share: instrument(() => shareRef.current, "share.") };
   const onLocalAdd = (reference: string): CatalogItemView | null => {
     const ref = parsePropertyRef(reference);
     if (ref.kind === "invalid") return null;
@@ -298,12 +364,12 @@ export function FixtureCatalogManager({
   return (
     <CatalogManager
       catalog={cat}
-      actions={actions}
+      actions={fx.current.actions}
       basePath="/dev-fixtures/mi-espacio"
       numberLabel="nº 01"
       onLocalAdd={onLocalAdd}
       share={liveToken ? { token: liveToken, expiresAt: new Date(Date.now() + 60 * 86_400_000).toISOString(), expired: false } : null}
-      shareActions={shareActions}
+      shareActions={fx.current.share}
       measureMode={measureMode}
       texts={fxTexts.views()}
       storyHref={() => "#historia-de-prueba"}
