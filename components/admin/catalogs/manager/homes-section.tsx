@@ -50,6 +50,7 @@ export interface HomesSectionProps {
   message: ReactNode;
   criteriaForm: FormDraft<CriteriaRaw>;
   summarize: (raw: CriteriaRaw) => string;
+  /** Criterios del BORRADOR para «Añadir» del modo manual (PR-B/C1). «Coincidencias» usa los guardados (K3). */
   searchCriteria: CatalogCriteria;
   selectionActions: SelectionActions;
   search: SearchAction;
@@ -227,15 +228,22 @@ export function HomesSection(props: HomesSectionProps) {
         </>
       ) : null}
 
+      {view === "coincidencias" && criteriaForm.edited ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="matches-saved-notice">
+          Estás viendo las coincidencias de los criterios guardados. Guarda los criterios para aplicar tus cambios; para ver qué entraría con ellos, usa «Ver qué entraría» en «Modificar criterios».
+        </p>
+      ) : null}
       {view === "coincidencias" ? (
         <p className="text-xs text-ink/55" data-testid="matches-note">
           La búsqueda enseña también las que coinciden pero no pueden entrar solas (por ejemplo, sin foto), con su motivo.
         </p>
       ) : null}
       {view === "coincidencias" ? (
+        // K3: los criterios GUARDADOS, los mismos que deciden la lista (el
+        // borrador se ve con «Ver qué entraría»).
         <PropertySearch
           catalogId={catalog.id}
-          criteria={props.searchCriteria}
+          criteria={catalog.criteria}
           search={props.search}
           mode="auto"
           autoRun
