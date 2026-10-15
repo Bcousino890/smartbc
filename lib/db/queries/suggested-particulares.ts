@@ -67,8 +67,9 @@ export async function getSuggestedParticulares(
     .select(COLUMNS)
     .eq("is_active", true)
     .is("duplicate_of", null)
-    // La operación de un anuncio enlazado puede vivir en su copia (`link_ops`).
-    .or(`operation.eq.${op},link_ops.cs.{${op}}`);
+    // Solo la operación propia de la fila: el precio que se compara es el de
+    // esta fila, y `link_ops` incluye copias ya dadas de baja.
+    .eq("operation", op);
   if (brief.minPrice !== null) query = query.gte("price", brief.minPrice);
   if (ceiling !== null) query = query.lte("price", ceiling);
   if (brief.minBedrooms !== null) query = query.gte("bedrooms", brief.minBedrooms);
@@ -115,7 +116,6 @@ export async function getSuggestedParticulares(
       square_meters: r.square_meters ?? null,
       price: r.price ?? 0,
       operation: r.operation === "sale" ? "sale" : "rent",
-      operations: r.operation === op ? null : [op],
       title: r.title ?? null,
       features,
       floor_override: r.floor_num != null ? String(r.floor_num) : (r.floor ?? null),
