@@ -1,4 +1,5 @@
 import "server-only";
+import { catalogPhotoData } from "./photo-data";
 import { createAdminClient } from "@/lib/db/admin";
 import { isStorySourceCurrent } from "@/lib/services/story/source-hash";
 import { floorLabel, operationLabel } from "./format";
@@ -154,8 +155,10 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
   return out.sort((a, b) => Number(b.inList) - Number(a.inList));
 }
 
-/** Fuente de una vivienda para preparar o redactar su texto (solo lectura). */
-export async function textSourceFor(propertyId: string): Promise<{
+/** Fuente de una vivienda para preparar o redactar su texto (solo lectura).
+ *  E3: con `catalogId`, las fotos son las que se usan en ESE catálogo, con su
+ *  apertura (la misma regla que el lector). */
+export async function textSourceFor(propertyId: string, catalogId: string | null): Promise<{
   property: PropertyRow;
   source: DraftSource;
   photos: EditorialPhoto[];
@@ -167,26 +170,14 @@ export async function textSourceFor(propertyId: string): Promise<{
   if (!p) return null;
   const clean = cleanOf(p, src.clean.get(propertyId));
   const manual = (p.features_manual ?? []).filter((f) => f && f.trim() && isPublicSafe(f));
-  const { data: photos } = await db()
-    .from("property_photos")
-    .select("url, is_cover, class_override, ai_class, ai_confidence, position, id")
-    .eq("property_id", propertyId)
-    .order("position", { ascending: true })
-    .order("id", { ascending: true });
-  const seen = new Set<string>();
-  const list: EditorialPhoto[] = [];
-  let coverIndex = -1;
-  for (const ph of (photos ?? []) as any[]) {
-    if (!ph?.url || seen.has(ph.url)) continue;
-    seen.add(ph.url);
-    if (ph.is_cover && coverIndex < 0) coverIndex = list.length;
-    list.push({ u: String(list.length), k: ph.class_override ?? ((ph.ai_confidence ?? 0) >= 0.75 ? ph.ai_class : null) });
-  }
+  const eff = (await catalogPhotoData(catalogId, [propertyId])).get(propertyId)?.eff;
+  const list: EditorialPhoto[] = (eff?.photos ?? []).map((ph, i) => ({ u: String(i), k: ph.k }));
+  const coverIndex = eff?.openingIndex ?? 0;
   return {
     property: p,
     clean,
     photos: list,
-    coverIndex: coverIndex < 0 ? 0 : coverIndex,
+    coverIndex,
     source: {
       title: p.title,
       operation: operationLabel(p.operation, p.operations),
@@ -204,9 +195,10 @@ export async function textSourceFor(propertyId: string): Promise<{
 /** Vista previa del recorrido con un texto del catálogo (borrador o no). */
 export async function previewJourney(
   propertyId: string,
+  catalogId: string | null,
   text: { body: string | null; lead: string | null; highlights: string[] },
 ): Promise<{ lead: string | null; highlights: string[]; sections: Array<{ heading: string | null; text: string; photo: boolean }>; words: number } | null> {
-  const s = await textSourceFor(propertyId);
+  const s = await textSourceFor(propertyId, catalogId);
   if (!s) return null;
   const ed = deriveEditorial({
     description: s.property.description,
