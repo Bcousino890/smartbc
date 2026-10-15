@@ -1498,3 +1498,13 @@ Plan aprobado: [`qa-c2/plan-vista-previa.md`](qa-c2/plan-vista-previa.md) (D-QA1
 **No cumple G-ALQ ni resuelve el caso original de Recoletos.**
 
 **Merge:** lo decide y hace Fabricio. Es solo código, sin migración.
+
+**Merge y QA en producción:**
+- PR #320 fusionado por Fabricio: commit `f39fda2`, el 15 de octubre de 2026 a las 22:12 UTC. CI de `main` en verde.
+- **QA de Fabricio en producción, superada** (16 de octubre de 2026), en sus dos comprobaciones:
+  - al editar el precio, la vista previa anterior se oculta;
+  - con «10.0000» y «Ver qué entraría», solo sale el error de validación, sin resultados antiguos.
+- **Esta QA no cierra nada más:**
+  - G-ALQ sigue pendiente de la evidencia de la empresa;
+  - el caso original de Recoletos sigue sin confirmar;
+  - siguen pendientes la medición D13 en vivo y la QA en dispositivos reales.
