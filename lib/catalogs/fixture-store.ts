@@ -340,7 +340,16 @@ async function seed(): Promise<Map<string, Share>> {
           item({ key: "fxOpS950007", slug: "fx-op-s950", title: "Piso en venta en Lista", subzone: "Lista", price: 950000, bedrooms: 2, bathrooms: 2, square_meters: 98, photos: photos(250, 2, "h") }),
         ]),
   ];
-  return new Map<string, Share>([
+  // E3: clave opaca y estable de cada foto sintética (como catalog_photo_key).
+  const keyed = (m: Map<string, Share>) => {
+    for (const sh of m.values()) {
+      for (const it of sh.snapshot.items) {
+        it.photos = it.photos.map((ph, i) => (ph.f ? ph : { ...ph, f: createHash("md5").update(`fx-photo:${it.slug}:${ph.u}:${i}`).digest("hex").slice(0, 16) }));
+      }
+    }
+    return m;
+  };
+  return keyed(new Map<string, Share>([
     [FIXTURE_TOKENS.rent, { snapshot: snap("Alquiler en Salamanca", "Catálogo de alquiler con una dual, dos casos de importes y una venta incluida.", opItems(false)), expiresAt: far, revoked: false, archived: false, operation: "rent", version: 1 }],
     [FIXTURE_TOKENS.sale, { snapshot: snap("Venta en Salamanca", "Catálogo de venta con una dual y un alquiler incluido.", opItems(true)), expiresAt: far, revoked: false, archived: false, operation: "sale", version: 1 }],
     [FIXTURE_TOKENS.qa, { snapshot: snap("Casos de la QA", "Viviendas sintéticas para comprobar el recorrido adaptativo.", qaItems), expiresAt: far, revoked: false, archived: false }],
@@ -353,7 +362,7 @@ async function seed(): Promise<Map<string, Share>> {
     [FIXTURE_TOKENS.twenty, { snapshot: snap("Barrio de Salamanca", "Exclusivos pisos en la zona más exclusiva de todo Madrid.", series(20, "fxVeinte")), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.journey, { snapshot: snap("El recorrido de cada vivienda", "Tres viviendas: una con texto propio, otra con historia aprobada y otra solo con datos.", journeyItems), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.max, { snapshot: snap("Salamanca · selección máxima", "Veinticuatro viviendas, el máximo de un catálogo automático.", series(24, "fxMax")), expiresAt: far, revoked: false, archived: false }],
-  ]);
+  ]));
 }
 
 const KEY = "__bcpCatalogFixtureStore";
@@ -431,7 +440,12 @@ export type FixtureOp =
   | { op: "expire"; token: string; inMs?: number }
   | { op: "archive"; token: string }
   // K1: cambia la operación guardada del catálogo (la instantánea no cambia).
-  | { op: "operation"; token: string; operation: CatalogOperation };
+  | { op: "operation"; token: string; operation: CatalogOperation }
+  // E3: ajustes de fotos de una vivienda (por clave) y realojar una foto
+  // (cambia su URL —y su `u`— pero conserva su clave).
+  | { op: "photos"; token: string; key: string; x: string[]; o: string | null }
+  | { op: "photo-relocate"; token: string; key: string; index: number }
+  | { op: "photo-delete"; token: string; key: string; index: number };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -449,6 +463,17 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
   switch (op.op) {
     case "operation":
       s.operation = op.operation;
+      break;
+    case "photos":
+      snap.items = snap.items.map((it) => (it.key === op.key ? { ...it, pp: op.x.length || op.o ? { x: op.x, o: op.o } : null } : it));
+      break;
+    case "photo-relocate":
+      snap.items = snap.items.map((it) =>
+        it.key === op.key ? { ...it, photos: it.photos.map((ph, i) => (i === op.index ? { ...ph, u: `${ph.u}-r${++seq}` } : ph)) } : it,
+      );
+      break;
+    case "photo-delete":
+      snap.items = snap.items.map((it) => (it.key === op.key ? { ...it, photos: it.photos.filter((_, i) => i !== op.index) } : it));
       break;
     case "price":
       snap.items = snap.items.map((it) => (it.key === op.key ? { ...it, price: op.price } : it));
@@ -517,14 +542,24 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
 /** Foto sintética para la ruta de prueba /dev-fixtures/foto/[slug]/[idx],
  *  con las medidas que declara la instantánea (para que la orientación del
  *  marco y la de la imagen coincidan). */
-export async function fixturePhotoSvg(slug: string, idx: number): Promise<string | null> {
+export async function fixturePhotoSvg(slug: string, idx: number, f: string | null = null): Promise<string | null> {
+  const { isPhotoKey, pickProxyPhoto } = await import("./photo-selection");
+  if (f !== null && !isPhotoKey(f)) return null;
   for (const share of (await store()).values()) {
     const it = share.snapshot.items.find((x) => x.slug === slug);
-    const ph = it?.photos[idx];
-    if (!it || !ph) continue;
+    if (!it) continue;
+    // La misma elección que el proxy real: por clave si viene (o ninguna).
+    const rows = it.photos.map((ph, i) => ({ ...ph, url: ph.u, position: i }));
+    const ph = f !== null ? pickProxyPhoto(rows, idx, f, (r) => r.f ?? "") : it.photos[idx] ? rows[idx] : null;
+    if (!ph) {
+      if (f !== null) return null;
+      continue;
+    }
     let hue = 0;
     for (const ch of ph.u) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
-    const uri = syntheticPhoto(hue, ph.w ?? 1600, ph.h ?? 1067, `${slug} · ${idx + 1}`);
+    // La etiqueta lleva la clave: así una prueba comprueba qué foto se SIRVE.
+    const label = f !== null ? `${slug} · ${f}` : `${slug} · ${idx + 1}`;
+    const uri = syntheticPhoto(hue, ph.w ?? 1600, ph.h ?? 1067, label);
     return decodeURIComponent(uri.replace(/^data:image\/svg\+xml;charset=utf-8,/, ""));
   }
   return null;

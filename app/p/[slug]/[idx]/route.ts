@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { isMobiliaImageUrl, toMobiliaOriginal } from "@/lib/sync/scrapers/mobilia";
 import { contentRange, parseRangeHeader, unsatisfiedContentRange } from "@/lib/http/range";
+import { createHash } from "node:crypto";
+import { isPhotoKey, pickProxyPhoto } from "@/lib/catalogs/photo-selection";
 
 // Proxy de fotos de propiedad. Sirve la foto en posición `idx` para la
 // propiedad con `slug`, leyéndola desde Supabase Storage en streaming. El
@@ -11,6 +13,15 @@ import { contentRange, parseRangeHeader, unsatisfiedContentRange } from "@/lib/h
 // origen.
 //
 // Solo devuelve fotos de propiedades NO archivadas. Cache 24h en CDN.
+//
+// ── Identidad de la foto (`?f=`, BCP-01 E3, N1) ──
+// Los catálogos piden cada foto por su clave opaca y estable
+// (catalog_photo_key: md5('catalog-photo:' || id), 16 hex), con `?v=` (versión
+// del archivo, derivada de su URL) solo para la caché. Con `f` se sirve LA foto
+// de esa clave, sin mirar el índice ni el orden; si no existe (borrada o
+// reimportada), 404 sin caché: nunca otra foto. Sin `f`, todo es como antes.
+// `v` detecta un cambio de URL (realojar), no un archivo sustituido en la misma
+// URL: ahí la caché de 24 h puede servir el anterior (límite documentado).
 //
 // ── Variantes por ancho (`?w=`) ──
 // Históricamente esto servía SIEMPRE el fichero original tal cual: ni
@@ -102,6 +113,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 type PhotoRow = {
+  id: string;
   url: string;
   position: number;
   is_cover: boolean;
@@ -119,7 +131,12 @@ export async function GET(
   { params }: { params: Promise<{ slug: string; idx: string }> },
 ) {
   const { slug, idx } = await params;
-  const width = snapWidth(new URL(req.url).searchParams.get("w"));
+  const search = new URL(req.url).searchParams;
+  const width = snapWidth(search.get("w"));
+  const fRaw = search.get("f");
+  if (fRaw !== null && !isPhotoKey(fRaw)) {
+    return new NextResponse("bad_photo", { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
   const position = Number.parseInt(idx, 10);
   if (!Number.isFinite(position) || position < 0) {
     return new NextResponse("bad_idx", { status: 400 });
@@ -128,7 +145,7 @@ export async function GET(
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("properties")
-    .select("id, archived_at, status, property_photos(url, position, is_cover)")
+    .select("id, archived_at, status, property_photos(id, url, position, is_cover)")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -137,24 +154,18 @@ export async function GET(
     return new NextResponse("not_found", { status: 404 });
   }
 
-  // Ordenamos por posición y elegimos la foto del índice solicitado. Si la
-  // posición concreta no existe (porque se borró una foto), devolvemos 404
-  // para que el cliente no caiga en un loop esperando una imagen rota.
+  // Sin `f`: ordenamos por posición y elegimos la foto del índice solicitado.
+  // Si la posición concreta no existe (porque se borró una foto), devolvemos
+  // 404 para que el cliente no caiga en un loop esperando una imagen rota.
   // Deduplicamos por url (igual que el adapter de la galería): si hay filas
-  // duplicadas en property_photos, los índices del proxy deben casar con los que
-  // ve el cliente, no contar la foto repetida.
-  const seenUrls = new Set<string>();
-  const photos = (row.property_photos ?? [])
-    .slice()
-    .sort((a, b) => a.position - b.position)
-    .filter((p) => {
-      if (seenUrls.has(p.url)) return false;
-      seenUrls.add(p.url);
-      return true;
-    });
-  const photo = photos[position];
+  // duplicadas en property_photos, los índices del proxy deben casar con los
+  // que ve el cliente, no contar la foto repetida.
+  // Con `f` (catálogos, E3): la foto de esa clave o ninguna.
+  const photo = pickProxyPhoto(row.property_photos ?? [], position, fRaw, (r) =>
+    createHash("md5").update(`catalog-photo:${r.id}`).digest("hex").slice(0, 16),
+  );
   if (!photo) {
-    return new NextResponse("not_found", { status: 404 });
+    return new NextResponse("not_found", { status: 404, headers: fRaw ? { "Cache-Control": "no-store" } : undefined });
   }
 
   // Si la foto todavía se sirve desde el CDN de Mobilia (aún no se re-alojó en
