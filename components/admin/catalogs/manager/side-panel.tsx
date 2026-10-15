@@ -123,7 +123,7 @@ export function SidePanel({
       className="min-w-0 rounded-xl border border-gold/25 bg-white/90 shadow-sm xl:sticky xl:top-28 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col"
     >
       <div className="flex items-start gap-2 border-b border-gold/15 p-3">
-        <button type="button" onClick={onClose} className={`${iconBtn} w-auto gap-1 px-2 text-sm xl:hidden`}>
+        <button type="button" onClick={onClose} className={`${iconBtn} w-auto gap-1 px-2 text-sm xl:hidden`} data-testid="side-panel-back">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {backLabel}
         </button>
         <div className="hidden min-w-0 flex-1 xl:block" />
