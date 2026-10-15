@@ -145,16 +145,48 @@ export function priceDisplay(p: OperationPriceInput & { currency?: string | null
   - `getPublicCatalogState(token)`: tras `get_public_catalog`, `catalog_shares` → `catalogs.criteria->operation` de ese token;
   - `getCatalogTokenStates(tokens)`: una sola consulta para todos los enlaces vigentes de la pasada;
   - `getCatalogFingerprint(owner, catalog)`: `catalogs.criteria` filtrando por el dueño.
-- **Lectura coherente (D-QA15)**, sin migración. La operación se lee **antes y después** de la instantánea (o de los estados del vigilante), siempre en la misma petición del servidor:
-  - si las dos lecturas coinciden, esa es la operación de esa instantánea;
-  - si difieren (la operación se guardó en medio), se repite la lectura una vez;
-  - si siguen difiriendo, se trata como error de lectura.
-  - Nunca se combina una instantánea con una operación leída en otro momento.
-- **Error de lectura de la operación (D-QA15)**, con fallo seguro: **nunca** se cae en `any` en silencio, porque eso cambiaría las etiquetas y la huella sin que nadie hubiera cambiado nada. Los casos:
-  - estado público (abrir el lector): se comporta igual que un fallo de la base hoy (`getPublicCatalogState` lanza y la página enseña su error temporal);
-  - vigilante: ese enlace se salta en esa pasada, sin emitir cambio y conservando la última huella enviada;
-  - medición: `null`, como hoy ante un error.
-- Una operación guardada con un valor no válido no puede existir, porque `catalog_criteria_normalize` la rechaza. Si apareciera, se trata igual que un error de lectura.
+- **Lectura coherente guardada por versión (D-QA15, corregida el 15 de octubre de 2026).** Comparar solo la operación antes y después **no basta**. Con un cambio A→B→A en medio, las dos lecturas dan A, pero la instantánea es la de B.
+  - Está demostrado con las funciones reales en `test-catalog-operations.sql`: catálogo G en alquiler → venta → alquiler; la operación sale igual las dos veces, la instantánea de en medio es la de venta y la versión sube 2.
+  - Por eso la guarda es `catalogs.version`, no la operación.
+- **Por qué `catalogs.version` sirve como guarda.** Comprobado en el código y, lo marcado (SQL), en el Postgres temporal:
+  - Es `bigint NOT NULL DEFAULT 1` (`0192`): el catálogo nace en 1. Cada función de gestión que cambia lo que se publica lo sube **exactamente en 1**, en la **misma sentencia `UPDATE`** que hace el cambio:
+    - `catalog_update_meta`, `catalog_set_status`, `catalog_add_property`, `catalog_remove_item` y `catalog_reorder` (`0192`/`0195`);
+    - `catalog_set_contact` (`0194`);
+    - `catalog_set_criteria`, `catalog_set_mode`, `catalog_adjust`, `catalog_adjust_clear` y `catalog_set_cover` (`0195`/`0196`);
+    - `catalog_text_publish`, `catalog_text_withdraw` y `catalog_text_delete` (`0197`).
+    - Los anuncios de origen (`catalog_ad_*`) **no** la suben, pero no entran en la instantánea ni en la operación.
+  - Los criterios **solo** los escribe `catalog_set_criteria`, que siempre sube la versión, también si no cambia nada. El modo solo lo escribe `catalog_set_mode`.
+  - Nadie más que `service_role` puede escribir la tabla, y la aplicación no hace escrituras directas sobre `catalogs`: solo `select` en `lib/catalogs/queries.ts`.
+  - Ninguna función baja ni reinicia la versión.
+  - (SQL) Crear = 1, criterios = 2, modo = 3. Crear un enlace no la sube.
+  - (SQL) Cinco cambios de operación, uno idéntico y uno de modo la suben de 1 en 1.
+  - (SQL) En un catálogo manual, guardar criterios también la sube.
+  - (SQL) Ni `authenticated` ni `anon` pueden escribir en `catalogs`.
+- **El algoritmo** (puro, en el módulo nuevo `lib/catalogs/coherent-read.ts`, con los lectores inyectados para poder probarlo):
+  1. **m1:** se leen `version` y `criteria->>'operation'` del catálogo o catálogos.
+  2. **s:** se lee lo de siempre (`get_public_catalog`, `get_catalog_states` o `catalog_public_fingerprint`).
+  3. **m2:** se vuelve a leer `version`.
+  4. **Se acepta** la pareja (s, operación de m1) **solo si `m1.version = m2.version`** en ese catálogo.
+     - Como cada escritura sube la versión en la misma transacción y nunca baja, no hubo ningún cambio confirmado entre m1 y m2.
+     - La sentencia de s empezó entre las dos lecturas, así que vio los mismos criterios y el mismo modo que m1.
+     - A→B→A da `m2 = m1 + 2` y se rechaza.
+  5. Si las versiones no coinciden, se repite el intento: **3 intentos como máximo**. Agotados, es un **fallo explícito** (`catalog_read_unstable`).
+  6. **Error al leer m1 o m2, o una operación que no es `sale`, `rent` ni `any`:** fallo explícito (`catalog_operation_unreadable`), sin reintento. **Nunca** se cae en `any`.
+     - No puede existir una operación guardada no válida, porque `catalog_criteria_normalize` la rechaza. Si apareciera, se trata así.
+  7. **Validez:** manda s, como hoy. Un enlace que s da por no válido sale como no disponible, sea cual sea m1. Un enlace que no aparece en m1 pero s da por válido se trata como versión distinta y se reintenta.
+- **Las lecturas de m1 y m2** (cliente de servicio, sin migración):
+  - **lector y vigilante:** `catalog_shares` por token, con `catalogs(version, criteria)` embebido; una sola consulta para todos los tokens de la pasada;
+  - **medición:** `catalogs` por `id` y `owner_id`.
+- **Cada consumidor, igual de explícito:**
+  - **Carga inicial** (`getPublicCatalogState`): 3 intentos. Si falla, lanza, como hoy un fallo de la base, y la página enseña su error temporal.
+  - **Vigilante** (`getCatalogTokenStates`):
+    - una m1 y una m2 por pasada, para todos los enlaces;
+    - los que cambian de versión se reintentan **solo ellos**, hasta 3 intentos dentro de la pasada;
+    - los que no se estabilizan **se saltan en esa pasada**: no se emite cambio y se conserva la última huella enviada;
+    - si falla la lectura de m1 o m2, se salta la pasada entera;
+    - todo con un registro en el log del servidor, sin datos de clientes.
+  - **Medición** (`getCatalogFingerprint`): 3 intentos. Si falla, `null`, como hoy ante un error.
+- **Coste:** dos consultas ligeras más por carga, y dos por pasada del vigilante (no por enlace). Se mide en T8 con la prueba de carga sintética de siempre.
 
 ### 3.3 Huella y lectores abiertos
 
@@ -208,10 +240,10 @@ Cada tarea pasa `npx tsc --noEmit`, `test:catalogs`, `test:catalogs-public` y `t
 | **T3** | **K5:** los importes en `normalizeCriteria` | `lib/catalogs/criteria.ts`, `scripts/test-catalogs-public.mts` (aceptados y rechazados, uno a uno), `scripts/test-catalogs-manager.mts` («5.5» es un cambio no válido y se conserva en bruto) | T0 | Casos escritos a mano |
 | **T4** | **K4:** el resumen con el solapamiento y el aviso en la barra | `lib/catalogs/criteria.ts`, `components/admin/catalogs/manager/homes-section.tsx`, `scripts/test-catalogs-public.mts` | T3 | Casos a mano: con y sin solapamiento, barrio dentro de distrito, texto libre dentro de barrio y alias (Chueca → Justicia) |
 | **T5** | **K1 en el gestor:** `priceDisplay` en las vistas, `priceAlso` y `priceWarning`; las fixtures del gestor | `lib/catalogs/types.ts`, `queries.ts`, `fixtures-selection.ts` (`fixtureView(p, pos, op)`), `fixtures.ts`, `app/dev-fixtures/…/fixture-manager.tsx` (recalcula las etiquetas al cambiar la operación, también en la lista manual), `homes-section.tsx` (panel) | T2 | `tsc` y pruebas puras de `priceDisplay` (en T2) |
-| **T6** | **K1 en el lector, con la huella compuesta** | `lib/catalogs/to-public.ts`, `public-fingerprint.ts` (nuevo), `public-data.ts`, `fixture-store.ts` (`Share.operation` con `any` por defecto, enlaces nuevos `fixtureRentToken000000000011` y `fixtureSaleToken000000000012`, y `FixtureOp { op: "operation" }`), `scripts/test-catalogs-public.mts` | T2 | El contrato sin claves nuevas ni prohibidas; las etiquetas en alquiler, venta y «cualquiera»; la huella de «cualquiera» **idéntica**; la compuesta igual en las tres lecturas |
+| **T6** | **K1 en el lector, con la huella compuesta y la lectura guardada por versión (§3.2)** | `lib/catalogs/to-public.ts`, `public-fingerprint.ts` (nuevo), `coherent-read.ts` (nuevo, puro), `public-data.ts`, `fixture-store.ts` (`Share.operation` con `any` por defecto, enlaces nuevos `fixtureRentToken000000000011` y `fixtureSaleToken000000000012`, y `FixtureOp { op: "operation" }`), `scripts/test-catalogs-public.mts` | T2 | El contrato sin claves nuevas ni prohibidas; las etiquetas en alquiler, venta y «cualquiera»; la huella de «cualquiera» **idéntica**; la compuesta igual en las tres lecturas; los casos V1–V11 de §5.1 |
 | **T7** | **K3:** «Coincidencias» con los criterios guardados, con el aviso | `components/admin/catalogs/manager/homes-section.tsx`, `catalog-manager.tsx` | T5 | `tsc`. Navegador en T8 |
 | **T8** | Navegador, regresiones, compilación aislada y capturas | Solo los arreglos que salgan, cada uno con su motivo | T4, T6, T7 | §5 y §7 |
-| **T9** | Resultado y entrega | `result.md` (sección propia), `qa-c2/capturas-sel/` | T8 | Push de `fabri/bcp-01-seleccion`, PR y CI en verde en el último commit. **Se para antes del merge** |
+| **T9** | Resultado y entrega | `result.md` (sección propia), `qa-c2/capturas-sel/` | T8 | Push de `fabri/bcp-01-seleccion`, PR y CI en verde en el último commit. Si P-ALQ se decide como A, el PR lleva la casilla «G-ALQ cumplida» ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §5.2), que solo marca Fabricio. **Se para antes del merge** |
 
 **CI:** las pruebas nuevas van en `test:catalogs`, `test:catalogs-public` y `test:catalogs-manager`, que ya corren en la CI. La SQL (T1 y la paridad) corre en el Postgres temporal, como en las fases anteriores. **La CI no tiene Postgres**, así que esa parte queda en el resultado con su salida.
 
@@ -234,11 +266,34 @@ Cada tarea pasa `npx tsc --noEmit`, `test:catalogs`, `test:catalogs-public` y `t
 | **AC-S3 (K1 gestor)** | T5 y T8: en un catálogo de **alquiler**, la dual se ve «Alquiler» · «6.000 €/mes», con «También en venta: 2.100.000 €» en el panel; una solo de venta incluida a mano se ve «Venta» · «6.000 €» y «Incluida a mano» con su motivo; la de `rent_price` incoherente lleva su aviso en el panel. Lo mismo en **manual** y en **venta**. En **«venta y alquiler»**, como hoy |
 | **AC-S4 (K1 lector)** | T6 y T8: el lector de los enlaces de alquiler y de venta enseña la operación y el precio del catálogo (portada interior, índice, apertura y ficha), y las incompatibles con lo suyo real. El enlace `main` («cualquiera») queda como hoy: la expectativa de `lector.mjs` («Venta 2.100.000 € · Alquiler 6.800 €/mes») no cambia. **Nunca** sale «Alquiler» en una vivienda solo de venta |
 | **AC-S5 (huella)** | T6 y T8: la de «cualquiera» es idéntica a la del SQL; la compuesta coincide en el estado público, el vigilante y la medición. Cambiar la operación de un catálogo **manual** con el lector abierto (`fixtureMutate { op: "operation" }`) actualiza el lector sin recargar (D12), y la medición lo cuenta como cambio público |
+| **AC-S5b (lectura coherente)** | T6: los casos V1–V11 de §5.1 en `test:catalogs-public` (CI), con lectores inyectados. Ninguna pareja (instantánea, operación) se acepta si la versión cambió, y ningún error acaba en `any`. La parte SQL (que la versión sube con cada escritura) ya está verificada en T1 |
 | **AC-S6 (K3)** | T8: con criterios sin guardar, «Coincidencias» enseña las de los guardados (el recuento cuadra con «Coincidencias · N») y el aviso; «Ver qué entraría» enseña las del borrador; lo escrito se conserva exacto; guardar quita el aviso. «Añadir» (manual) sigue con el borrador |
 | **AC-S7 (K4)** | T4 y T8: «Salamanca (incluye Recoletos)» en la barra, en la vista previa y en la tarjeta de la HOME, con el aviso de redundancia en la barra. La selección es idéntica con y sin el texto (mismos recuentos) |
 | **AC-S8 (K5)** | T3 y T8: aceptados y rechazados de §3.6, uno a uno, en `normalizeCriteria`. En el navegador, «5.5» da el mensaje de criterios no válidos y no se guarda; se conserva escrito tal cual; «1.200.000» se guarda como 1200000 |
 | **AC-S9 (E2 intacto)** | T8: las pruebas de E2 de D-QA9, guardados con retraso y conflictos, IA (A3), Viviendas, Contenido, Diseño y Compartir y barras fijas, en verde sin cambiar expectativas |
 | **P-1 y aislamiento** | Comprobaciones de §2.1 antes de cada arranque. La base temporal solo en `pg-bcp01` |
+
+### 5.1 Casos de la lectura coherente (escritos a mano, para T6)
+
+Cada caso guiona m1, s y m2 por intento: la versión, la operación y si falla.
+- **«Carga»** es `getPublicCatalogState`.
+- **«Vigilante»** es `getCatalogTokenStates`.
+- **«Medición»** es `getCatalogFingerprint`.
+- La huella es `fp` en «venta y alquiler» y `fp:op` en venta o alquiler.
+
+| Caso | Guion | Resultado esperado |
+| --- | --- | --- |
+| **V1** sin cambios | m1 (3, rent) · s = X · m2 (3, rent) | Se acepta (X, rent) a la primera. Huella `fp(X):rent` en los tres consumidores |
+| **V2** cambio en medio | intento 1: m1 (3, rent) · s = X_B · m2 (4, sale); intento 2: m1 (4, sale) · s = Y · m2 (4, sale) | Se acepta (Y, sale) en el intento 2. **X_B nunca se devuelve** |
+| **V3** A→B→A | intento 1: m1 (3, rent) · s = X_B · m2 (5, rent); intento 2: m1 (5, rent) · s = Z · m2 (5, rent) | El intento 1 se rechaza **aunque la operación sea la misma**. Se acepta (Z, rent) en el intento 2 |
+| **V4** cambios repetidos | la versión cambia en los 3 intentos (3→4, 4→5, 5→6) | Carga: lanza `catalog_read_unstable`. Vigilante: ese enlace se salta, sin emitir, y conserva la última huella. Medición: `null`. **Nunca** `any` |
+| **V5** error en m1 | m1 falla | Carga: lanza `catalog_operation_unreadable`, sin pedir s. Vigilante: se salta la pasada entera. Medición: `null` |
+| **V6** error en m2 | m1 (3, rent) · s = X · m2 falla | Igual que V5. X se descarta |
+| **V7** operación no válida | m1 (3, «venta») | Igual que V5 |
+| **V8** error en s | s falla | Como hoy: carga lanza, vigilante salta la pasada, medición `null` |
+| **V9** vigilante con tres enlaces | t1 y t3 estables (V1) · t2 cambia una vez (V2) | t1 y t3 se emiten. t2 se reintenta solo y se emite con su versión nueva. Si t2 siguiera cambiando (V4), solo t2 se salta |
+| **V10** «venta y alquiler» | m1 (3, any) · s = X · m2 (3, any) | Huella `fp(X)`, idéntica a la del SQL, sin sufijo |
+| **V11** enlace no válido | s dice no válido; m1 (3, rent) | No disponible (`null`), sea cual sea m1. En el vigilante, `valid: false` como hoy |
 
 ## 6. Casos sintéticos y resultados esperados (escritos a mano)
 
@@ -303,11 +358,14 @@ No hace falta para preparar ni ejecutar este plan. Sirve para saber qué le pas�
 ## 11. Fase y siguiente paso
 
 - **Fase actual:** ejecución autorizada con condición (D-QA15).
-  - **Hecho:** `npm ci` (el lockfile no cambia), el Postgres temporal, T0 y T1. T1 confirma que la SQL real hace lo que dice la lectura.
+  - **Hecho:**
+    - `npm ci` (el lockfile no cambia), el Postgres temporal, T0 y T1. T1 confirma que la SQL real hace lo que dice la lectura;
+    - §3.2 corregido: la lectura coherente se guarda por `catalogs.version`, no por la operación. Que la versión sube con cada escritura está verificado en SQL, y los casos V1–V11 para T6 están escritos.
   - **Parado, a la espera del prerrequisito P-ALQ:** T2–T9, el push y el PR.
-  - La copia aislada para las fixtures se prepara al llegar a T8, porque hasta entonces no se usa.
+  - La copia aislada para las fixtures se prepara al llegar a T8.
   - La causa del caso real **sigue sin confirmar**.
 - **Siguiente paso:** Fabricio decide P-ALQ ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §6). Las salidas:
-  - si elige mantener la regla canónica, sigo con T2 tal como está el plan;
-  - si elige el respaldo, preparo antes el cambio de alcance (migración, paridad, recuperación) para su aprobación y no implemento nada hasta entonces.
-- **En pausa:** el plan de E3 (decisiones aprobadas), los grupos de la HOME y PDF.
+  - A + G-ALQ → T2;
+  - B → antes, el cambio de alcance para su aprobación;
+  - otra regla.
+  - Las consultas del §5 de ese documento puede ejecutarlas cuando quiera. Son necesarias para cumplir G-ALQ, pero no para decidir.

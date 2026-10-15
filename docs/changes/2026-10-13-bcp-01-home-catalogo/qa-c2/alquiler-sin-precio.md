@@ -66,9 +66,9 @@ Una vivienda **solo de alquiler** (`operation = 'rent'`) sin precio principal v�
 **Consecuencias:**
 - **Sin SQL, sin migración y sin cambio de selección:** el plan sigue tal cual.
 - **Para el dueño no es silencioso:** el gestor enseña la cifra y dice qué corregir. El lector **sí** perdería la cifra en las fichas que sigan sin corregir.
-- **Corregir la ficha** (escribir el precio en el formulario, que además borra el `rent_price`) es un proceso **humano y del dueño**. Ningún agente toca fichas.
+- **Corregir la ficha** (escribir en el formulario el alquiler **confirmado con la fuente**, no copiar el `rent_price` a ciegas; el formulario borra además el `rent_price`) es un proceso **humano y del dueño** (§5.1). Ningún agente toca fichas.
 - **Una ficha corregida se propaga sola.** La instantánea lleva `price`, así que la huella cambia y el lector abierto se actualiza en vivo. La ficha también queda bien en SmartLink, PDF, colecciones y sugeridas, que ya usan `price`.
-- **Para que ningún cliente vea un «sin dato» nuevo,** el orden sería: contar (§5) → corregir las fichas que salgan → desplegar K2. Si la consulta da 0, la decisión casi no tiene efecto.
+- **Para que ningún cliente vea un «sin dato» nuevo,** está la puerta G-ALQ (§5.2): contar → confirmar y corregir → desplegar K2. Si la consulta da 0, la decisión casi no tiene efecto.
 
 ## 4. Opción B: respaldo a `rent_price` (PROPUESTA, no aprobada)
 
@@ -110,14 +110,27 @@ Una vivienda **solo de alquiler** (`operation = 'rent'`) sin precio principal v�
    - Revertir las vuelve a sacar.
 7. **Divergencia:** el catálogo enseñaría 6.000 €/mes y SmartLink, PDF, colecciones y sugeridas seguirían usando `price` (0) para la misma vivienda, salvo que se ampliaran. Eso queda fuera de este trabajo.
 
-## 5. Consulta de solo lectura para Fabricio
+## 5. Consultas de solo lectura para Fabricio
 
-La ejecuta **Fabricio**: ningún agente accede a producción. Comprobada en el Postgres temporal con los datos sintéticos de T1. Dio 3, 2, 2 y 6 viviendas, y los catálogos esperados.
+Las ejecuta **Fabricio**: ningún agente accede a producción (política P-1).
+- Limitadas a viviendas **activas** (disponibles o reservadas), **sin archivar** y **en España**, que son las que pueden aparecer en un catálogo.
+- Probadas en el Postgres temporal con los datos sintéticos de T1. Dieron 3, 2, 2 y 6 viviendas y las referencias y catálogos esperados.
+- Dentro de una transacción, he añadido una vivienda archivada, una vendida, una de Chile y una dual con los mismos importes, y he deshecho la transacción al terminar. La consulta no contó ninguna de las cuatro.
 
-```sql
--- 1) Recuento de las viviendas de SOLO alquiler según sus dos importes.
+**Dónde se ejecutan.** Por la vía que ya usa el repo para la base de producción: el terminal de Fabricio, SSH al VPS y `psql` dentro del contenedor `supabase-db` (igual que el encabezado de `scripts/apply-migrations.sh`).
+1. Abrir el **Terminal** del Mac.
+2. Pegar el bloque entero de abajo, desde `ssh` hasta la última línea `SQL`, y pulsar Intro.
+   - Si pide la frase de la clave SSH, es la tuya.
+   - No compartas credenciales con nadie.
+3. `BEGIN TRANSACTION READ ONLY` hace que la base rechace cualquier escritura, y `ROLLBACK` cierra sin cambiar nada.
+4. Salen dos tablas: el recuento por caso y la lista de referencias con sus catálogos. Basta con traer los recuentos y las referencias BC.
+
+```bash
+ssh root@178.105.185.125 'docker exec -i supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres' <<'SQL'
+BEGIN TRANSACTION READ ONLY;
+
+-- 1) Recuento: viviendas de SOLO alquiler activas (disponibles o reservadas), sin archivar, en España.
 SELECT
-  (p.country = 'es' AND p.archived_at IS NULL AND p.status::text IN ('available', 'reserved')) AS en_alcance,
   CASE
     WHEN coalesce(p.price, 0) <= 0 AND coalesce(p.rent_price, 0) > 0                            THEN '1 sin precio principal, con rent_price'
     WHEN coalesce(p.price, 0) > 0  AND coalesce(p.rent_price, 0) > 0 AND p.rent_price <> p.price THEN '2 dos importes distintos'
@@ -128,60 +141,85 @@ SELECT
   count(*) FILTER (WHERE 'sale' = ANY (coalesce(p.operations, '{}'))) AS con_venta_en_operations
 FROM properties p
 WHERE p.operation::text = 'rent'
-GROUP BY 1, 2
-ORDER BY 1 DESC, 2;
+  AND p.country = 'es'
+  AND p.archived_at IS NULL
+  AND p.status::text IN ('available', 'reserved')
+GROUP BY 1
+ORDER BY 1;
 
--- 2) Detalle de los casos 1 y 2 que pueden aparecer, y en qué catálogos están hoy.
+-- 2) Referencias afectadas (casos 1 y 2) y catálogos en los que aparecen hoy.
 WITH en_catalogo AS (
   SELECT c.title, unnest(catalog_effective_ids(c.id)) AS property_id
     FROM catalogs c
    WHERE c.archived_at IS NULL
 )
-SELECT p.bc_reference, p.status::text AS estado, p.price, p.rent_price,
+SELECT p.bc_reference, p.slug, p.status::text AS estado, p.price, p.rent_price,
+       CASE WHEN coalesce(p.price, 0) <= 0 THEN '1 sin precio principal' ELSE '2 dos importes distintos' END AS caso,
        (SELECT string_agg(e.title, ' · ' ORDER BY e.title) FROM en_catalogo e WHERE e.property_id = p.id) AS catalogos
   FROM properties p
  WHERE p.operation::text = 'rent'
-   AND p.country = 'es' AND p.archived_at IS NULL AND p.status::text IN ('available', 'reserved')
+   AND p.country = 'es'
+   AND p.archived_at IS NULL
+   AND p.status::text IN ('available', 'reserved')
    AND coalesce(p.rent_price, 0) > 0
    AND (coalesce(p.price, 0) <= 0 OR p.rent_price <> p.price)
- ORDER BY p.bc_reference;
+ ORDER BY caso, p.bc_reference, p.slug;
+
+ROLLBACK;
+SQL
 ```
 
-**Cómo leer el resultado:**
-- `con_venta_en_operations` > 0 señala fichas con `operation = 'rent'` y venta en `operations`. Es otra incoherencia, que no se trata aquí.
-- La consulta B del diagnóstico queda **sustituida** por esta, que agrupa bien las condiciones y cuenta el 0 y los negativos.
+### 5.1 Cómo leer el resultado
 
-## 6. Recomendación y decisión que necesito
+- **Caso 1, sin precio principal con `rent_price`:**
+  - Hoy el catálogo enseña el `rent_price`, pero no lo usa para seleccionar.
+  - **Ese importe no es necesariamente el alquiler correcto.** Puede ser un resto de cuando la vivienda era dual, un dato importado o una cifra antigua.
+  - **No se copia a ciegas al precio:** hay que confirmarlo con la fuente (el anuncio vigente, el encargo o el contrato, o el propietario).
+- **Caso 2, dos importes distintos:**
+  - La selección usa `price` y la etiqueta de hoy enseña `rent_price`. Uno de los dos sobra, y no se sabe cuál sin mirar la fuente.
+  - Un `price` con forma de precio de venta (seis cifras o más) es sospechoso.
+- **Caso 3, sin ningún importe:** hoy ya sale «Precio · sin dato» y K2 no lo cambia. Completarlo es opcional y no forma parte de P-ALQ.
+- **`con_venta_en_operations` > 0:** fichas con `operation = 'rent'` y venta en `operations`. Es otra incoherencia, que K2 no resuelve. Se revisan aparte.
+- **`catalogos`:** dónde aparece hoy cada referencia. Una vivienda activa sin catálogo puede entrar mañana por unos criterios nuevos, así que también cuenta para la puerta.
 
-**Recomiendo la opción A, sin el «sin dato» silencioso:**
-- el gestor enseña la cifra secundaria y pide corregir la ficha;
-- Fabricio ejecuta la consulta 1;
-- si hay casos «1» en alcance, los corrige en las fichas **antes** de desplegar K2.
+**Cómo se corrige una ficha** (lo hacen Fabricio o su equipo, nunca un agente):
+- En el formulario de la ficha, se escribe el alquiler **confirmado** en el precio y se guarda.
+- Al guardar una vivienda que no es dual, el formulario borra `rent_price` (`property-edit-view.tsx:604-605`). Así la ficha queda con un solo importe.
+- El cambio llega solo a los lectores abiertos (la instantánea lleva `price`) y a SmartLink, PDF, colecciones y sugeridas.
 
-**Por qué:**
-- mantiene una sola regla en todo el CRM;
-- no cambia la selección de catálogos ya compartidos sin que su dueño haga nada;
-- la corrección se propaga sola en vivo.
+### 5.2 Puerta de despliegue propuesta (G-ALQ)
 
-El respaldo (B) es coherente dentro del catálogo, pero cambia la selección en producción y crea una divergencia con el resto del CRM.
+Antes de fusionar y desplegar K2:
+1. Fabricio ejecuta las consultas del §5.
+2. Revisa **cada** referencia de los casos 1 y 2: todas pueden aparecer en un catálogo, estén hoy en uno o no.
+3. Confirma con la fuente el alquiler correcto de cada una y lo corrige en la ficha. Si alguna no se puede confirmar, decide expresamente dejarla así: el gestor la avisará y el lector dirá «Precio · sin dato».
+4. Vuelve a ejecutar la consulta 1. El PR recoge la fecha, los recuentos antes y después, y las referencias que se dejan así a sabiendas.
+5. La descripción del PR lleva una casilla «G-ALQ cumplida», que solo marca Fabricio. Sin ella, el PR no se fusiona.
 
-**La decisión exacta (P-ALQ), una de estas:**
-1. **A (recomendada).** Regla canónica `price`. En el gestor, aviso con la cifra secundaria y «corrige la ficha». En el lector, «Precio · sin dato» **solo** en las fichas que sigan sin corregir. Despliegue después de la consulta 1 y de las correcciones que decidas.
-   - → Sigo con T2 tal como está el plan, más el aviso.
-2. **B.** Aprobar el respaldo como **cambio de alcance**.
-   - → Preparo la especificación y el plan de la migración `0198` (§4) para su revisión y aprobación. Hasta entonces no implemento nada, ni SQL ni aplicación.
-3. **Otra regla** que prefieras, por ejemplo A pero sin desplegar hasta corregir todas las fichas.
+**Los agentes no modifican esas fichas ni ninguna otra.**
+
+## 6. Recomendación y decisión que falta
+
+**Recomiendo la opción A con la puerta G-ALQ:**
+- se mantiene la regla canónica `price`;
+- el gestor enseña la cifra secundaria y pide corregir la ficha, sin cambiarla;
+- el lector dice «Precio · sin dato» solo en las fichas que, después de la puerta, se dejen sin corregir a sabiendas.
+
+**La decisión que falta (P-ALQ), una de estas:**
+1. **A + G-ALQ.** → Sigo con T2, añadiendo el aviso, y la puerta queda en el plan y en el PR.
+2. **B (respaldo a `rent_price`).** → Cambio de alcance: preparo la especificación y el plan de la migración `0198` (§4) para su aprobación. No implemento nada hasta entonces.
+3. **A con otra puerta** (por ejemplo, ninguna ficha sin corregir) **u otra regla.**
 
 ## 7. Evidencia
 
 - **Entorno:**
   - `npm ci` con Node 22.23.3 y el lockfile existente (386 paquetes; `package-lock.json` sin cambios);
   - Postgres 16 temporal (`run-local.sh`, `127.0.0.1:54329`, base `bcp_test`), solo con datos sintéticos.
-- **SQL, en el repo:**
-  - `scripts/sql/test-catalog-operations.sql`: escenario «2k», 22 comprobaciones escritas a mano, todas a la primera;
-  - `gen-catalog-parity.mts` ampliado;
-  - `test-catalogs-core.sh` entero en verde: **706** comprobaciones `ok` (683 antes de T1).
+- **SQL, en el repo:** `scripts/sql/test-catalog-operations.sql`, escenario «2k», con 31 comprobaciones escritas a mano, todas a la primera:
+  - 22 de selección, orden, búsqueda, instantánea y criterios;
+  - 9 de `catalogs.version`: qué escrituras la suben, A→B→A, cambios repetidos, catálogo manual y permisos de la tabla.
+  - Además: `gen-catalog-parity.mts` ampliado y `test-catalogs-core.sh` entero en verde.
 - **TS, fuera del repo:**
   - `scratchpad/alq/eval.mts`: 46/46.
   - Una expectativa mía estaba mal escrita (en una inclusión fuera de criterios, `details` lista los incumplimientos, no la zona). La corregí después de la primera ejecución. No afecta al caso.
-- **Consultas:** `scratchpad/alq/consultas.sql`, comprobadas sobre los datos de T1.
+- **Consultas:** `scratchpad/alq/consultas-v2.sql` y la prueba de alcance `consultas-alcance.sql`, sobre los datos de T1.
