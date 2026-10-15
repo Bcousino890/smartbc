@@ -10,9 +10,12 @@ import {
   Link as LinkIcon,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
+  SlidersHorizontal,
+  Tag as TagIcon,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -24,6 +27,15 @@ import {
   type AgencyOption,
   NewPropertyModal,
 } from "@/components/admin/new-property-modal";
+import { BatchTagMenu, TagFilterMenu } from "@/components/admin/property-tags/tag-menus";
+import { TagChip } from "@/components/admin/property-tags/tag-chip";
+import { TagManagerDialog } from "@/components/admin/property-tags/tag-manager-dialog";
+import { assignTags } from "@/components/admin/property-tags/tag-api";
+import {
+  applyTagChange,
+  matchesTagFilter,
+  type PropertyTag,
+} from "@/lib/properties/tags";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
@@ -31,6 +43,7 @@ import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { useT } from "@/lib/i18n/provider";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { canAccess } from "@/lib/permissions";
+import { matchesPropertySearch } from "@/lib/properties/admin-search";
 import { PORTAL_URL } from "@/lib/portal-url";
 import type { AdminProperty, AdminPropertyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -43,16 +56,26 @@ const STATUS_STYLES: Record<AdminPropertyStatus, string> = {
   draft: "border-ink/15 bg-ink/5 text-ink/55",
 };
 
+const STATUS_LABELS: Record<AdminPropertyStatus, string> = {
+  available: "Disponible",
+  reserved: "Reservado",
+  rented: "Alquilado",
+  sold: "Vendido",
+  draft: "Borrador",
+};
+
 export function PropertiesAdminClient({
-  properties,
+  properties: propertiesProp,
   agencies,
   currentRole,
   country,
+  initialTags = [],
 }: {
   properties: AdminProperty[];
   agencies: AgencyOption[];
   currentRole?: string;
   country: Country;
+  initialTags?: PropertyTag[];
 }) {
   const config = getCountryConfig(country);
   const t = useT();
@@ -91,12 +114,30 @@ export function PropertiesAdminClient({
   const [maxPrice, setMaxPrice] = useState<string>(() => param("precioMax"));
   const [minM2, setMinM2] = useState<string>(() => param("m2Min"));
   const [maxM2, setMaxM2] = useState<string>(() => param("m2Max"));
+  const [tagFilter, setTagFilter] = useState<string[]>(() =>
+    param("etiquetas").split(",").filter(Boolean),
+  );
   const [page, setPage] = useState(() => {
     const n = Number.parseInt(searchParams.get("pagina") ?? "", 10);
     return Number.isFinite(n) && n > 0 ? n : 1;
   });
+  // Etiquetas: el catálogo y la asignación viven en estado local para que
+  // crear/asignar se vea al instante sin recargar la lista entera.
+  const [tags, setTags] = useState<PropertyTag[]>(initialTags);
+  const [tagMap, setTagMap] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(propertiesProp.map((p) => [p.id, p.tagIds ?? []])),
+  );
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+  const properties = useMemo(
+    () => propertiesProp.map((p) => ({ ...p, tagIds: tagMap[p.id] ?? [] })),
+    [propertiesProp, tagMap],
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(
+    () => Boolean(param("estancia") || param("dormitorios") || param("banos") || param("planta") || param("precioMin") || param("precioMax") || param("m2Min") || param("m2Max") || param("zona")),
+  );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -153,17 +194,20 @@ export function PropertiesAdminClient({
   }, [menuOpen]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return properties.filter((p) => {
       if (
-        q &&
-        !p.title.toLowerCase().includes(q) &&
-        !p.reference.toLowerCase().includes(q) &&
-        !(p.bcReference?.toLowerCase().includes(q) ?? false) &&
-        !(p.zone?.toLowerCase().includes(q) ?? false)
-      ) {
+        !matchesPropertySearch(
+          {
+            ...p,
+            tagNames: (p.tagIds ?? [])
+              .map((id) => tagById.get(id)?.name)
+              .filter((n): n is string => Boolean(n)),
+          },
+          query,
+        )
+      )
         return false;
-      }
+      if (!matchesTagFilter(p.tagIds, tagFilter)) return false;
       if (
         operationFilter &&
         p.operation !== operationFilter &&
@@ -197,6 +241,8 @@ export function PropertiesAdminClient({
     });
   }, [
     properties,
+    tagById,
+    tagFilter,
     query,
     operationFilter,
     statusFilter,
@@ -231,6 +277,7 @@ export function PropertiesAdminClient({
     setPage(1);
   }, [
     query,
+    tagFilter,
     operationFilter,
     statusFilter,
     zoneFilter,
@@ -259,6 +306,7 @@ export function PropertiesAdminClient({
       else sp.delete(key);
     };
     set("q", query);
+    set("etiquetas", tagFilter.join(","));
     set("operacion", operationFilter);
     set("estado", statusFilter);
     set("distrito", zoneFilter);
@@ -294,10 +342,12 @@ export function PropertiesAdminClient({
     minM2,
     maxM2,
     page,
+    tagFilter,
   ]);
 
   const hasActiveFilters = Boolean(
-    operationFilter ||
+    tagFilter.length > 0 ||
+      operationFilter ||
       statusFilter ||
       zoneFilter ||
       subzoneFilter ||
@@ -315,6 +365,7 @@ export function PropertiesAdminClient({
 
   const clearFilters = () => {
     setQuery("");
+    setTagFilter([]);
     setOperationFilter("");
     setStatusFilter("");
     setZoneFilter("");
@@ -392,42 +443,177 @@ export function PropertiesAdminClient({
     copyToClipboard(text, "Mensaje copiado, listo para enviar");
   };
 
+  // Chips de filtros activos (cada uno se quita con su ×).
+  const activeChips: { key: string; label: string; clear: () => void }[] = [];
+  for (const id of tagFilter) {
+    const t = tagById.get(id);
+    if (t)
+      activeChips.push({
+        key: `tag-${id}`,
+        label: `Etiqueta: ${t.name}`,
+        clear: () => setTagFilter((p) => p.filter((x) => x !== id)),
+      });
+  }
+  if (operationFilter)
+    activeChips.push({
+      key: "op",
+      label: operationFilter === "venta" ? "Venta" : "Alquiler",
+      clear: () => setOperationFilter(""),
+    });
+  if (statusFilter)
+    activeChips.push({
+      key: "estado",
+      label: STATUS_LABELS[statusFilter],
+      clear: () => setStatusFilter(""),
+    });
+  if (zoneFilter)
+    activeChips.push({
+      key: "distrito",
+      label: zoneFilter,
+      clear: () => {
+        setZoneFilter("");
+        setSubzoneFilter("");
+      },
+    });
+  if (subzoneFilter)
+    activeChips.push({
+      key: "zona",
+      label: subzoneFilter,
+      clear: () => setSubzoneFilter(""),
+    });
+  if (agencyFilter)
+    activeChips.push({
+      key: "agencia",
+      label: agencyOptions.find(([id]) => id === agencyFilter)?.[1] ?? agencyFilter,
+      clear: () => setAgencyFilter(""),
+    });
+  if (stayFilter)
+    activeChips.push({
+      key: "estancia",
+      label: `Estancia ${stayFilter}`,
+      clear: () => setStayFilter(""),
+    });
+  if (bedroomsFilter)
+    activeChips.push({
+      key: "dorm",
+      label: bedroomsFilter.endsWith("plus")
+        ? `${bedroomsFilter.replace("plus", "")}+ dormitorios`
+        : `${bedroomsFilter} dormitorio${bedroomsFilter === "1" ? "" : "s"}`,
+      clear: () => setBedroomsFilter(""),
+    });
+  if (bathroomsFilter)
+    activeChips.push({
+      key: "banos",
+      label: `${bathroomsFilter}+ baños`,
+      clear: () => setBathroomsFilter(""),
+    });
+  if (floorFilter)
+    activeChips.push({
+      key: "planta",
+      label: `Planta ${floorFilter}ª o más`,
+      clear: () => setFloorFilter(""),
+    });
+  if (minPrice || maxPrice)
+    activeChips.push({
+      key: "precio",
+      label: `Precio ${minPrice || "0"} – ${maxPrice || "sin tope"}`,
+      clear: () => {
+        setMinPrice("");
+        setMaxPrice("");
+      },
+    });
+  if (minM2 || maxM2)
+    activeChips.push({
+      key: "m2",
+      label: `${minM2 || "0"} – ${maxM2 || "sin tope"} m²`,
+      clear: () => {
+        setMinM2("");
+        setMaxM2("");
+      },
+    });
+  if (query.trim())
+    activeChips.push({
+      key: "q",
+      label: `“${query.trim()}”`,
+      clear: () => setQuery(""),
+    });
+
+  // Cuántos filtros "avanzados" hay activos (para el contador del botón).
+  const advancedCount = [
+    subzoneFilter,
+    stayFilter,
+    bedroomsFilter,
+    bathroomsFilter,
+    floorFilter,
+    minPrice || maxPrice,
+    minM2 || maxM2,
+  ].filter(Boolean).length;
+  const canEdit = !currentRole || canAccess(currentRole, "properties", "edit");
+
+  const [batchBusy, setBatchBusy] = useState(false);
+  const applyBatchTag = async (tagId: string, mode: "add" | "remove") => {
+    const slugs = Array.from(selected);
+    if (slugs.length === 0) return;
+    setBatchBusy(true);
+    const r = await assignTags(slugs, mode === "add" ? [tagId] : [], mode === "remove" ? [tagId] : []);
+    setBatchBusy(false);
+    if (!r.ok) return toast(r.error, "error");
+    setTagMap((prev) => {
+      const next = { ...prev };
+      for (const slug of slugs)
+        next[slug] = applyTagChange(prev[slug], mode === "add" ? [tagId] : [], mode === "remove" ? [tagId] : []);
+      return next;
+    });
+    const name = tagById.get(tagId)?.name ?? "etiqueta";
+    toast(
+      `${mode === "add" ? "Añadida" : "Quitada"} «${name}» en ${slugs.length} propiedad${slugs.length === 1 ? "" : "es"}`,
+      "success",
+    );
+  };
+  const canDeleteTags = !currentRole || canAccess(currentRole, "properties", "delete");
+
   return (
-    <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
-          <Search size={15} strokeWidth={1.75} className="text-ink/45" />
+    <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-4 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm sm:p-5 md:p-6">
+      {/* Fila 1: buscador + alta */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-ink/10 bg-white/90 px-3.5 py-2.5 text-sm transition focus-within:border-gold/55">
+          <Search size={15} strokeWidth={1.75} className="shrink-0 text-ink/45" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por título, ref. BC, ref. portal o zona…"
+            placeholder="Buscar por título, ref. BC (BC-1766), ref. de portal, zona o etiqueta…"
             className="crm-input w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
+        <button
+          type="button"
+          onClick={() => setTagManagerOpen(true)}
+          className="crm-button inline-flex items-center gap-2 rounded-xl border border-ink/15 bg-white px-4 py-2.5 text-ink/75 transition hover:border-gold/55 hover:text-ink"
+        >
+          <TagIcon size={14} strokeWidth={1.75} className="text-gold-dark" />
+          <span>Etiquetas</span>
+        </button>
         <div className="relative" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMenuOpen((o) => !o)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            className="crm-button flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-cream-50 transition hover:bg-ink-soft"
+            className="crm-button flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-cream-50 transition hover:bg-ink-soft"
           >
             <Plus size={14} strokeWidth={1.75} className="text-gold" />
             <span>{t("adminProps.add")}</span>
             <ChevronDown
               size={13}
               strokeWidth={1.75}
-              className={cn(
-                "transition",
-                menuOpen ? "rotate-180" : "rotate-0",
-              )}
+              className={cn("transition", menuOpen ? "rotate-180" : "rotate-0")}
             />
           </button>
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-10 mt-2 w-64 overflow-hidden rounded-xl border border-gold/20 bg-cream-50 shadow-[0_15px_40px_-15px_rgba(40,28,10,0.4)]"
+              className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-xl border border-gold/20 bg-cream-50 shadow-[0_15px_40px_-15px_rgba(40,28,10,0.4)]"
             >
               <button
                 type="button"
@@ -438,16 +624,10 @@ export function PropertiesAdminClient({
                 }}
                 className="flex w-full items-start gap-3 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
               >
-                <Pencil
-                  size={15}
-                  strokeWidth={1.75}
-                  className="mt-0.5 shrink-0 text-gold-dark"
-                />
+                <Pencil size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold-dark" />
                 <div>
                   <p className="font-medium">{t("adminProps.add.manual")}</p>
-                  <p className="text-xs text-ink/55">
-                    {t("adminProps.add.manual.help")}
-                  </p>
+                  <p className="text-xs text-ink/55">{t("adminProps.add.manual.help")}</p>
                 </div>
               </button>
               {/* "Importar por link" navega a la página dedicada
@@ -458,16 +638,10 @@ export function PropertiesAdminClient({
                 onClick={() => setMenuOpen(false)}
                 className="flex w-full items-start gap-3 border-t border-gold/10 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
               >
-                <LinkIcon
-                  size={15}
-                  strokeWidth={1.75}
-                  className="mt-0.5 shrink-0 text-gold-dark"
-                />
+                <LinkIcon size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold-dark" />
                 <div>
                   <p className="font-medium">{t("adminProps.add.byLink")}</p>
-                  <p className="text-xs text-ink/55">
-                    {t("adminProps.add.byLink.help")}
-                  </p>
+                  <p className="text-xs text-ink/55">{t("adminProps.add.byLink.help")}</p>
                 </div>
               </Link>
             </div>
@@ -475,9 +649,7 @@ export function PropertiesAdminClient({
         </div>
       </div>
 
-      {/* Filtros: operación, estado, zona, agencia. Aparecen siempre — el
-          listado puede tener cientos de propiedades y el buscador de texto
-          no basta para acotar por categoría. */}
+      {/* Fila 2: filtros principales + "Más filtros" */}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
         <FilterSelect
           label="Operación"
@@ -510,21 +682,10 @@ export function PropertiesAdminClient({
             setSubzoneFilter(""); // al cambiar de distrito, reiniciar subzona
           }}
           options={[
-            { value: "", label: "Todas" },
+            { value: "", label: "Todos" },
             ...zoneOptions.map((z) => ({ value: z, label: z })),
           ]}
         />
-        {subzoneOptions.length > 0 && (
-          <FilterSelect
-            label="Subzona"
-            value={subzoneFilter}
-            onChange={setSubzoneFilter}
-            options={[
-              { value: "", label: "Todo el distrito" },
-              ...subzoneOptions.map((s) => ({ value: s, label: s })),
-            ]}
-          />
-        )}
         <FilterSelect
           label="Agencia"
           value={agencyFilter}
@@ -534,93 +695,127 @@ export function PropertiesAdminClient({
             ...agencyOptions.map(([id, name]) => ({ value: id, label: name })),
           ]}
         />
-        <FilterSelect
-          label="Estancia"
-          value={stayFilter}
-          onChange={(v) => setStayFilter(v as typeof stayFilter)}
-          options={[
-            { value: "", label: "Todas" },
-            { value: "larga", label: "Larga" },
-            { value: "corta", label: "Corta" },
-          ]}
+        <TagFilterMenu
+          tags={tags}
+          selected={tagFilter}
+          onChange={setTagFilter}
+          onManage={() => setTagManagerOpen(true)}
         />
-        <FilterSelect
-          label="Dormitorios"
-          value={bedroomsFilter}
-          onChange={setBedroomsFilter}
-          options={[
-            { value: "", label: "Todos" },
-            { value: "1", label: "Exacto 1" },
-            { value: "2", label: "Exacto 2" },
-            { value: "3", label: "Exacto 3" },
-            { value: "4", label: "Exacto 4" },
-            { value: "1plus", label: "1 o más" },
-            { value: "2plus", label: "2 o más" },
-            { value: "3plus", label: "3 o más" },
-            { value: "4plus", label: "4 o más" },
-            { value: "5plus", label: "5 o más" },
-          ]}
-        />
-        <FilterSelect
-          label="Baños"
-          value={bathroomsFilter}
-          onChange={setBathroomsFilter}
-          options={[
-            { value: "", label: "Todos" },
-            { value: "1", label: "1+" },
-            { value: "2", label: "2+" },
-            { value: "3", label: "3+" },
-          ]}
-        />
-        <FilterSelect
-          label="Planta"
-          value={floorFilter}
-          onChange={setFloorFilter}
-          options={[
-            { value: "", label: "Todas" },
-            { value: "1", label: "1ª o más" },
-            { value: "2", label: "2ª o más" },
-            { value: "3", label: "3ª o más" },
-            { value: "4", label: "4ª o más" },
-            { value: "5", label: "5ª o más" },
-            { value: "6", label: "6ª o más" },
-          ]}
-        />
-        <PriceRange
-          min={minPrice}
-          max={maxPrice}
-          onMin={setMinPrice}
-          onMax={setMaxPrice}
-        />
-        <RangeChip
-          label="M²"
-          min={minM2}
-          max={maxM2}
-          onMin={setMinM2}
-          onMax={setMaxM2}
-        />
-        {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="crm-button rounded-md border border-ink/15 bg-white px-2.5 py-1 text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
-          >
-            Limpiar filtros
-          </button>
-        )}
-        <span
+        <button
+          type="button"
+          onClick={() => setMoreOpen((o) => !o)}
+          aria-expanded={moreOpen}
           className={cn(
-            "ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold",
-            hasActiveFilters
-              ? "border-gold/40 bg-gold/10 text-gold-dark"
-              : "border-ink/10 bg-white/70 text-ink/60",
+            "crm-button inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 transition",
+            moreOpen || advancedCount > 0
+              ? "border-gold/50 bg-gold/10 text-gold-dark"
+              : "border-ink/10 bg-white/85 text-ink/70 hover:border-gold/55",
           )}
         >
+          <SlidersHorizontal size={12} strokeWidth={1.75} />
+          <span>Más filtros{advancedCount > 0 ? ` (${advancedCount})` : ""}</span>
+        </button>
+        <span className="ml-auto text-xs font-semibold text-ink/60">
           {hasActiveFilters
             ? `${filtered.length} resultado${filtered.length === 1 ? "" : "s"} de ${properties.length}`
             : `${properties.length} propiedades`}
         </span>
       </div>
+
+      {moreOpen && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-gold/15 bg-white/55 p-3 text-xs">
+          {subzoneOptions.length > 0 && (
+            <FilterSelect
+              label="Subzona"
+              value={subzoneFilter}
+              onChange={setSubzoneFilter}
+              options={[
+                { value: "", label: "Todo el distrito" },
+                ...subzoneOptions.map((s) => ({ value: s, label: s })),
+              ]}
+            />
+          )}
+          <FilterSelect
+            label="Estancia"
+            value={stayFilter}
+            onChange={(v) => setStayFilter(v as typeof stayFilter)}
+            options={[
+              { value: "", label: "Todas" },
+              { value: "larga", label: "Larga" },
+              { value: "corta", label: "Corta" },
+            ]}
+          />
+          <FilterSelect
+            label="Dormitorios"
+            value={bedroomsFilter}
+            onChange={setBedroomsFilter}
+            options={[
+              { value: "", label: "Todos" },
+              { value: "1", label: "Exacto 1" },
+              { value: "2", label: "Exacto 2" },
+              { value: "3", label: "Exacto 3" },
+              { value: "4", label: "Exacto 4" },
+              { value: "1plus", label: "1 o más" },
+              { value: "2plus", label: "2 o más" },
+              { value: "3plus", label: "3 o más" },
+              { value: "4plus", label: "4 o más" },
+              { value: "5plus", label: "5 o más" },
+            ]}
+          />
+          <FilterSelect
+            label="Baños"
+            value={bathroomsFilter}
+            onChange={setBathroomsFilter}
+            options={[
+              { value: "", label: "Todos" },
+              { value: "1", label: "1+" },
+              { value: "2", label: "2+" },
+              { value: "3", label: "3+" },
+            ]}
+          />
+          <FilterSelect
+            label="Planta"
+            value={floorFilter}
+            onChange={setFloorFilter}
+            options={[
+              { value: "", label: "Todas" },
+              { value: "1", label: "1ª o más" },
+              { value: "2", label: "2ª o más" },
+              { value: "3", label: "3ª o más" },
+              { value: "4", label: "4ª o más" },
+              { value: "5", label: "5ª o más" },
+              { value: "6", label: "6ª o más" },
+            ]}
+          />
+          <PriceRange min={minPrice} max={maxPrice} onMin={setMinPrice} onMax={setMaxPrice} />
+          <RangeChip label="M²" min={minM2} max={maxM2} onMin={setMinM2} onMax={setMaxM2} />
+        </div>
+      )}
+
+      {/* Chips de filtros activos + limpiar */}
+      {activeChips.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {activeChips.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={c.clear}
+              title="Quitar este filtro"
+              className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-gold-dark transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+            >
+              <span>{c.label}</span>
+              <X size={12} strokeWidth={2} />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="ml-1 text-xs font-medium text-ink/55 underline-offset-2 transition hover:text-rose-700 hover:underline"
+          >
+            Limpiar todo
+          </button>
+        </div>
+      )}
 
       {/* Barra de selección: copiar URLs para enviar a clientes */}
       {selected.size > 0 && (
@@ -644,6 +839,15 @@ export function PropertiesAdminClient({
             <MessageCircle size={12} strokeWidth={1.75} />
             <span>Copiar para WhatsApp</span>
           </button>
+          {canEdit && (
+            <BatchTagMenu
+              tags={tags}
+              count={selected.size}
+              busy={batchBusy}
+              onApply={applyBatchTag}
+              onManage={() => setTagManagerOpen(true)}
+            />
+          )}
           <button
             type="button"
             onClick={() => setSelected(new Set())}
@@ -655,6 +859,23 @@ export function PropertiesAdminClient({
         </div>
       )}
 
+      <TagManagerDialog
+        open={tagManagerOpen}
+        onClose={() => setTagManagerOpen(false)}
+        tags={tags}
+        country={country}
+        canDelete={canDeleteTags}
+        onTagsChange={setTags}
+        onTagDeleted={(id) => {
+          setTagFilter((p) => p.filter((x) => x !== id));
+          setTagMap((prev) =>
+            Object.fromEntries(
+              Object.entries(prev).map(([k, v]) => [k, v.filter((x) => x !== id)]),
+            ),
+          );
+        }}
+      />
+
       <NewPropertyModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -662,59 +883,48 @@ export function PropertiesAdminClient({
         country={country}
       />
 
-      <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[1200px] border-separate border-spacing-y-1.5 text-left text-sm">
-          <thead>
-            <tr className="crm-table-header text-ink/50">
-              <th className="w-10 px-3 pb-2">
-                <SelectCheckbox
-                  checked={allFilteredSelected}
-                  onChange={toggleAllFiltered}
-                  ariaLabel="Seleccionar todas las propiedades filtradas"
-                />
-              </th>
-              <th className="px-3 pb-2">{t("adminProps.table.property")}</th>
-              <th className="px-3 pb-2">{t("adminProps.table.reference")}</th>
-              <th className="px-3 pb-2">{t("adminProps.table.agency")}</th>
-              <th className="px-3 pb-2">{t("adminProps.table.zone")}</th>
-              <th className="px-3 pb-2">{t("adminProps.table.operation")}</th>
-              <th className="px-3 pb-2 text-center">
-                {t("adminProps.table.size")}
-              </th>
-              <th className="px-3 pb-2">{t("adminProps.table.price")}</th>
-              <th className="px-3 pb-2">{t("adminProps.table.status")}</th>
-              <th className="px-3 pb-2">
-                {t("adminProps.table.published")}
-              </th>
-              <th className="px-3 pb-2 text-right">
-                {t("adminProps.table.actions")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={11}
-                  className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-ink/55"
+      {/* Lista en tarjetas: sin scroll horizontal, se apila en móvil. */}
+      <div className="mt-5">
+        {filtered.length > 0 && (
+          <div className="mb-2 flex items-center gap-2.5 px-1">
+            <SelectCheckbox
+              checked={allFilteredSelected}
+              onChange={toggleAllFiltered}
+              ariaLabel="Seleccionar todas las propiedades filtradas"
+            />
+            <span className="crm-label-sm text-ink/45">Seleccionar todas</span>
+          </div>
+        )}
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-ink/55">
+            {t("adminProps.empty")}
+            {hasActiveFilters && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="crm-button rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/70 transition hover:border-gold/55"
                 >
-                  {t("adminProps.empty")}
-                </td>
-              </tr>
-            ) : (
-              paged.map((p) => (
-                <PropertyRow
-                  key={p.id}
-                  property={p}
-                  canEdit={!currentRole || canAccess(currentRole, "properties", "edit")}
-                  selected={selected.has(p.id)}
-                  onToggleSelect={() => toggleOne(p.id)}
-                  config={config}
-                />
-              ))
+                  Limpiar filtros
+                </button>
+              </div>
             )}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {paged.map((p) => (
+              <PropertyRow
+                key={p.id}
+                property={p}
+                canEdit={canEdit}
+                selected={selected.has(p.id)}
+                onToggleSelect={() => toggleOne(p.id)}
+                config={config}
+                tags={(p.tagIds ?? []).map((id) => tagById.get(id)).filter((t): t is PropertyTag => Boolean(t))}
+              />
+            ))}
+          </ul>
+        )}
       </div>
 
       {totalPages > 1 && (
@@ -730,187 +940,241 @@ function PropertyRow({
   selected = false,
   onToggleSelect,
   config,
+  tags = [],
 }: {
   property: AdminProperty;
   canEdit?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
   config: ReturnType<typeof getCountryConfig>;
+  tags?: PropertyTag[];
 }) {
   const t = useT();
   const [photosOpen, setPhotosOpen] = useState(false);
   const isRent = property.operation === "alquiler";
   const formatted = config.formatPrice(property.price, property.currency);
   const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
+  const photoCount = property.photos?.length ?? 0;
+  const editHref = `${config.prefix}/propiedades/${property.id}`;
+  // Referencia visible: SIEMPRE la BC. Las de portal y la PROP-… viven en la
+  // ficha (Notas internas), no aquí.
+  const bcRef = property.bcReference;
 
   return (
-    <tr
+    <li
       className={cn(
-        "transition",
-        selected ? "bg-gold/10 hover:bg-gold/15" : "bg-white/55 hover:bg-white/85",
+        "relative flex flex-col gap-3 rounded-2xl border p-3 transition sm:flex-row sm:items-center sm:gap-4 sm:p-3.5",
+        selected
+          ? "border-gold/50 bg-gold/10"
+          : "border-gold/10 bg-white/65 hover:border-gold/35 hover:bg-white/90",
       )}
     >
-      <td className="rounded-l-xl px-3 py-3">
-        <SelectCheckbox
-          checked={selected}
-          onChange={() => onToggleSelect?.()}
-          ariaLabel={`Seleccionar ${property.title}`}
-        />
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setPhotosOpen(true)}
-            aria-label={t("adminProps.photos.manage")}
-            className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md border border-gold/15 transition hover:border-gold/55"
-            style={cover ? undefined : { backgroundImage: PLACEHOLDER_GRADIENT }}
-          >
-            {cover ? (
-              <Image
-                src={cover}
-                alt=""
-                fill
-                sizes="64px"
-                className="object-cover"
-              />
-            ) : (
-              <ImageIcon
-                size={14}
-                strokeWidth={1.75}
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink/45"
-              />
-            )}
-          </button>
-          <div>
-            <p className="flex items-center gap-2 font-medium text-ink">
-              {property.title}
-              {property.featured && (
-                <span className="crm-badge rounded-md border border-gold/35 bg-gold/15 px-1.5 py-0.5 text-gold-dark">
-                  {t("adminProps.featured.badge")}
-                </span>
-              )}
-            </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink/55">
-              {property.bcReference && (
-                <span className="rounded-md border border-gold/30 bg-gold/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wider text-gold-dark">
-                  {property.bcReference}
-                </span>
-              )}
-              <span>
-                {t("agency.properties.ref", { ref: property.reference })}
-              </span>
-            </p>
-          </div>
+      <div className="flex items-start gap-3 sm:contents">
+        <div className="pt-1 sm:pt-0">
+          <SelectCheckbox
+            checked={selected}
+            onChange={() => onToggleSelect?.()}
+            ariaLabel={`Seleccionar ${property.title}`}
+          />
         </div>
-        <PropertyPhotosModal
-          open={photosOpen}
-          onClose={() => setPhotosOpen(false)}
-          slug={property.id}
+
+        <button
+          type="button"
+          onClick={() => setPhotosOpen(true)}
+          aria-label={t("adminProps.photos.manage")}
+          className="relative h-[88px] w-[118px] shrink-0 overflow-hidden rounded-xl border border-gold/15 transition hover:border-gold/55 sm:h-[96px] sm:w-[132px]"
+          style={cover ? undefined : { backgroundImage: PLACEHOLDER_GRADIENT }}
+        >
+          {cover ? (
+            <Image src={cover} alt="" fill sizes="132px" className="object-cover" />
+          ) : (
+            <ImageIcon
+              size={18}
+              strokeWidth={1.75}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink/45"
+            />
+          )}
+          {photoCount > 0 && (
+            <span className="absolute bottom-1 right-1 rounded-md bg-ink/70 px-1.5 py-0.5 text-xs font-semibold text-cream-50">
+              {photoCount}
+            </span>
+          )}
+        </button>
+
+        {/* Móvil: precio junto a la miniatura */}
+        <div className="min-w-0 flex-1 sm:hidden">
+          <PriceBlock formatted={formatted} isRent={isRent} />
+        </div>
+      </div>
+
+      {/* Título y datos */}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {bcRef ? (
+            <span className="rounded-md border border-gold/30 bg-gold/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wider text-gold-dark">
+              {bcRef}
+            </span>
+          ) : (
+            <span className="rounded-md border border-ink/10 bg-ink/5 px-1.5 py-0.5 text-xs text-ink/45">
+              Sin ref. BC
+            </span>
+          )}
+          {property.featured && (
+            <span className="crm-badge rounded-md border border-gold/35 bg-gold/15 px-1.5 py-0.5 text-gold-dark">
+              {t("adminProps.featured.badge")}
+            </span>
+          )}
+        </div>
+        <Link
+          href={canEdit ? editHref : `/compartir/${property.id}`}
+          className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-ink transition hover:text-gold-dark"
           title={property.title}
-          initialPhotos={property.photos ?? []}
-        />
-      </td>
-      <td className="px-3 py-3">
-        <span className="inline-block rounded-md border border-ink/10 bg-ink/5 px-2 py-1 font-mono text-xs font-semibold tracking-wider text-ink/80">
-          {property.propertyReference ?? "—"}
-        </span>
-      </td>
-      <td className="px-3 py-3 text-ink/75">{property.agencyName || "—"}</td>
-      <td className="px-3 py-3 text-ink/75">{property.zone}</td>
-      <td className="px-3 py-3">
-        {property.isDualOperation ? (
-          <span className="crm-badge rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">
-            {t("filters.operation.sale")} + {t("filters.operation.rent")}
-          </span>
-        ) : (
-          <span
-            className={cn(
-              "crm-badge rounded-md border px-2.5 py-1",
-              isRent
-                ? "border-blue-200 bg-blue-50 text-blue-700"
-                : "border-amber-200 bg-amber-50 text-amber-700",
-            )}
-          >
-            {isRent
-              ? t("filters.operation.rent")
-              : t("filters.operation.sale")}
-          </span>
+        >
+          {property.title}
+        </Link>
+        <p className="mt-1 truncate text-xs text-ink/60">
+          {[property.subzone, property.zone].filter(Boolean).join(" · ")}
+          {property.agencyName && property.agencyName !== "—"
+            ? ` · ${property.agencyName}`
+            : ""}
+        </p>
+        <p className="mt-0.5 text-xs text-ink/60">
+          {property.bedrooms} dorm. · {property.bathrooms} baños · {property.squareMeters} m²
+        </p>
+        {tags.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {tags.map((tg) => (
+              <TagChip key={tg.id} name={tg.name} color={tg.color} />
+            ))}
+          </div>
         )}
-      </td>
-      <td className="px-3 py-3 text-center text-xs text-ink/75">
-        {property.bedrooms} / {property.bathrooms} / {property.squareMeters}
-      </td>
-      <td className="crm-price px-3 py-3 text-ink">
-        {formatted}{isRent ? " /mes" : ""}
-      </td>
-      <td className="px-3 py-3">
+      </div>
+
+      {/* Precio (escritorio) */}
+      <div className="hidden w-[150px] shrink-0 text-right sm:block">
+        <PriceBlock formatted={formatted} isRent={isRent} align="right" />
+      </div>
+
+      {/* Chips de estado */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:w-[128px] sm:flex-col sm:items-end">
         <span
           className={cn(
-            "crm-badge rounded-md border px-2.5 py-1",
+            "crm-badge rounded-full border px-2.5 py-0.5",
             STATUS_STYLES[property.status],
           )}
         >
           {t(`adminProps.status.${property.status}`)}
         </span>
-      </td>
-      <td className="crm-badge px-3 py-3 text-ink/65">
-        {property.publishedLabel}
-      </td>
-      <td className="rounded-r-xl px-3 py-3 text-right">
-        <div className="inline-flex items-center gap-2">
-          <a
-            href={`/compartir/${property.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="crm-button inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/75 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+        {property.isDualOperation ? (
+          <span className="crm-badge rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-emerald-700">
+            {t("filters.operation.sale")} + {t("filters.operation.rent")}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "crm-badge rounded-full border px-2.5 py-0.5",
+              isRent
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-amber-200 bg-amber-50 text-amber-700",
+            )}
           >
-            <Eye size={12} strokeWidth={1.75} />
-            <span>{t("adminProps.view")}</span>
-          </a>
-          {canEdit ? (
-            <Link
-              href={`${config.prefix}/propiedades/${property.id}`}
-              className="crm-button inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-cream-50 transition hover:bg-ink-soft"
-            >
-              <Pencil size={12} strokeWidth={1.75} className="text-gold" />
-              <span>{t("adminProps.edit")}</span>
-            </Link>
-          ) : (
-            <span
-              aria-disabled="true"
-              className="crm-button inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-ink/20 px-3 py-1.5 text-ink/40"
-              title="Sin permiso para editar"
-            >
-              <Pencil size={12} strokeWidth={1.75} />
-              <span>{t("adminProps.edit")}</span>
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setPhotosOpen(true)}
-            className="crm-button inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/75 transition hover:border-gold/55 hover:text-ink"
+            {isRent ? t("filters.operation.rent") : t("filters.operation.sale")}
+          </span>
+        )}
+        <span className="text-xs text-ink/45">{property.publishedLabel}</span>
+      </div>
+
+      {/* Acciones: Editar + menú */}
+      <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+        {canEdit ? (
+          <Link
+            href={editHref}
+            className="crm-button inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-cream-50 transition hover:bg-ink-soft sm:flex-none"
           >
-            <ImageIcon size={12} strokeWidth={1.75} className="text-gold" />
-            <span>
-              {t("adminProps.photos.action", {
-                count: property.photos?.length ?? 0,
-              })}
-            </span>
-          </button>
-          <ArchiveButton slug={property.id} />
-        </div>
-      </td>
-    </tr>
+            <Pencil size={12} strokeWidth={1.75} className="text-gold" />
+            <span>{t("adminProps.edit")}</span>
+          </Link>
+        ) : (
+          <span
+            aria-disabled="true"
+            className="crm-button inline-flex flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-ink/20 px-3.5 py-2 text-ink/40 sm:flex-none"
+            title="Sin permiso para editar"
+          >
+            <Pencil size={12} strokeWidth={1.75} />
+            <span>{t("adminProps.edit")}</span>
+          </span>
+        )}
+        <RowMenu
+          slug={property.id}
+          photoCount={photoCount}
+          onPhotos={() => setPhotosOpen(true)}
+        />
+      </div>
+
+      <PropertyPhotosModal
+        open={photosOpen}
+        onClose={() => setPhotosOpen(false)}
+        slug={property.id}
+        title={property.title}
+        initialPhotos={property.photos ?? []}
+      />
+    </li>
   );
 }
 
-function ArchiveButton({ slug }: { slug: string }) {
+function PriceBlock({
+  formatted,
+  isRent,
+  align = "left",
+}: {
+  formatted: string;
+  isRent: boolean;
+  align?: "left" | "right";
+}) {
+  return (
+    <p className={cn(align === "right" ? "text-right" : "text-left")}>
+      <span className="block text-lg font-bold leading-tight tabular-nums text-ink">
+        {formatted}
+      </span>
+      {isRent && <span className="text-xs text-ink/55">al mes</span>}
+    </p>
+  );
+}
+
+// Menú "⋯" de cada fila: ver ficha pública, fotos y archivar.
+function RowMenu({
+  slug,
+  photoCount,
+  onPhotos,
+}: {
+  slug: string;
+  photoCount: number;
+  onPhotos: () => void;
+}) {
   const t = useT();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const handleArchive = () => {
+    setOpen(false);
     if (
       typeof window !== "undefined" &&
       !window.confirm(t("adminProps.archive.confirm"))
@@ -927,20 +1191,66 @@ function ArchiveButton({ slug }: { slug: string }) {
     });
   };
 
+  const itemClass =
+    "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-ink transition hover:bg-gold/10";
+
   return (
-    <button
-      type="button"
-      onClick={handleArchive}
-      disabled={isPending}
-      className="crm-button inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/70 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {isPending ? (
-        <Loader2 size={12} strokeWidth={1.75} className="animate-spin" />
-      ) : (
-        <Archive size={12} strokeWidth={1.75} />
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Más acciones"
+        disabled={isPending}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 bg-white text-ink/70 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+      >
+        {isPending ? (
+          <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+        ) : (
+          <MoreHorizontal size={16} strokeWidth={1.75} />
+        )}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1.5 w-52 overflow-hidden rounded-xl border border-gold/20 bg-cream-50 shadow-[0_15px_40px_-15px_rgba(40,28,10,0.4)]"
+        >
+          <a
+            href={`/compartir/${slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className={itemClass}
+          >
+            <Eye size={14} strokeWidth={1.75} className="text-gold-dark" />
+            <span>Ver ficha pública</span>
+          </a>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onPhotos();
+            }}
+            className={cn(itemClass, "border-t border-gold/10")}
+          >
+            <ImageIcon size={14} strokeWidth={1.75} className="text-gold-dark" />
+            <span>Gestionar fotos ({photoCount})</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handleArchive}
+            className={cn(itemClass, "border-t border-gold/10 hover:bg-red-50 hover:text-red-700")}
+          >
+            <Archive size={14} strokeWidth={1.75} />
+            <span>{t("adminProps.archive.action")}</span>
+          </button>
+        </div>
       )}
-      <span>{t("adminProps.archive.action")}</span>
-    </button>
+    </div>
   );
 }
 
