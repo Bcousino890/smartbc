@@ -15,11 +15,11 @@ import {
   textKey,
   textPendingSave,
   textSaveSucceeded,
-  textStateLabel,
   type TextDraft,
   type TextRaw,
 } from "@/lib/catalogs/manager-state";
 import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
+import { SidePanelFooter } from "./manager/side-panel";
 
 // Textos de las viviendas del catálogo (BCP-01 ampliación C2, Z5). Todo se
 // queda en el catálogo: nunca toca la ficha global ni las historias.
@@ -31,6 +31,8 @@ import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
 //   · Publicar: sin contacto, URL ni precio, y cada aviso corregido o
 //     confirmado. Si la ficha cambia, lo publicado deja de verse y aquí se
 //     dice qué cambió; el texto se conserva para revisarlo.
+// E2: la lista vive en manager/content-section.tsx; aquí quedan el editor
+// (controlado por el almacén de borradores del gestor) y sus tipos.
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 type Proposal = ActionResult<{ proposal: DraftProposal; check: DraftCheck }>;
@@ -56,19 +58,19 @@ export interface TextActions {
   preview: (i: { catalogId: string; propertyId: string; body: string | null; lead: string | null; highlights: string[] }) => Promise<Preview>;
 }
 
-const LEVEL: Record<CatalogTextView["level"], string> = {
+export const LEVEL: Record<CatalogTextView["level"], string> = {
   text: "Texto del catálogo",
   story: "Historia aprobada",
   clean: "Descripción limpia de la ficha",
   facts: "Solo datos y fotos",
 };
-const CLEAN: Record<CatalogTextView["source"]["clean"], string> = {
+export const CLEAN: Record<CatalogTextView["source"]["clean"], string> = {
   none: "Sin versión limpia para clientes",
   stale: "Versión limpia caducada (la ficha cambió)",
   current: "Versión limpia vigente",
   empty: "La ficha no tiene texto",
 };
-const STORY: Record<CatalogTextView["source"]["story"], string> = {
+export const STORY: Record<CatalogTextView["source"]["story"], string> = {
   none: "Sin historia",
   pending: "Historia pendiente de revisar",
   current: "Historia aprobada vigente",
@@ -105,9 +107,12 @@ export function TextEditor({
   pending,
   storyHref,
   refresh,
+  message = null,
 }: {
   catalogId: string;
   view: CatalogTextView;
+  /** E2 · mensaje del gestor, junto a las acciones fijas. */
+  message?: React.ReactNode;
   actions: TextActions;
   run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
   pending: boolean;
@@ -439,26 +444,7 @@ export function TextEditor({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2" data-testid="text-actions">
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || busy || !dirty}
-          className="rounded-lg bg-gold/90 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-        >
-          Guardar borrador
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Texto publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
-          }
-          disabled={pending || busy || !canPublish}
-          title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}
-          className="rounded-lg border border-gold bg-white px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-50"
-        >
-          Publicar
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
         {view.published ? (
           <button
             type="button"
@@ -482,6 +468,31 @@ export function TextEditor({
             Borrar texto
           </button>
         ) : null}
+        <a href={storyHref} className="ml-auto text-xs text-ink/60 underline" target="_blank" rel="noreferrer">
+          Historia de la ficha (revisión aparte)
+        </a>
+      </div>
+      <SidePanelFooter message={message}>
+        <div className="flex w-full flex-wrap items-center gap-2" data-testid="text-actions">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || busy || !dirty}
+          className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          Guardar borrador
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Texto publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
+          }
+          disabled={pending || busy || !canPublish}
+          title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}
+          className="rounded-lg border border-gold bg-white px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+        >
+          Publicar
+        </button>
         {edited ? (
           <span className="text-xs font-semibold text-amber-800" data-testid="text-unsaved">
             Cambios sin guardar
@@ -489,107 +500,8 @@ export function TextEditor({
         ) : dirty ? (
           <span className="text-xs text-ink/50">Aún sin guardar como borrador</span>
         ) : null}
-        <a href={storyHref} className="ml-auto text-xs text-ink/60 underline" target="_blank" rel="noreferrer">
-          Historia de la ficha (revisión aparte)
-        </a>
-      </div>
+        </div>
+      </SidePanelFooter>
     </div>
-  );
-}
-
-export function CatalogTextsPanel({
-  catalogId,
-  texts,
-  actions,
-  run,
-  pending,
-  storyHref,
-  openId,
-  onOpen,
-  refresh,
-}: {
-  catalogId: string;
-  texts: CatalogTextView[];
-  actions: TextActions;
-  run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
-  pending: boolean;
-  storyHref: (slug: string) => string;
-  /** E2 · vivienda con el editor abierto (en la URL) y cómo cambiarla. */
-  openId: string | null;
-  onOpen: (propertyId: string | null) => void;
-  refresh: () => void;
-}) {
-  useDraftsVersion();
-  const open = openId;
-  const inList = texts.filter((t) => t.inList);
-  const reserve = texts.filter((t) => !t.inList);
-
-  function row(t: CatalogTextView) {
-    const state = textStateLabel(t);
-    const unsaved = textEdited(catalogId, t.propertyId);
-    return (
-      <li key={t.propertyId} className="rounded-xl border border-gold/15 bg-white/60 p-3" data-testid="text-row" data-check-overflow="texto">
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
-          <div className="min-w-0 flex-1 basis-48">
-            <p className="crm-body-strong text-ink">
-              {t.bcReference ? <span className="mr-2 text-xs text-ink/45">{t.bcReference}</span> : null}
-              {t.title}
-            </p>
-            <p className="text-xs text-ink/60" data-testid="text-level">
-              El cliente ve: <strong>{LEVEL[t.level]}</strong> · {CLEAN[t.source.clean]} · {STORY[t.source.story]}
-            </p>
-            <p className={`text-xs ${t.published && !t.published.current ? "text-amber-800" : "text-ink/60"}`} data-testid="text-state">
-              {state}
-              {unsaved ? <span className="ml-2 font-semibold text-amber-800" data-testid="row-unsaved">· Cambios sin guardar</span> : null}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onOpen(open === t.propertyId ? null : t.propertyId)}
-            className="shrink-0 rounded-lg border border-gold/40 px-3 py-1 text-xs text-ink/80 hover:bg-white"
-            aria-expanded={open === t.propertyId}
-            aria-label={`${open === t.propertyId ? "Cerrar" : "Editar"} el texto de «${t.title}»`}
-          >
-            {open === t.propertyId ? "Cerrar" : "Editar texto"}
-          </button>
-        </div>
-        {open === t.propertyId ? (
-          <div className="mt-3 border-t border-gold/15 pt-3">
-            <TextEditor
-              key={t.propertyId}
-              catalogId={catalogId}
-              view={t}
-              actions={actions}
-              run={run}
-              pending={pending}
-              storyHref={storyHref(t.slug)}
-              refresh={refresh}
-            />
-          </div>
-        ) : null}
-      </li>
-    );
-  }
-
-  return (
-    <section className="space-y-3 rounded-xl border border-gold/20 bg-white/40 p-3" aria-labelledby="ct-title" data-testid="texts-panel">
-      <div>
-        <h3 id="ct-title" className="crm-label-sm text-ink/70">
-          Textos de las viviendas
-        </h3>
-        <p className="text-xs text-ink/55">
-          Solo para este catálogo: la ficha de la propiedad no cambia. Manda el texto publicado aquí; si no hay, la historia aprobada; si no, la
-          descripción limpia; si no, solo datos y fotos.
-        </p>
-      </div>
-      {inList.length === 0 ? <p className="text-xs text-ink/50">Este catálogo todavía no tiene viviendas.</p> : <ul className="space-y-2">{inList.map(row)}</ul>}
-      {reserve.length ? (
-        <div className="space-y-2" data-testid="texts-reserve">
-          <h4 className="crm-label-sm text-ink/60">Textos en reserva ({reserve.length})</h4>
-          <p className="text-xs text-ink/50">Viviendas que ya no están en la lista: su texto se conserva por si vuelven. Bórralo solo si ya no lo quieres.</p>
-          <ul className="space-y-2">{reserve.map(row)}</ul>
-        </div>
-      ) : null}
-    </section>
   );
 }

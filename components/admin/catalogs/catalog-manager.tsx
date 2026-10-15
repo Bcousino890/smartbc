@@ -13,7 +13,7 @@ import type { SelectionActions } from "./selection-panel";
 import type { SearchAction } from "./property-search";
 import { AdsPanel, type AdActions } from "./ads-panel";
 import { CoverPicker, type CoverActions } from "./cover-picker";
-import { CatalogTextsPanel, textDraftKey, type TextActions } from "./catalog-texts-panel";
+import { textDraftKey, type TextActions } from "./catalog-texts-panel";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { criteriaSummary } from "@/lib/catalogs/criteria";
 import {
@@ -39,6 +39,7 @@ import { useLeaveGuard } from "./manager/use-leave-guard";
 import { ManagerHeader, type NoLinkReason, type UnsavedEntry } from "./manager/manager-header";
 import { SectionTabs } from "./manager/section-tabs";
 import { HomesSection } from "./manager/homes-section";
+import { ContentSection } from "./manager/content-section";
 import { useManagerUrl } from "./manager/use-manager-url";
 import { ConflictNote } from "./manager/conflict-note";
 
@@ -371,7 +372,7 @@ export function CatalogManager({
 
   // El mensaje del gestor se ve junto a las acciones: dentro del panel abierto
   // (Viviendas o Contenido) o, si no hay panel, encima de la sección.
-  const panelOpen = section === "viviendas" && !!vivienda;
+  const panelOpen = (section === "viviendas" || section === "contenido") && !!vivienda;
   const messageEl = message ? (
     <p
       role={message.kind === "error" ? "alert" : "status"}
@@ -460,20 +461,22 @@ export function CatalogManager({
         />
       </section>
 
-      <section {...panel("contenido")} className="min-w-0 space-y-4 focus:outline-none">
-          <CatalogTextsPanel
-            catalogId={catalog.id}
-            texts={texts}
-            actions={wrapped.texts}
-            run={run}
-            pending={pending}
-            storyHref={storyHref}
-            openId={section === "contenido" ? vivienda : null}
-            onOpen={(pid) => navigate({ seccion: "contenido", vivienda: pid })}
-            refresh={() => {
-              if (!onLocalAdd) router.refresh();
-            }}
-          />
+      <section {...panel("contenido")} className="min-w-0 focus:outline-none">
+        <ContentSection
+          catalogId={catalog.id}
+          texts={texts}
+          material={catalog.material}
+          actions={wrapped.texts}
+          run={run}
+          pending={pending}
+          storyHref={storyHref}
+          openId={section === "contenido" ? vivienda : null}
+          onOpen={(pid) => navigate({ seccion: "contenido", vivienda: pid })}
+          refresh={() => {
+            if (!onLocalAdd) router.refresh();
+          }}
+          message={section === "contenido" && vivienda ? messageEl : null}
+        />
       </section>
 
       <section {...panel("diseno")} className="min-w-0 focus:outline-none">

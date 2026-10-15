@@ -35,6 +35,23 @@ export function SidePanel({
   testId?: string;
 }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  // Esc también cuando el foco se ha quedado en <body> (p. ej. al desactivarse
+  // el botón pulsado); si está en otro sitio fuera del panel, no se toca.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const a = document.activeElement;
+      if (a === document.body || a === null || asideRef.current?.contains(a)) {
+        e.preventDefault();
+        closeRef.current();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     titleRef.current?.focus({ preventScroll: false });
   }, [heading]);
@@ -51,14 +68,9 @@ export function SidePanel({
   const iconBtn = "inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink/70 hover:bg-cream-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-30";
   return (
     <aside
+      ref={asideRef}
       aria-label={label}
       data-testid={testId}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
       className="min-w-0 rounded-xl border border-gold/25 bg-white/90 shadow-sm lg:sticky lg:top-28 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col"
     >
       <div className="flex items-start gap-2 border-b border-gold/15 p-3">
