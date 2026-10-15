@@ -587,6 +587,11 @@ type Row = Record<string, any>;
 const arr = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
 const n = (v: unknown): number | null =>
   v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null;
+/** Un presupuesto de 0 es el DEFAULT de la columna (numeric 0.00): "sin dato", no "0 €". */
+const positive = (v: unknown): number | null => {
+  const x = n(v);
+  return x !== null && x > 0 ? x : null;
+};
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
 /**
@@ -603,8 +608,8 @@ export function briefFromRow(r: Row | null | undefined): BriefInput {
     subzones: arr(r.subzones),
     zonesFlexible: r.zones_flexible === true,
     polygons: cleanPolygons(r.search_polygons),
-    minPrice: n(r.min_price),
-    maxPrice: n(r.max_price),
+    minPrice: positive(r.min_price),
+    maxPrice: positive(r.max_price),
     maxPriceFlexPct: n(r.max_price_flex_pct),
     minBedrooms: n(r.min_bedrooms),
     maxBedrooms: n(r.max_bedrooms),
