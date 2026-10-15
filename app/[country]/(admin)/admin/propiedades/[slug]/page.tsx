@@ -47,6 +47,7 @@ export default async function PropertyDetailPage({
         longitude: number | null;
         bc_reference: string | null;
         property_reference: string;
+        external_id: string | null;
         source: "manual" | "scrape" | "api";
         source_url: string | null;
         archived_at: string | null;
@@ -139,6 +140,7 @@ export default async function PropertyDetailPage({
         longitude: property.longitude,
         bc_reference: property.bc_reference,
         property_reference: property.property_reference,
+        external_id: property.external_id ?? null,
         source: property.source,
         source_url: property.source_url,
         archived_at: property.archived_at,

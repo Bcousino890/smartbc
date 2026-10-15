@@ -104,6 +104,8 @@ export type PropertyForEdit = {
   available_from: string | null;
   bc_reference: string | null;
   property_reference: string;
+  // Ref. del portal de origen (idealista-111959166…). Solo se muestra aquí.
+  external_id?: string | null;
   source: "manual" | "scrape" | "api";
   source_url: string | null;
   archived_at: string | null;
@@ -680,13 +682,6 @@ export function PropertyEditView({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            {property.property_reference && (
-              <span
-                className="rounded-md border border-ink/10 bg-ink/5 px-2 py-0.5 font-mono text-xs font-semibold tracking-wider text-ink/80"
-              >
-                {property.property_reference}
-              </span>
-            )}
             {property.bc_reference && (
               <span
                 className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-xs font-semibold tracking-wider text-gold-dark"
@@ -1280,6 +1275,46 @@ export function PropertyEditView({
               />
             </Field>
           </div>
+          {(property.external_id || property.property_reference || property.source_url) && (
+            <div className="rounded-lg border border-ink/10 bg-ink/[0.03] px-3.5 py-3 text-xs text-ink/70">
+              <p className="crm-label-sm mb-1.5 text-ink/50">
+                Referencias de origen (solo lectura)
+              </p>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                {property.external_id && (
+                  <div className="flex gap-1.5">
+                    <dt className="text-ink/50">Ref. portal:</dt>
+                    <dd className="break-all font-mono font-semibold text-ink/80">
+                      {property.external_id}
+                    </dd>
+                  </div>
+                )}
+                {property.property_reference && (
+                  <div className="flex gap-1.5">
+                    <dt className="text-ink/50">Ref. técnica:</dt>
+                    <dd className="font-mono font-semibold text-ink/80">
+                      {property.property_reference}
+                    </dd>
+                  </div>
+                )}
+                {property.source_url && (
+                  <div className="flex gap-1.5 sm:col-span-2">
+                    <dt className="shrink-0 text-ink/50">Anuncio original:</dt>
+                    <dd className="min-w-0 truncate">
+                      <a
+                        href={property.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gold-dark underline-offset-2 hover:underline"
+                      >
+                        {property.source_url}
+                      </a>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
           <Field label={t("adminProps.detail.internalNotes")}>
             <textarea
               value={internalNotes}
