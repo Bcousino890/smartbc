@@ -3,6 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
 import { criteriaSummary, type CatalogCriteria } from "@/lib/catalogs/criteria";
+import { zoneRedundancies } from "@/lib/catalogs/explain";
 import type { CriteriaRaw } from "@/lib/catalogs/manager-state";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { PropertySearch, type SearchAction } from "../property-search";
@@ -92,6 +93,8 @@ export function HomesSection(props: HomesSectionProps) {
   }, [openId]);
 
   const summary = criteriaSummary(catalog.criteria) || "Todas las zonas y precios";
+  // K4: el solapamiento de zonas, también fuera del editor (no estrecha nada).
+  const overlap = zoneRedundancies(catalog.criteria);
   const tabBtn = (v: View, label: string, testId: string) => (
     <button
       key={v}
@@ -118,6 +121,11 @@ export function HomesSection(props: HomesSectionProps) {
             {auto ? <span className="text-ink/50"> · máx. {catalog.criteria.max}</span> : null}
             {criteriaForm.edited ? <span className="ml-2 text-xs font-semibold text-amber-800">· cambios sin guardar</span> : null}
           </p>
+          {overlap.length ? (
+            <p className="basis-full text-xs text-ink/60" data-testid="criteria-overlap">
+              {overlap.join(" · ")}: no estrecha la búsqueda.
+            </p>
+          ) : null}
           <button
             type="button"
             aria-expanded={criteriaOpen}

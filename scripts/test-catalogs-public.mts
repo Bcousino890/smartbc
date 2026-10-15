@@ -288,6 +288,26 @@ async function liveTests() {
     check("resumen con unidades (venta €)", s.ok && criteriaSummary(s.criteria) === "Salamanca · Justicia · Venta · 900.000–1.500.000 €", s.ok ? criteriaSummary(s.criteria) : "");
     const r = normalizeCriteria({ operation: "rent", price_max: 4000 });
     check("resumen alquiler €/mes", r.ok && criteriaSummary(r.criteria) === "Alquiler · hasta 4.000 €/mes");
+    // K4: el resumen hace explícito el solapamiento (esperados escritos a mano).
+    const sum = (zones: object[], extra: object = {}) => { const n = normalizeCriteria({ zones, ...extra }); return n.ok ? criteriaSummary(n.criteria) : "inválido"; };
+    const Dz = (name: string) => ({ kind: "district", name }), Bz = (name: string) => ({ kind: "barrio", name }), Fz = (name: string) => ({ kind: "free", name });
+    check("K4 distrito + barrio suyo", sum([Dz("Salamanca"), Bz("Recoletos")], { operation: "rent", price_min: 5000, price_max: 7000 }) === "Salamanca (incluye Recoletos) · Alquiler · 5.000–7.000 €/mes", sum([Dz("Salamanca"), Bz("Recoletos")], { operation: "rent", price_min: 5000, price_max: 7000 }));
+    check("K4 el orden no importa: barrio antes que su distrito", sum([Bz("Recoletos"), Dz("Salamanca")]) === "Salamanca (incluye Recoletos)");
+    check("K4 alias como texto libre dentro de su barrio", sum([Bz("Justicia"), Fz("Chueca")]) === "Justicia (incluye «Chueca»)");
+    check("K4 texto libre dentro de un distrito", sum([Dz("Centro"), Fz("Chueca")]) === "Centro (incluye «Chueca»)");
+    check("K4 varias dentro del mismo distrito", sum([Dz("Salamanca"), Bz("Recoletos"), Bz("Goya")]) === "Salamanca (incluye Recoletos, Goya)");
+    check("K4 sin solapamiento: igual que antes", sum([Dz("Salamanca"), Bz("Justicia"), Fz("Pozuelo de Alarcón")]) === "Salamanca · Justicia · Pozuelo de Alarcón");
+    {
+      const props4 = [
+        { id: "k4a", country: "es", archived_at: null, status: "available", operation: "rent", operations: ["rent"], price: 6000, rent_price: null, zone: "Salamanca", subzone: "Recoletos", created_at: "2026-01-01T00:00:00Z", photo_count: 1 },
+        { id: "k4b", country: "es", archived_at: null, status: "available", operation: "rent", operations: ["rent"], price: 6500, rent_price: null, zone: "Salamanca", subzone: "Goya", created_at: "2026-01-02T00:00:00Z", photo_count: 1 },
+        { id: "k4c", country: "es", archived_at: null, status: "available", operation: "rent", operations: ["rent"], price: 6200, rent_price: null, zone: "Chamberí", subzone: "Almagro", created_at: "2026-01-03T00:00:00Z", photo_count: 1 },
+      ] as CandidateProperty[];
+      const both = normalizeCriteria({ operation: "rent", zones: [Dz("Salamanca"), Bz("Recoletos")] });
+      const one = normalizeCriteria({ operation: "rent", zones: [Dz("Salamanca")] });
+      check("K4 la selección no cambia: Salamanca + Recoletos = Salamanca (regla «o»)",
+        both.ok && one.ok && JSON.stringify(autoSelect(props4, both.criteria).ids) === JSON.stringify(["k4a", "k4b"]) && JSON.stringify(autoSelect(props4, one.criteria).ids) === JSON.stringify(["k4a", "k4b"]));
+    }
     // K5: formatos de importe aceptados y rechazados, uno a uno (escritos a mano).
     const pm = (v: unknown) => { const n = normalizeCriteria({ operation: "rent", price_min: v }); return n.ok ? n.criteria.price_min : "bad"; };
     const okCases: Array<[unknown, number | null]> = [["5000", 5000], ["5.000", 5000], ["1.200.000", 1200000], ["0", 0], [" 5.000 ", 5000], [5000, 5000], [0, 0], ["", null], ["   ", null], [null, null], [undefined, null]];

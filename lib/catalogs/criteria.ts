@@ -1,4 +1,4 @@
-import { catalogBarrios, catalogDistricts, catalogFold } from "./zones";
+import { catalogBarrios, catalogDistricts, catalogFold, catalogZoneMatch } from "./zones";
 
 // ============================================================================
 // Criterios de un catálogo (BCP-01 ampliación X5, D21, P2/P4/P5). Puro.
@@ -128,10 +128,36 @@ export function normalizeCriteria(input: unknown): { ok: true; criteria: Catalog
 
 const EUR = new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 0 } as Intl.NumberFormatOptions);
 
+/** Zonas del resumen con el solapamiento explícito (K4): una zona que ya está
+ *  dentro de otra elegida se nombra dentro de ella, «Salamanca (incluye
+ *  Recoletos)», en vez de parecer un filtro más. Solo es texto: la selección
+ *  sigue siendo «cualquiera de las zonas» (misma regla que zoneRedundancies). */
+function zonesSummary(zones: ZoneCriterion[]): string {
+  const districts = new Set(zones.filter((z) => z.kind === "district").map((z) => z.name));
+  const barrios = new Set(zones.filter((z) => z.kind === "barrio").map((z) => z.name));
+  const parentOf = new Map<ZoneCriterion, string>();
+  for (const z of zones) {
+    if (z.kind === "district") continue;
+    const m = catalogZoneMatch(z.name);
+    if (!m) continue;
+    if (districts.has(m.district)) parentOf.set(z, `district:${m.district}`);
+    else if (z.kind === "free" && m.barrio && barrios.has(m.barrio)) parentOf.set(z, `barrio:${m.barrio}`);
+  }
+  return zones
+    .filter((z) => !parentOf.has(z))
+    .map((z) => {
+      const key = z.kind === "free" ? null : `${z.kind}:${z.name}`;
+      const inside = key ? zones.filter((x) => parentOf.get(x) === key) : [];
+      if (inside.length === 0) return z.name;
+      return `${z.name} (incluye ${inside.map((x) => (x.kind === "free" ? `«${x.name}»` : x.name)).join(", ")})`;
+    })
+    .join(" · ");
+}
+
 /** «Salamanca · Justicia · Venta · 900.000–1.500.000 €» para la HOME y la gestión. */
 export function criteriaSummary(c: CatalogCriteria): string {
   const parts: string[] = [];
-  if (c.zones.length) parts.push(c.zones.map((z) => z.name).join(" · "));
+  if (c.zones.length) parts.push(zonesSummary(c.zones));
   if (c.operation === "sale") parts.push("Venta");
   if (c.operation === "rent") parts.push("Alquiler");
   const unit = c.operation === "rent" ? " €/mes" : " €";
