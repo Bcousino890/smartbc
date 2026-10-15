@@ -1,17 +1,41 @@
 # BCP-01 · E3 «Fotos por catálogo»: plan de implementación
 
-**Estado: BORRADOR, pendiente de que Fabricio apruebe su ejecución.** Este documento no autoriza:
-- preparar el entorno ni instalar nada;
-- arrancar servicios ni la base temporal;
-- ejecutar migraciones;
-- cambiar la aplicación;
-- hacer push ni abrir un PR.
+**Estado: EJECUCIÓN APROBADA (D-QA19, 16 de octubre de 2026)**, T0–T9, con las correcciones del §0.
+- Se para **antes del merge**: fusionar puede desplegar y aplicar `0202`.
 
 **Especificación:** [`enmienda-e3.md`](enmienda-e3.md), con las decisiones E3-1 a E3-7 de Fabricio (D-QA13). Este plan **resuelve su requisito técnico abierto**, la identidad de la foto que se sirve (§3), y **corrige el número de migración**, que pasa de `0198` a `0202` (§1).
 
 **Fuera de E3:**
 - la organización editable de la HOME y el PDF. Toda exportación futura tendrá que usar la misma regla de fotos;
 - G-ALQ, el caso de Recoletos, D13 en vivo y la QA en dispositivos reales: siguen como están y no son requisitos previos de E3.
+
+## 0. Aprobación (D-QA19) y correcciones obligatorias
+
+**Fabricio aprueba:**
+- **N1(a):** ampliar el proxy de fotos existente con una identificación opaca y estable de la foto (`?f=`) y una versión del archivo (`?v=`). Sin la identificación nueva, el comportamiento es el de hoy.
+- **N2:** se acepta el cambio único de los `src` de las fotos y de las huellas de los catálogos al desplegar. Los lectores abiertos pueden necesitar recargar.
+- **Excluir la apertura elegida:** se confirma antes y su apertura vuelve a la automática.
+- **Miniaturas del gestor:** enseñan la apertura efectiva.
+- **La ejecución de T0–T9.**
+
+Se conservan E3-1 a E3-7: exclusión en todo el catálogo y la galería, guardado al pulsar, respaldos de la portada y ninguna escritura en las fichas ni en las fotos del CRM.
+
+**Correcciones obligatorias, incorporadas en este plan:**
+1. **La regla de la última foto es transaccional**, también con exclusiones simultáneas. La función bloquea la fila del catálogo (`FOR UPDATE`) antes de contar, así que todos los ajustes de fotos de un catálogo van uno detrás de otro. Se prueba con **dos transacciones independientes simultáneas** en el Postgres temporal: la primera excluye y espera; la segunda queda bloqueada y, al confirmarse la primera, falla con `last_photo`.
+2. **Los avisos de ajustes que ya no aplican no se pierden.**
+   - La instantánea pública solo lleva ajustes de fotos que existen.
+   - El gestor lee la tabla de ajustes **entera**, incluidos los de fotos borradas o reimportadas, y los cuenta y explica.
+   - Filtrar la instantánea nunca borra esos diagnósticos.
+3. **Redacción en la interfaz:** las exclusiones no cambian el CRM, pero excluir la foto de apertura o la de la portada del catálogo **activa su respaldo**. Cada caso tiene su confirmación y su explicación, sin decir que «no cambia la portada».
+4. **Rendimiento:** se compara con la base **actual de `main`** en condiciones equivalentes (mismo Postgres temporal, mismos datos y mismo script, antes y después de `0202`), no con C2.
+5. **La versión `v`** sale de la URL: **detecta los cambios de URL** (realojar), pero **no la sustitución del archivo en la misma URL**.
+   - Se verifica lo que sí se cubre (realojar → `v` nuevo → foto nueva).
+   - La limitación queda documentada: tras sustituir un archivo sin cambiar la URL, la caché de 24 h puede servir el anterior, como hoy.
+   - No se amplía el alcance.
+
+**QA de #320 en producción:** superada en sus dos comprobaciones (registrada en `result.md`).
+
+**Siguen pendientes, y no son requisitos previos de E3:** G-ALQ, el caso original de Recoletos, D13 en vivo y la QA en dispositivos reales.
 
 ## 1. Base
 
@@ -172,7 +196,7 @@ Va en `BEGIN`/`COMMIT`, como `0196` y `0197`. Es idempotente (`IF NOT EXISTS`, `
 - Acciones: «Usar como foto de apertura», «No usar en este catálogo», «Volver a usarla» y «Volver a la apertura automática».
 - **Confirmaciones:** al excluir la portada del catálogo (E3-7) y al excluir la apertura elegida.
 - Un recuento («Se usan 7 de 9 fotos») y un aviso de los ajustes que ya no aplican (E3-5).
-- La nota «No cambia la ficha del CRM ni la portada del catálogo (Diseño)».
+- La nota «Estos ajustes no cambian la ficha ni las fotos del CRM». Si una exclusión afecta a la foto de apertura o a la de la portada del catálogo, se explica qué respaldo entra en su lugar (corrección 3).
 - **Se guarda al pulsar** (E3-4) con `saved()`: aviso inmediato, vigilante y medición.
 
 **Diseño:** el selector de portada sin las fotos excluidas, con el aviso del respaldo.
@@ -289,5 +313,5 @@ Va en `BEGIN`/`COMMIT`, como `0196` y `0197`. Es idempotente (`IF NOT EXISTS`, `
 
 ## 11. Fase y siguiente paso
 
-- **Fase:** plan de E3 en borrador. La especificación tiene las decisiones aprobadas, y el requisito técnico queda resuelto en §3, pendiente de N1.
-- **Siguiente paso:** Fabricio decide N1 y N2 y aprueba la ejecución con las autorizaciones de §9.
+- **Fase:** ejecución de E3 aprobada (D-QA19), T0–T9.
+- **Siguiente paso:** las tareas en orden, parando antes del merge.
