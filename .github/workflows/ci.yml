@@ -53,6 +53,10 @@ jobs:
         run: npm run test:catalogs
       - name: Catálogos (contrato público, sincronización y medición, offline)
         run: npm run test:catalogs-public
+      # E2: gestor en secciones (valores sin guardar, guardados en curso,
+      # conflictos, material y filtros). Puro, sin BD.
+      - name: Catálogos (gestor: borradores y diagnósticos, offline)
+        run: npm run test:catalogs-manager
 
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
