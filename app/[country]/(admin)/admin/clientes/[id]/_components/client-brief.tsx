@@ -118,7 +118,7 @@ export function ClientBrief({
         ]
           .filter(Boolean)
           .join(" · ")
-      : [t("filters.operation.sale"), labelOf(PURCHASE_PURPOSE, b.purchasePurpose)].filter(Boolean).join(" · "),
+      : ["Compra", labelOf(PURCHASE_PURPOSE, b.purchasePurpose)].filter(Boolean).join(" · "),
   );
   add("Tipo", labels(PROPERTY_TYPES, b.propertyTypes));
   add(

@@ -81,11 +81,15 @@ export function AreaPicker({
         open={open}
         onClose={() => setOpen(false)}
         title="Delimitar la búsqueda"
-        subtitle="Usa el icono de polígono (arriba a la izquierda del mapa) para marcar una o varias áreas. Se sugerirán las propiedades que caen dentro."
+        subtitle="Dibuja el área que le interesa"
         size="2xl"
       >
         {open && (
           <div className="flex flex-col gap-4">
+            <p className="text-xs text-ink/60">
+              Pulsa el icono de polígono (arriba a la izquierda del mapa), marca los vértices y cierra la figura
+              tocando el primero. Puedes dibujar varias áreas. Solo se sugerirán propiedades que caigan dentro.
+            </p>
             <ZoneDrawMap initialPolygons={draft} onChange={setDraft} />
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-ink/55">

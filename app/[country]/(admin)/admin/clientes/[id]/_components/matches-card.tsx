@@ -34,7 +34,7 @@ type Row = {
   portal: string | null;
 };
 
-type Side = { ok: true; rows: Row[]; total: number } | { ok: false };
+type Side = { ok: true; rows: Row[]; total: number } | { ok: false; missing?: string[] };
 
 const PORTAL: Record<string, string> = {
   idealista: "Idealista",
@@ -43,12 +43,15 @@ const PORTAL: Record<string, string> = {
   habitaclia: "Habitaclia",
 };
 
-async function load<T>(url: string): Promise<{ ok: true; items: T[]; total: number } | { ok: false }> {
+async function load<T>(
+  url: string,
+): Promise<{ ok: true; items: T[]; total: number } | { ok: false; missing?: string[] }> {
   try {
     const res = await fetch(url);
     if (!res.ok) return { ok: false };
     const json = await res.json();
     if (json.reason === "not_available") return { ok: false };
+    if (json.reason === "insufficient_brief") return { ok: false, missing: json.missing ?? [] };
     const items = (json.suggestions ?? []) as T[];
     return { ok: true, items, total: typeof json.total === "number" ? json.total : items.length };
   } catch {
@@ -103,7 +106,7 @@ export function MatchesCard({
                 portal: null,
               })),
             }
-          : { ok: false },
+          : r,
       );
     });
     load<SuggestedParticular>(`/api/admin/clientes/${clientId}/suggested-particulares`).then((r) => {
@@ -127,7 +130,7 @@ export function MatchesCard({
                 portal: p.portal,
               })),
             }
-          : { ok: false },
+          : r,
       );
     });
     return () => {
@@ -152,6 +155,31 @@ export function MatchesCard({
           Define qué busca (operación, zonas, presupuesto, dormitorios) y aquí aparecerán las propiedades
           que le encajan.
         </Empty>
+      </Panel>
+    );
+  }
+
+  // Sin zona o sin presupuesto el servidor no sugiere nada (saldría de todo).
+  const missing = catalog && !catalog.ok ? catalog.missing : undefined;
+  if (missing && missing.length) {
+    return (
+      <Panel title={title}>
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+          <p className="flex items-start gap-1.5">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            <span>
+              Para sugerirle propiedades falta: <strong>{missing.join(", ").toLowerCase()}</strong>. Con eso se
+              cruzan el catálogo y los portales y aparecen aquí las que encajan.
+            </span>
+          </p>
+          {canEdit && (
+            <div className="mt-2">
+              <Button size="sm" variant="primary" onClick={onEditBrief}>
+                Completar encargo
+              </Button>
+            </div>
+          )}
+        </div>
       </Panel>
     );
   }

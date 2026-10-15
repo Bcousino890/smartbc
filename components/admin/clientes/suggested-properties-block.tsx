@@ -17,6 +17,7 @@ type State =
   | { kind: "loading" }
   | { kind: "ready"; suggestions: SuggestedProperty[]; excluded: ExcludedSummary }
   | { kind: "no_preferences" }
+  | { kind: "insufficient"; missing: string[] }
   | { kind: "error"; message: string };
 
 export function SuggestedPropertiesBlock({
@@ -52,6 +53,10 @@ export function SuggestedPropertiesBlock({
           return;
         }
         setAlertsEnabled(Boolean(json.alertsEnabled));
+        if (json.reason === "insufficient_brief") {
+          setState({ kind: "insufficient", missing: json.missing ?? [] });
+          return;
+        }
         if (json.reason === "no_preferences") {
           setState({ kind: "no_preferences" });
           return;
@@ -130,6 +135,13 @@ export function SuggestedPropertiesBlock({
           <Loader2 size={15} className="mr-2 animate-spin" />
           <span className="text-xs">Buscando propiedades…</span>
         </div>
+      )}
+
+      {state.kind === "insufficient" && (
+        <p className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 px-4 py-6 text-center text-xs text-amber-900">
+          Para sugerirle propiedades falta en el encargo: <strong>{state.missing.join(", ").toLowerCase()}</strong>.
+          Sin eso saldrían propiedades de cualquier zona y precio.
+        </p>
       )}
 
       {state.kind === "no_preferences" && (

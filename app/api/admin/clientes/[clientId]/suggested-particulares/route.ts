@@ -37,6 +37,9 @@ export async function GET(
     const result = await getSuggestedParticulares(clientId);
 
     if (!result.ok) {
+      if (result.reason === "insufficient_brief") {
+        return NextResponse.json({ ok: true, suggestions: [], total: 0, excluded: [], reason: "insufficient_brief", missing: result.missing });
+      }
       if (result.reason === "no_preferences") {
         return NextResponse.json({ ok: true, suggestions: [], excluded: [], reason: "no_preferences" });
       }

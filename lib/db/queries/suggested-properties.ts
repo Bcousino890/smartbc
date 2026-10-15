@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "../server";
-import { briefFromRow } from "@/lib/clients/brief";
+import { briefFromRow, briefSuggestMissing } from "@/lib/clients/brief";
 import {
   effectivePrice,
   evaluateMatch,
@@ -42,6 +42,7 @@ export type ExcludedSummary = Array<{ label: string; count: number }>;
 export type SuggestedPropertiesResult =
   | { ok: true; suggestions: SuggestedProperty[]; total?: number; excluded?: ExcludedSummary }
   | { ok: false; reason: "no_preferences" }
+  | { ok: false; reason: "insufficient_brief"; missing: string[] }
   | { ok: false; reason: "error"; message: string };
 
 type PhotoRow = { url: string; position: number; is_cover: boolean };
@@ -153,6 +154,8 @@ export async function getSuggestedProperties(
 
   const brief = briefFromRow(prefsData);
   const op = brief.operation;
+  const missing = briefSuggestMissing(brief);
+  if (missing.length) return { ok: false, reason: "insufficient_brief", missing };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase.from("properties").select(`

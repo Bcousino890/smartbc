@@ -85,7 +85,7 @@ export function SuggestedParticularesBlock({
         const res = await fetch(`/api/admin/clientes/${clientId}/suggested-particulares`);
         const json = await res.json().catch(() => ({}));
         if (cancelled) return;
-        if (!res.ok || json.reason === "no_preferences" || json.reason === "not_available") {
+        if (!res.ok || json.reason === "no_preferences" || json.reason === "not_available" || json.reason === "insufficient_brief") {
           return setState({ kind: "hidden" });
         }
         setState({ kind: "ready", suggestions: json.suggestions ?? [], excluded: json.excluded ?? [] });

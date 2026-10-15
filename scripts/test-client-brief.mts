@@ -17,6 +17,7 @@ import {
   appliesTo,
   briefFromRow,
   briefGaps,
+  briefSuggestMissing,
   buildPreferencesPayload,
   EMPTY_BRIEF,
   profileForOperation,
@@ -406,6 +407,20 @@ const ev = (b: BriefInput, p: MatchProperty) => evaluateMatch(b, p);
   check("solo se guardan anillos válidos", JSON.stringify(clean.search_polygons) === JSON.stringify([square]), clean.search_polygons);
   check("el dibujo sobrevive al guardado", JSON.stringify(briefFromRow(clean).polygons) === JSON.stringify([square]));
   check("una fila vieja sin la columna da cero áreas", briefFromRow({ operation: "rent" }).polygons.length === 0);
+}
+
+console.log("\nZonas con otro nombre y encargos sin criterio");
+{
+  const b = brief({ zones: ["Salamanca"], maxPrice: 3000 });
+  check(
+    "«Barrio de Salamanca» con alias Salamanca encaja",
+    !evaluateMatch(b, prop({ subzone: null, zone: "Barrio de Salamanca", zoneAliases: ["Salamanca"] })).excluded,
+  );
+  check("sin alias, «Barrio de Salamanca» no se da por Salamanca", evaluateMatch(b, prop({ subzone: null, zone: "Barrio de Salamanca" })).excluded === true);
+  check("un barrio pedido casa por alias", !evaluateMatch(brief({ zones: ["Salamanca"], subzones: ["Goya"], maxPrice: 3000 }), prop({ subzone: null, zone: "Goya", zoneAliases: ["Salamanca", "Goya"] })).excluded);
+  check("«—» guardado no cuenta como zona", briefFromRow({ operation: "rent", zones: ["—"] }).zones.length === 0);
+  check("sin zona ni presupuesto no se sugiere", briefSuggestMissing(brief({})).length === 2);
+  check("con zona dibujada y presupuesto sí", briefSuggestMissing(brief({ polygons: [[[0, 0], [1, 0], [1, 1]]], maxPrice: 1 })).length === 0);
 }
 
 console.log("\nPrecio sin dato");

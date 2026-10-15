@@ -43,6 +43,16 @@ export async function GET(
     if (!result.ok) {
       // "Sin preferencias" no es un error: es un estado normal del cliente y
       // la UI lo distingue para poder invitar a configurarlas.
+      if (result.reason === "insufficient_brief") {
+        return NextResponse.json({
+          ok: true,
+          suggestions: [],
+          total: 0,
+          reason: "insufficient_brief",
+          missing: result.missing,
+          alertsEnabled,
+        });
+      }
       if (result.reason === "no_preferences") {
         return NextResponse.json({
           ok: true,

@@ -306,13 +306,17 @@ function ClientRow({
         )}
       </td>
       <td className="px-3 py-3 text-ink/75">
-        <p>
-          {t(`filters.operation.${isRent ? "rent" : "sale"}`)}
-          {client.preferredZone && client.preferredZone !== "—" && (
-            <span className="text-ink/55"> · {client.preferredZone}</span>
-          )}
-        </p>
-        {isRent && (
+        {client.brief === null ? (
+          <p className="text-xs text-ink/40">Sin encargo</p>
+        ) : (
+          <p>
+            {isRent ? t("filters.operation.rent") : "Compra"}
+            {client.preferredZone && client.preferredZone !== "—" && (
+              <span className="text-ink/55"> · {client.preferredZone}</span>
+            )}
+          </p>
+        )}
+        {isRent && client.brief !== null && (
           <p className="text-xs text-ink/50">
             {t(`card.stay.${client.stayType === "corta" ? "short" : "long"}`)}
           </p>
@@ -363,9 +367,14 @@ function PortalCell({
       className="group inline-flex flex-col items-start gap-1"
     >
       {summary.toCall > 0 ? (
-        <span className="inline-flex items-center whitespace-nowrap gap-1.5 rounded-full border border-gold/45 bg-gold/10 px-2 py-0.5 text-xs font-medium text-gold-dark group-hover:border-gold">
-          {count("clientes.portal.toCall", summary.toCall)}
-        </span>
+        <>
+          <span className="whitespace-nowrap text-xs text-ink/60 group-hover:text-ink">
+            {count("clientes.portal.total", summary.total)}
+          </span>
+          <span className="inline-flex items-center whitespace-nowrap gap-1.5 rounded-full border border-gold/45 bg-gold/10 px-2 py-0.5 text-xs font-medium text-gold-dark group-hover:border-gold">
+            {count("clientes.portal.toCall", summary.toCall)}
+          </span>
+        </>
       ) : (
         <span className="whitespace-nowrap text-xs text-ink/60 group-hover:text-ink">
           {count("clientes.portal.total", summary.total)}

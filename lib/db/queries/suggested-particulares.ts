@@ -1,7 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { briefFromRow } from "@/lib/clients/brief";
-import { evaluateMatch, exclusionLabel, zoneLikePattern } from "@/lib/clients/brief-match";
+import { briefFromRow, briefSuggestMissing } from "@/lib/clients/brief";
+import { evaluateMatch, exclusionLabel, fold, zoneLikePattern } from "@/lib/clients/brief-match";
+import { MADRID_DISTRICTS, normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import type { ExcludedSummary } from "@/lib/db/queries/suggested-properties";
 
 /** Anuncio de portal (tabla `particulares`) que encaja con el encargo de un cliente. */
@@ -28,14 +29,49 @@ export type SuggestedParticular = {
 export type SuggestedParticularesResult =
   | { ok: true; suggestions: SuggestedParticular[]; total: number; excluded: ExcludedSummary }
   | { ok: false; reason: "no_preferences" }
+  | { ok: false; reason: "insufficient_brief"; missing: string[] }
   | { ok: false; reason: "error"; message: string };
 
 const COLUMNS =
   "id, portal, source_url, title, address, zone, price, operation, bedrooms, bathrooms, square_meters, " +
   "cover_url, latitude, longitude, attrs, has_lift, condition, floor, floor_num, advertiser_type, price_drop_pct, detected_at, " +
-  "taken_down_at, fraud_status";
+  "taken_down_at, fraud_status, municipality:scraper_extra->>municipality, portal_district:scraper_extra->>district";
 
-const CANDIDATE_LIMIT = 600;
+const CANDIDATE_LIMIT = 1000;
+
+const MADRID_CAPITAL = new Set(["madrid", "madrid capital"]);
+
+/**
+ * Los portales nombran el mismo sitio de muchas formas («Barrio de Salamanca»,
+ * «Goya», «Fuencarral - El Pardo»). Para Madrid capital (según el municipio
+ * que trae el anuncio) se añaden el distrito y el barrio canónicos; fuera de
+ * Madrid NO, porque «Zona Centro» de Getafe no es el distrito Centro.
+ */
+function placeAliases(zone: string | null, extra: Record<string, unknown> | null): string[] {
+  const out: string[] = [];
+  const strip = (x: string) => x.replace(/^(barrio|distrito|zona)\s+(del?\s+)?/i, "").trim();
+  if (zone) out.push(strip(zone));
+  const muni = fold(String(extra?.municipality ?? "")).trim();
+  if (MADRID_CAPITAL.has(muni)) {
+    for (const raw of [zone, typeof extra?.district === "string" ? extra.district : null]) {
+      const n = normalizeZone(raw);
+      if (n.district !== OTHER_ZONE_LABEL) out.push(n.district);
+      if (n.barrio) out.push(n.barrio);
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** Nombres a buscar en SQL: lo pedido y, si es un distrito de Madrid, sus barrios. */
+function zoneSearchNames(names: string[]): string[] {
+  const out = new Set<string>();
+  for (const name of names) {
+    out.add(name);
+    const district = Object.keys(MADRID_DISTRICTS).find((d) => fold(d) === fold(name));
+    if (district) for (const b of MADRID_DISTRICTS[district]) out.add(b);
+  }
+  return [...out];
+}
 
 /**
  * Anuncios de portales activos que encajan con el encargo. Mismo cruce
@@ -61,6 +97,8 @@ export async function getSuggestedParticulares(
 
   const brief = briefFromRow(prefs);
   const op = brief.operation;
+  const missing = briefSuggestMissing(brief);
+  if (missing.length) return { ok: false, reason: "insufficient_brief", missing };
   const ceiling = brief.maxPrice !== null ? brief.maxPrice * (1 + (brief.maxPriceFlexPct ?? 0) / 100) : null;
 
   let query = supabase
@@ -90,8 +128,14 @@ export async function getSuggestedParticulares(
           `longitude.gte.${Math.min(...lngs) - pad},longitude.lte.${Math.max(...lngs) + pad})`,
       );
     } else {
-      const patterns = [...new Set([...brief.zones, ...brief.subzones].map(zoneLikePattern))].filter(Boolean);
-      if (patterns.length) query = query.or(patterns.map((p) => `zone.ilike."${p}"`).join(","));
+      // Búsqueda AMPLIA (contiene, también en el distrito del portal): la
+      // comparación exacta con distrito/barrio canónicos la hace evaluateMatch.
+      const patterns = [...new Set(zoneSearchNames([...brief.zones, ...brief.subzones]).map(zoneLikePattern))].filter(Boolean);
+      if (patterns.length) {
+        query = query.or(
+          patterns.flatMap((p) => [`zone.ilike."*${p}*"`, `scraper_extra->>district.ilike."*${p}*"`]).join(","),
+        );
+      }
     }
   }
 
@@ -118,6 +162,7 @@ export async function getSuggestedParticulares(
     const outcome = evaluateMatch(brief, {
       zone: r.zone ?? null,
       subzone: null,
+      zoneAliases: placeAliases(r.zone ?? null, { municipality: r.municipality, district: r.portal_district }),
       latitude: r.latitude,
       longitude: r.longitude,
       bedrooms: r.bedrooms ?? null,

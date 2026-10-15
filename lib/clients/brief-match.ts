@@ -31,6 +31,12 @@ import {
 export type MatchProperty = {
   zone: string | null;
   subzone: string | null;
+  /**
+   * Otros nombres que identifican el MISMO sitio (distrito y barrio canónicos
+   * de Madrid para un anuncio que dice «Barrio de Salamanca»). Los calcula
+   * quien conoce el origen del dato; aquí solo se comparan.
+   */
+  zoneAliases?: string[] | null;
   /** Ubicación exacta, si se conoce: permite comparar con la zona dibujada. */
   latitude?: number | string | null;
   longitude?: number | string | null;
@@ -295,8 +301,14 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
   } else if (wanted.length) {
     const zone = p.zone ? fold(p.zone) : null;
     const sub = p.subzone ? fold(p.subzone) : null;
-    const hitSub = sub !== null && brief.subzones.map(fold).includes(sub);
-    const inZone = (zone !== null && wanted.includes(zone)) || (sub !== null && wanted.includes(sub));
+    const aliases = (p.zoneAliases ?? []).filter(Boolean).map(fold);
+    const wantedSubs = brief.subzones.map(fold);
+    const hitSub =
+      (sub !== null && wantedSubs.includes(sub)) || aliases.some((a) => wantedSubs.includes(a));
+    const inZone =
+      (zone !== null && wanted.includes(zone)) ||
+      (sub !== null && wanted.includes(sub)) ||
+      aliases.some((a) => wanted.includes(a));
     if (!inZone) {
       if (!brief.zonesFlexible) return { excluded: true, reason: "zone" };
       warnings.push("Fuera de sus zonas (está abierto a otras)");
@@ -304,7 +316,7 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
     } else {
       const place = [p.zone, p.subzone].filter(Boolean).join(" · ");
       reasons.unshift(`En ${place}`);
-      if (brief.subzones.length && !hitSub && sub !== null) {
+      if (brief.subzones.length && !hitSub && (sub !== null || aliases.length > 0)) {
         warnings.push("Fuera de los barrios que marcó");
         component(25, 18);
       } else {

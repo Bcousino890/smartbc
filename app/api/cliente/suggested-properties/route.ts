@@ -28,11 +28,11 @@ export async function GET() {
     });
 
     if (!result.ok) {
-      if (result.reason === "no_preferences") {
+      if (result.reason === "no_preferences" || result.reason === "insufficient_brief") {
         return NextResponse.json({
           ok: true,
           properties: [],
-          reason: "no_preferences",
+          reason: result.reason,
         });
       }
       return NextResponse.json({ error: result.message }, { status: 500 });

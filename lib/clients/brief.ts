@@ -437,7 +437,10 @@ const cleanList = (v: string[] | null | undefined): string[] => {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of v ?? []) {
+    if (typeof raw !== "string") continue;
     const s = raw.trim();
+    // "—" / "-" son el relleno que pintaba la lista vieja, no una zona.
+    if (!/[\p{L}\p{N}]/u.test(s)) continue;
     const k = s.toLowerCase();
     if (s && !seen.has(k)) {
       seen.add(k);
@@ -604,8 +607,8 @@ export function briefFromRow(r: Row | null | undefined): BriefInput {
   return {
     operation: r.operation === "sale" ? "sale" : "rent",
     propertyTypes: arr(r.property_types),
-    zones: arr(r.zones),
-    subzones: arr(r.subzones),
+    zones: cleanList(arr(r.zones)),
+    subzones: cleanList(arr(r.subzones)),
     zonesFlexible: r.zones_flexible === true,
     polygons: cleanPolygons(r.search_polygons),
     minPrice: positive(r.min_price),
@@ -653,6 +656,18 @@ export function briefFromRow(r: Row | null | undefined): BriefInput {
 // agente para no tener que volver a llamar. Separado en dos niveles: sin lo
 // "esencial" las sugerencias salen a ciegas; lo "recomendable" es lo que se
 // suele olvidar y luego cuesta una visita.
+
+/**
+ * Sin DÓNDE (zona, barrio o zona dibujada) y sin HASTA CUÁNTO no se sugiere
+ * nada: salían diez propiedades de toda la comunidad con un 50 % de relleno,
+ * presentadas como si encajaran. Mejor decir qué falta.
+ */
+export function briefSuggestMissing(b: BriefInput): string[] {
+  const missing: string[] = [];
+  if (b.zones.length === 0 && b.subzones.length === 0 && b.polygons.length === 0) missing.push("Zonas");
+  if (b.maxPrice === null) missing.push("Presupuesto máximo");
+  return missing;
+}
 
 export type BriefGap = { field: string; label: string; level: "essential" | "recommended" };
 
