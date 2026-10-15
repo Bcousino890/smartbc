@@ -1,9 +1,19 @@
 # BCP-01 · Plan de E2 «Gestor en cuatro secciones»
 
-**Estado: BORRADOR, pendiente de que Fabricio apruebe su ejecución.** Este documento **no** autoriza:
-- cambiar la aplicación;
-- instalar dependencias (`npm ci` incluido);
-- hacer push ni abrir el PR.
+**Estado: APROBADO PARA EJECUTARSE (15 de octubre de 2026), tareas T0–T10, con A1–A4 y cuatro ajustes obligatorios** ya incorporados (§0). Registro: [enmienda §0, D-QA12](enmienda.md).
+
+## 0. Aprobación y ajustes obligatorios
+
+Fabricio aprueba la ejecución de E2 (T0–T10) y los puntos A1–A4 de §8.1, con estos ajustes, que **mandan sobre el resto del plan** si difieren:
+
+| | Ajuste | Dónde |
+| --- | --- | --- |
+| **1** | Lo escrito se conserva **en bruto y exacto**: precios con formato, espacios del teléfono, selecciones de zona a medio hacer y entradas incompletas. La normalización semántica solo decide validación e indicadores; nunca borra lo escrito porque coincida con lo guardado | §3.4 (reglas 2 y 3), §3.5 |
+| **2** | Ediciones hechas **mientras un guardado está en curso**: se captura la instantánea enviada; la respuesta solo reconoce esa instantánea; nunca se borran ni pisan ediciones más nuevas; la referencia guardada se reconcilia conservándolas. Pruebas independientes de guardado con retraso, con éxito y con fallo | §3.4 (regla 4), §3.5, §5, T1 y T9 |
+| **3** | `test:catalogs-manager` entra en la **CI real** (`.github/workflows/ci.yml`), para que corra en el último commit del PR | T1 |
+| **4** | Solo herramientas y configuración de lint **existentes**. No se instala nada ni se añade una configuración de lint. Si una comprobación no está disponible, se dice | §7 |
+
+Autoriza: `npm ci` con el lockfile existente, el Chromium en caché, el entorno aislado, fixtures y pruebas sintéticas, commits, push de `fabri/bcp-01-e2`, PR y CI. **No autoriza el merge** (de Fabricio), E3 ni PDF. Si faltara Chromium, se pregunta antes de descargarlo.
 
 Decisiones de origen: [enmienda §0](enmienda.md) (D-QA7, D-QA8, D-QA9 y D-QA10, aprobadas el 14 de octubre de 2026) y §4 (AC-G1–AC-G8). Maqueta: [gestor](maquetas/gestor.html) (G1–G4 y GM1–GM3). Modelo de plan: [`plan-e1.md`](plan-e1.md).
 
@@ -190,24 +200,26 @@ Piezas compartidas:
 **Modelo de cada borrador** (puro, en `lib/catalogs/manager-state.ts`):
 
 ```ts
-interface Draft<V> {
-  start: V;          // valor guardado cuando empezó la edición
-  value: V;          // lo que hay escrito
-  conflict: V | null; // valor guardado nuevo, distinto de `start`, que llegó mientras se editaba
+interface Draft<R, S> {
+  start: S;            // valor GUARDADO de referencia (semántico): el de cuando empezó la edición o el último guardado confirmado
+  value: R;            // lo escrito, EN BRUTO y tal cual (texto de precios «1.200.000», teléfono con sus espacios, zona a medio elegir…)
+  pending: S | null;   // forma semántica de la instantánea enviada en el guardado en curso (ajuste 2)
+  conflict: S | null;  // valor guardado nuevo, distinto de `start` y de lo escrito, llegado durante la edición
 }
 ```
 
-**Reglas:**
+**Reglas** (ajustes obligatorios 1 y 2 de la aprobación, §0):
 1. **Sin borrador,** el formulario enseña el valor guardado. El borrador se crea al **primer cambio**, no al abrir: abrir un editor no marca nada.
-2. **Cambios sin guardar** = existe un borrador y `value ≠ start`, según la igualdad de cada formulario:
-   - criterios normalizados y precios recortados;
-   - teléfono comparado con el formato que se enseña;
-   - puntos como lista ordenada.
+2. **Lo escrito se conserva en bruto, exactamente.** La normalización semántica (criterios normalizados, precio como número, teléfono en E.164, textos recortados, puntos como conjunto) **solo** decide la validación y los indicadores. Un borrador **nunca** se borra porque su valor normalizado coincida con lo guardado: deja de marcarse como cambio, pero el campo sigue mostrando lo que se escribió.
+3. **Cambios sin guardar** = existe un borrador y `semántico(value) ≠ start`. Los campos incompletos que no forman parte de lo guardado (distrito o barrio elegidos sin «Añadir», texto de «Otra zona») también cuentan, porque se perderían al salir.
+4. **Guardado con otros cambios en curso (ajuste 2).** Al pulsar Guardar se captura la instantánea enviada: `pending = semántico(instantánea)`. La respuesta solo **reconoce esa instantánea**:
+   - **éxito** → `start = pending` y `pending = null`. `value` **no se toca**: lo escrito después de enviar sigue ahí y sigue marcado como cambio si difiere de lo enviado;
+   - **fallo** → `pending = null` y nada más. El borrador y lo escrito se quedan.
 
-   Si el valor vuelve a ser igual que `start`, el borrador desaparece.
-3. **Guardar con éxito** (la respuesta `ok` de la acción de siempre) borra el borrador: lo guardado ya es lo escrito. **Si la acción falla, el borrador se queda.**
-4. **Nada se guarda ni se publica solo.** El almacén no llama a ninguna acción.
-5. **Vida del almacén:** la de la pestaña. Sobrevive a:
+   Ninguna respuesta borra ni pisa ediciones más nuevas.
+5. **El borrador solo desaparece** por una decisión explícita: «Descartar mis cambios», o aceptar salir sin guardar (§3.6).
+6. **Nada se guarda ni se publica solo.** El almacén no llama a ninguna acción.
+7. **Vida del almacén:** la del documento de la pestaña (el «runtime» de la aplicación). Sobrevive a:
    - cerrar un editor;
    - cambiar de sección o de vivienda;
    - `router.refresh()`;
@@ -220,24 +232,28 @@ interface Draft<V> {
 | Noción | Para qué sirve | Cómo se calcula |
 | --- | --- | --- |
 | **Pendiente de guardar** (`dirty` de C2) | Activar «Guardar borrador» y bloquear «Publicar», con las mismas condiciones que hoy | Lo escrito ≠ el último borrador guardado |
-| **Cambios sin guardar** (D-QA9) | Marca en la fila, filtro, punto en la pestaña, contador de la cabecera y aviso al salir | Existe borrador y `value ≠ start` (lo cambió la persona en esta sesión) |
+| **Cambios sin guardar** (D-QA9) | Marca en la fila, filtro, punto en la pestaña, contador de la cabecera y aviso al salir | Existe borrador y `semántico(value) ≠ start` (lo cambió la persona en esta sesión) |
 
-Así, abrir lo publicado no dispara el aviso al salir.
+Así, abrir lo publicado no dispara el aviso al salir. En el texto, el borrador lleva dos referencias: `start` (lo que se enseñaba al empezar, o lo último guardado) y `saved` (el último borrador guardado con su `rev`, que decide «Guardar borrador», «Publicar» y el `expectedRev`). Un guardado con éxito reconoce la instantánea enviada en las dos.
 
 ### 3.5 Refrescos y cambios en la lista
 
 **Refrescos.** Tras cada acción, `run` llama a `router.refresh()` como hoy. Al llegar los datos nuevos, el almacén reconcilia cada borrador con el valor guardado nuevo (`reconcileDraft`, pura y probada):
 
-| Valor guardado nuevo | Resultado |
-| --- | --- |
-| Igual a `value` | Se borra el borrador: ya está guardado. Es el caso normal tras guardar |
-| Igual a `start` | No pasa nada: siguen los cambios |
-| Distinto de los dos (otra pestaña u otra acción) | Se conserva `value` y se marca `conflict`. El formulario avisa: «Lo guardado cambió mientras editabas. Tus cambios siguen aquí.», con «Ver lo guardado» y «Descartar mis cambios». **Nunca se pisa en silencio** |
+En todos los casos `value` (lo escrito en bruto) **no cambia**.
 
-**Texto con revisión cambiada.** El servidor sigue rechazando con su mensaje de siempre el guardado con un `expectedRev` antiguo. Entonces:
+| Valor guardado nuevo `S` | Resultado |
+| --- | --- |
+| Igual a `start` | No pasa nada |
+| Igual a `pending` (guardado en curso que ya llegó) | `start = S`; es el reconocimiento de esa instantánea |
+| Igual a `semántico(value)` | `start = S`: ya no hay cambio que marcar, pero el campo conserva lo escrito |
+| Distinto de todo lo anterior (otra pestaña u otra acción) | `conflict = S`. El formulario avisa: «Lo guardado cambió mientras editabas. Tus cambios siguen aquí.», enseña lo guardado y ofrece «Descartar mis cambios» o «Mantener los míos» (que solo toma `S` como nueva referencia, sin guardar). **Nunca se pisa en silencio** |
+
+**Texto con revisión cambiada (A2, aprobado).** El servidor sigue rechazando con su mensaje de siempre el guardado con un `expectedRev` antiguo. Entonces:
 - el editor conserva lo escrito y hace `router.refresh()`;
-- con la revisión nueva a la vista, la persona elige «Descartar mis cambios» o «Mantener los míos»;
-- **solo después** «Guardar borrador» usa la revisión nueva. Es una decisión explícita, nunca automática (punto para aprobar: §8.1, A2).
+- la versión guardada actual se enseña junto a lo escrito;
+- la persona elige «Descartar mis cambios» o «Mantener los míos»;
+- «Mantener los míos» **no guarda**: solo toma la revisión nueva como referencia. El siguiente «Guardar borrador» sigue mandando `expectedRev`, y si la revisión volviera a cambiar, se rechazaría igual.
 
 **Cambios en la lista** (automático que se recalcula, exclusiones, quitar o reordenar):
 - **Texto de una vivienda que pasa a la reserva:** el borrador se conserva y el editor se sigue abriendo, porque la reserva es editable como en C2.
@@ -248,9 +264,10 @@ Así, abrir lo publicado no dispara el aviso al salir.
 - **Panel de Viviendas abierto de una vivienda que sale:**
   - el panel dice «Ya no está en el catálogo» y su estado (por ejemplo, excluida);
   - no se cierra solo.
-- **Portada pendiente cuya vivienda sale de la lista:**
-  - el borrador se descarta con un aviso, porque ya no puede ser portada (regla de C1);
-  - es la única excepción y queda anotada.
+- **Portada pendiente cuya vivienda sale de la lista (A4, aprobado):**
+  - solo se descarta **esa** elección no confirmada, con un aviso, porque ya no puede ser portada (regla de C1);
+  - los demás formularios sin guardar no se tocan, y la portada guardada sigue con sus respaldos de siempre;
+  - es la única excepción a la regla 5 y queda anotada.
 - **Reordenar:** el editor sigue en la misma vivienda (clave `propertyId`, no posición).
 
 ### 3.6 Aviso al salir
@@ -267,7 +284,7 @@ Así, abrir lo publicado no dispara el aviso al salir.
    - **Aceptar** descarta los borradores de ese catálogo y deja seguir la navegación.
 3. **Formularios de fuera del gestor**, como «Cerrar sesión» de la barra lateral: `submit` en fase de captura, con la misma confirmación.
 
-**Límite (punto para aprobar: §8.1, A1).** «Atrás» del navegador, cuando **sale** de la página del gestor, no se puede cancelar en el App Router sin manipular el historial interno de Next. Por eso no se intercepta. **No se pierde nada**: el almacén vive mientras viva la pestaña, y al volver («Adelante» o un enlace) los valores siguen ahí, con el aviso «Tienes cambios sin guardar de antes». Dentro del gestor, «Atrás» solo cambia de sección o cierra paneles, y no pierde nada.
+**A1 (aprobado).** «Atrás» del navegador, cuando **sale** de la página del gestor, no se intercepta: en el App Router no se puede cancelar sin manipular el historial interno de Next. Los valores siguen en el almacén mientras viva el mismo documento de la aplicación, y al volver dentro de él («Adelante» o un enlace) reaparecen con el aviso «Tienes cambios sin guardar de antes en este catálogo». **No se promete** recuperarlos tras una recarga ni en un documento nuevo (otra pestaña, otra sesión), y la interfaz no lo sugiere. Recarga, enlaces internos y «Cerrar sesión» siguen pidiendo confirmación. Dentro del gestor, «Atrás» solo cambia de sección o cierra paneles, y no pierde nada.
 
 La barra lateral del CRM solo navega con `Link` y el formulario de cerrar sesión (comprobado en `components/admin-sidebar.tsx`). No hay `router.push` que escape al aviso.
 
@@ -344,7 +361,7 @@ El editor es el `TextEditor` de C2, controlado por el almacén y con lo mismo:
 - «Cancelar» sigue igual;
 - el límite de 60 s está en el servidor (`AI_TIMEOUT_MS`), y `actions.ts` no cambia;
 - una respuesta tardía no pisa lo escrito: se compara con el valor **del almacén** y, si cambió, sale «Usar la propuesta» / «Descartarla»;
-- **cerrar el editor, pasar a otra vivienda o cambiar de sección con la IA trabajando cuenta como «Cancelar»**: la respuesta se ignora y lo escrito se conserva.
+- **A3 (aprobado): cerrar el editor, pasar a otra vivienda o salir de Contenido con la IA trabajando cuenta como «Cancelar»**: la respuesta tardía se ignora, lo escrito se conserva y **reabrir no lanza ninguna llamada nueva** a la IA.
 
 **Acciones fijas:** en el pie del panel (escritorio) o en la barra inferior (móvil) van «Guardar borrador» y «Publicar». El resto de acciones siguen en el cuerpo del editor.
 
@@ -450,9 +467,9 @@ Cada tarea es un commit que compila y pasa:
 | Tarea | Contenido | Archivos | Depende de | Verificación propia |
 | --- | --- | --- | --- | --- |
 | **T0** | Registro de la aprobación en la enmienda (D-QA12) y en la cabecera de este plan | `qa-c2/enmienda.md`, `qa-c2/plan-e2.md` | — | `git log` |
-| **T1** | Modelos puros y sus pruebas: `materialOf`/`materialLabels`; secciones y URL (`parseSection`, `managerHref`); igualdad y normalización de cada formulario; `reconcileDraft`; dos nociones del editor; predicados de los filtros de Contenido | `lib/catalogs/material.ts` (nuevo), `lib/catalogs/manager-state.ts` (nuevo), `scripts/test-catalogs-manager.mts` (nuevo), `package.json` (solo el script `test:catalogs-manager`) | T0 | Casos **escritos a mano** (§5): `PublicItem` con 0/1/3 capítulos y fotos nulas; reconciliación en sus tres casos; precios «1.000» vs `1000`; teléfono con y sin espacios |
+| **T1** | Modelos puros y sus pruebas: `materialOf`/`materialLabels`; secciones y URL (`parseSection`, `managerHref`); igualdad y normalización de cada formulario; `reconcileDraft`; dos nociones del editor; predicados de los filtros de Contenido | `lib/catalogs/material.ts` (nuevo), `lib/catalogs/manager-state.ts` (nuevo), `scripts/test-catalogs-manager.mts` (nuevo), `package.json` (solo el script `test:catalogs-manager`), `.github/workflows/ci.yml` (un paso que lo ejecuta; ajuste 3) | T0 | Casos **escritos a mano** (§5): `PublicItem` con 0/1/3 capítulos y fotos nulas; reconciliación en todos sus casos; lo escrito en bruto se conserva aunque coincida al normalizar («1.000.000» frente a `1000000`, «600 111 222» frente a `+34600111222`); guardado con retraso: ediciones durante el guardado que sobreviven al éxito y al fallo |
 | **T2** | `material` en los datos, con **todos** sus literales | `lib/catalogs/types.ts`, `lib/catalogs/material.ts` (`materialByProperty`), `lib/catalogs/queries.ts`, `lib/catalogs/fixtures.ts` (`material` de las 4 viviendas, a mano), `app/dev-fixtures/…/fixture-manager.tsx` (`refresh` lo conserva), `scripts/test-catalogs-manager.mts` | T1 | `tsc`; `materialByProperty` con una instantánea escrita a mano (vendida filtrada, slug que no casa, orden distinto); `git diff` sin cambios en `actions.ts` ni en SQL |
-| **T3** | Fixtures de E2 (solo desarrollo): catálogo grande con `?grande=1` (22 viviendas en manual y un conjunto de 36 para que el automático llene 24); su `material` sintético; contadores `window.__fxCalls` (por acción: escrituras, IA y lecturas); `window.__fxAiDelay`; marco del CRM en la página de fixtures (§6.1) | `lib/catalogs/fixtures-selection.ts`, `lib/catalogs/fixtures.ts`, `app/dev-fixtures/mi-espacio/catalogos/[id]/page.tsx`, `fixture-manager.tsx` (`pool` como prop; por defecto el de hoy), `fixture-texts.ts` | T2 | `tsc`. Las regresiones **C1, C2, PR-A, PR-B y enlace, sin tocar**, pasan contra las fixtures por defecto: el catálogo de 4 y sus números no cambian. Se escribe a mano la tabla de recuentos esperados del catálogo grande (§6.2) **antes** de abrirlo en el navegador |
+| **T3** | Fixtures de E2 (solo desarrollo): catálogo grande con `?grande=1` (22 viviendas en manual y un conjunto de 36 para que el automático llene 24); su `material` sintético; contadores `window.__fxCalls` (por acción: escrituras, IA y lecturas, con el último contenido enviado); `window.__fxAiDelay`, `window.__fxSaveDelay` y `window.__fxFailNext`; marco del CRM en la página de fixtures (§6.1) | `lib/catalogs/fixtures-selection.ts`, `lib/catalogs/fixtures.ts`, `app/dev-fixtures/mi-espacio/catalogos/[id]/page.tsx`, `fixture-manager.tsx` (`pool` como prop; por defecto el de hoy), `fixture-texts.ts` | T2 | `tsc`. Las regresiones **C1, C2, PR-A, PR-B y enlace, sin tocar**, pasan contra las fixtures por defecto: el catálogo de 4 y sus números no cambian. Se escribe a mano la tabla de recuentos esperados del catálogo grande (§6.2) **antes** de abrirlo en el navegador |
 | **T4** | Estructura: cabecera, pestañas y las cuatro secciones con los paneles **actuales** reubicados (aún sin rediseñar); `?seccion=` con historial; «Vista previa» y «Compartir»; ⋯ con Archivar; anuncios plegados; medición en Compartir. Secciones inactivas montadas y ocultas, así que ningún valor se pierde todavía | `catalog-manager.tsx`, `manager/manager-header.tsx`, `manager/section-tabs.tsx`, `manager/use-manager-url.ts` (nuevos) | T3 | `tsc`; navegador: URL, Atrás y Adelante, teclado de las pestañas y contadores sin escrituras ni IA al navegar; regresiones con el único cambio de «ir a la sección» antes de cada paso |
 | **T5** | Valores sin guardar: almacén, reconciliación, aviso al salir; `SelectionPanel`, meta, contacto, `CoverPicker` y `TextEditor` controlados por el almacén; indicadores (punto en la pestaña, contador de la cabecera, «Cambios sin guardar» en el editor) | `manager/drafts-store.ts`, `manager/use-leave-guard.ts` (nuevos), `selection-panel.tsx`, `cover-picker.tsx`, `catalog-texts-panel.tsx`, `catalog-manager.tsx`, `manager/manager-header.tsx`, `manager/section-tabs.tsx` | T4 | `tsc`, `test:catalogs-manager`; navegador: el guion D-QA9 de §6.3 sobre la estructura de T4 |
 | **T6** | Viviendas: barra de criterios y editor desplegable, vistas, lista compacta, panel de la vivienda (escritorio y móvil) y avisos compactos | `manager/homes-section.tsx`, `manager/property-panel.tsx`, `manager/side-panel.tsx` (nuevos), `property-search.tsx` (presentación), `selection-panel.tsx` (despliegue), `catalog-manager.tsx` | T5 | `tsc`; navegador: §6.4 (todas las acciones de selección con sus mensajes literales) |
@@ -476,6 +493,7 @@ Cada tarea es un commit que compila y pasa:
 | **Cabecera y navegación sin efectos** | T9: tras un guion solo de navegación (pestañas, Atrás/Adelante, abrir y cerrar paneles, «‹ ›», «Vista previa» sin enlace, «Compartir», «Editar texto» desde Viviendas), `__fxCalls` tiene **0 escrituras y 0 llamadas a la IA**. Las únicas lecturas son las enumeradas: `texts.preview` al abrir un borrador guardado, `cover.photos` y `search` al abrir «Coincidencias». Con enlace activo, «Vista previa» es un `<a target="_blank">` a `/seleccion/<token>` y sin enlace lleva a Compartir con el foco en el bloque del enlace |
 | **AC-G2 Viviendas** | T6 y T9 con el catálogo grande: 22 filas en manual y 24 en automático (recuentos de §6.2), sin desplazamiento horizontal a 1280 y 1440, con y sin panel. Todas las acciones con su **mensaje literal**: incluir, excluir, quitar inclusión, volver a permitir, subir/bajar, quitar (con confirmación), añadir por búsqueda y por referencia, pasar a automático, «Volver a mi lista anterior», «Convertir». Bloqueo del máximo, criterios no válidos, zonas redundantes, inclusión no disponible y `over-max`. Explicaciones **solo** en el panel: el texto de `explain` no aparece en las filas |
 | **AC-G3 / D-QA9 Valores sin guardar** | T5 y T9, guion de §6.3: en los **cinco** formularios se escribe un valor conocido, se cierra, se cambia de sección o de vivienda, y se vuelve: el valor escrito es **exactamente** el mismo. Las marcas «Cambios sin guardar» de la fila, el filtro, la pestaña y la cabecera coinciden con la lista esperada. Recarga: diálogo `beforeunload`; al aceptar, valores perdidos y ninguna frase de «recuperado». Enlace interno y «Cerrar sesión»: confirmación; cancelar = misma página y valores; aceptar = sale y no vuelven. Atrás fuera de la página y Adelante de vuelta: valores conservados con su aviso. Ninguna escritura sin pulsar Guardar o Publicar (`__fxCalls`). Guardar borrador y Publicar separados, con las 4 condiciones para publicar. Abrir lo publicado sin tocarlo **no** marca cambios |
+| **Ajustes 1 y 2: en bruto y guardado con retraso** | T1 (puro) y T9 (navegador, con `window.__fxSaveDelay` y `window.__fxFailNext` de las fixtures): «1.200.000», «600 111 222» y un distrito sin añadir se ven **exactamente** igual tras guardar, refrescar, cambiar de sección y volver. En los cinco formularios: se pulsa Guardar con 2 s de retraso, se sigue escribiendo, y (a) con éxito, lo escrito después sigue en el campo y marcado como cambio, sin «conflicto»; (b) con fallo, todo lo escrito sigue y aparece el mensaje de error de siempre. `__fxCalls` registra exactamente el envío de la instantánea, con su contenido |
 | **Refrescos y lista** | T9: un guardado en otra pestaña de fixtures (el mismo almacén sintético) produce `conflict` con su aviso y sin pisar. Una exclusión que saca la vivienda del editor abierto la deja en reserva o en «ya no están» con su texto. Reordenar no cambia la vivienda del editor. Portada pendiente de una vivienda excluida: aviso y descarte |
 | **AC-G4 IA** | T7 y T9 con la IA falsa: solo actúa al pulsar (0 llamadas al abrir y al navegar); «Cancelar»; con `__fxAiDelay=3000`, escribir durante la espera da «Usar la propuesta» y no pisa; cerrar el editor o pasar a otra vivienda durante la espera cancela (la respuesta no aparece al reabrir y el texto se conserva); aviso «piscina» que se confirma uno a uno; bloqueo por teléfono o precio que impide publicar; los avisos se ven al reabrir un borrador guardado; «Qué ve el cliente» con su «Por qué» y la fuente cambiada (`__fxChangeSource`). El límite de 60 s no cambia (`actions.ts` sin diferencias) |
 | **DQ8 Material** | T1 (puro, a mano) y T9: las etiquetas de cada vivienda del catálogo grande coinciden con la tabla escrita a mano en T3; el filtro «Sin descripción» da su número esperado; 0 llamadas a la IA |
@@ -568,7 +586,7 @@ Las capturas para la QA de Fabricio salen de esta matriz.
   - las mismas suites que E1: `test:smartlink`, `test:particulares`, `test:idealista`, `test:lead-merge`, `test:zinto-v2`, `test:viewing-collections`, `test:client-shortlist` y `test:portal-links`;
   - `lint-migrations`;
   - `test:typography`: como mucho las mismas 15 infracciones de la base, en archivos ajenos;
-  - `next lint` sobre los archivos tocados;
+  - lint: **solo lo que ya existe** (ajuste 4). El repo no tiene configuración de ESLint, y `next lint` sin ella pide crear una de forma interactiva. Si sigue así, se anota «no disponible» y no se añade ninguna configuración ni paquete;
   - compilación aislada (`npm run build`, §2.1).
 - **Navegador, lector:** lector, índice, PR-A, PR-B, enlace, C1 y C2 (scripts del scratchpad usados en E1).
   - Las pruebas del lector no cambian.
@@ -589,13 +607,13 @@ Las capturas para la QA de Fabricio salen de esta matriz.
 - En móvil no hay barras fijas arriba, por el botón de menú fijo del CRM.
 - Archivar pasa al menú ⋯ de la cabecera, como en la maqueta.
 
-### 8.1 Puntos para que Fabricio los apruebe con el plan
+### 8.1 Puntos aprobados con el plan (15 de octubre de 2026)
 | | Punto | Propuesta |
 | --- | --- | --- |
-| **A1** | «Atrás» del navegador que **sale** del gestor no se puede cancelar sin manipular el historial interno de Next | No interceptarlo. Los valores sin guardar se conservan en la pestaña y reaparecen al volver, con aviso. Recarga, enlaces internos, «Cerrar sesión» y salir de la pestaña sí piden confirmación |
-| **A2** | Guardar un texto cuando el borrador cambió en otra pestaña (`expectedRev`) | El servidor lo sigue rechazando. La interfaz conserva lo escrito, refresca y deja elegir «Descartar mis cambios» o «Mantener los míos». Solo después se puede volver a guardar, con la revisión nueva. Hoy solo se puede recargar y perder lo escrito |
-| **A3** | Cerrar el editor o cambiar de vivienda con la IA trabajando | Cuenta como «Cancelar»: la respuesta se ignora y lo escrito se conserva |
-| **A4** | Portada pendiente de una vivienda que sale de la lista | Se descarta con aviso: ya no puede ser portada |
+| **A1** ✅ | «Atrás» del navegador que **sale** del gestor no se puede cancelar sin manipular el historial interno de Next | Aprobado: no se intercepta. Los valores reaparecen al volver dentro del mismo documento de la aplicación, con aviso; no se promete nada tras una recarga ni en un documento nuevo. Recarga, enlaces internos y «Cerrar sesión» piden confirmación |
+| **A2** ✅ | Guardar un texto cuando el borrador cambió en otra pestaña (`expectedRev`) | El servidor lo sigue rechazando. La interfaz conserva lo escrito, refresca y deja elegir «Descartar mis cambios» o «Mantener los míos». Aprobado: «Mantener los míos» no guarda; los guardados siguientes siguen comprobando la revisión. Hoy solo se puede recargar y perder lo escrito |
+| **A3** ✅ | Cerrar el editor, cambiar de vivienda o salir de Contenido con la IA trabajando | Aprobado: cuenta como «Cancelar». La respuesta tardía se ignora, lo escrito se conserva y reabrir no lanza ninguna llamada nueva |
+| **A4** ✅ | Portada pendiente de una vivienda que sale de la lista | Aprobado: se descarta solo esa elección, con aviso; los demás formularios y los respaldos de la portada guardada no cambian |
 
 ## 9. Recuperación
 
@@ -618,6 +636,9 @@ Las capturas para la QA de Fabricio salen de esta matriz.
 | La barra lateral real no se puede montar en las fixtures | Barra sintética con los mismos mecanismos, anotado (§6.1) |
 
 ## 11. Fase y siguiente paso
+
+> **Actualización (15 de octubre de 2026):** plan aprobado (§0). Ejecución en curso según §4; la fase final se registra en `result.md`.
+
 
 - **Fase actual:** E2 en planificación. **Este plan es un BORRADOR** pendiente de la aprobación de Fabricio para ejecutarse. No se ha cambiado la aplicación, no se ha instalado nada y no hay push ni PR. El único commit de `fabri/bcp-01-e2` es este plan.
 - **Siguiente paso:** Fabricio aprueba (o corrige) el plan y los puntos A1–A4 de §8.1. Solo entonces:

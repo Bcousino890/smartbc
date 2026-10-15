@@ -20,6 +20,7 @@ Fabricio aprueba DQ1–DQ8, la dirección de las maquetas y el orden de entregas
 | **D-QA10** | **Entregas.** <ul><li>**E1:** defectos del lector L1–L4 más DQ1–DQ4 y DQ6, **sin migración**.</li><li>**E2:** organización del gestor y diagnósticos, conservando las acciones de servidor y la semántica de selección existentes.</li><li>**E3:** fotos por catálogo, con migración y plan de recuperación propios.</li><li>PDF (importar/exportar), fuera de este trabajo.</li></ul> |
 
 | **D-QA11** | **Ejecución de E1 aprobada** el 14 de octubre de 2026 (tareas del plan), con tres correcciones obligatorias incorporadas en [`plan-e1.md`](plan-e1.md): <ul><li>cada cambio de API llega en el mismo commit que sus consumidores, con los literales tipados actualizados;</li><li>la verificación usa resultados explícitos y la completitud se compara con los capítulos de origen, no con `itemLayout`;</li><li>el servidor de fixtures y la compilación corren en una copia aislada sin `.env*` y con un entorno mínimo explícito, verificado antes de arrancar.</li></ul> Autoriza preparar el worktree, `npm ci`, usar el Chromium en caché, verificar en local, hacer commits, push de la rama, abrir el PR y la CI. **No autoriza el merge, E2, E3 ni PDF.** |
+| **D-QA12** | **Ejecución de E2 aprobada** el 15 de octubre de 2026 (tareas T0–T10 de [`plan-e2.md`](plan-e2.md)), con A1–A4 aprobados y cuatro ajustes obligatorios incorporados en el plan (§0): <ul><li>lo escrito se conserva en bruto y exacto, y la normalización solo decide validación e indicadores;</li><li>las ediciones hechas durante un guardado en curso nunca se borran ni se pisan: la respuesta solo reconoce la instantánea enviada, con pruebas de guardado con retraso, con éxito y con fallo;</li><li>`test:catalogs-manager` entra en la CI real;</li><li>solo herramientas de lint existentes, sin instalar nada ni añadir configuración.</li></ul> Autoriza `npm ci`, el Chromium en caché, el entorno aislado, fixtures y pruebas sintéticas, commits, push de `fabri/bcp-01-e2`, el PR y la CI. **No autoriza el merge, E3 ni PDF.** |
 
 Sin revisión adicional de Codex.
 
@@ -168,7 +169,7 @@ Si DQ1–DQ6 no se aprueban, E1 queda en L1–L4. E1 y E2 no dependen entre sí.
 
 ## 7. Fase y siguiente paso
 
-> **Actualización (15 de octubre de 2026):** E1 está fusionado (PR #317). El plan de **E2** está en **borrador**, pendiente de que Fabricio apruebe su ejecución: [`plan-e2.md`](plan-e2.md). Lo que sigue en esta sección es el estado del 14 de octubre.
+> **Actualización (15 de octubre de 2026):** E1 está fusionado (PR #317). El plan de **E2** está **aprobado y en ejecución** (D-QA12): [`plan-e2.md`](plan-e2.md). Lo que sigue en esta sección es el estado del 14 de octubre.
 
 - **Fase actual:** decisiones aprobadas (§0). Plan de E1 en **borrador**, pendiente de aprobación para ejecutarse: [`plan-e1.md`](plan-e1.md). No se ha cambiado la aplicación.
 - **Siguiente paso:** Fabricio aprueba (o corrige) el plan de E1. Solo entonces se prepara el entorno y se implementa E1. E2 y E3 tendrán su propio plan.
