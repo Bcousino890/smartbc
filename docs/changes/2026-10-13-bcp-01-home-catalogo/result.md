@@ -938,6 +938,7 @@ Plan: [`qa-c2/plan-e2.md`](qa-c2/plan-e2.md), aprobado el 15 de octubre de 2026 
 | `57f5e4d` | T8 · Diseño y Compartir |
 | `e6046ce`, `75213a6`, `fb1359d` | T9 · arreglos encontrados por la matriz (abajo) |
 | (T10) | Este resultado y las capturas; el enlace del PR y la CI, en un commit posterior |
+| (CI) | Arreglo del paso de CI de T1: el nombre llevaba «: » sin comillas y GitHub rechazaba el YAML entero (las dos primeras ejecuciones fallaron por eso). Ahora va entre comillas, validado en local |
 
 ## Qué hay
 
