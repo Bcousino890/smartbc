@@ -755,7 +755,12 @@ function buildZoneGroups(
 ): ZoneFilterGroup[] {
   const districts = new Map<
     string,
-    { total: number; missingPhone: number; zones: Map<string, { total: number; missingPhone: number }> }
+    {
+      total: number;
+      missingPhone: number;
+      isMadrid: boolean;
+      zones: Map<string, { total: number; missingPhone: number }>;
+    }
   >();
   for (const r of rows) {
     if (showRetired ? r.is_active : !r.is_active) continue;
@@ -764,9 +769,10 @@ function buildZoneGroups(
     // Fuera de Madrid capital (ojo: «Centro» de Villaviciosa no es el Centro de
     // Madrid): en vez de un cajón «Otras zonas», agrupar por municipio (el scraper lo guarda en scraper_extra.municipality).
     const muni = (r.municipality ?? "").trim();
-    if (muni && muni.toLowerCase() !== "madrid") district = muni;
+    const isMadrid = !(muni && muni.toLowerCase() !== "madrid");
+    if (!isMadrid) district = muni;
     if (!districts.has(district)) {
-      districts.set(district, { total: 0, missingPhone: 0, zones: new Map() });
+      districts.set(district, { total: 0, missingPhone: 0, isMadrid, zones: new Map() });
     }
     const d = districts.get(district)!;
     d.total += r.total;
@@ -786,6 +792,7 @@ function buildZoneGroups(
       district,
       total: d.total,
       missingPhone: d.missingPhone,
+      isMadrid: d.isMadrid,
       zones: Array.from(d.zones.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
         .map(([name, c]) => ({ name, total: c.total, missingPhone: c.missingPhone })),

@@ -1,15 +1,29 @@
 "use client";
 
-import { Check, ChevronDown, MapPin, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronRight, MapPin, Minus, Phone, Search, TrendingUp, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  chipLabel,
+  filterGroups,
+  fold,
+  groupIsMadrid,
+  groupState,
+  highlightParts,
+  isFlat,
+  parseValue,
+  serialize,
+  sortByTotal,
+  toggleGroup,
+  toggleZone,
+  topKeys,
+  zoneOn,
+  type CheckState,
+  type ZoneEntry,
+  type ZoneGroup,
+} from "./zone-filter-utils";
 
-export type ZoneFilterEntry = { name: string; total: number; missingPhone: number };
-export type ZoneFilterGroup = {
-  district: string;
-  total: number;
-  missingPhone: number;
-  zones: ZoneFilterEntry[];
-};
+export type ZoneFilterEntry = ZoneEntry;
+export type ZoneFilterGroup = ZoneGroup;
 
 interface ZoneFilterProps {
   groups: ZoneFilterGroup[];
@@ -18,225 +32,556 @@ interface ZoneFilterProps {
   onChange: (value: string) => void;
 }
 
-// Separador de selecciones en la URL. "|" y no "," porque algún distrito
-// lleva coma en el nombre ("Moncloa - Aravaca" no, pero el criterio se
-// mantiene por seguridad); page.tsx parte por el mismo carácter.
-const SEP = "|";
-
-function parse(value: string): string[] {
-  return value.split(SEP).map((s) => s.trim()).filter(Boolean);
-}
+type Row =
+  | { kind: "group"; id: string; group: ZoneGroup; flat: boolean }
+  | { kind: "zone"; id: string; group: ZoneGroup; zone: ZoneEntry };
 
 /**
- * Selector de zona buscable y de MULTI-selección: permite marcar varios
- * distritos y/o barrios a la vez (buscar en Salamanca + Chamberí en una
- * sola pasada, como la búsqueda multi-zona de Idealista) en vez de obligar
- * a repetir la búsqueda zona por zona. Mantiene el formato de valor
- * "d:"/"z:" que ya consumía el filtrado; lo único nuevo es que pueden ir
- * varios unidos por "|".
+ * Selector de zona de MULTI-selección para /admin/particulares.
+ *
+ * - Madrid capital (distritos → barrios) separado de los municipios.
+ * - Dentro de cada bloque, ordenado por nº de anuncios.
+ * - Buscador insensible a acentos con el texto coincidente resaltado.
+ * - Chips con lo seleccionado arriba y «Limpiar».
+ * - Casilla del distrito tri-estado (todo / algunos barrios / ninguno).
+ * - Atajos: las 5 zonas con más anuncios y solo zonas con anuncios sin teléfono.
+ * - Teclado: flechas, Inicio/Fin, → / ← para abrir o cerrar un distrito,
+ *   Intro o espacio (con el buscador vacío) para marcar, Esc para cerrar.
+ *
+ * Mantiene el formato de valor "d:"/"z:" unidos por "|" que consume page.tsx.
  */
 export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [active, setActive] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const uid = useId();
 
-  const selected = useMemo(() => new Set(parse(value)), [value]);
+  const selected = useMemo(() => new Set(parseValue(value)), [value]);
+  const searching = query.trim().length > 0;
+
+  const sorted = useMemo(() => sortByTotal(groups, (g) => g.district), [groups]);
+  const visible = useMemo(() => filterGroups(sorted, query, onlyMissing), [sorted, query, onlyMissing]);
+  const madrid = useMemo(() => visible.filter(groupIsMadrid), [visible]);
+  const munis = useMemo(() => visible.filter((g) => !groupIsMadrid(g)), [visible]);
+
+  const isOpenGroup = (g: ZoneGroup) =>
+    searching || onlyMissing || expanded.has(g.district) || groupState(g, selected) === "some";
+
+  // Lista plana de filas navegables, en el mismo orden en que se pintan.
+  const rows = useMemo(() => {
+    const out: Row[] = [];
+    for (const g of [...madrid, ...munis]) {
+      const flat = isFlat(g);
+      out.push({ kind: "group", id: `g:${g.district}`, group: g, flat });
+      if (!flat && isOpenGroup(g)) {
+        for (const z of sortByTotal(g.zones, (x) => x.name)) {
+          out.push({ kind: "zone", id: `z:${g.district}:${z.name}`, group: g, zone: z });
+        }
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [madrid, munis, expanded, searching, onlyMissing, selected]);
+
+  useEffect(() => {
+    setActive((a) => Math.min(a, Math.max(rows.length - 1, 0)));
+  }, [rows.length]);
 
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
     document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
     inputRef.current?.focus();
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  const q = query.trim().toLowerCase();
-  const filteredGroups = useMemo(() => {
-    if (!q) return groups;
-    return groups
-      .map((g) => {
-        const districtMatches = g.district.toLowerCase().includes(q);
-        const zones = districtMatches ? g.zones : g.zones.filter((z) => z.name.toLowerCase().includes(q));
-        if (!districtMatches && zones.length === 0) return null;
-        return { ...g, zones };
-      })
-      .filter((g): g is ZoneFilterGroup => g !== null);
-  }, [groups, q]);
+  // Mantener visible la fila activa al navegar con el teclado.
+  useEffect(() => {
+    if (!open || !rows[active]) return;
+    document.getElementById(`${uid}-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, open, rows, uid]);
 
+  const totalSelected = selected.size;
   const label = useMemo(() => {
-    const items = parse(value);
+    const items = parseValue(value);
     if (items.length === 0) return "Zona: todas";
-    const pretty = (v: string) =>
-      v.startsWith("d:") ? `Todo ${v.slice(2)}` : v.startsWith("z:") ? v.slice(2) : v;
-    if (items.length === 1) return pretty(items[0]);
-    // Con varias, el primero + contador: el botón tiene ancho acotado y
-    // listarlas todas lo desbordaría.
-    return `${pretty(items[0])} +${items.length - 1}`;
+    if (items.length === 1) return chipLabel(items[0]);
+    return `${items.length} zonas`;
   }, [value]);
 
-  // Marcar/desmarcar sin cerrar el desplegable: elegir varias zonas de una
-  // sentada es justo el caso de uso, cerrar en cada clic lo haría inútil.
-  function toggle(v: string) {
-    const next = new Set(selected);
-    // Elegir un barrio dentro de un distrito seleccionado acota la búsqueda.
-    // Al elegir el distrito, eliminamos los barrios redundantes de la URL.
-    const group = groups.find((g) => v === `d:${g.district}` || g.zones.some((z) => v === `z:${z.name}`));
-    if (group && v.startsWith("z:")) next.delete(`d:${group.district}`);
-    if (group && v.startsWith("d:")) {
-      for (const z of group.zones) next.delete(`z:${z.name}`);
-    }
-    if (next.has(v)) next.delete(v);
-    else next.add(v);
-    onChange([...next].join(SEP));
+  function commit(next: Set<string>) {
+    onChange(serialize(next));
   }
-
   function clearAll() {
     onChange("");
     setQuery("");
+    setOnlyMissing(false);
   }
+  function closeAndFocus() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+  function toggleExpanded(district: string) {
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(district)) n.delete(district);
+      else n.add(district);
+      return n;
+    });
+  }
+  function activate(r: Row) {
+    if (r.kind === "group") commit(toggleGroup(groups, selected, r.group.district));
+    else commit(toggleZone(groups, selected, r.group.district, r.zone.name));
+  }
+  function removeChip(key: string) {
+    const next = new Set(selected);
+    next.delete(key);
+    commit(next);
+  }
+
+  function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    const r = rows[active];
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        if (query) setQuery("");
+        else closeAndFocus();
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        setActive((a) => Math.min(a + 1, rows.length - 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setActive((a) => Math.max(a - 1, 0));
+        break;
+      case "Home":
+        if (!query) {
+          e.preventDefault();
+          setActive(0);
+        }
+        break;
+      case "End":
+        if (!query) {
+          e.preventDefault();
+          setActive(rows.length - 1);
+        }
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (r) activate(r);
+        break;
+      case " ":
+        if (!query && r) {
+          e.preventDefault();
+          activate(r);
+        }
+        break;
+      case "ArrowRight":
+        if (r?.kind === "group" && !r.flat && !isOpenGroup(r.group) && e.currentTarget.selectionStart === query.length) {
+          e.preventDefault();
+          toggleExpanded(r.group.district);
+        }
+        break;
+      case "ArrowLeft":
+        if (!query && r) {
+          const district = r.group.district;
+          if (r.kind === "zone") {
+            e.preventDefault();
+            const gi = rows.findIndex((x) => x.kind === "group" && x.group.district === district);
+            setActive(gi);
+          } else if (!r.flat && expanded.has(district)) {
+            e.preventDefault();
+            toggleExpanded(district);
+          }
+        }
+        break;
+    }
+  }
+
+  const renderSection = (title: string, list: ZoneGroup[]) => {
+    if (list.length === 0) return null;
+    const total = list.reduce((n, g) => n + g.total, 0);
+    return (
+      <div role="group" aria-label={title} className="pb-2">
+        <div className="sticky top-0 z-10 flex items-center gap-3 bg-cream-50 px-3 pb-1.5 pt-3">
+          <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink/55">{title}</span>
+          <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
+          <span className="text-[11px] tabular-nums text-ink/40">{total.toLocaleString("es-ES")} anuncios</span>
+        </div>
+        <div className="px-1.5">
+          {list.map((g) => {
+            const idx = rows.findIndex((r) => r.kind === "group" && r.group.district === g.district);
+            const flat = isFlat(g);
+            const st = groupState(g, selected);
+            const openG = !flat && isOpenGroup(g);
+            const zoneRows = rows.filter((r) => r.kind === "zone" && r.group.district === g.district);
+            return (
+              <div key={g.district} className="mb-px">
+                <div
+                  id={`${uid}-${idx}`}
+                  role="option"
+                  aria-selected={st === "on"}
+                  aria-checked={st === "some" ? "mixed" : st === "on"}
+                  aria-expanded={flat ? undefined : openG}
+                  onMouseEnter={() => setActive(idx)}
+                  className={`flex items-center rounded-xl transition-colors ${
+                    active === idx ? "bg-gold/15" : st !== "off" ? "bg-gold/[0.07]" : ""
+                  }`}
+                >
+                  {flat ? (
+                    <span className="w-8 shrink-0" />
+                  ) : (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={openG ? `Ocultar barrios de ${g.district}` : `Ver barrios de ${g.district}`}
+                      disabled={searching || onlyMissing}
+                      onClick={() => toggleExpanded(g.district)}
+                      className="flex h-10 w-8 shrink-0 items-center justify-center text-ink/40 transition hover:text-ink disabled:opacity-30"
+                    >
+                      <ChevronRight
+                        size={15}
+                        strokeWidth={2}
+                        className={`transition-transform duration-200 ${openG ? "rotate-90" : ""}`}
+                      />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => {
+                      setActive(idx);
+                      commit(toggleGroup(groups, selected, g.district));
+                    }}
+                    className="flex min-h-10 min-w-0 flex-1 items-center gap-3 py-1.5 pr-2.5 text-left"
+                  >
+                    <Box state={st} />
+                    <span className="min-w-0 flex-1 break-words text-[14px] font-medium leading-snug text-ink">
+                      <Highlight text={flat ? g.district : `Todo ${g.district}`} query={query} />
+                    </span>
+                    <Counts total={g.total} missing={g.missingPhone} />
+                  </button>
+                </div>
+                {openG && (
+                  <div className="ml-[2.1rem] animate-[zfIn_.18s_ease-out] border-l border-gold/30 pb-1 pl-1.5">
+                    {zoneRows.map((r) => {
+                      if (r.kind !== "zone") return null;
+                      const zi = rows.indexOf(r);
+                      const on = zoneOn(g, r.zone, selected);
+                      return (
+                        <div
+                          key={r.id}
+                          id={`${uid}-${zi}`}
+                          role="option"
+                          aria-selected={on}
+                          onMouseEnter={() => setActive(zi)}
+                          className={`rounded-lg transition-colors ${active === zi ? "bg-gold/15" : on ? "bg-gold/[0.07]" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => {
+                              setActive(zi);
+                              commit(toggleZone(groups, selected, g.district, r.zone.name));
+                            }}
+                            className="flex min-h-9 w-full items-center gap-2.5 px-2.5 py-1 text-left"
+                          >
+                            <Box state={on ? "on" : "off"} small />
+                            <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-ink/80">
+                              <Highlight text={r.zone.name} query={query} />
+                            </span>
+                            <Counts total={r.zone.total} missing={r.zone.missingPhone} small />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const chipKeys = [...selected];
+  const nSel = chipKeys.length;
 
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex max-w-[220px] items-center gap-1.5 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink transition focus:border-gold/55 focus:outline-none"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={nSel > 1 ? chipKeys.map(chipLabel).join(", ") : undefined}
+        className={`inline-flex h-10 max-w-[260px] shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium text-ink transition hover:border-ink/30 hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+          nSel > 0 ? "border-gold-dark bg-gold/20" : "border-ink/15 bg-white"
+        }`}
       >
-        <MapPin size={13} strokeWidth={1.75} className="shrink-0 text-ink/45" />
+        <MapPin size={14} strokeWidth={1.75} className="shrink-0 text-ink/50" />
         <span className="truncate">{label}</span>
-        <ChevronDown size={13} strokeWidth={1.75} className="ml-auto shrink-0 text-ink/40" />
+        <ChevronDown
+          size={14}
+          strokeWidth={1.75}
+          className={`ml-0.5 shrink-0 text-ink/45 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-[calc(100%+4px)] z-30 w-72 rounded-xl border border-gold/20 bg-cream-50 p-2 shadow-[0_20px_50px_-20px_rgba(40,28,10,0.4)]">
-          <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white px-2.5 py-1.5">
-            <Search size={13} strokeWidth={1.75} className="text-ink/40" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar distrito o barrio…"
-              className="w-full bg-transparent text-sm text-ink placeholder:text-ink/40 focus:outline-none"
-            />
-            {selected.size > 0 && (
+        <>
+          <div className="fixed inset-0 z-40 bg-ink/40 sm:hidden" onClick={() => setOpen(false)} aria-hidden />
+          <div
+            role="dialog"
+            aria-label="Filtrar por zona"
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && e.target !== inputRef.current) closeAndFocus();
+            }}
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-t-2xl border border-ink/10 bg-cream-50 shadow-[0_-12px_40px_-12px_rgba(10,10,10,0.35)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+8px)] sm:z-30 sm:max-h-none sm:w-[27rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl sm:shadow-[0_24px_60px_-20px_rgba(40,28,10,0.45)]"
+          >
+            <span aria-hidden className="mx-auto mt-2 h-1 w-10 rounded-full bg-ink/15 sm:hidden" />
+            <header className="flex items-start justify-between gap-3 px-4 pb-3 pt-3 sm:pt-4">
+              <div>
+                <h2 className="font-serif text-lg leading-tight text-ink">Zona</h2>
+                <p className="mt-0.5 text-xs text-ink/50">Elige distritos, barrios o municipios.</p>
+              </div>
               <button
                 type="button"
-                onClick={clearAll}
-                className="text-ink/40 transition hover:text-ink"
-                aria-label="Quitar filtro de zona"
+                onClick={closeAndFocus}
+                aria-label="Cerrar selector de zona"
+                className="-mr-1 rounded-lg p-1.5 text-ink/50 transition hover:bg-ink/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
               >
-                <X size={13} />
+                <X size={17} />
               </button>
-            )}
-          </div>
+            </header>
 
-          {selected.size > 0 && (
-            <div className="mt-2 flex items-center justify-between px-1">
-              <span className="text-xs text-ink/50">
-                {selected.size} {selected.size === 1 ? "zona" : "zonas"} seleccionada
-                {selected.size === 1 ? "" : "s"}
+            <div className="px-4">
+              <div className="flex h-11 items-center gap-2.5 rounded-xl border border-ink/15 bg-white px-3 shadow-[inset_0_1px_2px_rgba(10,10,10,0.04)] transition focus-within:border-gold-dark focus-within:ring-2 focus-within:ring-gold/30">
+                <Search size={15} strokeWidth={1.75} className="shrink-0 text-ink/40" />
+                <input
+                  ref={inputRef}
+                  role="combobox"
+                  aria-expanded
+                  aria-controls={`${uid}-list`}
+                  aria-activedescendant={rows[active] ? `${uid}-${active}` : undefined}
+                  aria-autocomplete="list"
+                  aria-label="Buscar distrito, barrio o municipio"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setActive(0);
+                  }}
+                  onKeyDown={onInputKeyDown}
+                  placeholder="Buscar distrito, barrio o municipio…"
+                  className="w-full bg-transparent text-sm text-ink placeholder:text-ink/40 focus:outline-none"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      inputRef.current?.focus();
+                    }}
+                    className="rounded-full p-0.5 text-ink/40 transition hover:bg-ink/5 hover:text-ink"
+                    aria-label="Borrar búsqueda"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <Shortcut
+                  icon={<TrendingUp size={12} />}
+                  onClick={() => commit(new Set(topKeys(sorted, 5)))}
+                  label="Top 5 con más anuncios"
+                />
+                <Shortcut
+                  icon={<Phone size={12} />}
+                  pressed={onlyMissing}
+                  onClick={() => setOnlyMissing((v) => !v)}
+                  label="Solo sin teléfono"
+                />
+              </div>
+            </div>
+
+            {nSel > 0 && (
+              <div className="mx-4 mt-3 rounded-xl border border-gold/30 bg-gold/10 px-2.5 py-2">
+                <ul className="flex max-h-[4.5rem] flex-wrap gap-1.5 overflow-y-auto" aria-label="Zonas seleccionadas">
+                  {chipKeys.map((k) => (
+                    <li key={k} className="max-w-full">
+                      <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-ink/10 bg-white py-0.5 pl-2.5 pr-1 text-xs font-medium text-ink shadow-sm">
+                        <span className="break-words">{k.startsWith("d:") ? `Todo ${chipLabel(k)}` : chipLabel(k)}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeChip(k)}
+                          aria-label={`Quitar ${chipLabel(k)}`}
+                          className="rounded-full p-0.5 text-ink/45 transition hover:bg-ink hover:text-cream-50"
+                        >
+                          <X size={11} strokeWidth={2.25} />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div
+              id={`${uid}-list`}
+              ref={listRef}
+              role="listbox"
+              aria-multiselectable
+              aria-label="Zonas"
+              className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-ink/10 sm:max-h-[22rem]"
+            >
+              {rows.length === 0 && (
+                <div className="flex flex-col items-center px-6 py-10 text-center">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gold/15 text-gold-dark">
+                    <Search size={18} strokeWidth={1.75} />
+                  </span>
+                  <p className="mt-3 font-serif text-base text-ink">
+                    {onlyMissing && !searching ? "Todo con teléfono" : "Sin resultados"}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink/55">
+                    {onlyMissing && !searching
+                      ? "No hay zonas con anuncios sin teléfono."
+                      : `No encontramos «${query.trim()}». Prueba con otro nombre; no hace falta escribir tildes.`}
+                  </p>
+                  {searching && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery("")}
+                      className="mt-3 rounded-full border border-ink/15 bg-white px-3 py-1 text-xs font-medium text-ink transition hover:border-ink/30"
+                    >
+                      Borrar búsqueda
+                    </button>
+                  )}
+                </div>
+              )}
+              {renderSection("Madrid capital", madrid)}
+              {renderSection("Municipios", munis)}
+            </div>
+
+            <footer className="flex items-center gap-3 border-t border-ink/10 bg-white/70 px-4 py-3">
+              <span className="text-xs text-ink/55" aria-live="polite">
+                {nSel === 0 ? "Ninguna seleccionada" : `${nSel} ${nSel === 1 ? "seleccionada" : "seleccionadas"}`}
               </span>
               <button
                 type="button"
                 onClick={clearAll}
-                className="text-xs text-ink/45 underline transition hover:text-ink"
+                disabled={nSel === 0}
+                className="ml-auto text-xs font-medium text-ink/60 underline-offset-2 transition hover:text-ink hover:underline disabled:opacity-35 disabled:no-underline"
               >
                 Limpiar
               </button>
-            </div>
-          )}
-
-          <div className="mt-2 max-h-72 overflow-y-auto">
-            {filteredGroups.length === 0 && (
-              <p className="px-2 py-3 text-center text-sm text-ink/45">Sin resultados</p>
-            )}
-            {filteredGroups.map((g) => {
-              const districtKey = `d:${g.district}`;
-              const districtOn = selected.has(districtKey);
-              return (
-                <div key={g.district} className="mb-1">
-                  <button
-                    type="button"
-                    aria-pressed={districtOn}
-                    onClick={() => toggle(districtKey)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition hover:bg-gold/10 ${
-                      districtOn ? "bg-gold/15 text-ink" : "text-ink/85"
-                    }`}
-                  >
-                    <Box on={districtOn} />
-                    <span className="truncate">Todo {g.district}</span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal text-ink/45">
-                      {g.total}
-                      {g.missingPhone > 0 && (
-                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
-                          {g.missingPhone} sin tel.
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  {g.zones.length > 0 &&
-                    g.zones.map((z) => {
-                      const zoneKey = `z:${z.name}`;
-                      // El distrito incluye todos sus barrios; pulsar uno
-                      // permite acotar la selección a ese barrio.
-                      const zoneOn = selected.has(zoneKey) || districtOn;
-                      return (
-                        <button
-                          key={z.name}
-                          type="button"
-                          aria-pressed={zoneOn}
-                          title={districtOn ? `Filtrar solo ${z.name}` : undefined}
-                          onClick={() => toggle(zoneKey)}
-                          className={`flex w-full items-center gap-2 rounded-md py-1 pl-4 pr-2 text-left text-xs transition hover:bg-gold/10 ${
-                            selected.has(zoneKey) ? "bg-gold/15 text-ink" : "text-ink/65"
-                          }`}
-                        >
-                          <Box on={zoneOn} small />
-                          <span className="truncate">{z.name}</span>
-                          <span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-ink/40">
-                            {z.total}
-                            {z.missingPhone > 0 && (
-                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
-                                {z.missingPhone}
-                              </span>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                </div>
-              );
-            })}
+              <button
+                type="button"
+                onClick={closeAndFocus}
+                className="h-9 rounded-xl bg-ink px-5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+              >
+                Aplicar
+              </button>
+            </footer>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-// Casilla de selección dibujada a mano (no un <input type="checkbox">): va
-// dentro de un <button>, donde un input anidado no sería accesible por
-// teclado de forma independiente y además rompería el click del botón.
-function Box({ on, small }: { on: boolean; small?: boolean }) {
-  const size = small ? "h-3.5 w-3.5" : "h-4 w-4";
+function Highlight({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {highlightParts(text, query).map((p, i) =>
+        p.match ? (
+          <mark key={i} className="rounded-sm bg-gold/35 px-0 text-ink">
+            {p.text}
+          </mark>
+        ) : (
+          <span key={i}>{p.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+function Counts({ total, missing, small }: { total: number; missing: number; small?: boolean }) {
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-1.5">
+      {missing > 0 && (
+        <span
+          title={`${missing} sin teléfono`}
+          className="inline-flex items-center gap-1 whitespace-nowrap text-[10.5px] text-amber-700/85"
+        >
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500/80" />
+          {missing} sin tel.
+        </span>
+      )}
+      <span
+        className={`min-w-[2rem] rounded-full bg-ink/[0.06] px-2 text-center tabular-nums text-ink/65 ${
+          small ? "py-px text-[11px]" : "py-0.5 text-xs font-medium"
+        }`}
+      >
+        {total.toLocaleString("es-ES")}
+      </span>
+    </span>
+  );
+}
+
+function Shortcut({
+  icon,
+  label,
+  onClick,
+  pressed,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  pressed?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+        pressed
+          ? "border-gold-dark bg-gold/30 text-ink"
+          : "border-ink/15 bg-white text-ink/70 hover:border-gold-dark/60 hover:text-ink"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// Casilla dibujada a mano (no <input>): vive dentro de un botón, que ya es
+// el control accesible; así el estado intermedio ("algunos barrios") es posible.
+function Box({ state, small }: { state: CheckState; small?: boolean }) {
+  const size = small ? "h-4 w-4 rounded-[5px]" : "h-[18px] w-[18px] rounded-md";
+  const filled = state !== "off";
   return (
     <span
       aria-hidden
-      className={`flex ${size} shrink-0 items-center justify-center rounded border transition ${
-        on ? "border-gold bg-gold text-ink" : "border-ink/25 bg-white"
+      className={`flex ${size} shrink-0 items-center justify-center border transition ${
+        filled ? "border-ink bg-ink text-gold-light" : "border-ink/25 bg-white"
       }`}
     >
-      {on && <Check size={small ? 9 : 11} strokeWidth={3} />}
+      {state === "on" && <Check size={small ? 10 : 12} strokeWidth={3} />}
+      {state === "some" && <Minus size={small ? 10 : 12} strokeWidth={3} />}
     </span>
   );
 }
