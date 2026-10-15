@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "../server";
 import type { PropertyTag } from "@/lib/properties/tags";
 
-// Las tablas son nuevas (migración 0198) y aún no están en database.types.
+// Las tablas son nuevas (migración 0199) y aún no están en database.types.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Catálogo de etiquetas del país. */
