@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import {
   AUTO_MAX_MAX,
@@ -14,7 +14,18 @@ import {
 import type { CatalogItemView } from "@/lib/catalogs/types";
 import { catalogBarrios, catalogDistricts } from "@/lib/catalogs/zones";
 import { zoneRedundancies } from "@/lib/catalogs/explain";
-import { criteriaFromRaw, type CriteriaRaw } from "@/lib/catalogs/manager-state";
+import {
+  criteriaFromRaw,
+  emptyPreview,
+  nextDraftRevision,
+  previewInvalid,
+  previewSettle,
+  previewStart,
+  previewView,
+  type CriteriaRaw,
+  type DraftRevision,
+  type PreviewSlot,
+} from "@/lib/catalogs/manager-state";
 import type { FormDraft } from "./manager/use-form-draft";
 import { ConflictNote } from "./manager/conflict-note";
 
@@ -36,6 +47,8 @@ export interface SelectionActions {
   }) => Promise<ActionResult<{ entering: CatalogItemView[]; leaving: CatalogItemView[]; autoTotal: number; manualCount: number }>>;
   setMode: (i: { catalogId: string; mode: "manual" | "auto"; strategy?: "restore" | "convert" | null; skipNotify?: boolean }) => Promise<Res>;
 }
+
+type PreviewData = { items: CatalogItemView[]; total: number; matched?: number };
 
 const OPS: Array<{ v: CatalogOperation; label: string }> = [
   { v: "sale", label: "Venta" },
@@ -101,7 +114,18 @@ export function SelectionPanel({
   const setPmin = (v: string) => set({ pmin: v });
   const setPmax = (v: string) => set({ pmax: v });
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ items: CatalogItemView[]; total: number; matched?: number } | null>(null);
+  // «Ver qué entraría»: solo se enseña con el borrador EXACTO que la pidió
+  // (revisión), y solo la última petición cuenta (manager-state.ts).
+  const revRef = useRef<DraftRevision | null>(null);
+  revRef.current = nextDraftRevision(revRef.current, JSON.stringify(raw));
+  const rev = revRef.current.rev;
+  const [slot, setSlot] = useState<PreviewSlot<PreviewData>>(() => emptyPreview<PreviewData>());
+  const slotRef = useRef(slot);
+  const putSlot = (next: PreviewSlot<PreviewData>) => {
+    slotRef.current = next;
+    setSlot(next);
+  };
+  const view = previewView(slot, rev);
   const [modePrev, setModePrev] = useState<{
     to: "manual" | "auto";
     entering: CatalogItemView[];
@@ -116,7 +140,6 @@ export function SelectionPanel({
 
   function update(patch: Partial<CriteriaRaw>) {
     set(patch);
-    setPreview(null);
   }
 
   function addZone(z: ZoneCriterion, clear: Partial<CriteriaRaw>) {
@@ -129,6 +152,8 @@ export function SelectionPanel({
     const n = criteriaFromRaw(raw);
     if (!n) {
       setError("Revisa los criterios: el precio solo con venta o alquiler, mínimo ≤ máximo y entre 1 y 24 viviendas.");
+      // Con un error, ninguna vista previa anterior (ni la que esté en camino).
+      putSlot(previewInvalid(slotRef.current));
       return null;
     }
     setError(null);
@@ -149,14 +174,21 @@ export function SelectionPanel({
     );
   }
 
+  function settlePreview(seq: number, outcome: { ok: true; data: PreviewData } | { ok: false; error: string }) {
+    const r = previewSettle(slotRef.current, seq, revRef.current?.rev ?? 0, outcome);
+    putSlot(r.slot);
+    if (r.accepted && r.error) setError(r.error);
+  }
+
   function showPreview() {
     const crit = current();
     if (!crit) return;
-    startBusy(async () => {
-      const r = await actions.previewAuto({ catalogId, criteria: crit });
-      if (r.ok) setPreview({ items: r.items, total: r.total, matched: r.matched });
-      else setError(r.error);
-    });
+    const { slot: next, seq } = previewStart(slotRef.current, rev, criteriaSummary(crit));
+    putSlot(next);
+    actions.previewAuto({ catalogId, criteria: crit }).then(
+      (r) => settlePreview(seq, r.ok ? { ok: true, data: { items: r.items, total: r.total, matched: r.matched } } : { ok: false, error: r.error }),
+      () => settlePreview(seq, { ok: false, error: "No se pudo calcular la vista previa. Inténtalo de nuevo." }),
+    );
   }
 
   function askMode(to: "manual" | "auto") {
@@ -403,16 +435,26 @@ export function SelectionPanel({
           {error}
         </p>
       ) : null}
-      {preview ? (
+      {view.kind === "loading" ? (
+        <p className="text-xs text-ink/60" role="status" data-testid="preview-loading">
+          Calculando…
+        </p>
+      ) : null}
+      {view.kind === "changed" ? (
+        <p className="text-xs text-ink/60" data-testid="preview-changed">
+          Los criterios han cambiado desde la última vista previa: pulsa «Ver qué entraría» para verlos.
+        </p>
+      ) : null}
+      {view.kind === "result" ? (
         <div className="space-y-2 rounded-lg border border-gold/20 bg-white p-3" data-testid="auto-preview">
           <p className="text-xs text-ink/70">
             <strong>
-              {preview.items.length} de {preview.matched ?? preview.total}
+              {view.data.items.length} de {view.data.matched ?? view.data.total}
             </strong>{" "}
-            coinciden {criteriaSummary(criteriaFromRaw(raw) ?? c) ? `· ${criteriaSummary(criteriaFromRaw(raw) ?? c)}` : ""}
-            {preview.items.some((it) => it.via === "include") ? " · con tus inclusiones" : ""}
+            coinciden {view.summary ? `· ${view.summary}` : ""}
+            {view.data.items.some((it) => it.via === "include") ? " · con tus inclusiones" : ""}
           </p>
-          <MiniList items={preview.items} empty="Ninguna vivienda encaja con estos criterios." />
+          <MiniList items={view.data.items} empty="Ninguna vivienda encaja con estos criterios." />
         </div>
       ) : null}
 

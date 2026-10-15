@@ -281,6 +281,11 @@ export function FixtureCatalogManager({
         return changes ? live({ op: "reorder", skipNotify }) : unchanged();
       },
       previewAuto: async ({ criteria }) => {
+        // Pruebas de la vista previa: retardos por petición (window.__fxPreviewDelays = [ms, …]),
+        // para provocar respuestas tardías y desordenadas.
+        const delays = (window as unknown as { __fxPreviewDelays?: number[] }).__fxPreviewDelays;
+        const ms = delays?.shift();
+        if (ms) await new Promise((r) => setTimeout(r, ms));
         const n = normalizeCriteria(criteria);
         return n.ok ? { ok: true as const, ...autoItems(n.criteria) } : invalid;
       },
