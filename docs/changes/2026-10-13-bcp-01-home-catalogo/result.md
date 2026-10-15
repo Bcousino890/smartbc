@@ -1356,17 +1356,23 @@ Diagnóstico de origen: [`qa-c2/diagnostico-seleccion-auto.md`](qa-c2/diagnostic
 2. En el lector de alquiler, 6.800 €/mes es el alquiler de la dual y **sí** debe verse; lo que no debe verse es su venta.
 3. Tras «Añadir» un barrio, «Barrio en…» se queda elegido. La regla de E2 lo cuenta como cambio sin guardar, así que el aviso de K3 sigue. La prueba lo documenta y comprueba que desaparece al vaciarlo.
 
-## Puerta G-ALQ: sustituida (D-QA17)
+## Puerta G-ALQ: PENDIENTE (después del despliegue)
 
-**G-ALQ sustituida por decisión de Fabricio (D-QA17, 15 de octubre de 2026).** Fabricio no tiene acceso SSH a producción (lo tiene la empresa) y decide no ejecutar las consultas previas. Acepta en bloque, sin revisar las fichas antes del merge:
-- **Sin precio principal válido** (caso 1): el cliente ve «Precio · sin dato», aunque la ficha tenga un importe en `rent_price`.
-- **Dos importes distintos** (caso 2): el cliente ve el precio principal.
-- **Después del despliegue**, las fichas afectadas se detectan en el propio gestor: el aviso ⚠ en la fila y, en el panel de la vivienda, el texto con la cifra secundaria y lo que ve el cliente. Solo aparecen las que estén en algún catálogo.
-- Las corrige una persona en el formulario de la ficha, confirmando el alquiler en la fuente. **Nunca se copia el `rent_price` a ciegas**, y ningún agente toca fichas.
+**G-ALQ: PENDIENTE (registro corregido el 15 de octubre de 2026, D-QA18).**
+- **El 15 de octubre, antes del merge**, Fabricio dijo que no tiene la clave SSH (la tiene la empresa) y que había que «ir directamente al funcionamiento».
+  - Lo registré como D-QA17, «aceptación en bloque» de lo que ve el cliente.
+  - **Eso fue una interpretación mía, no una decisión suya.** Fabricio **no** aceptó excepciones sin revisar **ni** renunció a la puerta.
+- **Fabricio pedirá los recuentos a una persona autorizada de la empresa.** Ningún agente pide credenciales SSH ni ejecuta las consultas de producción.
+- **G-ALQ sigue PENDIENTE aunque K1–K5 ya estén fusionados y desplegados.** El merge y el despliegue no la cumplen, y no se propone deshacerlos.
+- **Para cerrarla hace falta:**
+  - los resultados de las consultas de §5, que aporta la empresa;
+  - la revisión de las fichas afectadas;
+  - la aceptación expresa de Fabricio, ficha por ficha o por grupo, de las que se queden sin corregir, con lo que ve el cliente:
+    - sin precio principal válido: «Precio · sin dato»;
+    - con dos importes distintos: el precio principal.
+- **Ni la corrección de la vista previa** (PR aparte) **ni las pruebas sintéticas** cumplen G-ALQ ni resuelven el caso original de Recoletos.
 
-Orden de cierre: Fabricio hace el merge → despliegue automático → QA en producción.
-
-### Lo que pedía la puerta original (ya no se exige)
+### Lo que pide la puerta
 
 **No se ha cumplido.** Ni las pruebas sintéticas ni ninguna suposición sobre las fichas reales la cumplen. Hace falta lo que aporten Fabricio o su equipo:
 1. las consultas de solo lectura de [`alquiler-sin-precio.md`](qa-c2/alquiler-sin-precio.md) §5 (recuento y referencias de viviendas activas en España);
@@ -1409,8 +1415,41 @@ La QA en producción de este PR no puede ir antes del despliegue. Ni la CI ni la
 
 - Rama `fabri/bcp-01-seleccion` → `main`. El enlace del PR y el estado de la CI están en el PR.
 - PR: [#319](https://github.com/Bcousino890/smartbc/pull/319). CI en verde en `712a82f`.
-- **El merge espera a G-ALQ y lo decide y hace Fabricio.** No hay migración. Puede desplegar.
+- **Se fusionó antes de cumplir G-ALQ** (ver «Registro del lanzamiento»). La puerta sigue pendiente.
 - La QA en producción viene **después** del despliegue (orden de cierre, arriba).
+
+## Registro del lanzamiento (sin acceso a producción)
+
+- **Merge:** PR #319, commit `8fd4bb8` en `main`, el 15 de octubre de 2026 a las 20:58 UTC, hecho por Fabricio. La CI de `main` en ese commit, en verde.
+- **Despliegue**, con evidencia indirecta:
+  - la captura de Fabricio en el gestor real, que rechaza «10.0000» (K5);
+  - la lectura **pública** del lector de un catálogo suyo de alquiler (`/api/seleccion/…/estado`): la huella termina en `:rent`, algo que solo produce el código nuevo, y las 18 viviendas salen como «Alquiler · X €/mes».
+- **Ningún agente** ha accedido a la administración, la base de datos o el servidor.
+- **G-ALQ:** PENDIENTE (arriba). El despliegue no la cumple.
+
+## QA de Fabricio: observaciones, no conclusiones
+
+**Observado** (15 de octubre de 2026, catálogo manual «Recoletos y Castellana»):
+- **En el lector público**, los lugares de las 18 viviendas son: 4 «Castellana», 3 «Recoletos», 8 «Salamanca» y 3 «Barrio de Salamanca». Las 18 tienen precios dentro de 5.000–10.000 €/mes.
+- **En la captura del editor** se ve:
+  - «Todas las zonas»;
+  - un máximo no válido («10.0000»), bien rechazado;
+  - «Cambios sin guardar (1)»;
+  - una vista previa anterior debajo del error. Era un defecto, que se corrige en un PR aparte.
+
+**Lo que NO se puede concluir de eso:**
+- **De los lugares del lector:** que una vivienda salga solo como «Salamanca» no prueba que su ficha no tenga barrio.
+  - El lector enseña dos campos, la zona y el barrio.
+  - La ficha puede tener el barrio en otros datos (la dirección, el título o el mapa), que el lector no enseña.
+  - No se ha visto ninguna de esas fichas.
+  - Lo que sí decide la selección automática por barrio está en la explicación del panel de la vivienda en el gestor («Zona: …» o «Zona … fuera de …»).
+- **De «Todas las zonas» en el editor:** con cambios sin guardar, eso no prueba que los criterios **guardados** no tengan zonas. El editor enseña el borrador. Lo guardado está en la línea de la barra, encima del editor, sin «cambios sin guardar».
+- La causa del caso original de Recoletos **sigue sin confirmar**.
+
+**Lo mínimo que hace falta de Fabricio:**
+1. Una captura de la **barra de criterios** sin cambios sin guardar: los criterios guardados.
+2. Si pasa el catálogo a automático, una captura de la **vista previa de «Pasar a automático…»**: qué entra y qué sale.
+3. Dos o tres **referencias BC** que esperaba y no salen, o al revés, con el **panel de la vivienda** abierto («Por qué está en el catálogo»).
 
 ## Revisión
 
