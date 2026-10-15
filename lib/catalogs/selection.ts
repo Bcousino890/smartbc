@@ -1,4 +1,5 @@
 import type { CatalogCriteria } from "./criteria";
+import { fitsOperation as fitsOp, operationPrice } from "./operation-price";
 import { catalogFold, catalogZoneMatch, zoneCandidates } from "./zones";
 
 // ============================================================================
@@ -13,7 +14,8 @@ import { catalogFold, catalogZoneMatch, zoneCandidates } from "./zones";
 //      (en modo automático; la búsqueda manual no exige foto).
 //   2. Operación: venta → operation='sale' y precio = price; alquiler →
 //      operation='rent' (price) o venta con 'rent' en operations (rent_price);
-//      any → todas (primero el grupo de venta).
+//      any → todas (primero el grupo de venta). La regla vive en
+//      operation-price.ts (K2, la misma para la explicación y las etiquetas).
 //   3. Precio ≤ 0 o vacío = sin precio: con rango no entra; sin rango sí.
 //   4. Zona: distrito o barrio según catalogZoneMatch() de zone O subzone;
 //      un nombre libre casa con cualquier fragmento normalizado. Sin zona
@@ -61,31 +63,24 @@ export interface Adjustment {
 }
 export type Via = "match" | "include" | "both";
 
-function positive(n: number | null | undefined): number | null {
-  return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null;
-}
-
 /** España, sin archivar, disponible o reservada (lo mínimo para aparecer). */
 export function isAvailable(p: Pick<CandidateProperty, "country" | "archived_at" | "status">): boolean {
   return p.country === "es" && !p.archived_at && (p.status === "available" || p.status === "reserved");
 }
 
-/** ¿La operación de la vivienda es la del catálogo? */
+/** ¿La operación de la vivienda es la del catálogo? (operation-price.ts) */
 export function fitsOperation(p: Pick<CandidateProperty, "operation" | "operations">, c: CatalogCriteria): boolean {
-  if (c.operation === "sale") return p.operation === "sale";
-  if (c.operation === "rent") return p.operation === "rent" || p.operations.includes("rent");
-  return true;
+  return fitsOp(p, c.operation);
 }
 
 /** Grupo e importe con los que se ordena una vivienda en este catálogo (los
- *  mismos que usa candidates() para las coincidencias). */
+ *  mismos que usa candidates() para las coincidencias). El importe es el de
+ *  operationPrice(), la regla única (K2). */
 export function orderKeyOf(p: CandidateProperty, c: CatalogCriteria): Candidate {
-  if (!fitsOperation(p, c)) return { id: p.id, group: 2, price: positive(p.price) };
-  if (c.operation === "rent") {
-    return { id: p.id, group: 0, price: positive(p.operation === "rent" ? p.price : p.rent_price) };
-  }
-  if (c.operation === "sale") return { id: p.id, group: 0, price: positive(p.price) };
-  return { id: p.id, group: p.operation === "sale" ? 0 : 1, price: positive(p.price) };
+  const price = operationPrice(p, c.operation);
+  if (!fitsOperation(p, c)) return { id: p.id, group: 2, price };
+  if (c.operation === "any") return { id: p.id, group: p.operation === "sale" ? 0 : 1, price };
+  return { id: p.id, group: 0, price };
 }
 
 export function zoneMatches(p: Pick<CandidateProperty, "zone" | "subzone">, c: CatalogCriteria): boolean {
@@ -110,19 +105,9 @@ export function candidates(
   for (const p of props) {
     if (p.country !== "es" || p.archived_at || (p.status !== "available" && p.status !== "reserved")) continue;
     if (opts.requirePhoto && p.photo_count < 1) continue;
-    let group: 0 | 1 = 0;
-    let price: number | null;
-    if (c.operation === "sale") {
-      if (p.operation !== "sale") continue;
-      price = positive(p.price);
-    } else if (c.operation === "rent") {
-      if (p.operation === "rent") price = positive(p.price);
-      else if (p.operations.includes("rent")) price = positive(p.rent_price);
-      else continue;
-    } else {
-      group = p.operation === "sale" ? 0 : 1;
-      price = positive(p.price);
-    }
+    if (!fitsOperation(p, c)) continue;
+    const group: 0 | 1 = c.operation === "any" && p.operation !== "sale" ? 1 : 0;
+    const price = operationPrice(p, c.operation);
     if (c.price_min !== null || c.price_max !== null) {
       if (price === null) continue;
       if (c.price_min !== null && price < c.price_min) continue;

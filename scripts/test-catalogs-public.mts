@@ -18,6 +18,7 @@ import { CATALOG_ZONE_ALIASES, catalogBarrios, catalogDistricts, catalogZoneMatc
 import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
 import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
+import { fitsOperation as fitsOp, operationPrice, priceDisplay, rentDataWarning } from "../lib/catalogs/operation-price.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
 import { deriveEditorial, highlightCandidates, leadFrom, JOURNEY_EXCLUDED_CLASSES, type EditorialInput } from "../lib/catalogs/editorial.ts";
@@ -1264,6 +1265,81 @@ async function main() {
     const c = toPublicCatalog(snap([extra]));
     const json = JSON.stringify(c);
     check("campos internos nuevos no se cuelan", !json.includes("BC-1234") && !json.includes("nota interna") && !UUID_RE.test(json));
+  }
+
+  section("K2 · operación y precio (D-QA14, D-QA16; casos del plan §6, como en test-catalog-operations.sql)");
+  {
+    // Mismos datos que el escenario 2k de SQL. Esperados escritos a mano.
+    const mk = (n: number, slug: string, operation: "sale" | "rent", operations: string[], price: number | null, rent: number | null, day: number) => ({
+      id: `a7000000-0000-0000-0000-${String(n).padStart(12, "0")}`, slug, country: "es", archived_at: null, status: "available",
+      operation, operations, price, rent_price: rent, zone: "Salamanca", subzone: "Recoletos",
+      created_at: `2026-05-${String(day).padStart(2, "0")}T00:00:00Z`, photo_count: 1,
+    } as CandidateProperty & { slug: string });
+    const P = [
+      mk(1, "r5000", "rent", ["rent"], 5000, null, 1), mk(2, "r6000", "rent", ["rent"], 6000, null, 2), mk(3, "r7000", "rent", ["rent"], 7000, null, 3),
+      mk(4, "r4999", "rent", ["rent"], 4999, null, 4), mk(18, "r7001", "rent", ["rent"], 7001, null, 18), mk(5, "z0r6", "rent", ["rent"], 0, 6000, 5),
+      mk(6, "z0r8", "rent", ["rent"], 0, 8000, 6), mk(7, "neg6", "rent", ["rent"], -1, 6000, 7), mk(8, "z0n", "rent", ["rent"], 0, null, 8),
+      mk(9, "z0z", "rent", ["rent"], 0, 0, 9), mk(10, "x6r9", "rent", ["rent"], 6000, 9000, 10), mk(11, "y9r6", "rent", ["rent"], 9000, 6000, 11),
+      mk(12, "e6r6", "rent", ["rent"], 6000, 6000, 12), mk(13, "d6000", "sale", ["sale", "rent"], 2100000, 6000, 13),
+      mk(14, "ds6", "sale", ["sale", "rent"], 6000, null, 14), mk(15, "ds0", "sale", ["sale", "rent"], 0, 6000, 15),
+      mk(16, "s6000", "sale", ["sale"], 6000, null, 16), mk(17, "s2m", "sale", ["sale"], 2000000, null, 17),
+    ];
+    const rnull = mk(19, "rnull", "rent", ["rent"], null, 6000, 19);
+    const by = new Map([...P, rnull].map((p) => [p.slug, p]));
+    const slugs = (ids: string[]) => ids.map((i) => [...by.values()].find((p) => p.id === i)!.slug);
+    const crit = (raw: object) => { const n = normalizeCriteria(raw); if (!n.ok) throw new Error("criterios"); return n.criteria; };
+    const REC = [{ kind: "barrio", name: "Recoletos" }];
+    const A = crit({ operation: "rent", zones: REC, price_min: 5000, price_max: 7000, sort: "price_asc", max: 24 });
+    const B = crit({ operation: "rent", zones: REC, sort: "price_asc", max: 24 });
+    const C = crit({ operation: "any", zones: REC, sort: "price_asc", max: 24 });
+    const D = crit({ operation: "sale", zones: REC, price_min: 1000000, price_max: 3000000, sort: "price_asc", max: 24 });
+    const F = crit({ operation: "rent", zones: REC, price_min: 5000, price_max: 7000, sort: "price_asc", max: 8 });
+    const inc = (...xs: string[]) => xs.map((x) => ({ propertyId: by.get(x)!.id, kind: "include" as const }));
+    const eqj = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const run = (c: typeof A, adj = [] as ReturnType<typeof inc>) => { const r = autoSelect(P, c, adj); return { ids: slugs(r.ids), n: `${r.total}/${r.matched}`, via: r.via }; };
+    // La referencia TS da las mismas listas que la SQL real (T1); sin cambios.
+    check("A alquiler 5.000–7.000 (bordes incluidos)", eqj(run(A).ids, ["r5000", "ds0", "d6000", "e6r6", "x6r9", "r6000", "r7000"]), JSON.stringify(run(A).ids));
+    check("B sin rango: sin importe al final (Z0R6 la última)", eqj(run(B).ids, ["r4999", "r5000", "ds0", "d6000", "e6r6", "x6r9", "r6000", "r7000", "r7001", "y9r6", "ds6", "z0z", "z0n", "neg6", "z0r8", "z0r6"]));
+    check("C venta y alquiler", eqj(run(C).ids, ["s6000", "ds6", "s2m", "d6000", "ds0", "r4999", "r5000", "e6r6", "x6r9", "r6000", "r7000", "r7001", "y9r6", "z0z", "z0n", "neg6", "z0r8", "z0r6"]));
+    check("D venta con dos alquileres incluidos", eqj(run(D, inc("z0r6", "r6000")), { ids: ["s2m", "d6000", "r6000", "z0r6"], n: "4/2", via: ["match", "match", "include", "include"] }));
+    check("E alquiler con tres inclusiones", eqj(run(A, inc("s6000", "ds6", "z0r6")).ids, ["r5000", "ds0", "d6000", "e6r6", "x6r9", "r6000", "r7000", "ds6", "z0r6", "s6000"]));
+    check("F máximo 8", eqj(run(F, inc("s6000", "ds6", "z0r6")).ids, ["r5000", "ds0", "d6000", "e6r6", "x6r9", "ds6", "z0r6", "s6000"]));
+    const op = (s: string, o: "sale" | "rent" | "any") => operationPrice(by.get(s)!, o);
+    check("importe en alquiler: Z0R6/NEG6/Rnull sin importe (nunca su rent_price)", op("z0r6", "rent") === null && op("neg6", "rent") === null && op("rnull", "rent") === null);
+    check("importe en alquiler: X6R9 = 6.000 (price), Y9R6 = 9.000 (price)", op("x6r9", "rent") === 6000 && op("y9r6", "rent") === 9000);
+    check("importe en alquiler de una dual: su rent_price, nunca su venta", op("d6000", "rent") === 6000 && op("ds0", "rent") === 6000 && op("ds6", "rent") === null);
+    check("importe de una inclusión de otra operación: su price real", op("s6000", "rent") === 6000 && op("z0r6", "sale") === null && op("x6r9", "sale") === 6000);
+    check("importe en venta y en «cualquiera»: price", op("d6000", "sale") === 2100000 && op("ds0", "sale") === null && op("d6000", "any") === 2100000);
+    check("encaja: dual en alquiler y en venta; solo venta no en alquiler; solo alquiler no en venta",
+      fitsOp(by.get("d6000")!, "rent") && fitsOp(by.get("d6000")!, "sale") && !fitsOp(by.get("s6000")!, "rent") && !fitsOp(by.get("z0r6")!, "sale"));
+    const pd = (s: string, o: "sale" | "rent" | "any") => priceDisplay({ ...by.get(s)!, currency: "eur" }, o);
+    const D_ = (operation: string, price: string, also: string | null = null, contextual = true) => ({ operation, price, also, contextual });
+    check("DS-1 alquiler: dual → «Alquiler · 6.000 €/mes» + la venta aparte", eqj(pd("d6000", "rent"), D_("Alquiler", "6.000 €/mes", "También en venta: 2.100.000 €")));
+    check("DS-1 alquiler: solo alquiler 5.000", eqj(pd("r5000", "rent"), D_("Alquiler", "5.000 €/mes")));
+    check("P-ALQ: Z0R6 sin precio principal → «Precio · sin dato»", eqj(pd("z0r6", "rent"), D_("Alquiler", "Precio · sin dato")));
+    check("P-ALQ: X6R9 con dos importes → su price 6.000 (no «sin dato»)", eqj(pd("x6r9", "rent"), D_("Alquiler", "6.000 €/mes")));
+    check("P-ALQ: Y9R6 con dos importes → su price 9.000", eqj(pd("y9r6", "rent"), D_("Alquiler", "9.000 €/mes")));
+    check("dual sin alquiler en alquiler: sin dato, nunca su venta de 6.000", eqj(pd("ds6", "rent"), D_("Alquiler", "Precio · sin dato", "También en venta: 6.000 €")));
+    check("dual sin venta en alquiler", eqj(pd("ds0", "rent"), D_("Alquiler", "6.000 €/mes", "También en venta · precio sin dato")));
+    check("inclusión de solo venta en alquiler: «Venta · 6.000 €» real, no contextual", eqj(pd("s6000", "rent"), D_("Venta", "6.000 €", null, false)));
+    check("DS-2 venta: dual → «Venta · 2.100.000 €» + el alquiler aparte", eqj(pd("d6000", "sale"), D_("Venta", "2.100.000 €", "También en alquiler: 6.000 €/mes")));
+    check("venta: dual sin precio de venta", eqj(pd("ds0", "sale"), D_("Venta", "Precio · sin dato", "También en alquiler: 6.000 €/mes")));
+    check("inclusión de solo alquiler en venta: lo suyo real (sin dato / 6.000 €/mes)",
+      eqj(pd("z0r6", "sale"), D_("Alquiler", "Precio · sin dato", null, false)) && eqj(pd("x6r9", "sale"), D_("Alquiler", "6.000 €/mes", null, false)));
+    check("«venta y alquiler» como siempre: dual con las dos", eqj(pd("d6000", "any"), D_("Venta y alquiler", "Venta 2.100.000 € · Alquiler 6.000 €/mes")));
+    check("«venta y alquiler»: solo alquiler con su price (X6R9 6.000, antes 9.000; Z0R6 sin dato, antes 6.000)",
+      eqj(pd("x6r9", "any"), D_("Alquiler", "6.000 €/mes")) && eqj(pd("z0r6", "any"), D_("Alquiler", "Precio · sin dato")) && eqj(pd("y9r6", "any"), D_("Alquiler", "9.000 €/mes")));
+    const w = (s: string) => rentDataWarning({ ...by.get(s)!, currency: "eur" });
+    check("aviso: sin precio principal, con la cifra secundaria", w("z0r6") === "La ficha no tiene precio principal: el campo secundario dice 6.000 €/mes, pero no se usa. Corrige el precio en la ficha.", String(w("z0r6")));
+    check("aviso: negativo y nulo cuentan como sin precio principal", w("neg6") === w("z0r6") && w("rnull") === w("z0r6") && /8\.000 €\/mes/.test(String(w("z0r8"))));
+    check("aviso: dos importes, con los dos", w("x6r9") === "Dos importes de alquiler en la ficha: se usa el precio (6.000 €/mes); el campo secundario dice 9.000 €/mes. Revisa la ficha.", String(w("x6r9")));
+    check("aviso: Y9R6 usa 9.000 y menciona 6.000", /se usa el precio \(9\.000 €\/mes\).*6\.000 €\/mes/.test(String(w("y9r6"))));
+    check("sin aviso: coherente, iguales, sin ningún importe, duales y ventas",
+      [w("r5000"), w("e6r6"), w("z0n"), w("z0z"), w("d6000"), w("ds0"), w("s6000")].every((x) => x === null));
+    const ex = explainProperty(by.get("z0r6")!, A, null);
+    check("explicación de Z0R6 en A: «Sin precio» (la misma regla que la selección)", ex.status === "out" && ex.details.includes("Sin precio (con un rango de precio no entra)"));
+    const ex2 = explainProperty(by.get("x6r9")!, A, null);
+    check("explicación de X6R9 en A: dentro por 6.000 (lo mismo que su etiqueta)", ex2.status === "match" && ex2.details.includes("6.000 €/mes dentro de 5.000–7.000 €/mes"));
   }
 
   await liveTests();
