@@ -1206,9 +1206,12 @@ Diagnóstico de origen: [`qa-c2/diagnostico-seleccion-auto.md`](qa-c2/diagnostic
 
 ## Base y commits
 
-- **Base:** `origin/main` = `f906cb6`.
-  - El plan se hizo sobre `84538e7`. Entre medias entraron dos commits de clientes (con la migración `0198_client_search_polygons`), ajenos a catálogos.
-  - Los commits locales se rebasaron sobre `f906cb6` antes de implementar.
+- **Base:** `origin/main` = `f822200`.
+  - El plan se hizo sobre `84538e7`.
+  - Antes de implementar, los commits locales se rebasaron sobre `f906cb6` (dos commits de clientes, con la migración `0198`).
+  - Antes del push, sobre `f822200` (clientes, particulares, propiedades, sindicación y etiquetas, con las migraciones `0199`–`0201`).
+  - Ninguno de esos cambios toca archivos de catálogos, dependencias ni la CI. El formulario sigue borrando `rent_price` en las no duales.
+  - Tras el último rebase se repitieron `tsc`, las tres suites y la compilación aislada (abajo).
 - **Rama:** `fabri/bcp-01-seleccion`, en el worktree `wt/bcp-01-sel`. El checkout original, su stash, la rama de E3 y los demás worktrees no se han tocado.
 
 - **Commits** (uno por tarea; cada uno compila y pasa las tres suites):

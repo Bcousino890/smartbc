@@ -27,7 +27,7 @@ Una vivienda **solo de alquiler** (`operation = 'rent'`) sin precio principal v�
   - `/compartir` y el PDF de la ficha: `app/compartir/[slug]/page.tsx:71`, `app/api/admin/properties/[slug]/pdf/route.ts:98`;
   - propiedades sugeridas: `lib/db/queries/suggested-properties.ts:193-204`.
   - Todos usan `rent_price` **solo en las duales**. La etiqueta del catálogo (`priceLabel`, `rent ?? price`) es la única excepción.
-- El formulario de la ficha borra `rent_price` al guardar una vivienda que no es dual (`property-edit-view.tsx:604-605` → `actions.ts:599`). No he encontrado otro código que lo escriba. Así que estas filas vienen de datos antiguos o de escrituras fuera del formulario. **No sé cuántas hay:** la consulta del §5 lo dice.
+- El formulario de la ficha borra `rent_price` al guardar una vivienda que no es dual (`property-edit-view.tsx:615-617` → `actions.ts:599`). No he encontrado otro código que lo escriba. Así que estas filas vienen de datos antiguos o de escrituras fuera del formulario. **No sé cuántas hay:** la consulta del §5 lo dice.
 
 ## 2. Comportamiento ACTUAL (verificado con datos sintéticos)
 
@@ -192,7 +192,7 @@ SQL
 
 **Cómo se corrige una ficha** (lo hacen Fabricio o su equipo, nunca un agente):
 - En el formulario de la ficha, se escribe el alquiler **confirmado** en el precio y se guarda.
-- Al guardar una vivienda que no es dual, el formulario borra `rent_price` (`property-edit-view.tsx:604-605`). Así la ficha queda con un solo importe.
+- Al guardar una vivienda que no es dual, el formulario borra `rent_price` (`property-edit-view.tsx:615-617`). Así la ficha queda con un solo importe.
 - El cambio llega solo a los lectores abiertos (la instantánea lleva `price`) y a SmartLink, PDF, colecciones y sugeridas.
 
 ### 5.2 Puerta de despliegue propuesta (G-ALQ)
