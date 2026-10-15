@@ -62,7 +62,7 @@ export function SectionTabs({
               setFocusIdx(i);
               if (!on) onSelect(s);
             }}
-            className={`relative min-w-0 rounded-lg px-1 py-2 text-[13px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold sm:px-3 sm:text-sm ${
+            className={`relative min-w-0 rounded-lg px-1 py-2 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold sm:px-3 sm:text-sm ${
               on ? "bg-ink text-cream-50" : "text-ink/70 hover:bg-white"
             }`}
           >

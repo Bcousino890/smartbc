@@ -4,8 +4,8 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 // Panel de una vivienda (BCP-01 E2, plan §3.7, §3.8 y §3.13). En escritorio
-// (≥ 1024 px) es un aside al lado de la lista, fijo bajo la cabecera, que se
-// desplaza por dentro; en móvil es una pantalla propia (la lista se oculta)
+// ancho (≥ 1280 px; con la barra lateral del CRM no caben antes) es un aside al lado de la lista, fijo bajo la cabecera, que se
+// desplaza por dentro; por debajo, y en móvil, es una pantalla propia (la lista se oculta)
 // con «‹ Volver». Al abrir, el foco va a su título; Esc o ✕ lo cierran (la
 // sección devuelve el foco a la fila). El pie (SidePanelFooter) queda fijo
 // abajo y los campos reservan su altura (scroll-margin), así que nunca los
@@ -120,13 +120,13 @@ export function SidePanel({
       ref={asideRef}
       aria-label={label}
       data-testid={testId}
-      className="min-w-0 rounded-xl border border-gold/25 bg-white/90 shadow-sm lg:sticky lg:top-28 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col"
+      className="min-w-0 rounded-xl border border-gold/25 bg-white/90 shadow-sm xl:sticky xl:top-28 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col"
     >
       <div className="flex items-start gap-2 border-b border-gold/15 p-3">
-        <button type="button" onClick={onClose} className={`${iconBtn} w-auto gap-1 px-2 text-sm lg:hidden`}>
+        <button type="button" onClick={onClose} className={`${iconBtn} w-auto gap-1 px-2 text-sm xl:hidden`}>
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {backLabel}
         </button>
-        <div className="hidden min-w-0 flex-1 lg:block" />
+        <div className="hidden min-w-0 flex-1 xl:block" />
         <div className="ml-auto flex items-center gap-1">
           {onPrev !== undefined ? (
             <button type="button" onClick={onPrev ?? undefined} disabled={!onPrev} aria-label="Vivienda anterior" className={iconBtn}>
@@ -138,13 +138,13 @@ export function SidePanel({
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           ) : null}
-          <button type="button" onClick={onClose} aria-label="Cerrar el panel" className={`${iconBtn} hidden lg:inline-flex`}>
+          <button type="button" onClick={onClose} aria-label="Cerrar el panel" className={`${iconBtn} hidden xl:inline-flex`}>
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </div>
       <div
-        className="min-w-0 space-y-3 p-3 lg:flex-1 lg:overflow-y-auto [&_:is(input,textarea,select,button,a,label)]:scroll-mb-28 [&_:is(input,textarea,select,button,a,label)]:scroll-mt-4"
+        className="min-w-0 space-y-3 p-3 xl:flex-1 xl:overflow-y-auto [&_:is(input,textarea,select,button,a,label)]:scroll-mb-28 [&_:is(input,textarea,select,button,a,label)]:scroll-mt-4"
         data-testid="side-panel-body"
       >
         <div>

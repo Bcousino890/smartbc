@@ -108,7 +108,7 @@ export function HomesSection(props: HomesSectionProps) {
   );
 
   const listCol = (
-    <div className={`min-w-0 space-y-3 ${openId ? "hidden lg:block" : ""}`}>
+    <div className={`min-w-0 space-y-3 ${openId ? "hidden xl:block" : ""}`}>
       {/* Criterios resumidos y su editor */}
       <div className="rounded-xl border border-gold/20 bg-white/60" data-testid="criteria-bar">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
@@ -298,7 +298,7 @@ export function HomesSection(props: HomesSectionProps) {
   );
 
   return (
-    <div className={openId ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:items-start lg:gap-4" : ""}>
+    <div className={openId ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] xl:items-start xl:gap-4" : ""}>
       {listCol}
       {openId ? (
         <SidePanel
@@ -350,7 +350,7 @@ function HomeRow({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={it.photoUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <span className="flex h-full items-center justify-center text-[10px] text-ink/45">Sin foto</span>
+          <span className="flex h-full items-center justify-center text-xs text-ink/45">Sin foto</span>
         )}
       </div>
       <button
@@ -373,10 +373,10 @@ function HomeRow({
       </button>
       {compact ? null : <span className="hidden w-44 shrink-0 truncate text-xs text-ink/55 md:block">{it.zone ?? "Zona · sin dato"}</span>}
       <div className="flex shrink-0 items-center gap-1">
-        {badge ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">{badge}</span> : null}
-        {manualPick ? <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] text-ink/75">Incluida a mano</span> : null}
+        {badge ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">{badge}</span> : null}
+        {manualPick ? <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs text-ink/75">Incluida a mano</span> : null}
         {warnings ? (
-          <span className="inline-flex items-center gap-0.5 text-[11px] text-amber-800" title="Tiene avisos: ábrela para verlos" data-testid="row-warnings">
+          <span className="inline-flex items-center gap-0.5 text-xs text-amber-800" title="Tiene avisos: ábrela para verlos" data-testid="row-warnings">
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
             {warnings}
             <span className="sr-only"> aviso{warnings === 1 ? "" : "s"}</span>

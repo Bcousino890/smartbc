@@ -126,7 +126,7 @@ export function ContentSection({
   const counts = Object.fromEntries(CONTENT_FILTERS.map((f) => [f.id, texts.filter((t) => matchesContentFilter(f.id, t, ctx(t))).length])) as Record<ContentFilter, number>;
 
   const listCol = (
-    <div className={`min-w-0 space-y-3 ${openId ? "hidden lg:block" : ""}`} data-testid="texts-panel">
+    <div className={`min-w-0 space-y-3 ${openId ? "hidden xl:block" : ""}`} data-testid="texts-panel">
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Filtrar por estado" className="flex min-w-0 flex-wrap gap-1">
           {CONTENT_FILTERS.map((f) => (
@@ -160,7 +160,7 @@ export function ContentSection({
       {texts.filter((t) => t.inList).length === 0 ? <p className="text-xs text-ink/50">Este catálogo todavía no tiene viviendas.</p> : null}
       {inList.length ? (
         <ul className="divide-y divide-gold/10 overflow-hidden rounded-xl border border-gold/15 bg-white/60">
-          <li className="hidden px-3 py-1.5 text-[11px] uppercase tracking-wide text-ink/45 sm:grid sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-3" aria-hidden="true">
+          <li className="hidden px-3 py-1.5 text-xs uppercase tracking-wide text-ink/45 sm:grid sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-3" aria-hidden="true">
             <span>Vivienda</span>
             <span>Qué ve el cliente</span>
             <span>Texto · material</span>
@@ -223,7 +223,7 @@ export function ContentSection({
   );
 
   return (
-    <div className={openId ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:items-start lg:gap-4" : ""}>
+    <div className={openId ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] xl:items-start xl:gap-4" : ""}>
       {listCol}
       {openId ? (
         <SidePanel
