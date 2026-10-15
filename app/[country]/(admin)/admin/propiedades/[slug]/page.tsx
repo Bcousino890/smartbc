@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { getSharesForProperty } from "@/lib/db/queries/shares";
+import { getPropertyTags, getTagLinksByProperty } from "@/lib/db/queries/property-tags";
 import { guardPage } from "@/lib/auth/guard";
 import type { Country } from "@/lib/country-config";
 import { PropertyEditView } from "./property-edit-view";
@@ -98,10 +99,15 @@ export default async function PropertyDetailPage({
 
   // SmartLinks de esta propiedad (con stats de aperturas).
   const shares = await getSharesForProperty(property.id);
+  const allTags = await getPropertyTags(country);
+  const tagLinks = await getTagLinksByProperty(allTags.map((t) => t.id));
 
   return (
     <PropertyEditView
       shares={shares}
+      allTags={allTags}
+      tagIds={tagLinks[property.id] ?? []}
+      country={country}
       videos={videos}
       plans={plans}
       property={{

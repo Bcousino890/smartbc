@@ -22,6 +22,7 @@ import {
   User,
   Video,
   X,
+  Tag as TagIcon,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -59,6 +60,8 @@ import { useT } from "@/lib/i18n/provider";
 import { shareSlug } from "@/lib/share-slug";
 import { PORTAL_URL } from "@/lib/portal-url";
 import { cn } from "@/lib/utils";
+import { PropertyTagEditor } from "@/components/admin/property-tags/tag-editor";
+import type { PropertyTag } from "@/lib/properties/tags";
 
 type Photo = {
   url: string;
@@ -129,9 +132,15 @@ export function PropertyEditView({
   shares,
   videos: initialVideos = [],
   plans: initialPlans = [],
+  allTags = [],
+  tagIds = [],
+  country: tagCountry = "es",
 }: {
   property: PropertyForEdit;
   shares: SmartLinkRow[];
+  allTags?: PropertyTag[];
+  tagIds?: string[];
+  country?: string;
   videos?: MediaItem[];
   plans?: MediaItem[];
 }) {
@@ -891,6 +900,20 @@ export function PropertyEditView({
       )}
 
       <form onSubmit={handleSave} className="mt-6 flex flex-col gap-6">
+        {/* Etiquetas: se guardan al instante, no dependen de "Guardar". */}
+        <Section
+          icon={<TagIcon size={15} strokeWidth={1.75} />}
+          title="Etiquetas"
+          subtitle="Clasifica la propiedad (Exclusiva, Oportunidad…). Se guardan al momento y sirven para filtrar la lista."
+        >
+          <PropertyTagEditor
+            slug={property.slug}
+            country={tagCountry}
+            allTags={allTags}
+            initialIds={tagIds}
+          />
+        </Section>
+
         {/* Datos básicos */}
         <Section
           icon={<Info size={15} strokeWidth={1.75} />}

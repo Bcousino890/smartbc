@@ -13,6 +13,7 @@ export type SearchableProperty = {
   reference?: string | null; // ref. del portal de origen (external_id)
   bcReference?: string | null;
   propertyReference?: string | null; // PROP-YYYY-NNNN (dato técnico)
+  tagNames?: string[]; // nombres de las etiquetas asignadas
 };
 
 const compact = (s: string) => s.toLowerCase().replace(/[\s\-_.]/g, "");
@@ -25,7 +26,7 @@ export function matchesPropertySearch(
   if (!q) return true;
   const qc = compact(q);
 
-  const text = [p.title, p.zone, p.subzone, p.agencyName]
+  const text = [p.title, p.zone, p.subzone, p.agencyName, ...(p.tagNames ?? [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();

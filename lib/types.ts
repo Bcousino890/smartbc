@@ -409,6 +409,8 @@ export type AdminProperty = {
   featured?: boolean;
   coverPhotoUrl?: string | null;
   photos?: { url: string; isCover: boolean }[];
+  // Ids de las etiquetas asignadas (catálogo en property_tags).
+  tagIds?: string[];
 };
 
 export type AdminPropertiesStats = {

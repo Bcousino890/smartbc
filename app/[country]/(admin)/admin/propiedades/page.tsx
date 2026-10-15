@@ -7,6 +7,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { propertyRowToAdminProperty } from "@/lib/db/adapters";
 import { getAgencies } from "@/lib/db/queries/agencies";
 import { getProperties } from "@/lib/db/queries/properties";
+import { getPropertyTags, getTagLinksByProperty } from "@/lib/db/queries/property-tags";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -39,7 +40,12 @@ export default async function AdminPropiedadesPage({
   if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
-  const properties = rows.map(propertyRowToAdminProperty);
+  const tags = await getPropertyTags(country);
+  const links = await getTagLinksByProperty(tags.map((t) => t.id));
+  const properties = rows.map((row) => ({
+    ...propertyRowToAdminProperty(row),
+    tagIds: links[(row as unknown as { id: string }).id] ?? [],
+  }));
   const agencies = ((agencyRows ?? []) as Array<{
     slug: string;
     name: string;
@@ -115,6 +121,7 @@ export default async function AdminPropiedadesPage({
         agencies={agencies}
         currentRole={currentProfile?.role}
         country={country}
+        initialTags={tags}
       />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />

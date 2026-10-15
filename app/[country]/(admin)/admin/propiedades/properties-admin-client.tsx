@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Tag as TagIcon,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -26,6 +27,15 @@ import {
   type AgencyOption,
   NewPropertyModal,
 } from "@/components/admin/new-property-modal";
+import { BatchTagMenu, TagFilterMenu } from "@/components/admin/property-tags/tag-menus";
+import { TagChip } from "@/components/admin/property-tags/tag-chip";
+import { TagManagerDialog } from "@/components/admin/property-tags/tag-manager-dialog";
+import { assignTags } from "@/components/admin/property-tags/tag-api";
+import {
+  applyTagChange,
+  matchesTagFilter,
+  type PropertyTag,
+} from "@/lib/properties/tags";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
@@ -55,15 +65,17 @@ const STATUS_LABELS: Record<AdminPropertyStatus, string> = {
 };
 
 export function PropertiesAdminClient({
-  properties,
+  properties: propertiesProp,
   agencies,
   currentRole,
   country,
+  initialTags = [],
 }: {
   properties: AdminProperty[];
   agencies: AgencyOption[];
   currentRole?: string;
   country: Country;
+  initialTags?: PropertyTag[];
 }) {
   const config = getCountryConfig(country);
   const t = useT();
@@ -102,10 +114,25 @@ export function PropertiesAdminClient({
   const [maxPrice, setMaxPrice] = useState<string>(() => param("precioMax"));
   const [minM2, setMinM2] = useState<string>(() => param("m2Min"));
   const [maxM2, setMaxM2] = useState<string>(() => param("m2Max"));
+  const [tagFilter, setTagFilter] = useState<string[]>(() =>
+    param("etiquetas").split(",").filter(Boolean),
+  );
   const [page, setPage] = useState(() => {
     const n = Number.parseInt(searchParams.get("pagina") ?? "", 10);
     return Number.isFinite(n) && n > 0 ? n : 1;
   });
+  // Etiquetas: el catálogo y la asignación viven en estado local para que
+  // crear/asignar se vea al instante sin recargar la lista entera.
+  const [tags, setTags] = useState<PropertyTag[]>(initialTags);
+  const [tagMap, setTagMap] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(propertiesProp.map((p) => [p.id, p.tagIds ?? []])),
+  );
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+  const properties = useMemo(
+    () => propertiesProp.map((p) => ({ ...p, tagIds: tagMap[p.id] ?? [] })),
+    [propertiesProp, tagMap],
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(
@@ -168,7 +195,19 @@ export function PropertiesAdminClient({
 
   const filtered = useMemo(() => {
     return properties.filter((p) => {
-      if (!matchesPropertySearch(p, query)) return false;
+      if (
+        !matchesPropertySearch(
+          {
+            ...p,
+            tagNames: (p.tagIds ?? [])
+              .map((id) => tagById.get(id)?.name)
+              .filter((n): n is string => Boolean(n)),
+          },
+          query,
+        )
+      )
+        return false;
+      if (!matchesTagFilter(p.tagIds, tagFilter)) return false;
       if (
         operationFilter &&
         p.operation !== operationFilter &&
@@ -202,6 +241,8 @@ export function PropertiesAdminClient({
     });
   }, [
     properties,
+    tagById,
+    tagFilter,
     query,
     operationFilter,
     statusFilter,
@@ -236,6 +277,7 @@ export function PropertiesAdminClient({
     setPage(1);
   }, [
     query,
+    tagFilter,
     operationFilter,
     statusFilter,
     zoneFilter,
@@ -264,6 +306,7 @@ export function PropertiesAdminClient({
       else sp.delete(key);
     };
     set("q", query);
+    set("etiquetas", tagFilter.join(","));
     set("operacion", operationFilter);
     set("estado", statusFilter);
     set("distrito", zoneFilter);
@@ -299,10 +342,12 @@ export function PropertiesAdminClient({
     minM2,
     maxM2,
     page,
+    tagFilter,
   ]);
 
   const hasActiveFilters = Boolean(
-    operationFilter ||
+    tagFilter.length > 0 ||
+      operationFilter ||
       statusFilter ||
       zoneFilter ||
       subzoneFilter ||
@@ -320,6 +365,7 @@ export function PropertiesAdminClient({
 
   const clearFilters = () => {
     setQuery("");
+    setTagFilter([]);
     setOperationFilter("");
     setStatusFilter("");
     setZoneFilter("");
@@ -399,6 +445,15 @@ export function PropertiesAdminClient({
 
   // Chips de filtros activos (cada uno se quita con su ×).
   const activeChips: { key: string; label: string; clear: () => void }[] = [];
+  for (const id of tagFilter) {
+    const t = tagById.get(id);
+    if (t)
+      activeChips.push({
+        key: `tag-${id}`,
+        label: `Etiqueta: ${t.name}`,
+        clear: () => setTagFilter((p) => p.filter((x) => x !== id)),
+      });
+  }
   if (operationFilter)
     activeChips.push({
       key: "op",
@@ -495,6 +550,28 @@ export function PropertiesAdminClient({
   ].filter(Boolean).length;
   const canEdit = !currentRole || canAccess(currentRole, "properties", "edit");
 
+  const [batchBusy, setBatchBusy] = useState(false);
+  const applyBatchTag = async (tagId: string, mode: "add" | "remove") => {
+    const slugs = Array.from(selected);
+    if (slugs.length === 0) return;
+    setBatchBusy(true);
+    const r = await assignTags(slugs, mode === "add" ? [tagId] : [], mode === "remove" ? [tagId] : []);
+    setBatchBusy(false);
+    if (!r.ok) return toast(r.error, "error");
+    setTagMap((prev) => {
+      const next = { ...prev };
+      for (const slug of slugs)
+        next[slug] = applyTagChange(prev[slug], mode === "add" ? [tagId] : [], mode === "remove" ? [tagId] : []);
+      return next;
+    });
+    const name = tagById.get(tagId)?.name ?? "etiqueta";
+    toast(
+      `${mode === "add" ? "Añadida" : "Quitada"} «${name}» en ${slugs.length} propiedad${slugs.length === 1 ? "" : "es"}`,
+      "success",
+    );
+  };
+  const canDeleteTags = !currentRole || canAccess(currentRole, "properties", "delete");
+
   return (
     <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-4 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm sm:p-5 md:p-6">
       {/* Fila 1: buscador + alta */}
@@ -505,10 +582,18 @@ export function PropertiesAdminClient({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por título, ref. BC (BC-1766), ref. de portal o zona…"
+            placeholder="Buscar por título, ref. BC (BC-1766), ref. de portal, zona o etiqueta…"
             className="crm-input w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
+        <button
+          type="button"
+          onClick={() => setTagManagerOpen(true)}
+          className="crm-button inline-flex items-center gap-2 rounded-xl border border-ink/15 bg-white px-4 py-2.5 text-ink/75 transition hover:border-gold/55 hover:text-ink"
+        >
+          <TagIcon size={14} strokeWidth={1.75} className="text-gold-dark" />
+          <span>Etiquetas</span>
+        </button>
         <div className="relative" ref={menuRef}>
           <button
             type="button"
@@ -609,6 +694,12 @@ export function PropertiesAdminClient({
             { value: "", label: "Todas" },
             ...agencyOptions.map(([id, name]) => ({ value: id, label: name })),
           ]}
+        />
+        <TagFilterMenu
+          tags={tags}
+          selected={tagFilter}
+          onChange={setTagFilter}
+          onManage={() => setTagManagerOpen(true)}
         />
         <button
           type="button"
@@ -748,6 +839,15 @@ export function PropertiesAdminClient({
             <MessageCircle size={12} strokeWidth={1.75} />
             <span>Copiar para WhatsApp</span>
           </button>
+          {canEdit && (
+            <BatchTagMenu
+              tags={tags}
+              count={selected.size}
+              busy={batchBusy}
+              onApply={applyBatchTag}
+              onManage={() => setTagManagerOpen(true)}
+            />
+          )}
           <button
             type="button"
             onClick={() => setSelected(new Set())}
@@ -758,6 +858,23 @@ export function PropertiesAdminClient({
           </button>
         </div>
       )}
+
+      <TagManagerDialog
+        open={tagManagerOpen}
+        onClose={() => setTagManagerOpen(false)}
+        tags={tags}
+        country={country}
+        canDelete={canDeleteTags}
+        onTagsChange={setTags}
+        onTagDeleted={(id) => {
+          setTagFilter((p) => p.filter((x) => x !== id));
+          setTagMap((prev) =>
+            Object.fromEntries(
+              Object.entries(prev).map(([k, v]) => [k, v.filter((x) => x !== id)]),
+            ),
+          );
+        }}
+      />
 
       <NewPropertyModal
         open={modalOpen}
@@ -803,6 +920,7 @@ export function PropertiesAdminClient({
                 selected={selected.has(p.id)}
                 onToggleSelect={() => toggleOne(p.id)}
                 config={config}
+                tags={(p.tagIds ?? []).map((id) => tagById.get(id)).filter((t): t is PropertyTag => Boolean(t))}
               />
             ))}
           </ul>
@@ -822,12 +940,14 @@ function PropertyRow({
   selected = false,
   onToggleSelect,
   config,
+  tags = [],
 }: {
   property: AdminProperty;
   canEdit?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
   config: ReturnType<typeof getCountryConfig>;
+  tags?: PropertyTag[];
 }) {
   const t = useT();
   const [photosOpen, setPhotosOpen] = useState(false);
@@ -921,6 +1041,13 @@ function PropertyRow({
         <p className="mt-0.5 text-xs text-ink/60">
           {property.bedrooms} dorm. · {property.bathrooms} baños · {property.squareMeters} m²
         </p>
+        {tags.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {tags.map((tg) => (
+              <TagChip key={tg.id} name={tg.name} color={tg.color} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Precio (escritorio) */}
