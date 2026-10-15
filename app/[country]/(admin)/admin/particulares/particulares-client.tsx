@@ -1,7 +1,6 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Loader2, Phone, RefreshCw, Radar, LayoutGrid, List, SlidersHorizontal, Wrench, X } from "lucide-react";
-import Link from "next/link";
+import { Check, ChevronLeft, ChevronRight, Loader2, Phone, RefreshCw, LayoutGrid, List, SlidersHorizontal, Wrench, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/ui/toast";
@@ -379,9 +378,6 @@ export function ParticularesClient({
                   <button role="menuitem" type="button" onClick={handleVerifyPhones} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-ink/5">
                     <Phone size={14} /> Verificar teléfonos
                   </button>
-                  <Link role="menuitem" href="/es/admin/sindicacion?tab=portales" onClick={() => setToolsOpen(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-ink/5">
-                    <Radar size={14} /> Scrapers y zonas (Sindicación)
-                  </Link>
                 </div>
               )}
             </div>

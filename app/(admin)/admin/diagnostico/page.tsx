@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
-import { getCurrentProfile } from "@/lib/db/queries/session";
 
-export default async function AdminDiagnosticoPage() {
-  const profile = await getCurrentProfile();
-  const country = (profile as any)?.country === "cl" ? "cl" : "es";
-  redirect(`/${country}/admin/diagnostico`);
+// Diagnóstico se eliminó: la salud de los scrapers está en Sindicación.
+export default function AdminDiagnosticoPage() {
+  redirect("/es/admin/sindicacion");
 }
