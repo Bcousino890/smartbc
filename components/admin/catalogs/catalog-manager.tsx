@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
@@ -18,6 +17,10 @@ import { CoverPicker, type CoverActions } from "./cover-picker";
 import { CatalogTextsPanel, type TextActions } from "./catalog-texts-panel";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import type { CatalogCriteria } from "@/lib/catalogs/criteria";
+import type { Section } from "@/lib/catalogs/manager-state";
+import { ManagerHeader, type NoLinkReason } from "./manager/manager-header";
+import { SectionTabs } from "./manager/section-tabs";
+import { useManagerUrl } from "./manager/use-manager-url";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
 // llegan inyectadas: en la página real son las acciones de servidor (con la
@@ -28,6 +31,9 @@ import type { CatalogCriteria } from "@/lib/catalogs/criteria";
 // Ampliación C1: en automático se puede incluir y excluir (ajustes
 // persistentes; la lista sigue actualizándose sola), cada vivienda dice por
 // qué está, y la portada se elige aparte. Nada de esto llega al lector.
+// E2: cuatro secciones (Viviendas, Contenido, Diseño, Compartir) con la
+// sección en la URL; mismas acciones de servidor, envueltas con la medición
+// en UN solo sitio (abajo, `wrapped`).
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 /** Solo con ?medir=1 y «sin aviso inmediato». */
@@ -109,8 +115,63 @@ export function CatalogManager({
   const [pending, start] = useTransition();
   const [currentShare, setCurrentShare] = useState<ShareView | null>(share);
   const measure = useHomeMeasure(measureMode, currentShare && !currentShare.expired ? currentShare.token : null);
-  const mo: M = measure.skipNotify ? { skipNotify: true } : {};
+  const skip = measure.skipNotify;
   const auto = catalog.mode === "auto";
+  const { section, navigate } = useManagerUrl();
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const focusAfter = useRef<string | null>(null);
+
+  // Acciones con la medición (?medir=1, «sin aviso inmediato»): las MISMAS que
+  // antes de E2, envueltas una vez y estables entre renders.
+  const wrapped = useMemo(() => {
+    const mo: M = skip ? { skipNotify: true } : {};
+    return {
+      updateMeta: (i: Parameters<CatalogManagerActions["updateMeta"]>[0]) => actions.updateMeta({ ...i, ...mo }),
+      addProperty: (i: Parameters<CatalogManagerActions["addProperty"]>[0]) => actions.addProperty({ ...i, ...mo }),
+      removeProperty: (i: Parameters<CatalogManagerActions["removeProperty"]>[0]) => actions.removeProperty({ ...i, ...mo }),
+      reorder: (i: Parameters<CatalogManagerActions["reorder"]>[0]) => actions.reorder({ ...i, ...mo }),
+      setStatus: (i: Parameters<CatalogManagerActions["setStatus"]>[0]) => actions.setStatus({ ...i, ...mo }),
+      setContact: (i: Parameters<CatalogManagerActions["setContact"]>[0]) => actions.setContact({ ...i, ...mo }),
+      addPropertyById: (i: Parameters<CatalogManagerActions["addPropertyById"]>[0]) => actions.addPropertyById({ ...i, ...mo }),
+      adjust: (i: Parameters<CatalogManagerActions["adjust"]>[0]) => actions.adjust({ ...i, ...mo }),
+      clearAdjustment: (i: Parameters<CatalogManagerActions["clearAdjustment"]>[0]) => actions.clearAdjustment({ ...i, ...mo }),
+      selection: {
+        ...actions.selection,
+        setCriteria: (i: Parameters<SelectionActions["setCriteria"]>[0]) => actions.selection.setCriteria({ ...i, ...mo }),
+        setMode: (i: Parameters<SelectionActions["setMode"]>[0]) => actions.selection.setMode({ ...i, ...mo }),
+      } satisfies SelectionActions,
+      cover: { ...actions.cover, set: (i: Parameters<CoverActions["set"]>[0]) => actions.cover.set({ ...i, ...mo }) } satisfies CoverActions,
+      texts: {
+        ...actions.texts,
+        save: (i: Parameters<TextActions["save"]>[0]) => actions.texts.save({ ...i, ...mo }),
+        publish: (i: Parameters<TextActions["publish"]>[0]) => actions.texts.publish({ ...i, ...mo }),
+        withdraw: (i: Parameters<TextActions["withdraw"]>[0]) => actions.texts.withdraw({ ...i, ...mo }),
+        remove: (i: Parameters<TextActions["remove"]>[0]) => actions.texts.remove({ ...i, ...mo }),
+      } satisfies TextActions,
+    };
+  }, [actions, skip]);
+
+  function go(next: Section, focusId?: string) {
+    focusAfter.current = focusId ?? null;
+    navigate({ seccion: next });
+  }
+  useEffect(() => {
+    const id = focusAfter.current;
+    if (!id) return;
+    focusAfter.current = null;
+    requestAnimationFrame(() => document.getElementById(id)?.focus());
+  }, [section]);
+
+  function previewWithoutLink(reason: NoLinkReason) {
+    setShareNotice(
+      reason === "archived"
+        ? "Reactiva el catálogo para compartirlo: mientras esté archivado no hay vista previa."
+        : reason === "expired"
+          ? "El enlace caducó: renuévalo para ver la vista previa."
+          : "Aún no hay enlace: créalo aquí para ver la vista previa.",
+    );
+    go("compartir", "sp-title");
+  }
   const [draftCriteria, setDraftCriteria] = useState<CatalogCriteria>(catalog.criteria);
 
   useEffect(() => setItems(catalog.items), [catalog.items]);
@@ -151,7 +212,7 @@ export function CatalogManager({
     [next[index], next[j]] = [next[j], next[index]];
     setItems(next);
     run(
-      () => actions.reorder({ catalogId: catalog.id, propertyIds: next.map((i) => i.propertyId) , ...mo }),
+      () => wrapped.reorder({ catalogId: catalog.id, propertyIds: next.map((i) => i.propertyId) }),
       "Orden guardado.",
       undefined,
       () => setItems(before),
@@ -164,7 +225,7 @@ export function CatalogManager({
     const before = items;
     setItems(items.filter((x) => x.propertyId !== it.propertyId));
     run(
-      () => actions.removeProperty({ catalogId: catalog.id, propertyId: it.propertyId , ...mo }),
+      () => wrapped.removeProperty({ catalogId: catalog.id, propertyId: it.propertyId }),
       "Propiedad quitada del catálogo.",
       undefined,
       () => setItems(before),
@@ -176,7 +237,7 @@ export function CatalogManager({
     e.preventDefault();
     const ref = reference;
     run(
-      () => actions.addProperty({ catalogId: catalog.id, reference: ref , ...mo }),
+      () => wrapped.addProperty({ catalogId: catalog.id, reference: ref }),
       "Propiedad añadida.",
       () => {
         setReference("");
@@ -195,8 +256,8 @@ export function CatalogManager({
       run(
         () =>
           kind === "clear"
-            ? actions.clearAdjustment({ catalogId: catalog.id, propertyId: it.propertyId, ...mo })
-            : actions.adjust({ catalogId: catalog.id, propertyId: it.propertyId, kind, ...mo }),
+            ? wrapped.clearAdjustment({ catalogId: catalog.id, propertyId: it.propertyId })
+            : wrapped.adjust({ catalogId: catalog.id, propertyId: it.propertyId, kind }),
         labels[kind],
         () => resolve(true),
         () => resolve(false),
@@ -207,13 +268,13 @@ export function CatalogManager({
 
   function saveMeta(e: React.FormEvent) {
     e.preventDefault();
-    run(() => actions.updateMeta({ catalogId: catalog.id, title, intro , ...mo }), "Datos guardados.", undefined, undefined, "edición");
+    run(() => wrapped.updateMeta({ catalogId: catalog.id, title, intro }), "Datos guardados.", undefined, undefined, "edición");
   }
 
   function saveContact(e: React.FormEvent) {
     e.preventDefault();
     run(
-      () => actions.setContact({ catalogId: catalog.id, name: contactName, phone: contactPhone, role: contactRole , ...mo }),
+      () => wrapped.setContact({ catalogId: catalog.id, name: contactName, phone: contactPhone, role: contactRole }),
       "Contacto guardado. Quien tenga el enlace abierto lo verá al momento.",
       undefined,
       undefined,
@@ -223,7 +284,7 @@ export function CatalogManager({
 
   function toggleStatus() {
     const next = status === "active" ? "archived" : "active";
-    run(() => actions.setStatus({ catalogId: catalog.id, status: next , ...mo }), next === "archived" ? "Catálogo archivado." : "Catálogo reactivado.", () => setStatus(next));
+    run(() => wrapped.setStatus({ catalogId: catalog.id, status: next }), next === "archived" ? "Catálogo archivado." : "Catálogo reactivado.", () => setStatus(next));
   }
 
   const archived = status === "archived";
@@ -239,26 +300,32 @@ export function CatalogManager({
     return parts.join(" · ");
   }
 
+  const panel = (s: Section) => ({
+    role: "tabpanel" as const,
+    id: `cm-panel-${s}`,
+    "aria-labelledby": `cm-tab-${s}`,
+    hidden: section !== s,
+    tabIndex: -1,
+  });
+
   return (
-    <div className="mt-6 space-y-6 pb-12">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={basePath} className="inline-flex items-center gap-1 text-sm text-ink/60 hover:text-ink">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Mi espacio
-        </Link>
-        <div className="flex items-center gap-3">
-          <span className={`rounded-full px-3 py-1 text-xs ${archived ? "bg-ink/10 text-ink/60" : "bg-gold/15 text-ink/80"}`}>
-            {archived ? "Archivado" : "Activo"}
-          </span>
-          <button
-            type="button"
-            onClick={toggleStatus}
-            disabled={pending}
-            className="rounded-lg border border-gold/40 px-3 py-1.5 text-sm text-ink/80 transition hover:bg-white/70 disabled:opacity-60"
-          >
-            {archived ? "Reactivar" : "Archivar"}
-          </button>
-        </div>
-      </div>
+    <div className="mt-4 space-y-4 pb-12">
+      <ManagerHeader
+        basePath={basePath}
+        title={catalog.title}
+        archived={archived}
+        mode={catalog.mode}
+        count={items.length}
+        share={currentShare}
+        pending={pending}
+        onToggleStatus={toggleStatus}
+        onPreviewWithoutLink={previewWithoutLink}
+        onShare={() => {
+          setShareNotice(null);
+          go("compartir", "sp-title");
+        }}
+      />
+      <SectionTabs section={section} onSelect={(s) => go(s)} counts={{ viviendas: items.length }} />
 
       {message ? (
         <p
@@ -269,8 +336,7 @@ export function CatalogManager({
         </p>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="min-w-0 space-y-4 lg:col-span-2" aria-labelledby="cm-props">
+      <section {...panel("viviendas")} className="min-w-0 space-y-4 focus:outline-none">
           <div className="flex items-end justify-between gap-3">
             <h2 id="cm-props" className="crm-section-title text-ink">
               Propiedades
@@ -285,11 +351,7 @@ export function CatalogManager({
             mode={catalog.mode}
             criteria={catalog.criteria}
             manualCount={catalog.manualCount}
-            actions={{
-              ...actions.selection,
-              setCriteria: (i) => actions.selection.setCriteria({ ...i, ...mo }),
-              setMode: (i) => actions.selection.setMode({ ...i, ...mo }),
-            }}
+            actions={wrapped.selection}
             run={run}
             pending={pending}
             onCriteriaChange={setDraftCriteria}
@@ -325,7 +387,7 @@ export function CatalogManager({
               onAdd={(it) =>
                 new Promise<boolean>((resolve) => {
                   run(
-                    () => actions.addPropertyById({ catalogId: catalog.id, propertyId: it.propertyId, ...mo }),
+                    () => wrapped.addPropertyById({ catalogId: catalog.id, propertyId: it.propertyId }),
                     "Propiedad añadida.",
                     () => {
                       if (onLocalAdd) setItems((xs) => [...xs, it]);
@@ -530,103 +592,125 @@ export function CatalogManager({
             </section>
           ) : null}
 
+      </section>
+
+      <section {...panel("contenido")} className="min-w-0 space-y-4 focus:outline-none">
           <CatalogTextsPanel
             catalogId={catalog.id}
             texts={texts}
-            actions={{
-              ...actions.texts,
-              save: (i) => actions.texts.save({ ...i, ...mo }),
-              publish: (i) => actions.texts.publish({ ...i, ...mo }),
-              withdraw: (i) => actions.texts.withdraw({ ...i, ...mo }),
-              remove: (i) => actions.texts.remove({ ...i, ...mo }),
-            }}
+            actions={wrapped.texts}
             run={run}
             pending={pending}
             storyHref={storyHref}
           />
-        </section>
+      </section>
 
-        <aside className="min-w-0 space-y-4">
-          <div className="mx-auto aspect-[150/212] w-full max-w-[240px] overflow-hidden rounded-sm shadow-[0_10px_24px_-14px_rgba(60,40,20,0.45)]" data-check-overflow="portada">
-            <CatalogCover
-              data={{
-                title: title || catalog.title,
-                subtitle: intro || null,
-                numberLabel,
-                edition: catalog.edition,
-                photoUrl: catalog.cover.effectivePhotoUrl ?? null,
-                preparedBy: contactName.trim() || null,
-              }}
-            />
+      <section {...panel("diseno")} className="min-w-0 focus:outline-none">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 space-y-4">
+              <form onSubmit={saveMeta} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4">
+                <label className="block">
+                  <span className="crm-label-sm text-ink/70">Título</span>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    maxLength={160}
+                    required
+                    className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+                  />
+                </label>
+                <label className="block">
+                  <span className="crm-label-sm text-ink/70">Introducción</span>
+                  <textarea
+                    value={intro}
+                    onChange={(e) => setIntro(e.target.value)}
+                    maxLength={2000}
+                    rows={4}
+                    className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
+                >
+                  Guardar
+                </button>
+              </form>
+              <CoverPicker
+                catalogId={catalog.id}
+                items={items}
+                cover={catalog.cover}
+                actions={wrapped.cover}
+                run={run}
+                pending={pending}
+              />
           </div>
-          <CoverPicker
-            catalogId={catalog.id}
-            items={items}
-            cover={catalog.cover}
-            actions={{ ...actions.cover, set: (i) => actions.cover.set({ ...i, ...mo }) }}
-            run={run}
-            pending={pending}
-          />
-          <form onSubmit={saveMeta} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4">
-            <label className="block">
-              <span className="crm-label-sm text-ink/70">Título</span>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={160}
-                required
-                className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+          <div className="min-w-0 space-y-2">
+            <p className="crm-label-sm text-ink/60">Vista previa de la portada</p>
+            <div className="mx-auto aspect-[150/212] w-full max-w-[240px] overflow-hidden rounded-sm shadow-[0_10px_24px_-14px_rgba(60,40,20,0.45)]" data-check-overflow="portada">
+              <CatalogCover
+                data={{
+                  title: title || catalog.title,
+                  subtitle: intro || null,
+                  numberLabel,
+                  edition: catalog.edition,
+                  photoUrl: catalog.cover.effectivePhotoUrl ?? null,
+                  preparedBy: contactName.trim() || null,
+                }}
               />
-            </label>
-            <label className="block">
-              <span className="crm-label-sm text-ink/70">Introducción</span>
-              <textarea
-                value={intro}
-                onChange={(e) => setIntro(e.target.value)}
-                maxLength={2000}
-                rows={4}
-                className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section {...panel("compartir")} className="min-w-0 focus:outline-none">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="min-w-0 space-y-4">
+            <form onSubmit={saveContact} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="contact-form">
+              <ContactFields
+                idPrefix="cm"
+                name={contactName}
+                phone={contactPhone}
+                role={contactRole}
+                onName={setContactName}
+                onPhone={setContactPhone}
+                onRole={setContactRole}
               />
-            </label>
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
-            >
-              Guardar
-            </button>
-          </form>
-          <form onSubmit={saveContact} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="contact-form">
-            <ContactFields
-              idPrefix="cm"
-              name={contactName}
-              phone={contactPhone}
-              role={contactRole}
-              onName={setContactName}
-              onPhone={setContactPhone}
-              onRole={setContactRole}
-            />
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
-            >
-              Guardar contacto
-            </button>
-          </form>
-          {shareActions ? (
-            <SharePanel
-              catalogId={catalog.id}
-              share={currentShare}
-              archived={archived}
-              actions={shareActions}
-              onChange={setCurrentShare}
-            />
-          ) : null}
-          <AdsPanel catalogId={catalog.id} ads={catalog.ads} actions={actions.ads} />
-          {measureMode ? <MeasurePanel measure={measure} hasShare={!!currentShare && !currentShare.expired} /> : null}
-        </aside>
-      </div>
+              <button
+                type="submit"
+                disabled={pending}
+                className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
+              >
+                Guardar contacto
+              </button>
+            </form>
+          </div>
+          <div className="min-w-0 space-y-4">
+            {shareNotice ? (
+              <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="share-notice">
+                {shareNotice}
+              </p>
+            ) : null}
+            {shareActions ? (
+              <SharePanel
+                catalogId={catalog.id}
+                share={currentShare}
+                archived={archived}
+                actions={shareActions}
+                onChange={setCurrentShare}
+              />
+            ) : null}
+            <details className="rounded-xl border border-gold/20 bg-white/40 p-3" data-testid="internal-ads">
+              <summary className="cursor-pointer text-sm text-ink/70">Organización interna · anuncios de origen</summary>
+              <div className="mt-3">
+              <AdsPanel catalogId={catalog.id} ads={catalog.ads} actions={actions.ads} />
+              </div>
+            </details>
+            {measureMode ? <MeasurePanel measure={measure} hasShare={!!currentShare && !currentShare.expired} /> : null}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

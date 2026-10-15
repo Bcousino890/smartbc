@@ -119,7 +119,7 @@ export function SharePanel({
 
   return (
     <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="sp-title" data-check-overflow="enlace">
-      <h2 id="sp-title" className="crm-label-sm flex items-center gap-1.5 text-ink/70">
+      <h2 id="sp-title" tabIndex={-1} className="crm-label-sm flex items-center gap-1.5 text-ink/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">
         <Link2 className="h-4 w-4" aria-hidden="true" /> Enlace para compartir
       </h2>
 
