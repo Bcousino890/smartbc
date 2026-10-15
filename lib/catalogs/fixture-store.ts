@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { syntheticPhoto } from "./fixtures";
 import type { InternalItem, InternalSnapshot } from "./to-public";
+import type { CatalogMeta } from "./coherent-read";
+import type { CatalogOperation } from "./operation-price";
+import { composeFingerprint } from "./public-fingerprint";
 
 // ============================================================================
 // SOLO DESARROLLO LOCAL (BCP-01 T11, E7). Almacén EN MEMORIA que sustituye a
@@ -9,7 +12,10 @@ import type { InternalItem, InternalSnapshot } from "./to-public";
 // /api/seleccion/* y el vigilante reales se prueban de punta a punta con datos
 // 100 % sintéticos. Nunca se importa fuera de ese modo.
 //
-// La huella imita a 0193: md5 de la instantánea interna completa.
+// La huella imita a 0193: md5 de la instantánea interna completa. Como en la
+// BD, cada enlace tiene la operación guardada de su catálogo y una versión que
+// sube con cada cambio (K1, lectura coherente §3.2); public-data.ts compone
+// la huella pública igual que con la BD.
 // ============================================================================
 
 export const FIXTURE_TOKENS = {
@@ -28,6 +34,10 @@ export const FIXTURE_TOKENS = {
   // E1: casos de la QA de C2 (entrada larga, capítulos breves, historias de
   // 7–9 capítulos, clases de foto excluidas, ficha breve y capítulo largo).
   qa: "fixtureQaToken00000000000010",
+  // K1: catálogos de una sola operación (DS-1/DS-2) con duales, P-ALQ y una
+  // inclusión de otra operación.
+  rent: "fixtureRentToken000000000011",
+  sale: "fixtureSaleToken000000000012",
 } as const;
 
 // Títulos como los de las fichas reales: varios ocupan dos líneas en el índice.
@@ -46,6 +56,10 @@ interface Share {
   expiresAt: number;
   revoked: boolean;
   archived: boolean;
+  /** K1: operación guardada del catálogo («any» por defecto). */
+  operation?: CatalogOperation;
+  /** Como catalogs.version: sube con cada cambio. */
+  version?: number;
 }
 
 const DESC =
@@ -123,7 +137,8 @@ async function seed(): Promise<Map<string, Share>> {
     ),
     item({
       key: "fxKeyDuplex3", slug: "fx-duplex", title: "Dúplex con patio", zone: null, operation: "rent",
-      status: "reserved", bathrooms: 2, photos: photos(145, 1, "v"),
+      // P-ALQ (D-QA16): sin precio principal y un importe secundario → «Precio · sin dato».
+      rent_price: 3900, status: "reserved", bathrooms: 2, photos: photos(145, 1, "v"),
     }),
     await withClean(
       item({
@@ -307,7 +322,27 @@ async function seed(): Promise<Map<string, Share>> {
     withStory(qaBase("fxQaSinFoto0k", "Piso sin foto adecuada", classed(710, [null, null, null])), null,
       [{ c: "building", t: words(20, "Edificio clásico con portería física") }, { c: "barrio", t: words(45, "A pocos minutos a pie del mercado") }]),
   ];
+  // K1: las mismas viviendas en un catálogo de alquiler y en uno de venta.
+  const opItems = (sale: boolean): InternalItem[] => [
+    item({ key: "fxOpDual0001", slug: "fx-op-dual", title: "Piso en Almagro en venta y alquiler", subzone: "Almagro", operations: ["sale", "rent"], price: 2100000, rent_price: 6800, bedrooms: 4, bathrooms: 3, square_meters: 186, photos: photos(205, 3, "h") }),
+    ...(sale
+      ? [
+          item({ key: "fxOpVenta002", slug: "fx-op-venta", title: "Ático en venta en Goya", subzone: "Goya", price: 1450000, bedrooms: 3, bathrooms: 2, square_meters: 142, photos: photos(28, 2, "h") }),
+          // Inclusión de otra operación: alquiler en un catálogo de venta.
+          item({ key: "fxOpAlq00003", slug: "fx-op-alq", title: "Estudio en alquiler en Recoletos", subzone: "Recoletos", operation: "rent", operations: ["rent"], price: 2100, bedrooms: 1, bathrooms: 1, square_meters: 54, photos: photos(330, 2, "v") }),
+        ]
+      : [
+          item({ key: "fxOpR500004", slug: "fx-op-r5000", title: "Piso en alquiler en Recoletos", subzone: "Recoletos", operation: "rent", operations: ["rent"], price: 5000, bedrooms: 2, bathrooms: 2, square_meters: 110, photos: photos(60, 2, "h") }),
+          // P-ALQ: dos importes → el principal; sin principal → «sin dato».
+          item({ key: "fxOpX6R9005", slug: "fx-op-x6r9", title: "Piso con dos importes de alquiler", subzone: "Recoletos", operation: "rent", operations: ["rent"], price: 6000, rent_price: 9000, bedrooms: 3, bathrooms: 2, square_meters: 130, photos: photos(90, 2, "h") }),
+          item({ key: "fxOpZ0R6006", slug: "fx-op-z0r6", title: "Piso sin precio principal", subzone: "Recoletos", operation: "rent", operations: ["rent"], price: 0, rent_price: 6000, bedrooms: 3, bathrooms: 2, square_meters: 125, photos: photos(120, 2, "h") }),
+          // Inclusión de otra operación: venta en un catálogo de alquiler.
+          item({ key: "fxOpS950007", slug: "fx-op-s950", title: "Piso en venta en Lista", subzone: "Lista", price: 950000, bedrooms: 2, bathrooms: 2, square_meters: 98, photos: photos(250, 2, "h") }),
+        ]),
+  ];
   return new Map<string, Share>([
+    [FIXTURE_TOKENS.rent, { snapshot: snap("Alquiler en Salamanca", "Catálogo de alquiler con una dual, dos casos de importes y una venta incluida.", opItems(false)), expiresAt: far, revoked: false, archived: false, operation: "rent", version: 1 }],
+    [FIXTURE_TOKENS.sale, { snapshot: snap("Venta en Salamanca", "Catálogo de venta con una dual y un alquiler incluido.", opItems(true)), expiresAt: far, revoked: false, archived: false, operation: "sale", version: 1 }],
     [FIXTURE_TOKENS.qa, { snapshot: snap("Casos de la QA", "Viviendas sintéticas para comprobar el recorrido adaptativo.", qaItems), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.journey12, { snapshot: snap("Doce recorridos", "Doce viviendas con textos largos, historias, descripciones y solo datos.", journey12), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.journey24, { snapshot: snap("Veinticuatro recorridos", "El máximo de un catálogo automático, con textos largos.", journey24), expiresAt: far, revoked: false, archived: false }],
@@ -342,6 +377,28 @@ function valid(s: Share | undefined): s is Share {
   return !!s && !s.revoked && !s.archived && s.expiresAt > Date.now();
 }
 
+/** Huella pública compuesta (la misma que sirve public-data.ts). */
+function publicFingerprintOf(s: Share): string {
+  return composeFingerprint(fingerprintOf(s.snapshot), s.operation ?? "any");
+}
+
+/** m1/m2 de la lectura coherente: versión y operación de cada enlace. */
+export async function fixtureGetMetas(tokens: string[]): Promise<Map<string, CatalogMeta>> {
+  const st = await store();
+  const out = new Map<string, CatalogMeta>();
+  for (const t of tokens) {
+    const s = st.get(t);
+    if (s) out.set(t, { version: s.version ?? 1, operation: s.operation ?? "any" });
+  }
+  return out;
+}
+
+/** Huella pública actual de un enlace (null si no vale). */
+export async function fixtureFingerprint(token: string): Promise<string | null> {
+  const s = (await store()).get(token);
+  return valid(s) ? publicFingerprintOf(s) : null;
+}
+
 export async function fixtureGetPublic(token: string): Promise<{ snapshot: InternalSnapshot; fingerprint: string; expiresAt: string } | null> {
   const s = (await store()).get(token);
   if (!valid(s)) return null;
@@ -372,7 +429,9 @@ export type FixtureOp =
   | { op: "text"; token: string; index: number; body: string | null; lead: string | null }
   | { op: "revoke"; token: string }
   | { op: "expire"; token: string; inMs?: number }
-  | { op: "archive"; token: string };
+  | { op: "archive"; token: string }
+  // K1: cambia la operación guardada del catálogo (la instantánea no cambia).
+  | { op: "operation"; token: string; operation: CatalogOperation };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -385,7 +444,12 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
   const s = st.get(op.token);
   if (!s) return { fingerprint: null };
   const snap = s.snapshot;
+  // Como catalogs.version: cualquier cambio la sube (lectura coherente).
+  s.version = (s.version ?? 1) + 1;
   switch (op.op) {
+    case "operation":
+      s.operation = op.operation;
+      break;
     case "price":
       snap.items = snap.items.map((it) => (it.key === op.key ? { ...it, price: op.price } : it));
       break;
@@ -447,7 +511,7 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       s.archived = true;
       break;
   }
-  return { fingerprint: valid(s) ? fingerprintOf(snap) : null };
+  return { fingerprint: valid(s) ? publicFingerprintOf(s) : null };
 }
 
 /** Foto sintética para la ruta de prueba /dev-fixtures/foto/[slug]/[idx],

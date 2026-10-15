@@ -269,7 +269,15 @@ export function FixtureCatalogManager({
           return { ok: false as const, error: "Hay más inclusiones que ese máximo. Sube el máximo o quita una inclusión." };
         }
         const changes = cat.mode === "auto" && JSON.stringify(autoItems(n.criteria).items.map((x) => x.propertyId)) !== JSON.stringify(cat.items.map((x) => x.propertyId));
+        // K1: la operación guardada cambia lo que ve el lector también en
+        // manual (la instantánea no): se lleva al enlace de prueba en vivo.
+        const opChanged = n.criteria.operation !== cat.criteria.operation;
         refresh({ criteria: n.criteria });
+        if (opChanged) {
+          const before = changes ? (await live({ op: "reorder", skipNotify })).fingerprint : null;
+          const r = await live({ op: "operation", operation: n.criteria.operation, skipNotify });
+          return before === null ? r : { ...r, publicChange: true };
+        }
         return changes ? live({ op: "reorder", skipNotify }) : unchanged();
       },
       previewAuto: async ({ criteria }) => {

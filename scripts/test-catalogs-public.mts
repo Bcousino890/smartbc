@@ -19,6 +19,8 @@ import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
 import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { fitsOperation as fitsOp, operationPrice, priceDisplay, rentDataWarning } from "../lib/catalogs/operation-price.ts";
+import { composeFingerprint } from "../lib/catalogs/public-fingerprint.ts";
+import { CoherentReadError, readCoherent, readCoherentBatch, type CatalogMeta } from "../lib/catalogs/coherent-read.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
 import { deriveEditorial, highlightCandidates, leadFrom, JOURNEY_EXCLUDED_CLASSES, type EditorialInput } from "../lib/catalogs/editorial.ts";
@@ -1369,6 +1371,145 @@ async function main() {
     check("explicación de Z0R6 en A: «Sin precio» (la misma regla que la selección)", ex.status === "out" && ex.details.includes("Sin precio (con un rango de precio no entra)"));
     const ex2 = explainProperty(by.get("x6r9")!, A, null);
     check("explicación de X6R9 en A: dentro por 6.000 (lo mismo que su etiqueta)", ex2.status === "match" && ex2.details.includes("6.000 €/mes dentro de 5.000–7.000 €/mes"));
+  }
+
+  section("K1 · el lector con la operación del catálogo (DS-1/DS-2) y la huella compuesta (§3.3)");
+  {
+    const dual = item({ key: "kDual0000001", operations: ["sale", "rent"], price: 2100000, rent_price: 6800 });
+    const z0r6 = item({ key: "kZ0R60000001", operation: "rent", operations: ["rent"], price: 0, rent_price: 6000 });
+    const x6r9 = item({ key: "kX6R90000001", operation: "rent", operations: ["rent"], price: 6000, rent_price: 9000 });
+    const venta = item({ key: "kVenta000001", price: 950000 });
+    const lab = (it: InternalItem, op?: "sale" | "rent" | "any") => { const x = op ? toPublicItem(it, op) : toPublicItem(it); return `${x.operation} · ${x.price}`; };
+    check("alquiler: la dual como alquiler", lab(dual, "rent") === "Alquiler · 6.800 €/mes", lab(dual, "rent"));
+    check("alquiler: sin precio principal → sin dato (P-ALQ)", lab(z0r6, "rent") === "Alquiler · Precio · sin dato");
+    check("alquiler: dos importes → el principal", lab(x6r9, "rent") === "Alquiler · 6.000 €/mes");
+    check("alquiler: una venta incluida sigue siendo «Venta · 950.000 €» (nunca alquiler)", lab(venta, "rent") === "Venta · 950.000 €");
+    check("venta: la dual como venta", lab(dual, "sale") === "Venta · 2.100.000 €");
+    check("venta: un alquiler incluido con lo suyo real", lab(x6r9, "sale") === "Alquiler · 6.000 €/mes");
+    check("«venta y alquiler» y sin operación: como siempre", lab(dual, "any") === "Venta y alquiler · Venta 2.100.000 € · Alquiler 6.800 €/mes" && lab(dual) === lab(dual, "any"));
+    const keysOf = (x: object) => Object.keys(x).sort().join(",");
+    check("contrato: las mismas claves con o sin operación", keysOf(toPublicItem(dual, "rent")) === keysOf(toPublicItem(dual)) && keysOf(toPublicItem(z0r6, "sale")) === keysOf(toPublicItem(z0r6)));
+    const catR = toPublicCatalog(snap([dual, z0r6, x6r9, venta]), "rent");
+    check("contrato: sin claves prohibidas en un catálogo de alquiler", findForbiddenKeys(catR, FORBIDDEN_PUBLIC_KEYS).length === 0);
+    const jsonR = JSON.stringify(catR);
+    // (Las claves sintéticas llevan dígitos: se buscan los importes con su formato.)
+    // La dual enseña su alquiler (6.800 €/mes), nunca su venta (2.100.000 €).
+    check("privacidad: el cliente no ve la otra operación ni los importes secundarios", !/También|campo secundario|9\.000|2\.100\.000/.test(jsonR) && /6\.800 €\/mes/.test(jsonR));
+    check("privacidad: Z0R6 no enseña su rent_price en ningún sitio", !JSON.stringify(toPublicItem(z0r6, "rent")).includes("6.000"));
+    check("toPublicCatalog lleva la operación a todas", catR.items.map((x) => x.operation).join("|") === "Alquiler|Alquiler|Alquiler|Venta");
+    check("huella: «venta y alquiler» = la del SQL exacta", composeFingerprint("abc", "any") === "abc");
+    check("huella: venta y alquiler añaden la operación", composeFingerprint("abc", "rent") === "abc:rent" && composeFingerprint("abc", "sale") === "abc:sale");
+  }
+
+  section("K1 · lectura coherente por versión (§3.2 y §5.1, casos V1–V11)");
+  {
+    const M = (version: number, operation: unknown): CatalogMeta => ({ version, operation });
+    // Guion: cada lectura consume el siguiente paso (un Error = esa lectura falla).
+    const guion = (metas: Array<CatalogMeta | Error | null>, snaps: Array<string | null | Error>) => {
+      const c = { meta: 0, snap: 0 };
+      return {
+        c,
+        readMeta: async () => { const m = metas[c.meta++]; if (m instanceof Error) throw m; if (m === undefined) throw new Error("guion agotado"); return m; },
+        readSnapshot: async () => { const x = snaps[c.snap++]; if (x instanceof Error) throw x; if (x === undefined) throw new Error("guion agotado"); return x; },
+        isAvailable: (x: string | null) => x !== null,
+      };
+    };
+    const code = async (p: Promise<unknown>) => { try { await p; return "sin error"; } catch (e) { return e instanceof CoherentReadError ? e.code : `otro: ${(e as Error).message}`; } };
+    let g = guion([M(3, "rent"), M(3, "rent")], ["X"]);
+    let r = await readCoherent(g);
+    check("V1 sin cambios: (X, alquiler) a la primera, huella fp:rent", r.snapshot === "X" && r.operation === "rent" && r.attempts === 1 && composeFingerprint("fpX", r.operation) === "fpX:rent");
+    g = guion([M(3, "rent"), M(4, "sale"), M(4, "sale"), M(4, "sale")], ["X_B", "Y"]);
+    r = await readCoherent(g);
+    check("V2 cambio en medio: se acepta (Y, venta) en el 2.º intento; X_B nunca", r.snapshot === "Y" && r.operation === "sale" && r.attempts === 2);
+    g = guion([M(3, "rent"), M(5, "rent"), M(5, "rent"), M(5, "rent")], ["X_B", "Z"]);
+    r = await readCoherent(g);
+    check("V3 A→B→A: misma operación pero versión distinta → se rechaza X_B y se acepta Z", r.snapshot === "Z" && r.operation === "rent" && r.attempts === 2);
+    g = guion([M(3, "rent"), M(4, "rent"), M(4, "rent"), M(5, "rent"), M(5, "rent"), M(6, "rent")], ["a", "b", "c"]);
+    check("V4 cambios repetidos: 3 intentos y catalog_read_unstable (nunca «any»)", (await code(readCoherent(g))) === "catalog_read_unstable" && g.c.snap === 3);
+    g = guion([new Error("red")], ["X"]);
+    check("V5 error en m1: catalog_operation_unreadable sin pedir la instantánea", (await code(readCoherent(g))) === "catalog_operation_unreadable" && g.c.snap === 0);
+    g = guion([M(3, "rent"), new Error("red")], ["X"]);
+    check("V6 error en m2: catalog_operation_unreadable; X se descarta", (await code(readCoherent(g))) === "catalog_operation_unreadable" && g.c.snap === 1);
+    g = guion([M(3, "venta")], ["X"]);
+    check("V7 operación no válida: catalog_operation_unreadable, sin instantánea", (await code(readCoherent(g))) === "catalog_operation_unreadable" && g.c.snap === 0);
+    g = guion([M(3, "rent")], [new Error("rpc caída")]);
+    check("V8 error en la instantánea: el de siempre, sin disfrazar", (await code(readCoherent(g))) === "otro: rpc caída");
+    g = guion([M(3, "any"), M(3, "any")], ["X"]);
+    r = await readCoherent(g);
+    check("V10 «venta y alquiler»: huella del SQL sin sufijo", r.operation === "any" && composeFingerprint("fpX", r.operation) === "fpX");
+    g = guion([M(3, "rent")], [null]);
+    r = await readCoherent(g);
+    check("V11 enlace no válido: no disponible sea cual sea m1 (sin segunda lectura)", r.snapshot === null && r.operation === null && g.c.meta === 1);
+
+    // Vigilante: varios enlaces a la vez.
+    const lote = (metaCalls: Array<Record<string, CatalogMeta> | Error>, stateCalls: Array<Record<string, { valid: boolean; fp: string | null }>>) => {
+      let mi = 0;
+      let si = 0;
+      return {
+        readMetas: async (keys: string[]) => {
+          const m = metaCalls[mi++];
+          if (m instanceof Error) throw m;
+          if (!m) throw new Error("guion agotado");
+          return new Map(keys.filter((k) => m[k]).map((k) => [k, m[k]]));
+        },
+        readStates: async (keys: string[]) => {
+          const x = stateCalls[si++];
+          if (!x) throw new Error("guion agotado");
+          return new Map(keys.filter((k) => x[k]).map((k) => [k, x[k]]));
+        },
+        isAvailable: (x: { valid: boolean }) => x.valid,
+      };
+    };
+    const ok3 = { t1: { valid: true, fp: "f1" }, t2: { valid: true, fp: "f2" }, t3: { valid: true, fp: "f3" } };
+    let b = await readCoherentBatch(["t1", "t2", "t3"], lote(
+      [{ t1: M(3, "rent"), t2: M(7, "sale"), t3: M(2, "any") }, { t1: M(3, "rent"), t2: M(8, "sale"), t3: M(2, "any") }, { t2: M(8, "sale") }, { t2: M(8, "sale") }],
+      [ok3, { t2: { valid: true, fp: "f2b" } }],
+    ));
+    check("V9 vigilante: t1 y t3 a la primera; t2 se reintenta solo y entra con su versión nueva",
+      b.accepted.get("t1")?.operation === "rent" && b.accepted.get("t3")?.operation === "any" && (b.accepted.get("t2")?.state as { fp: string }).fp === "f2b" && b.skipped.size === 0);
+    b = await readCoherentBatch(["t1", "t2", "t3"], lote(
+      [{ t1: M(3, "rent"), t2: M(7, "sale"), t3: M(2, "any") }, { t1: M(3, "rent"), t2: M(8, "sale"), t3: M(2, "any") }, { t2: M(8, "sale") }, { t2: M(9, "sale") }, { t2: M(9, "sale") }, { t2: M(10, "sale") }],
+      [ok3, { t2: { valid: true, fp: "f2b" } }, { t2: { valid: true, fp: "f2c" } }],
+    ));
+    check("V9/V4 vigilante: t2 no se estabiliza → solo t2 se salta (catalog_read_unstable)",
+      b.skipped.get("t2") === "catalog_read_unstable" && b.accepted.has("t1") && b.accepted.has("t3") && !b.accepted.has("t2"));
+    check("V5 vigilante: si falla la lectura de versiones, falla la pasada entera",
+      (await code(readCoherentBatch(["t1", "t2"], lote([new Error("red")], [ok3])))) === "catalog_operation_unreadable");
+    b = await readCoherentBatch(["t1", "t2"], lote([{ t1: M(3, "rent"), t2: M(4, "venta") }, { t1: M(3, "rent"), t2: M(4, "venta") }], [ok3]));
+    check("V7 vigilante: operación no válida → solo ese enlace se salta", b.skipped.get("t2") === "catalog_operation_unreadable" && b.accepted.get("t1")?.operation === "rent");
+    b = await readCoherentBatch(["t1", "t3"], lote([{ t1: M(3, "rent"), t3: M(2, "rent") }, { t1: M(3, "rent"), t3: M(9, "rent") }], [{ t1: { valid: true, fp: "f1" }, t3: { valid: false, fp: null } }]));
+    check("V11 vigilante: un enlace no válido sale como no válido (sin reintentos)", b.accepted.get("t3")?.operation === null && (b.accepted.get("t3")?.state as { valid: boolean }).valid === false && b.skipped.size === 0);
+
+    // El vigilante real con un enlace saltado: no emite nada y conserva la huella.
+    const clock = new FakeClock();
+    let mode: "skip" | "B" = "skip";
+    let throwFor: string | null = null;
+    const hub = new SyncHub({
+      fetchStates: async (tokens) => new Map(tokens.map((t) => [t, mode === "skip" && t === "tA" ? { valid: true, fingerprint: null, expiresAt: null, skipped: true } : { valid: true, fingerprint: "B", expiresAt: "2099-01-01T00:00:00Z" }])),
+      fetchContent: async (t) => { if (t === throwFor) throw new CoherentReadError("catalog_read_unstable"); return pubState("B", ["a"]); },
+      now: clock.now,
+      setInterval: clock.setInterval,
+      clearInterval: clock.clear,
+    });
+    const evA: HubEvent[] = [];
+    const evB: HubEvent[] = [];
+    hub.subscribe("tA", "A", (e) => evA.push(e));
+    hub.subscribe("tB", "A", (e) => evB.push(e));
+    await clock.advance(HUB_CHECK_MS);
+    const pings = evA.filter((e) => e.type === "ping") as Array<{ type: "ping"; fingerprint: string | null }>;
+    check("vigilante: enlace saltado → ni update ni unavailable; otro enlace sí se actualiza",
+      !evA.some((e) => e.type === "update" || e.type === "unavailable") && evB.some((e) => e.type === "update"));
+    await clock.advance(HUB_HEARTBEAT_MS);
+    const pings2 = evA.filter((e) => e.type === "ping") as Array<{ type: "ping"; fingerprint: string | null }>;
+    check("vigilante: el latido del saltado conserva su última huella (A)", pings2.length > pings.length && pings2[pings2.length - 1].fingerprint === "A");
+    mode = "B";
+    throwFor = "tA";
+    hub.subscribe("tC", "A", () => {});
+    await clock.advance(HUB_CHECK_MS);
+    check("vigilante: si leer el contenido de un enlace falla, los demás siguen", !evA.some((e) => e.type === "update"));
+    throwFor = null;
+    await clock.advance(HUB_CHECK_MS);
+    check("vigilante: en la pasada siguiente, el saltado recibe su versión", evA.some((e) => e.type === "update"));
   }
 
   await liveTests();

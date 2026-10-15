@@ -28,6 +28,9 @@ export interface TokenState {
   valid: boolean;
   fingerprint: string | null;
   expiresAt: string | null;
+  /** K1 (§3.2): sin lectura coherente en esta pasada. No se emite nada, se
+   *  conserva la última huella y se vuelve a mirar en la siguiente. */
+  skipped?: boolean;
 }
 
 export type HubEvent =
@@ -147,6 +150,7 @@ export class SyncHub {
         const entry = this.tokens.get(token);
         if (!entry) continue;
         const st = states.get(token);
+        if (st?.skipped) continue;
         if (!st || !st.valid) {
           for (const l of entry.listeners) safeSend(l, { type: "unavailable" });
           this.tokens.delete(token);
@@ -155,7 +159,15 @@ export class SyncHub {
         entry.fingerprint = st.fingerprint;
         const behind = [...entry.listeners].filter((l) => l.fingerprint !== st.fingerprint);
         if (behind.length === 0) continue;
-        const content = await this.deps.fetchContent(token);
+        // Un enlace cuyo contenido no se puede leer ahora (lectura coherente
+        // agotada o fallo puntual) no frena a los demás: se reintenta luego.
+        let content: PublicCatalogState | null;
+        try {
+          content = await this.deps.fetchContent(token);
+        } catch (err) {
+          this.deps.onError?.(err);
+          continue;
+        }
         const current = this.tokens.get(token);
         if (!current) continue;
         if (!content) {
