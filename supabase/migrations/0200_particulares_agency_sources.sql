@@ -1,10 +1,10 @@
 -- ============================================================
--- SmartBC · Taxonomía de fuentes + señales de matching con agencias (sobre 0198)
+-- SmartBC · Taxonomía de fuentes + señales de matching con agencias (sobre 0199)
 -- ============================================================
 -- Tipos de fuente de un inmueble:
 --   particular      → anuncio de propietario (advertiser_type <> 'professional')
 --   agencia_portal  → agencia anunciante en un portal (advertiser_type = 'professional')
---   agencia_web     → web directa de agencia colaboradora (`properties`, migración 0198)
+--   agencia_web     → web directa de agencia colaboradora (`properties`, migración 0199)
 --
 -- Esta migración solo AMPLÍA lo que ve el enlazador (lib/particulares/linking-runner.ts):
 --  · `particulares_link_rows` (la vista de 0176/0184) gana, AL FINAL, el tipo de anunciante,

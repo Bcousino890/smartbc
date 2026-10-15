@@ -6,7 +6,7 @@ export type LinkOffer = {
   portal: string;
   price: number | null;
   active: boolean;
-  /** Tipo de fuente (source-kind.ts). Sin él: «particular» (anuncios anteriores a 0199). */
+  /** Tipo de fuente (source-kind.ts). Sin él: «particular» (anuncios anteriores a 0200). */
   kind?: "particular" | "agencia_portal" | "agencia_web";
   /** Nombre de la agencia (agencia_portal / agencia_web). */
   agency?: string;
@@ -94,7 +94,7 @@ export type ParticularLinksPayload = {
   contacts: Array<{ phone: string | null; name: string | null; portals: string[] }>;
   /** Historial de cambios de todas las fuentes del inmueble (más reciente primero). */
   changes?: LinkedChange[];
-  /** Propiedades de agencias del CRM que coinciden con este inmueble (migración 0198). */
+  /** Propiedades de agencias del CRM que coinciden con este inmueble (migración 0199). */
   agency_matches?: AgencyMatchInfo[];
 };
 

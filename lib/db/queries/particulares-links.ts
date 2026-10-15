@@ -174,7 +174,7 @@ export async function getParticularLinks(id: string): Promise<ParticularLinksPay
     .limit(600);
   if (!ch.error) changes = (ch.data ?? []) as LinkedChange[];
 
-  // Propiedades de agencias del CRM que son el mismo piso (migración 0198; si no existe, vacío).
+  // Propiedades de agencias del CRM que son el mismo piso (migración 0199; si no existe, vacío).
   const agency_matches = await getAgencyMatches(db, memberIds);
 
   return { root_id: rootId, members, suggestions, same_contact, contacts, changes, agency_matches };

@@ -149,7 +149,7 @@ const blockKeys = (
   ...(agency?.core && agency.m2 && agency.beds != null ? [`ag:${agency.core}|${agency.m2}|${agency.beds}`] : []),
 ];
 
-/** Fila cruda de `particulares_link_rows` / `particulares_agency_rows` (vistas 0199) → LinkRow con la taxonomía y las señales. */
+/** Fila cruda de `particulares_link_rows` / `particulares_agency_rows` (vistas 0200) → LinkRow con la taxonomía y las señales. */
 export type ViewRow = Omit<LinkRow, "kind" | "refs" | "photo_keys" | "block_keys" | "agency_name" | "agency_key"> & {
   advertiser_type?: string | null;
   agency_key?: string | null;

@@ -66,7 +66,7 @@ async function loadRows(db: Db, view = "particulares_link_rows", optional = fals
       .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) {
-      // Vista nueva (0199) sin aplicar: el cruce de agencias en portales se salta.
+      // Vista nueva (0200) sin aplicar: el cruce de agencias en portales se salta.
       if (optional) {
         console.warn(`[particulares-linking] ${view}:`, error.message);
         return [];
@@ -108,7 +108,7 @@ async function loadDecisions(db: Db): Promise<LinkDecision[]> {
   return out;
 }
 
-// ── Propiedades de agencias del CRM (migración 0198) ────────────────────────
+// ── Propiedades de agencias del CRM (migración 0199) ────────────────────────
 // Si la migración o alguna columna aún no existen, el cruce se salta sin romper el
 // enlazado de particulares (devuelve null).
 
@@ -148,7 +148,7 @@ async function loadAgencyDecisions(db: Db): Promise<AgencyDecision[] | null> {
       .in("status", ["confirmado", "descartado"])
       .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
-    if (error) return null; // migración 0198 sin aplicar
+    if (error) return null; // migración 0199 sin aplicar
     out.push(...(data as AgencyDecision[]));
     if (!data || data.length < PAGE) break;
   }

@@ -1,6 +1,6 @@
 /**
  * Test del cruce particulares ↔ propiedades de agencias del CRM
- * (lib/particulares/agency-matching.ts, migración 0198).
+ * (lib/particulares/agency-matching.ts, migración 0199).
  *
  *   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
  *     scripts/test-particulares-agency-matching.mts
