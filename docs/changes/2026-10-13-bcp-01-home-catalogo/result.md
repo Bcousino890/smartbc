@@ -1183,7 +1183,8 @@ Capturas en [`qa-c2/capturas-e2/`](qa-c2/capturas-e2/) (JPEG, datos sintéticos)
 
 ## PR, CI y merge (E2)
 
-- PR: (se añade al abrirlo), `fabri/bcp-01-e2` → `main`.
+- PR: [#318](https://github.com/Bcousino890/smartbc/pull/318), `fabri/bcp-01-e2` → `main`.
+- `origin/main` antes del push: `87bf218…`, sin cambios desde la base.
 - CI del último commit: se comprueba tras el push; su resultado está en el PR. Incluye el paso nuevo `test:catalogs-manager`.
 - Merge: lo decide Fabricio. Puede desplegar; no hay migración.
 
