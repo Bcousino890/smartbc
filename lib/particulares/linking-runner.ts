@@ -10,6 +10,9 @@ import {
 import {
   applyAgencyToState,
   computeAgencyMatches,
+  computeAgencyPortalLinks,
+  viewRowToLinkRow,
+  type ViewRow,
   type AgencyDecision,
   type AgencyPropertyInput,
 } from "./agency-matching";
@@ -54,16 +57,26 @@ type CurrentRow = LinkRow & {
   link_ops: string[] | null;
 };
 
-async function loadRows(db: Db): Promise<CurrentRow[]> {
+async function loadRows(db: Db, view = "particulares_link_rows", optional = false): Promise<CurrentRow[]> {
   const out: CurrentRow[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await db
-      .from("particulares_link_rows")
+      .from(view)
       .select("*")
       .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
-    if (error) throw new Error(`particulares_link_rows: ${error.message}`);
-    out.push(...((data ?? []) as CurrentRow[]));
+    if (error) {
+      // Vista nueva (0199) sin aplicar: el cruce de agencias en portales se salta.
+      if (optional) {
+        console.warn(`[particulares-linking] ${view}:`, error.message);
+        return [];
+      }
+      throw new Error(`${view}: ${error.message}`);
+    }
+    // Taxonomía de fuentes (kind/agencia), referencias, fotos… ya normalizadas para el enlazador.
+    for (const r of (data ?? []) as Array<ViewRow & Pick<CurrentRow, "duplicate_of" | "link_summary" | "link_ops">>) {
+      out.push({ ...viewRowToLinkRow(r), duplicate_of: r.duplicate_of, link_summary: r.link_summary, link_ops: r.link_ops });
+    }
     if (!data || data.length < PAGE) break;
   }
   // Si el crawler inserta filas mientras se pagina, un mismo anuncio puede salir
@@ -100,7 +113,7 @@ async function loadDecisions(db: Db): Promise<LinkDecision[]> {
 // enlazado de particulares (devuelve null).
 
 const PROPERTY_COLUMNS =
-  "id, operation, status, archived_at, price, bedrooms, bathrooms, square_meters, address, latitude, longitude, location_precision, created_at, agencies(name)";
+  "id, description, external_id, property_reference, bc_reference, cover_photo_url, operation, status, archived_at, price, bedrooms, bathrooms, square_meters, address, latitude, longitude, location_precision, created_at, agencies(name)";
 
 async function loadAgencyProperties(db: Db): Promise<AgencyPropertyInput[] | null> {
   const out: AgencyPropertyInput[] = [];
@@ -119,7 +132,7 @@ async function loadAgencyProperties(db: Db): Promise<AgencyPropertyInput[] | nul
     }
     for (const r of data ?? []) {
       const ag = Array.isArray(r.agencies) ? r.agencies[0] : r.agencies;
-      out.push({ ...r, agency_name: ag?.name ?? null });
+      out.push({ ...r, description: typeof r.description === "string" ? r.description.slice(0, 700) : null, agency_name: ag?.name ?? null });
     }
     if (!data || data.length < PAGE) break;
   }
@@ -179,6 +192,20 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     const [rows, decisions] = await Promise.all([loadRows(db), loadDecisions(db)]);
     const result = computeLinks(rows, decisions);
 
+    // Agencias anunciantes en portales (tipo «agencia_portal»): misma agencia en varios portales
+    // o republicada → se agrupan con descripción, referencia, fotos y geometría (agency-matching.ts).
+    const proRows = await loadRows(db, "particulares_agency_rows", true);
+    if (proRows.length > 0) {
+      const pro = computeAgencyPortalLinks(proRows, decisions);
+      result.links.push(...pro.links);
+      for (const [id, st] of pro.state) result.state.set(id, st);
+      result.groups.push(...pro.groups);
+      result.stats.pro_rows = proRows.length;
+      result.stats.pro_links = pro.links.length;
+      result.stats.pro_groups = pro.groups.length;
+    }
+    const allRows = [...rows, ...proRows];
+
     // Propiedades de agencias del CRM: mismo piso en otro portal → fuente «Agencia».
     let agencyMatches: ReturnType<typeof computeAgencyMatches> = [];
     let agencyReady = false;
@@ -187,7 +214,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
       agencyReady = true;
       // Solo el anuncio principal de cada grupo: sus copias (otro portal, mismo piso) serían
       // «gemelos parecidos» y degradarían a «probable» un enlace que es cierto.
-      const primaries = rows.filter((r) => !result.state.get(r.id)?.duplicate_of);
+      const primaries = allRows.filter((r) => !result.state.get(r.id)?.duplicate_of);
       agencyMatches = computeAgencyMatches(primaries, props, agencyDecisions);
       applyAgencyToState(result, primaries, props, agencyMatches);
       result.stats.agency_matches = agencyMatches.length;
@@ -195,7 +222,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     }
 
     const changes: Array<Record<string, unknown>> = [];
-    for (const cur of rows) {
+    for (const cur of allRows) {
       const want = result.state.get(cur.id);
       if (want && !sameState(cur, want)) {
         changes.push({

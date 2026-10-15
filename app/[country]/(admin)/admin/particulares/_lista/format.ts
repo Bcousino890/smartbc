@@ -9,7 +9,7 @@
 
 import { esAddress } from "@/lib/particulares/es-labels";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
-import type { LinkSummaryLite } from "@/lib/particulares/links-types";
+import type { LinkOffer, LinkSummaryLite } from "@/lib/particulares/links-types";
 
 // es-ES no agrupa los números de 4 cifras por defecto («9524»): "always" lo fuerza («9.524»).
 const NUM = new Intl.NumberFormat("es-ES", { useGrouping: "always" } as Intl.NumberFormatOptions);
@@ -293,7 +293,7 @@ export function otherOffersText(row: {
 /** Fuentes del grupo para la tarjeta: las 5 primeras (activas antes) y el total de anuncios. */
 export function sourceOffers(row: {
   link_summary?: LinkSummaryLite | null;
-}): { shown: Array<{ op: "rent" | "sale" | null; portal: string; price: number | null; active: boolean }>; total: number } | null {
+}): { shown: LinkOffer[]; total: number } | null {
   const s = row.link_summary;
   if (!s || s.n < 2 || !s.offers?.length) return null;
   const sorted = [...s.offers].sort((a, b) => Number(b.active) - Number(a.active));

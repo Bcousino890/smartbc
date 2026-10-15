@@ -12,6 +12,8 @@ import type {
   ParticularLinksPayload,
 } from "@/lib/particulares/links-types";
 import { setParticularLinkStatus } from "./link-actions";
+import { kindOfAdvertiser } from "@/lib/particulares/source-kind";
+import { SourceKindBadge } from "./_ficha/source-kind-badge";
 
 /**
  * Ficha unificada de un particular (migración 0176): el MISMO inmueble puede
@@ -80,6 +82,10 @@ function describeEvidence(ev: Record<string, unknown>): string[] {
   if (ev.floor_equal === true) out.push("misma planta");
   if (ev.other_operation) out.push("otra operación");
   if (typeof ev.price_diff_pct === "number") out.push(ev.price_diff_pct === 0 ? "mismo precio" : `precio ±${ev.price_diff_pct} %`);
+  if (ev.ref_equal) out.push("misma referencia");
+  if (typeof ev.desc_sim === "number" && ev.desc_sim >= 0.3) out.push(`descripción ${Math.round(ev.desc_sim * 100)} % parecida`);
+  if (typeof ev.photos_shared === "number" && ev.photos_shared > 0) out.push(`${ev.photos_shared} fotos iguales`);
+  if (ev.same_agency) out.push("misma agencia");
   if (ev.ambiguous) out.push("hay más pisos iguales en el edificio");
   return out;
 }
@@ -129,6 +135,7 @@ function AdRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-ink">{portalName(ad.portal)}</span>
+          <SourceKindBadge kind={kindOfAdvertiser(ad.advertiser_type)} />
           <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(ad.operation)}</span>
           <span className="text-sm font-semibold text-ink">{priceText(ad)}</span>
           {!ad.is_active && <span className="rounded-md bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-600">Retirado</span>}
@@ -302,7 +309,7 @@ export function LinkedAdsSection({
       {agencyMatches.length > 0 && (
         <div className="mb-3">
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink/45">
-            <Building2 size={13} /> Fuente Agencia — propiedades del CRM
+            <Building2 size={13} /> Web de agencias colaboradoras (propiedades del CRM)
           </p>
           <ul className="flex flex-col gap-2">
             {agencyMatches.map((m) => {
@@ -312,8 +319,7 @@ export function LinkedAdsSection({
               return (
                 <li key={m.id} className="rounded-lg border border-ink/10 bg-white p-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-ink">Agencia</span>
-                    {p.agency_name && <span className="text-xs font-medium text-ink/70">{p.agency_name}</span>}
+                    <SourceKindBadge kind="agencia_web" full agency={p.agency_name} />
                     {p.reference && <span className="font-mono text-xs text-ink/50">{p.reference}</span>}
                     <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(p.operation)}</span>
                     <span className="text-sm font-semibold text-ink">{priceText({ price: p.price, operation: p.operation })}</span>

@@ -9,7 +9,6 @@ import {
   Copy,
   ExternalLink,
   ImageOff,
-  Link2,
   MapPin,
   MessageCircle,
   MessageSquare,
@@ -22,6 +21,8 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { KIND_META, kindOfAdvertiser, sourceLabel, type SourceKind } from "@/lib/particulares/source-kind";
+import { SourceKindIcon } from "../_ficha/source-kind-badge";
 import { isStreetAddress, addressLine, listingTitle } from "@/lib/particulares/address-title";
 import { setTabIntent } from "../_ficha/tab-intent";
 import type { ParticularRow } from "../particulares-types";
@@ -124,6 +125,12 @@ type CardProps = {
   onCopyPhone: (phone: string, id: string) => void;
 };
 
+const KIND_ICON_TONE: Record<SourceKind, string> = {
+  particular: "text-emerald-700",
+  agencia_portal: "text-sky-700",
+  agencia_web: "text-gold-dark",
+};
+
 function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone }: CardProps) {
   const retired = !row.is_active;
   const cover = row.cover_url ?? row.photos?.[0]?.url ?? null;
@@ -136,6 +143,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
   const area = [isStreet ? "" : addressLine(row.address), zone].filter((v, i, a) => v && a.indexOf(v) === i).join(" · ");
   const title = listingTitle({ title: row.title, address: row.address, zone: zoneLabel(row.zone), operation: row.operation });
   const portal = portalName(row.portal);
+  const rowKind = kindOfAdvertiser(row.advertiser_type);
   const perM2 = pricePerM2Label(row.price, row.square_meters, row.operation);
   const isRent = row.operation === "rent";
   const drop = row.price_drop_pct != null && row.price_drop_pct > 0 ? row.price_drop_pct : null;
@@ -222,8 +230,12 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             <span className="absolute left-2.5 top-2.5 rounded-md bg-ink/90 px-2 py-1 text-xs font-bold uppercase leading-none tracking-wider text-cream-50">
               {op}
             </span>
-            <span className="absolute right-2.5 top-2.5 rounded-md bg-white/95 px-2 py-1 text-xs font-bold leading-none text-ink shadow-sm">
-              {portal}
+            <span
+              title={KIND_META[rowKind].description}
+              className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-bold leading-none text-ink shadow-sm"
+            >
+              <SourceKindIcon kind={rowKind} size={12} className={KIND_ICON_TONE[rowKind]} />
+              {sourceLabel({ kind: rowKind, portal: row.portal })}
             </span>
           </div>
 
@@ -300,9 +312,9 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
               <ul className="space-y-0.5" aria-label="Fuentes del inmueble">
                 {sources.shown.map((o, i) => (
                   <li key={`${o.portal}-${o.op}-${i}`} className={cn("flex items-baseline gap-1.5 text-xs", o.active ? "text-ink" : "text-ink/50")}>
-                    <Link2 size={11} strokeWidth={1.75} className="shrink-0 translate-y-px text-gold-dark" aria-hidden="true" />
-                    <span className="truncate font-medium">
-                      {portalName(o.portal)}
+                    <SourceKindIcon kind={o.kind ?? "particular"} size={11} className={cn("shrink-0 translate-y-px", KIND_ICON_TONE[o.kind ?? "particular"])} />
+                    <span className="truncate font-medium" title={KIND_META[o.kind ?? "particular"].description}>
+                      {sourceLabel({ kind: o.kind, portal: o.portal, agency: o.agency })}
                       {o.op && <span className="font-normal text-ink/60"> · {o.op === "rent" ? "Alquiler" : "Venta"}</span>}
                     </span>
                     <span className="ml-auto shrink-0 font-semibold tabular-nums">

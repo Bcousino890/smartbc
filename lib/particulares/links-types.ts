@@ -6,6 +6,10 @@ export type LinkOffer = {
   portal: string;
   price: number | null;
   active: boolean;
+  /** Tipo de fuente (source-kind.ts). Sin él: «particular» (anuncios anteriores a 0199). */
+  kind?: "particular" | "agencia_portal" | "agencia_web";
+  /** Nombre de la agencia (agencia_portal / agencia_web). */
+  agency?: string;
 };
 
 /** Resumen ya calculado en el anuncio PRINCIPAL de un grupo (`particulares.link_summary`). */

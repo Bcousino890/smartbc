@@ -48,6 +48,22 @@ export type LinkRow = {
   assigned_to: string | null;
   n_photos: number;
   created_at: string | null;
+  // ── Opcionales: los rellena el cruce con agencias (agency-matching.ts). El enlazado de
+  // particulares puro no los necesita y su comportamiento NO cambia sin `refine`.
+  /** Tipo de fuente (taxonomía de source-kind.ts): particular · agencia_portal · agencia_web. */
+  kind?: "particular" | "agencia_portal" | "agencia_web";
+  /** Nombre de la agencia que publica (agencias). */
+  agency_name?: string | null;
+  /** Nombre normalizado de la agencia (`particulares.agency_key`). */
+  agency_key?: string | null;
+  /** Texto del anuncio (recortado). */
+  description?: string | null;
+  /** Referencias/IDs del anunciante y del portal ya normalizados (MAYÚSCULAS, solo A-Z0-9). */
+  refs?: string[];
+  /** Identificadores de foto (nombre de fichero sin tamaño ni extensión) o hashes. */
+  photo_keys?: string[];
+  /** Claves extra para generar candidatos (misma referencia, misma foto…). */
+  block_keys?: string[];
 };
 
 export type LinkRelation = "mismo_inmueble" | "mismo_contacto";
@@ -77,6 +93,21 @@ export type RowGroupState = {
   duplicate_of: string | null;
   link_summary: LinkSummary | null;
   link_ops: string[] | null;
+};
+
+export type RefinedClass = {
+  relation: LinkRelation;
+  level: LinkLevel;
+  rule: string;
+  /** Se funde en `evidence` (razones visibles: descripción, referencia, fotos…). */
+  evidence?: Record<string, unknown>;
+  /** Prueba propia (referencia / descripción / fotos): no se degrada por «varios pisos iguales». */
+  extraStrong?: boolean;
+};
+
+export type LinkOptions = {
+  /** Ajusta la decisión de un par (o la crea si `base` es null). Solo lo usa el cruce con agencias. */
+  refine?: (a: LinkRow, b: LinkRow, base: RefinedClass | null, f: Feats) => RefinedClass | null;
 };
 
 export type LinkingResult = {
@@ -239,7 +270,7 @@ const jaccard = (a: Set<string>, b: Set<string>): number => {
 
 // ── Características de un par ────────────────────────────────────────────────
 
-type Feats = {
+export type Feats = {
   T: boolean; // algún teléfono en común
   phonesDiffer: boolean; // los dos tienen teléfono y ninguno coincide
   streetBoth: boolean; // los dos tienen calle y número reconocibles
@@ -481,15 +512,17 @@ type Blocks = {
   byNum: Map<string, Norm[]>;
   byPhone: Map<string, Norm[]>;
   byCell: Map<string, Norm[]>;
+  byKey: Map<string, Norm[]>;
 };
 
 function buildBlocks(norms: Norm[]): Blocks {
-  const blocks: Blocks = { byNum: new Map(), byPhone: new Map(), byCell: new Map() };
+  const blocks: Blocks = { byNum: new Map(), byPhone: new Map(), byCell: new Map(), byKey: new Map() };
   for (const n of norms) {
     // Clave = número + CADA palabra de la calle: así el bloque es "calle X número 8"
     // y no "todo número 8 de la ciudad" (miles de anuncios, que se descartaba entero).
     if (n.number) for (const t of n.tokens) push(blocks.byNum, `${n.number}|${t}`, n);
     for (const p of n.phones) push(blocks.byPhone, p, n);
+    for (const k of n.row.block_keys ?? []) push(blocks.byKey, k, n);
     if (n.row.latitude != null && n.row.longitude != null) {
       push(blocks.byCell, `${Math.round(n.row.latitude * CELL)}|${Math.round(n.row.longitude * CELL)}`, n);
     }
@@ -523,6 +556,7 @@ function* candidatePairs(blocks: Blocks): Generator<[Norm, Norm]> {
   }
   for (const l of blocks.byNum.values()) yield* within(l);
   for (const l of blocks.byPhone.values()) yield* within(l);
+  for (const l of blocks.byKey.values()) yield* within(l);
   for (const [ck, l] of blocks.byCell) {
     const [cx, cy] = ck.split("|").map(Number);
     const near: Norm[] = [...l];
@@ -570,7 +604,7 @@ const pairKey = (a: string, b: string, rel: string) => `${a}|${b}|${rel}`;
 const ordered = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x]);
 const MAX_GROUP = 12;
 
-export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): LinkingResult {
+export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = [], opts: LinkOptions = {}): LinkingResult {
   const norms = rows.map(normalize);
   const byId = new Map(norms.map((n) => [n.row.id, n]));
   const decided = new Map<string, "confirmado" | "descartado">();
@@ -585,14 +619,16 @@ export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): L
   for (const [x, y] of candidatePairs(blocks)) {
     const f = pairFeats(x, y);
     // Atajo: sin m² comparable, sin teléfono común y sin calle igual no hay nada que decidir.
-    if (!f.T && !f.S && !(f.dist != null && f.dist <= 150)) continue;
-    const c = classify(f);
+    const shortcut = !f.T && !f.S && !(f.dist != null && f.dist <= 150);
+    const base = shortcut ? null : classify(f);
+    const c: RefinedClass | null = opts.refine ? opts.refine(x.row, y.row, base, f) : base;
     if (!c) continue;
     const [a, b] = ordered(x.row.id, y.row.id);
     const k = pairKey(a, b, c.relation);
     if (decided.get(k) === "descartado") continue;
     featsOf.set(k, f);
-    links.push({ a, b, relation: c.relation, level: c.level, rule: c.rule, score: scoreOf(f), evidence: evidenceOf(f) });
+    const evidence = { ...evidenceOf(f), ...(c.evidence ?? {}), ...(c.extraStrong ? { extra_strong: true } : {}) };
+    links.push({ a, b, relation: c.relation, level: c.level, rule: c.rule, score: scoreOf(f) + (c.extraStrong ? 4 : 0), evidence });
   }
 
   // Ambigüedad: un enlace "cierto" SIN teléfono en común solo se mantiene si no hay
@@ -600,7 +636,7 @@ export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): L
   // distintos), salvo que coincidan nombre o planta.
   for (const l of links) {
     if (l.relation !== "mismo_inmueble" || l.level !== "cierto" || l.evidence.phone) continue;
-    if (l.evidence.same_first_name || l.evidence.floor_equal === true) continue;
+    if (l.evidence.same_first_name || l.evidence.floor_equal === true || l.evidence.extra_strong) continue;
     if (hasLookalike(blocks, byId.get(l.a)!, byId.get(l.b)!) || hasLookalike(blocks, byId.get(l.b)!, byId.get(l.a)!)) {
       l.level = "probable";
       l.rule += " (varios pisos iguales)";
@@ -634,6 +670,7 @@ export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): L
   };
   const group = (x: string): string[] => members.get(find(x)) ?? [x];
   let blocked = 0;
+  const strongPairs = new Set(links.filter((l) => l.evidence.extra_strong).map((l) => pairKey(l.a, l.b, l.relation)));
   const edges = links
     .filter((l) => l.relation === "mismo_inmueble" && l.level === "cierto")
     .sort((p, q) => q.score - p.score);
@@ -654,7 +691,8 @@ export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): L
           // Misma operación en el mismo portal en un grupo = anuncios distintos del mismo
           // piso solo si comparten contacto; si no, se contradice.
           if (hardConflict(f) || f.far || (f.streetBoth && !f.S && !f.T) ||
-              (xr.portal === yr.portal && xr.operation === yr.operation && !f.T)) {
+              (xr.portal === yr.portal && xr.operation === yr.operation && !f.T &&
+            !strongPairs.has(pairKey(...ordered(x, y), "mismo_inmueble")))) {
             conflict = true;
             break outer;
           }
@@ -697,7 +735,14 @@ export function computeLinks(rows: LinkRow[], decisions: LinkDecision[] = []): L
       offers: [...rowsOf]
         .sort((p, q) => Number(q.is_active) - Number(p.is_active) || (p.operation ?? "").localeCompare(q.operation ?? ""))
         .slice(0, 6)
-        .map((r) => ({ op: r.operation, portal: r.portal, price: r.price, active: r.is_active })),
+        .map((r) => ({
+          op: r.operation,
+          portal: r.portal,
+          price: r.price,
+          active: r.is_active,
+          ...(r.kind ? { kind: r.kind } : {}),
+          ...(r.agency_name ? { agency: r.agency_name } : {}),
+        })),
     };
     for (const r of rowsOf) {
       state.set(
