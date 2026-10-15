@@ -2,17 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { formatContactPhone } from "@/lib/catalogs/contact-format";
-import { ContactFields } from "./contact-fields";
-import { MeasurePanel, useHomeMeasure } from "./measure-panel";
-import { SharePanel, type ShareActions, type ShareView } from "./share-panel";
+import { useHomeMeasure } from "./measure-panel";
+import type { ShareActions, ShareView } from "./share-panel";
 import type { SelectionActions } from "./selection-panel";
 import type { SearchAction } from "./property-search";
-import { AdsPanel, type AdActions } from "./ads-panel";
-import { CoverPicker, type CoverActions } from "./cover-picker";
+import type { AdActions } from "./ads-panel";
+import type { CoverActions } from "./cover-picker";
 import { textDraftKey, type TextActions } from "./catalog-texts-panel";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { criteriaSummary } from "@/lib/catalogs/criteria";
@@ -40,8 +38,9 @@ import { ManagerHeader, type NoLinkReason, type UnsavedEntry } from "./manager/m
 import { SectionTabs } from "./manager/section-tabs";
 import { HomesSection } from "./manager/homes-section";
 import { ContentSection } from "./manager/content-section";
+import { DesignSection } from "./manager/design-section";
+import { ShareSection } from "./manager/share-section";
 import { useManagerUrl } from "./manager/use-manager-url";
-import { ConflictNote } from "./manager/conflict-note";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
 // llegan inyectadas: en la página real son las acciones de servidor (con la
@@ -189,8 +188,7 @@ export function CatalogManager({
   const chosenInList = catalog.cover.chosenPropertyId && catalog.items.some((it) => it.propertyId === catalog.cover.chosenPropertyId) ? catalog.cover.chosenPropertyId : "";
   const savedCover: CoverRaw = { propertyId: chosenInList };
   const coverForm = useFormDraft<CoverRaw>(catalog.id, "cover", coverAdapter, { raw: savedCover, key: coverAdapter.key(savedCover) });
-  const { title, intro } = metaForm.value;
-  const { name: contactName, phone: contactPhone, role: contactRole } = contactForm.value;
+  const contactName = contactForm.value.name;
   const draftCriteria = criteriaFromRaw(criteriaForm.value) ?? catalog.criteria;
   const [coverNotice, setCoverNotice] = useState<string | null>(null);
   const [returned, setReturned] = useState(false);
@@ -480,137 +478,38 @@ export function CatalogManager({
       </section>
 
       <section {...panel("diseno")} className="min-w-0 focus:outline-none">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="min-w-0 space-y-4">
-              <form onSubmit={saveMeta} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="meta-form">
-                {metaForm.conflict ? (
-                  <ConflictNote saved={metaForm.conflict.raw.title} onDiscard={metaForm.discard} onKeep={metaForm.keepMine} />
-                ) : null}
-                <label className="block">
-                  <span className="crm-label-sm text-ink/70">Título</span>
-                  <input
-                    id="cm-title"
-                    value={title}
-                    onChange={(e) => metaForm.set({ ...metaForm.value, title: e.target.value })}
-                    maxLength={160}
-                    required
-                    className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
-                  />
-                </label>
-                <label className="block">
-                  <span className="crm-label-sm text-ink/70">Introducción</span>
-                  <textarea
-                    value={intro}
-                    onChange={(e) => metaForm.set({ ...metaForm.value, intro: e.target.value })}
-                    maxLength={2000}
-                    rows={4}
-                    className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
-                >
-                  Guardar
-                </button>
-                {metaForm.edited ? (
-                  <span className="ml-3 text-xs font-semibold text-amber-800" data-testid="meta-unsaved">
-                    Cambios sin guardar
-                  </span>
-                ) : null}
-              </form>
-              {coverNotice ? (
-                <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="cover-discarded">
-                  {coverNotice}
-                </p>
-              ) : null}
-              <CoverPicker
-                catalogId={catalog.id}
-                items={items}
-                cover={catalog.cover}
-                actions={wrapped.cover}
-                run={run}
-                pending={pending}
-                form={coverForm}
-              />
-          </div>
-          <div className="min-w-0 space-y-2">
-            <p className="crm-label-sm text-ink/60">Vista previa de la portada</p>
-            <div className="mx-auto aspect-[150/212] w-full max-w-[240px] overflow-hidden rounded-sm shadow-[0_10px_24px_-14px_rgba(60,40,20,0.45)]" data-check-overflow="portada">
-              <CatalogCover
-                data={{
-                  title: title || catalog.title,
-                  subtitle: intro || null,
-                  numberLabel,
-                  edition: catalog.edition,
-                  photoUrl: catalog.cover.effectivePhotoUrl ?? null,
-                  preparedBy: contactName.trim() || null,
-                }}
-              />
-            </div>
-          </div>
-        </div>
+        <DesignSection
+          catalog={catalog}
+          items={items}
+          numberLabel={numberLabel}
+          pending={pending}
+          run={run}
+          coverActions={wrapped.cover}
+          metaForm={metaForm}
+          coverForm={coverForm}
+          contactName={contactName}
+          onSaveMeta={saveMeta}
+          coverNotice={coverNotice}
+          previewToken={currentShare && !currentShare.expired && !archived ? currentShare.token : null}
+        />
       </section>
 
       <section {...panel("compartir")} className="min-w-0 focus:outline-none">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="min-w-0 space-y-4">
-            <form onSubmit={saveContact} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="contact-form">
-              {contactForm.conflict ? (
-                <ConflictNote
-                  saved={[contactForm.conflict.raw.name, contactForm.conflict.raw.phone].filter(Boolean).join(" · ")}
-                  onDiscard={contactForm.discard}
-                  onKeep={contactForm.keepMine}
-                />
-              ) : null}
-              <ContactFields
-                idPrefix="cm"
-                name={contactName}
-                phone={contactPhone}
-                role={contactRole}
-                onName={(v) => contactForm.set({ ...contactForm.value, name: v })}
-                onPhone={(v) => contactForm.set({ ...contactForm.value, phone: v })}
-                onRole={(v) => contactForm.set({ ...contactForm.value, role: v })}
-              />
-              <button
-                type="submit"
-                disabled={pending}
-                className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
-              >
-                Guardar contacto
-              </button>
-              {contactForm.edited ? (
-                <span className="ml-3 text-xs font-semibold text-amber-800" data-testid="contact-unsaved">
-                  Cambios sin guardar
-                </span>
-              ) : null}
-            </form>
-          </div>
-          <div className="min-w-0 space-y-4">
-            {shareNotice ? (
-              <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="share-notice">
-                {shareNotice}
-              </p>
-            ) : null}
-            {shareActions ? (
-              <SharePanel
-                catalogId={catalog.id}
-                share={currentShare}
-                archived={archived}
-                actions={shareActions}
-                onChange={setCurrentShare}
-              />
-            ) : null}
-            <details className="rounded-xl border border-gold/20 bg-white/40 p-3" data-testid="internal-ads">
-              <summary className="cursor-pointer text-sm text-ink/70">Organización interna · anuncios de origen</summary>
-              <div className="mt-3">
-              <AdsPanel catalogId={catalog.id} ads={catalog.ads} actions={actions.ads} />
-              </div>
-            </details>
-            {measureMode ? <MeasurePanel measure={measure} hasShare={!!currentShare && !currentShare.expired} /> : null}
-          </div>
-        </div>
+        <ShareSection
+          catalogId={catalog.id}
+          archived={archived}
+          pending={pending}
+          contactForm={contactForm}
+          onSaveContact={saveContact}
+          shareNotice={shareNotice}
+          share={currentShare}
+          shareActions={shareActions}
+          onShareChange={setCurrentShare}
+          ads={catalog.ads}
+          adActions={actions.ads}
+          measureMode={measureMode}
+          measure={measure}
+        />
       </section>
     </div>
   );
