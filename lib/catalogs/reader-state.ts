@@ -56,6 +56,8 @@ export const PAGE_TURN_MS = 380;
 
 export const REMOVED_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección.";
 export const REMOVED_LAST_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección. Vuelves al índice.";
+/** E3: la foto que se veía en la galería ya no se usa en este catálogo. */
+export const PHOTO_REMOVED_NOTICE = "Esa foto ya no forma parte del catálogo.";
 
 const JOURNEY_PARTS: ItemPart[] = ["j1", "j2", "j3"];
 
@@ -184,11 +186,24 @@ export function applyUpdate(state: ReaderState, next: PublicCatalogState): Reade
       notice = REMOVED_LAST_NOTICE;
     }
   }
+  // E3: la galería abierta se queda en la MISMA foto (por su clave), aunque
+  // se excluyan o reordenen otras. Si la que se veía ya no está, se queda en
+  // esa posición (o la última) y lo dice; sin fotos, se cierra.
   let gallery = state.gallery;
   if (gallery) {
+    const seen = state.catalog.items.find((x) => x.key === gallery!.key)?.photos[gallery.photo]?.key ?? null;
     const it = next.catalog.items.find((x) => x.key === gallery!.key);
-    if (!it || it.photos.length === 0) gallery = null;
-    else if (gallery.photo >= it.photos.length) gallery = { key: it.key, photo: it.photos.length - 1 };
+    if (!it || it.photos.length === 0) {
+      gallery = null;
+      if (seen !== null && notice === null && it) notice = PHOTO_REMOVED_NOTICE;
+    } else {
+      const at = seen === null ? -1 : it.photos.findIndex((p) => p.key === seen);
+      if (at >= 0) gallery = { key: it.key, photo: at };
+      else {
+        gallery = { key: it.key, photo: Math.min(gallery.photo, it.photos.length - 1) };
+        if (seen !== null && notice === null) notice = PHOTO_REMOVED_NOTICE;
+      }
+    }
   }
   page = clampPage(next.catalog, state.layout, page);
   return { catalog: next.catalog, fingerprint: next.fingerprint, expiresAt: next.expiresAt, layout: state.layout, page, gallery, notice };

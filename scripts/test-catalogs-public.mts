@@ -53,6 +53,7 @@ import {
   step,
   updateDelay,
   PAGE_TURN_MS,
+  PHOTO_REMOVED_NOTICE,
   REMOVED_LAST_NOTICE,
   REMOVED_NOTICE,
 } from "../lib/catalogs/reader-state.ts";
@@ -1585,6 +1586,27 @@ async function main() {
     check("portada: la elegida es la portada del CRM excluida → primera en uso (B)", cov({ x: [K("a")], o: null }, { key: "kE3000000001", photo: U("a") }) === `/p/piso-e3/1.webp?f=${K("b")}&v=b0000000`);
     check("portada: vivienda fuera de la lista → apertura de la primera con fotos", cov({ x: [K("a")], o: null }, { key: null, photo: null }) === `/p/piso-e3/1.webp?f=${K("b")}&v=b0000000`);
     check("portada: sin elección → apertura efectiva de la primera con fotos", cov({ x: [], o: K("c") }, null) === `/p/piso-e3/2.webp?f=${K("c")}&v=c0000000`);
+  }
+
+  section("E3 · galería abierta durante una actualización en vivo (por clave de foto)");
+  {
+    const cat = (keys: string[]) => {
+      const c = pubCatalog(["a", "b"]);
+      c.items[0].photos = keys.map((k) => ({ key: k, src: `/p/a/0.webp?f=${k}`, width: null, height: null, orientation: "unknown" as const }));
+      return c;
+    };
+    const at = (keys: string[], fp = "F2") => ({ fingerprint: fp, expiresAt: "2099-01-01T00:00:00Z", catalog: cat(keys) });
+    const base = (photo: number) => openGallery(initialState(at(["k1", "k2", "k3"], "F1"), { kind: "cover" }, "spread"), "a", photo);
+    let st = applyUpdate(base(2), at(["k1", "k3"]));
+    check("se excluye otra (k2): la galería sigue en la misma foto (k3), sin aviso", st.gallery?.photo === 1 && st.catalog.items[0].photos[1].key === "k3" && st.notice === null);
+    st = applyUpdate(base(2), at(["k3", "k1", "k2"]));
+    check("el CRM reordena: sigue en k3 en su índice nuevo", st.gallery?.photo === 0 && st.notice === null);
+    st = applyUpdate(base(2), at(["k1", "k2"]));
+    check("se excluye la que se ve (k3, la última): se queda en la última y lo dice", st.gallery?.photo === 1 && st.notice === PHOTO_REMOVED_NOTICE);
+    st = applyUpdate(base(0), at(["k2", "k3"]));
+    check("se excluye la que se ve (k1): la misma posición enseña la siguiente y lo dice", st.gallery?.photo === 0 && st.catalog.items[0].photos[0].key === "k2" && st.notice === PHOTO_REMOVED_NOTICE);
+    st = applyUpdate(base(1), at([]));
+    check("sin fotos: la galería se cierra", st.gallery === null);
   }
 
   await liveTests();
