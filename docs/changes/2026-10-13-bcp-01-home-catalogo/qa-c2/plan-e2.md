@@ -637,7 +637,7 @@ Las capturas para la QA de Fabricio salen de esta matriz.
 
 ## 11. Fase y siguiente paso
 
-> **Actualización (15 de octubre de 2026):** plan aprobado (§0). Ejecución en curso según §4; la fase final se registra en `result.md`.
+> **Actualización (15 de octubre de 2026):** T0–T10 hechos; el resultado está en [`result.md`](../result.md) (sección E2). La fase es **PR abierto, a la espera de la revisión, el merge y la QA en vivo de Fabricio**. Desviaciones anotadas en el resultado: el panel va lado a lado desde 1280 px (no 1024), y `materialByProperty` va en `material-data.ts`.
 
 
 - **Fase actual:** E2 en planificación. **Este plan es un BORRADOR** pendiente de la aprobación de Fabricio para ejecutarse. No se ha cambiado la aplicación, no se ha instalado nada y no hay push ni PR. El único commit de `fabri/bcp-01-e2` es este plan.
