@@ -60,6 +60,10 @@ export default async function AdminParticularesPage({
   }
 
   const sp = await searchParams;
+  // Enlaces antiguos al diálogo «Configuración de scrapers»: ahora vive en Sindicación.
+  if (one(sp.scrapers) || one(sp.scraper)) {
+    redirect(`${getCountryConfig(country).prefix}/sindicacion?tab=portales`);
+  }
   const showRetired = one(sp.retired) === "1";
   const zoneParam = one(sp.zone) ?? "";
   // Zona dibujada a mano en el mapa (alternativa al desplegable de arriba —

@@ -5,6 +5,9 @@ import {
   RecentSyncsPanel,
   type RecentSyncVM,
 } from "@/components/admin/recent-syncs";
+import { SindicacionTabs, type SindicacionTabId } from "@/components/admin/sindicacion-tabs";
+import { ParticularesCrawlerPanel } from "@/components/admin/particulares-crawler-panel";
+import { PortalesPanel, SaludPanel } from "@/components/admin/scraper-control/panels";
 import { SindicacionShell } from "@/components/admin/sindicacion-shell";
 import type { FeedRowVM } from "@/components/admin/feeds-table";
 import { PageFooter } from "@/components/ui/page-footer";
@@ -20,26 +23,7 @@ import { canAccess } from "@/lib/permissions";
 import { getScraperByKey, listScraperKeys } from "@/lib/sync/scrapers";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
-export default async function AdminSindicacionPage({
-  params,
-}: {
-  params: Promise<{ country: Country }>;
-}) {
-  const { country } = await params;
-  // La sindicación de feeds (Idealista/Fotocasa) es solo de España.
-  if (country !== "es") redirect(getCountryConfig(country).prefix);
-
-  const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "sindicacion", "view")) {
-    redirect(getCountryConfig(country).prefix);
-  }
-
-  const [feeds, stats, allAgencies] = await Promise.all([
-    getFeedsWithAgency(),
-    getFeedAggregateStats(),
-    getAgencies(),
-  ]);
-
+async function loadRecentLogs(): Promise<RecentSyncVM[]> {
   const supabase = await createClient();
   const recentLogsRes = await supabase
     .from("sync_logs")
@@ -80,7 +64,7 @@ export default async function AdminSindicacionPage({
     return agency?.name ?? "—";
   }
 
-  const recentLogs: RecentSyncVM[] = (
+  return (
     (recentLogsRes.data ?? []) as unknown as LogJoin[]
   ).map((row) => ({
     id: row.id,
@@ -103,6 +87,69 @@ export default async function AdminSindicacionPage({
     archived: row.properties_archived,
     errorMessage: row.error_message,
   }));
+}
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminSindicacionPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ country: Country }>;
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
+  const { country } = await params;
+  // La sindicación de feeds (Idealista/Fotocasa) es solo de España.
+  if (country !== "es") redirect(getCountryConfig(country).prefix);
+
+  const currentProfile = await getCurrentProfile();
+  const role = currentProfile?.role ?? "";
+  // Feeds de agencias → permiso «sindicacion»; scrapers de portales, particulares y salud → «particulares»
+  // (el mismo que ya exige la API del crawler).
+  const canFeeds = canAccess(role, "sindicacion", "view");
+  const canScrapers = canAccess(role, "particulares", "view");
+  if (!canFeeds && !canScrapers) {
+    redirect(getCountryConfig(country).prefix);
+  }
+  const allowed: SindicacionTabId[] = [
+    ...(canFeeds ? (["feeds"] as const) : []),
+    ...(canScrapers ? (["portales", "particulares", "salud"] as const) : []),
+  ];
+  const sp = await searchParams;
+  const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
+  const tab: SindicacionTabId = allowed.includes(rawTab as SindicacionTabId) ? (rawTab as SindicacionTabId) : allowed[0];
+
+  const header = (
+    <>
+      <AdminPageHeader titleKey="sindicacion.title" subtitleKey="sindicacion.subtitle" />
+      <div className="mt-6">
+        <SindicacionTabs active={tab} allowed={allowed} />
+      </div>
+    </>
+  );
+  const footer = <PageFooter textKey="admin.realtime.footer" variant="inline" />;
+  const wrap = "mx-auto flex min-h-screen max-w-[1200px] flex-col px-6 pb-10 lg:px-10";
+
+  if (tab === "portales" || tab === "particulares" || tab === "salud") {
+    return (
+      <div className={wrap}>
+        {header}
+        <div className="mt-5" role="tabpanel">
+          {tab === "portales" ? <PortalesPanel /> : tab === "salud" ? <SaludPanel /> : <ParticularesCrawlerPanel />}
+        </div>
+        {tab === "salud" && canFeeds ? <div className="mt-5"><RecentSyncsPanel logs={await loadRecentLogs()} /></div> : null}
+        {footer}
+      </div>
+    );
+  }
+
+  const [feeds, stats, allAgencies] = await Promise.all([
+    getFeedsWithAgency(),
+    getFeedAggregateStats(),
+    getAgencies(),
+  ]);
+
+  const recentLogs = await loadRecentLogs();
 
   const feedRows: FeedRowVM[] = feeds.map((f) => ({
     id: f.id,
@@ -129,11 +176,8 @@ export default async function AdminSindicacionPage({
   });
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col px-6 pb-10 lg:px-10">
-      <AdminPageHeader
-        titleKey="sindicacion.title"
-        subtitleKey="sindicacion.subtitle"
-      />
+    <div className={wrap}>
+      {header}
 
       <div className="mt-7">
         <FeedsStatsBlock stats={stats} />
@@ -151,7 +195,7 @@ export default async function AdminSindicacionPage({
         <RecentSyncsPanel logs={recentLogs} />
       </div>
 
-      <PageFooter textKey="admin.realtime.footer" variant="inline" />
+      {footer}
     </div>
   );
 }

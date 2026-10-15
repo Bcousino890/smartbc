@@ -16,7 +16,7 @@ import {
   type ScraperZone,
   type ZonePriority,
 } from "@/lib/scrapers/control-types";
-import { FOCUS_RING, Segmented } from "../controls";
+import { FOCUS_RING, Segmented } from "@/app/[country]/(admin)/admin/particulares/_lista/controls";
 import { PrioritySelect, ZoneInfo } from "./priority-select";
 import { BTN_SECONDARY, Notice, Section, fmt } from "./shared";
 import { buildTree, costTotals, family, groupRoots, matches, normalize, type TreeNode } from "./zones-tree";

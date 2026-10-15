@@ -5,7 +5,7 @@ import { Maximize2, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { latLngToTile, worldPixelToLatLng, TILE_SIZE } from "@/lib/geo/tile-math";
 import { PORTAL_LABEL, type ScraperPortal, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
-import { FOCUS_RING, Segmented } from "../controls";
+import { FOCUS_RING, Segmented } from "@/app/[country]/(admin)/admin/particulares/_lista/controls";
 import { PrioritySelect, ZoneInfo } from "./priority-select";
 import { BTN_SECONDARY, fmt } from "./shared";
 import { family, normalize, type TreeNode } from "./zones-tree";

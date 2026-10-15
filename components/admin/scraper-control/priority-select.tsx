@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { isEstimatedPortal, zoneCredits, zoneListings, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
 import { COMPONENT_LABEL, COST_COMPONENTS, fmtDays, listingOnlyEstimate } from "@/lib/scrapers/cost-model";
-import { FOCUS_RING } from "../controls";
+import { FOCUS_RING } from "@/app/[country]/(admin)/admin/particulares/_lista/controls";
 import { fmt } from "./shared";
 import { useZoneCost } from "./zone-cost";
 

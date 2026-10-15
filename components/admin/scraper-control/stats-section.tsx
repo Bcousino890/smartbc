@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PORTAL_LABEL } from "@/lib/scrapers/control-types";
 import type { StatsOpFilter, StatsPayload, StatsPeriod, StatsPortalFilter, StatsZoneRow } from "@/lib/scrapers/stats-types";
-import { Segmented } from "../controls";
+import { Segmented } from "@/app/[country]/(admin)/admin/particulares/_lista/controls";
 import { BTN_SECONDARY, Notice, Section, fmt } from "./shared";
 
 const ENDPOINT = "/api/admin/particulares/scraper-control";
