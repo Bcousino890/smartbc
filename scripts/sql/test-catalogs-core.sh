@@ -74,6 +74,10 @@ echo "== 2i. 0197 sobre los tests de 0196 (ajustes y portada siguen igual)"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $S/test-catalog-adjust-pre.sql $M6 $M7 $S/test-catalog-adjust.sql
 
+echo "== 2k. operación e importe: alquiler, duales, precio principal ausente e inclusiones de otra operación (0192–0197)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-operations.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
