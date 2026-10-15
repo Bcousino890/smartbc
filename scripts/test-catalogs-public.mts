@@ -18,6 +18,9 @@ import { CATALOG_ZONE_ALIASES, catalogBarrios, catalogDistricts, catalogZoneMatc
 import { MADRID_DISTRICTS, normalizeZone } from "../lib/madrid-zones.ts";
 import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts";
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
+import { fitsOperation as fitsOp, operationPrice, priceDisplay, rentDataWarning } from "../lib/catalogs/operation-price.ts";
+import { composeFingerprint } from "../lib/catalogs/public-fingerprint.ts";
+import { CoherentReadError, readCoherent, readCoherentBatch, type CatalogMeta } from "../lib/catalogs/coherent-read.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
 import { deriveEditorial, highlightCandidates, leadFrom, JOURNEY_EXCLUDED_CLASSES, type EditorialInput } from "../lib/catalogs/editorial.ts";
@@ -287,6 +290,35 @@ async function liveTests() {
     check("resumen con unidades (venta €)", s.ok && criteriaSummary(s.criteria) === "Salamanca · Justicia · Venta · 900.000–1.500.000 €", s.ok ? criteriaSummary(s.criteria) : "");
     const r = normalizeCriteria({ operation: "rent", price_max: 4000 });
     check("resumen alquiler €/mes", r.ok && criteriaSummary(r.criteria) === "Alquiler · hasta 4.000 €/mes");
+    // K4: el resumen hace explícito el solapamiento (esperados escritos a mano).
+    const sum = (zones: object[], extra: object = {}) => { const n = normalizeCriteria({ zones, ...extra }); return n.ok ? criteriaSummary(n.criteria) : "inválido"; };
+    const Dz = (name: string) => ({ kind: "district", name }), Bz = (name: string) => ({ kind: "barrio", name }), Fz = (name: string) => ({ kind: "free", name });
+    check("K4 distrito + barrio suyo", sum([Dz("Salamanca"), Bz("Recoletos")], { operation: "rent", price_min: 5000, price_max: 7000 }) === "Salamanca (incluye Recoletos) · Alquiler · 5.000–7.000 €/mes", sum([Dz("Salamanca"), Bz("Recoletos")], { operation: "rent", price_min: 5000, price_max: 7000 }));
+    check("K4 el orden no importa: barrio antes que su distrito", sum([Bz("Recoletos"), Dz("Salamanca")]) === "Salamanca (incluye Recoletos)");
+    check("K4 alias como texto libre dentro de su barrio", sum([Bz("Justicia"), Fz("Chueca")]) === "Justicia (incluye «Chueca»)");
+    check("K4 texto libre dentro de un distrito", sum([Dz("Centro"), Fz("Chueca")]) === "Centro (incluye «Chueca»)");
+    check("K4 varias dentro del mismo distrito", sum([Dz("Salamanca"), Bz("Recoletos"), Bz("Goya")]) === "Salamanca (incluye Recoletos, Goya)");
+    check("K4 sin solapamiento: igual que antes", sum([Dz("Salamanca"), Bz("Justicia"), Fz("Pozuelo de Alarcón")]) === "Salamanca · Justicia · Pozuelo de Alarcón");
+    {
+      const props4 = [
+        { id: "k4a", country: "es", archived_at: null, status: "available", operation: "rent", operations: ["rent"], price: 6000, rent_price: null, zone: "Salamanca", subzone: "Recoletos", created_at: "2026-01-01T00:00:00Z", photo_count: 1 },
+        { id: "k4b", country: "es", archived_at: null, status: "available", operation: "rent", operations: ["rent"], price: 6500, rent_price: null, zone: "Salamanca", subzone: "Goya", created_at: "2026-01-02T00:00:00Z", photo_count: 1 },
+        { id: "k4c", country: "es", archived_at: null, status: "available", operation: "rent", operations: ["rent"], price: 6200, rent_price: null, zone: "Chamberí", subzone: "Almagro", created_at: "2026-01-03T00:00:00Z", photo_count: 1 },
+      ] as CandidateProperty[];
+      const both = normalizeCriteria({ operation: "rent", zones: [Dz("Salamanca"), Bz("Recoletos")] });
+      const one = normalizeCriteria({ operation: "rent", zones: [Dz("Salamanca")] });
+      check("K4 la selección no cambia: Salamanca + Recoletos = Salamanca (regla «o»)",
+        both.ok && one.ok && JSON.stringify(autoSelect(props4, both.criteria).ids) === JSON.stringify(["k4a", "k4b"]) && JSON.stringify(autoSelect(props4, one.criteria).ids) === JSON.stringify(["k4a", "k4b"]));
+    }
+    // K5: formatos de importe aceptados y rechazados, uno a uno (escritos a mano).
+    const pm = (v: unknown) => { const n = normalizeCriteria({ operation: "rent", price_min: v }); return n.ok ? n.criteria.price_min : "bad"; };
+    const okCases: Array<[unknown, number | null]> = [["5000", 5000], ["5.000", 5000], ["1.200.000", 1200000], ["0", 0], [" 5.000 ", 5000], [5000, 5000], [0, 0], ["", null], ["   ", null], [null, null], [undefined, null]];
+    for (const [v, want] of okCases) check(`K5 importe ${JSON.stringify(v)} → ${want}`, pm(v) === want, String(pm(v)));
+    const badCases: unknown[] = ["5.5", "5.50", "5.0000", "12.0", "5,000", "5.000,00", "5 000", "5.000 €", "5k", "-5", "0.500", "12.000.00", "1e3", "0x10", "5.5.5", 5.5, -1, 1_000_000_001, true, {}, []];
+    for (const v of badCases) check(`K5 importe ${JSON.stringify(v)} rechazado (nunca 55 ni otro número)`, pm(v) === "bad", String(pm(v)));
+    const mx = (v: unknown) => { const n = normalizeCriteria({ max: v }); return n.ok ? n.criteria.max : "bad"; };
+    check("K5 máximo: «12», 12 y vacío (12 por defecto)", mx("12") === 12 && mx(12) === 12 && mx(null) === 12 && mx(undefined) === 12);
+    check("K5 máximo: «12.0», «1e1», 2.5, true y «» rechazados", ["12.0", "1e1", 2.5, true, ""].every((v) => mx(v) === "bad"));
     const P = (o: Partial<CandidateProperty> & { id: string }): CandidateProperty => ({
       country: "es", archived_at: null, status: "available", operation: "sale", operations: ["sale"], price: 1000, rent_price: null,
       zone: "Salamanca", subzone: null, created_at: "2026-01-01T00:00:00Z", photo_count: 1, ...o,
@@ -1264,6 +1296,220 @@ async function main() {
     const c = toPublicCatalog(snap([extra]));
     const json = JSON.stringify(c);
     check("campos internos nuevos no se cuelan", !json.includes("BC-1234") && !json.includes("nota interna") && !UUID_RE.test(json));
+  }
+
+  section("K2 · operación y precio (D-QA14, D-QA16; casos del plan §6, como en test-catalog-operations.sql)");
+  {
+    // Mismos datos que el escenario 2k de SQL. Esperados escritos a mano.
+    const mk = (n: number, slug: string, operation: "sale" | "rent", operations: string[], price: number | null, rent: number | null, day: number) => ({
+      id: `a7000000-0000-0000-0000-${String(n).padStart(12, "0")}`, slug, country: "es", archived_at: null, status: "available",
+      operation, operations, price, rent_price: rent, zone: "Salamanca", subzone: "Recoletos",
+      created_at: `2026-05-${String(day).padStart(2, "0")}T00:00:00Z`, photo_count: 1,
+    } as CandidateProperty & { slug: string });
+    const P = [
+      mk(1, "r5000", "rent", ["rent"], 5000, null, 1), mk(2, "r6000", "rent", ["rent"], 6000, null, 2), mk(3, "r7000", "rent", ["rent"], 7000, null, 3),
+      mk(4, "r4999", "rent", ["rent"], 4999, null, 4), mk(18, "r7001", "rent", ["rent"], 7001, null, 18), mk(5, "z0r6", "rent", ["rent"], 0, 6000, 5),
+      mk(6, "z0r8", "rent", ["rent"], 0, 8000, 6), mk(7, "neg6", "rent", ["rent"], -1, 6000, 7), mk(8, "z0n", "rent", ["rent"], 0, null, 8),
+      mk(9, "z0z", "rent", ["rent"], 0, 0, 9), mk(10, "x6r9", "rent", ["rent"], 6000, 9000, 10), mk(11, "y9r6", "rent", ["rent"], 9000, 6000, 11),
+      mk(12, "e6r6", "rent", ["rent"], 6000, 6000, 12), mk(13, "d6000", "sale", ["sale", "rent"], 2100000, 6000, 13),
+      mk(14, "ds6", "sale", ["sale", "rent"], 6000, null, 14), mk(15, "ds0", "sale", ["sale", "rent"], 0, 6000, 15),
+      mk(16, "s6000", "sale", ["sale"], 6000, null, 16), mk(17, "s2m", "sale", ["sale"], 2000000, null, 17),
+    ];
+    const rnull = mk(19, "rnull", "rent", ["rent"], null, 6000, 19);
+    const by = new Map([...P, rnull].map((p) => [p.slug, p]));
+    const slugs = (ids: string[]) => ids.map((i) => [...by.values()].find((p) => p.id === i)!.slug);
+    const crit = (raw: object) => { const n = normalizeCriteria(raw); if (!n.ok) throw new Error("criterios"); return n.criteria; };
+    const REC = [{ kind: "barrio", name: "Recoletos" }];
+    const A = crit({ operation: "rent", zones: REC, price_min: 5000, price_max: 7000, sort: "price_asc", max: 24 });
+    const B = crit({ operation: "rent", zones: REC, sort: "price_asc", max: 24 });
+    const C = crit({ operation: "any", zones: REC, sort: "price_asc", max: 24 });
+    const D = crit({ operation: "sale", zones: REC, price_min: 1000000, price_max: 3000000, sort: "price_asc", max: 24 });
+    const F = crit({ operation: "rent", zones: REC, price_min: 5000, price_max: 7000, sort: "price_asc", max: 8 });
+    const inc = (...xs: string[]) => xs.map((x) => ({ propertyId: by.get(x)!.id, kind: "include" as const }));
+    const eqj = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const run = (c: typeof A, adj = [] as ReturnType<typeof inc>) => { const r = autoSelect(P, c, adj); return { ids: slugs(r.ids), n: `${r.total}/${r.matched}`, via: r.via }; };
+    // La referencia TS da las mismas listas que la SQL real (T1); sin cambios.
+    check("A alquiler 5.000–7.000 (bordes incluidos)", eqj(run(A).ids, ["r5000", "ds0", "d6000", "e6r6", "x6r9", "r6000", "r7000"]), JSON.stringify(run(A).ids));
+    check("B sin rango: sin importe al final (Z0R6 la última)", eqj(run(B).ids, ["r4999", "r5000", "ds0", "d6000", "e6r6", "x6r9", "r6000", "r7000", "r7001", "y9r6", "ds6", "z0z", "z0n", "neg6", "z0r8", "z0r6"]));
+    check("C venta y alquiler", eqj(run(C).ids, ["s6000", "ds6", "s2m", "d6000", "ds0", "r4999", "r5000", "e6r6", "x6r9", "r6000", "r7000", "r7001", "y9r6", "z0z", "z0n", "neg6", "z0r8", "z0r6"]));
+    check("D venta con dos alquileres incluidos", eqj(run(D, inc("z0r6", "r6000")), { ids: ["s2m", "d6000", "r6000", "z0r6"], n: "4/2", via: ["match", "match", "include", "include"] }));
+    check("E alquiler con tres inclusiones", eqj(run(A, inc("s6000", "ds6", "z0r6")).ids, ["r5000", "ds0", "d6000", "e6r6", "x6r9", "r6000", "r7000", "ds6", "z0r6", "s6000"]));
+    check("F máximo 8", eqj(run(F, inc("s6000", "ds6", "z0r6")).ids, ["r5000", "ds0", "d6000", "e6r6", "x6r9", "ds6", "z0r6", "s6000"]));
+    const op = (s: string, o: "sale" | "rent" | "any") => operationPrice(by.get(s)!, o);
+    check("importe en alquiler: Z0R6/NEG6/Rnull sin importe (nunca su rent_price)", op("z0r6", "rent") === null && op("neg6", "rent") === null && op("rnull", "rent") === null);
+    check("importe en alquiler: X6R9 = 6.000 (price), Y9R6 = 9.000 (price)", op("x6r9", "rent") === 6000 && op("y9r6", "rent") === 9000);
+    check("importe en alquiler de una dual: su rent_price, nunca su venta", op("d6000", "rent") === 6000 && op("ds0", "rent") === 6000 && op("ds6", "rent") === null);
+    check("importe de una inclusión de otra operación: su price real", op("s6000", "rent") === 6000 && op("z0r6", "sale") === null && op("x6r9", "sale") === 6000);
+    check("importe en venta y en «cualquiera»: price", op("d6000", "sale") === 2100000 && op("ds0", "sale") === null && op("d6000", "any") === 2100000);
+    check("encaja: dual en alquiler y en venta; solo venta no en alquiler; solo alquiler no en venta",
+      fitsOp(by.get("d6000")!, "rent") && fitsOp(by.get("d6000")!, "sale") && !fitsOp(by.get("s6000")!, "rent") && !fitsOp(by.get("z0r6")!, "sale"));
+    const pd = (s: string, o: "sale" | "rent" | "any") => priceDisplay({ ...by.get(s)!, currency: "eur" }, o);
+    const D_ = (operation: string, price: string, also: string | null = null, contextual = true) => ({ operation, price, also, contextual });
+    check("DS-1 alquiler: dual → «Alquiler · 6.000 €/mes» + la venta aparte", eqj(pd("d6000", "rent"), D_("Alquiler", "6.000 €/mes", "También en venta: 2.100.000 €")));
+    check("DS-1 alquiler: solo alquiler 5.000", eqj(pd("r5000", "rent"), D_("Alquiler", "5.000 €/mes")));
+    check("P-ALQ: Z0R6 sin precio principal → «Precio · sin dato»", eqj(pd("z0r6", "rent"), D_("Alquiler", "Precio · sin dato")));
+    check("P-ALQ: X6R9 con dos importes → su price 6.000 (no «sin dato»)", eqj(pd("x6r9", "rent"), D_("Alquiler", "6.000 €/mes")));
+    check("P-ALQ: Y9R6 con dos importes → su price 9.000", eqj(pd("y9r6", "rent"), D_("Alquiler", "9.000 €/mes")));
+    check("dual sin alquiler en alquiler: sin dato, nunca su venta de 6.000", eqj(pd("ds6", "rent"), D_("Alquiler", "Precio · sin dato", "También en venta: 6.000 €")));
+    check("dual sin venta en alquiler", eqj(pd("ds0", "rent"), D_("Alquiler", "6.000 €/mes", "También en venta · precio sin dato")));
+    check("inclusión de solo venta en alquiler: «Venta · 6.000 €» real, no contextual", eqj(pd("s6000", "rent"), D_("Venta", "6.000 €", null, false)));
+    check("DS-2 venta: dual → «Venta · 2.100.000 €» + el alquiler aparte", eqj(pd("d6000", "sale"), D_("Venta", "2.100.000 €", "También en alquiler: 6.000 €/mes")));
+    check("venta: dual sin precio de venta", eqj(pd("ds0", "sale"), D_("Venta", "Precio · sin dato", "También en alquiler: 6.000 €/mes")));
+    check("inclusión de solo alquiler en venta: lo suyo real (sin dato / 6.000 €/mes)",
+      eqj(pd("z0r6", "sale"), D_("Alquiler", "Precio · sin dato", null, false)) && eqj(pd("x6r9", "sale"), D_("Alquiler", "6.000 €/mes", null, false)));
+    check("«venta y alquiler» como siempre: dual con las dos", eqj(pd("d6000", "any"), D_("Venta y alquiler", "Venta 2.100.000 € · Alquiler 6.000 €/mes")));
+    check("«venta y alquiler»: solo alquiler con su price (X6R9 6.000, antes 9.000; Z0R6 sin dato, antes 6.000)",
+      eqj(pd("x6r9", "any"), D_("Alquiler", "6.000 €/mes")) && eqj(pd("z0r6", "any"), D_("Alquiler", "Precio · sin dato")) && eqj(pd("y9r6", "any"), D_("Alquiler", "9.000 €/mes")));
+    const w = (s: string) => rentDataWarning({ ...by.get(s)!, currency: "eur" });
+    check("aviso: sin precio principal, con la cifra secundaria", w("z0r6") === "La ficha no tiene precio principal: el campo secundario dice 6.000 €/mes, pero no se usa. Corrige el precio en la ficha.", String(w("z0r6")));
+    check("aviso: negativo y nulo cuentan como sin precio principal", w("neg6") === w("z0r6") && w("rnull") === w("z0r6") && /8\.000 €\/mes/.test(String(w("z0r8"))));
+    check("aviso: dos importes, con los dos", w("x6r9") === "Dos importes de alquiler en la ficha: se usa el precio (6.000 €/mes); el campo secundario dice 9.000 €/mes. Revisa la ficha.", String(w("x6r9")));
+    check("aviso: Y9R6 usa 9.000 y menciona 6.000", /se usa el precio \(9\.000 €\/mes\).*6\.000 €\/mes/.test(String(w("y9r6"))));
+    check("sin aviso: coherente, iguales, sin ningún importe, duales y ventas",
+      [w("r5000"), w("e6r6"), w("z0n"), w("z0z"), w("d6000"), w("ds0"), w("s6000")].every((x) => x === null));
+    const ex = explainProperty(by.get("z0r6")!, A, null);
+    check("explicación de Z0R6 en A: «Sin precio» (la misma regla que la selección)", ex.status === "out" && ex.details.includes("Sin precio (con un rango de precio no entra)"));
+    const ex2 = explainProperty(by.get("x6r9")!, A, null);
+    check("explicación de X6R9 en A: dentro por 6.000 (lo mismo que su etiqueta)", ex2.status === "match" && ex2.details.includes("6.000 €/mes dentro de 5.000–7.000 €/mes"));
+  }
+
+  section("K1 · el lector con la operación del catálogo (DS-1/DS-2) y la huella compuesta (§3.3)");
+  {
+    const dual = item({ key: "kDual0000001", operations: ["sale", "rent"], price: 2100000, rent_price: 6800 });
+    const z0r6 = item({ key: "kZ0R60000001", operation: "rent", operations: ["rent"], price: 0, rent_price: 6000 });
+    const x6r9 = item({ key: "kX6R90000001", operation: "rent", operations: ["rent"], price: 6000, rent_price: 9000 });
+    const venta = item({ key: "kVenta000001", price: 950000 });
+    const lab = (it: InternalItem, op?: "sale" | "rent" | "any") => { const x = op ? toPublicItem(it, op) : toPublicItem(it); return `${x.operation} · ${x.price}`; };
+    check("alquiler: la dual como alquiler", lab(dual, "rent") === "Alquiler · 6.800 €/mes", lab(dual, "rent"));
+    check("alquiler: sin precio principal → sin dato (P-ALQ)", lab(z0r6, "rent") === "Alquiler · Precio · sin dato");
+    check("alquiler: dos importes → el principal", lab(x6r9, "rent") === "Alquiler · 6.000 €/mes");
+    check("alquiler: una venta incluida sigue siendo «Venta · 950.000 €» (nunca alquiler)", lab(venta, "rent") === "Venta · 950.000 €");
+    check("venta: la dual como venta", lab(dual, "sale") === "Venta · 2.100.000 €");
+    check("venta: un alquiler incluido con lo suyo real", lab(x6r9, "sale") === "Alquiler · 6.000 €/mes");
+    check("«venta y alquiler» y sin operación: como siempre", lab(dual, "any") === "Venta y alquiler · Venta 2.100.000 € · Alquiler 6.800 €/mes" && lab(dual) === lab(dual, "any"));
+    const keysOf = (x: object) => Object.keys(x).sort().join(",");
+    check("contrato: las mismas claves con o sin operación", keysOf(toPublicItem(dual, "rent")) === keysOf(toPublicItem(dual)) && keysOf(toPublicItem(z0r6, "sale")) === keysOf(toPublicItem(z0r6)));
+    const catR = toPublicCatalog(snap([dual, z0r6, x6r9, venta]), "rent");
+    check("contrato: sin claves prohibidas en un catálogo de alquiler", findForbiddenKeys(catR, FORBIDDEN_PUBLIC_KEYS).length === 0);
+    const jsonR = JSON.stringify(catR);
+    // (Las claves sintéticas llevan dígitos: se buscan los importes con su formato.)
+    // La dual enseña su alquiler (6.800 €/mes), nunca su venta (2.100.000 €).
+    check("privacidad: el cliente no ve la otra operación ni los importes secundarios", !/También|campo secundario|9\.000|2\.100\.000/.test(jsonR) && /6\.800 €\/mes/.test(jsonR));
+    check("privacidad: Z0R6 no enseña su rent_price en ningún sitio", !JSON.stringify(toPublicItem(z0r6, "rent")).includes("6.000"));
+    check("toPublicCatalog lleva la operación a todas", catR.items.map((x) => x.operation).join("|") === "Alquiler|Alquiler|Alquiler|Venta");
+    check("huella: «venta y alquiler» = la del SQL exacta", composeFingerprint("abc", "any") === "abc");
+    check("huella: venta y alquiler añaden la operación", composeFingerprint("abc", "rent") === "abc:rent" && composeFingerprint("abc", "sale") === "abc:sale");
+  }
+
+  section("K1 · lectura coherente por versión (§3.2 y §5.1, casos V1–V11)");
+  {
+    const M = (version: number, operation: unknown): CatalogMeta => ({ version, operation });
+    // Guion: cada lectura consume el siguiente paso (un Error = esa lectura falla).
+    const guion = (metas: Array<CatalogMeta | Error | null>, snaps: Array<string | null | Error>) => {
+      const c = { meta: 0, snap: 0 };
+      return {
+        c,
+        readMeta: async () => { const m = metas[c.meta++]; if (m instanceof Error) throw m; if (m === undefined) throw new Error("guion agotado"); return m; },
+        readSnapshot: async () => { const x = snaps[c.snap++]; if (x instanceof Error) throw x; if (x === undefined) throw new Error("guion agotado"); return x; },
+        isAvailable: (x: string | null) => x !== null,
+      };
+    };
+    const code = async (p: Promise<unknown>) => { try { await p; return "sin error"; } catch (e) { return e instanceof CoherentReadError ? e.code : `otro: ${(e as Error).message}`; } };
+    let g = guion([M(3, "rent"), M(3, "rent")], ["X"]);
+    let r = await readCoherent(g);
+    check("V1 sin cambios: (X, alquiler) a la primera, huella fp:rent", r.snapshot === "X" && r.operation === "rent" && r.attempts === 1 && composeFingerprint("fpX", r.operation) === "fpX:rent");
+    g = guion([M(3, "rent"), M(4, "sale"), M(4, "sale"), M(4, "sale")], ["X_B", "Y"]);
+    r = await readCoherent(g);
+    check("V2 cambio en medio: se acepta (Y, venta) en el 2.º intento; X_B nunca", r.snapshot === "Y" && r.operation === "sale" && r.attempts === 2);
+    g = guion([M(3, "rent"), M(5, "rent"), M(5, "rent"), M(5, "rent")], ["X_B", "Z"]);
+    r = await readCoherent(g);
+    check("V3 A→B→A: misma operación pero versión distinta → se rechaza X_B y se acepta Z", r.snapshot === "Z" && r.operation === "rent" && r.attempts === 2);
+    g = guion([M(3, "rent"), M(4, "rent"), M(4, "rent"), M(5, "rent"), M(5, "rent"), M(6, "rent")], ["a", "b", "c"]);
+    check("V4 cambios repetidos: 3 intentos y catalog_read_unstable (nunca «any»)", (await code(readCoherent(g))) === "catalog_read_unstable" && g.c.snap === 3);
+    g = guion([new Error("red")], ["X"]);
+    check("V5 error en m1: catalog_operation_unreadable sin pedir la instantánea", (await code(readCoherent(g))) === "catalog_operation_unreadable" && g.c.snap === 0);
+    g = guion([M(3, "rent"), new Error("red")], ["X"]);
+    check("V6 error en m2: catalog_operation_unreadable; X se descarta", (await code(readCoherent(g))) === "catalog_operation_unreadable" && g.c.snap === 1);
+    g = guion([M(3, "venta")], ["X"]);
+    check("V7 operación no válida: catalog_operation_unreadable, sin instantánea", (await code(readCoherent(g))) === "catalog_operation_unreadable" && g.c.snap === 0);
+    g = guion([M(3, "rent")], [new Error("rpc caída")]);
+    check("V8 error en la instantánea: el de siempre, sin disfrazar", (await code(readCoherent(g))) === "otro: rpc caída");
+    g = guion([M(3, "any"), M(3, "any")], ["X"]);
+    r = await readCoherent(g);
+    check("V10 «venta y alquiler»: huella del SQL sin sufijo", r.operation === "any" && composeFingerprint("fpX", r.operation) === "fpX");
+    g = guion([M(3, "rent")], [null]);
+    r = await readCoherent(g);
+    check("V11 enlace no válido: no disponible sea cual sea m1 (sin segunda lectura)", r.snapshot === null && r.operation === null && g.c.meta === 1);
+
+    // Vigilante: varios enlaces a la vez.
+    const lote = (metaCalls: Array<Record<string, CatalogMeta> | Error>, stateCalls: Array<Record<string, { valid: boolean; fp: string | null }>>) => {
+      let mi = 0;
+      let si = 0;
+      return {
+        readMetas: async (keys: string[]) => {
+          const m = metaCalls[mi++];
+          if (m instanceof Error) throw m;
+          if (!m) throw new Error("guion agotado");
+          return new Map(keys.filter((k) => m[k]).map((k) => [k, m[k]]));
+        },
+        readStates: async (keys: string[]) => {
+          const x = stateCalls[si++];
+          if (!x) throw new Error("guion agotado");
+          return new Map(keys.filter((k) => x[k]).map((k) => [k, x[k]]));
+        },
+        isAvailable: (x: { valid: boolean }) => x.valid,
+      };
+    };
+    const ok3 = { t1: { valid: true, fp: "f1" }, t2: { valid: true, fp: "f2" }, t3: { valid: true, fp: "f3" } };
+    let b = await readCoherentBatch(["t1", "t2", "t3"], lote(
+      [{ t1: M(3, "rent"), t2: M(7, "sale"), t3: M(2, "any") }, { t1: M(3, "rent"), t2: M(8, "sale"), t3: M(2, "any") }, { t2: M(8, "sale") }, { t2: M(8, "sale") }],
+      [ok3, { t2: { valid: true, fp: "f2b" } }],
+    ));
+    check("V9 vigilante: t1 y t3 a la primera; t2 se reintenta solo y entra con su versión nueva",
+      b.accepted.get("t1")?.operation === "rent" && b.accepted.get("t3")?.operation === "any" && (b.accepted.get("t2")?.state as { fp: string }).fp === "f2b" && b.skipped.size === 0);
+    b = await readCoherentBatch(["t1", "t2", "t3"], lote(
+      [{ t1: M(3, "rent"), t2: M(7, "sale"), t3: M(2, "any") }, { t1: M(3, "rent"), t2: M(8, "sale"), t3: M(2, "any") }, { t2: M(8, "sale") }, { t2: M(9, "sale") }, { t2: M(9, "sale") }, { t2: M(10, "sale") }],
+      [ok3, { t2: { valid: true, fp: "f2b" } }, { t2: { valid: true, fp: "f2c" } }],
+    ));
+    check("V9/V4 vigilante: t2 no se estabiliza → solo t2 se salta (catalog_read_unstable)",
+      b.skipped.get("t2") === "catalog_read_unstable" && b.accepted.has("t1") && b.accepted.has("t3") && !b.accepted.has("t2"));
+    check("V5 vigilante: si falla la lectura de versiones, falla la pasada entera",
+      (await code(readCoherentBatch(["t1", "t2"], lote([new Error("red")], [ok3])))) === "catalog_operation_unreadable");
+    b = await readCoherentBatch(["t1", "t2"], lote([{ t1: M(3, "rent"), t2: M(4, "venta") }, { t1: M(3, "rent"), t2: M(4, "venta") }], [ok3]));
+    check("V7 vigilante: operación no válida → solo ese enlace se salta", b.skipped.get("t2") === "catalog_operation_unreadable" && b.accepted.get("t1")?.operation === "rent");
+    b = await readCoherentBatch(["t1", "t3"], lote([{ t1: M(3, "rent"), t3: M(2, "rent") }, { t1: M(3, "rent"), t3: M(9, "rent") }], [{ t1: { valid: true, fp: "f1" }, t3: { valid: false, fp: null } }]));
+    check("V11 vigilante: un enlace no válido sale como no válido (sin reintentos)", b.accepted.get("t3")?.operation === null && (b.accepted.get("t3")?.state as { valid: boolean }).valid === false && b.skipped.size === 0);
+
+    // El vigilante real con un enlace saltado: no emite nada y conserva la huella.
+    const clock = new FakeClock();
+    let mode: "skip" | "B" = "skip";
+    let throwFor: string | null = null;
+    const hub = new SyncHub({
+      fetchStates: async (tokens) => new Map(tokens.map((t) => [t, mode === "skip" && t === "tA" ? { valid: true, fingerprint: null, expiresAt: null, skipped: true } : { valid: true, fingerprint: "B", expiresAt: "2099-01-01T00:00:00Z" }])),
+      fetchContent: async (t) => { if (t === throwFor) throw new CoherentReadError("catalog_read_unstable"); return pubState("B", ["a"]); },
+      now: clock.now,
+      setInterval: clock.setInterval,
+      clearInterval: clock.clear,
+    });
+    const evA: HubEvent[] = [];
+    const evB: HubEvent[] = [];
+    hub.subscribe("tA", "A", (e) => evA.push(e));
+    hub.subscribe("tB", "A", (e) => evB.push(e));
+    await clock.advance(HUB_CHECK_MS);
+    const pings = evA.filter((e) => e.type === "ping") as Array<{ type: "ping"; fingerprint: string | null }>;
+    check("vigilante: enlace saltado → ni update ni unavailable; otro enlace sí se actualiza",
+      !evA.some((e) => e.type === "update" || e.type === "unavailable") && evB.some((e) => e.type === "update"));
+    await clock.advance(HUB_HEARTBEAT_MS);
+    const pings2 = evA.filter((e) => e.type === "ping") as Array<{ type: "ping"; fingerprint: string | null }>;
+    check("vigilante: el latido del saltado conserva su última huella (A)", pings2.length > pings.length && pings2[pings2.length - 1].fingerprint === "A");
+    mode = "B";
+    throwFor = "tA";
+    hub.subscribe("tC", "A", () => {});
+    await clock.advance(HUB_CHECK_MS);
+    check("vigilante: si leer el contenido de un enlace falla, los demás siguen", !evA.some((e) => e.type === "update"));
+    throwFor = null;
+    await clock.advance(HUB_CHECK_MS);
+    check("vigilante: en la pasada siguiente, el saltado recibe su versión", evA.some((e) => e.type === "update"));
   }
 
   await liveTests();

@@ -1,7 +1,8 @@
 import { deriveEditorial } from "./editorial";
 import { createHash } from "node:crypto";
 import { ATICO_FLOOR, resolveFloor } from "@/lib/floor";
-import { editionLabel, floorLabel, operationLabel, priceLabel } from "./format";
+import { editionLabel, floorLabel } from "./format";
+import { priceDisplay, type CatalogOperation } from "./operation-price";
 import { contactPhoneHref, formatContactPhone, isContactRole } from "./contact-format";
 import {
   type PhotoOrientation,
@@ -148,7 +149,7 @@ function photoIndexOf(it: InternalItem, u: string): number {
  */
 export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, items?: PublicItem[]): string | null {
   const internal = (snap.items ?? []).filter((it) => it && it.status !== "sold" && it.status !== "archived");
-  const pubs = items ?? internal.map(toPublicItem);
+  const pubs = items ?? internal.map((it) => toPublicItem(it));
   const key = snap.cover?.key;
   if (typeof key === "string") {
     const i = internal.findIndex((it) => String(it.key) === key);
@@ -161,7 +162,11 @@ export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, it
   return first ? first.photos[first.coverIndex].src : null;
 }
 
-export function toPublicItem(it: InternalItem): PublicItem {
+/** `op`: la operación guardada del catálogo (K1, DS-1/DS-2). En venta o
+ *  alquiler, la operación y el importe del catálogo; una inclusión de otra
+ *  operación, lo suyo real; en «venta y alquiler», como siempre. Sin la otra
+ *  operación de las duales: eso es solo de la gestión. */
+export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): PublicItem {
   const clean = it.clean;
   const cleanValid =
     !!clean && typeof clean.src === "string" && clean.src === clientDescriptionSrc(it.description, it.features);
@@ -188,18 +193,16 @@ export function toPublicItem(it: InternalItem): PublicItem {
     photos: classes.map((k, i) => ({ u: String(i), k })),
     coverIndex: coverIndex < 0 ? 0 : coverIndex,
   });
+  const shown = priceDisplay(
+    { operation: it.operation, operations: it.operations, price: it.price, rent_price: it.rent_price, currency: it.currency },
+    op,
+  );
   return {
     key: String(it.key),
     title: String(it.title ?? "").trim() || "Sin título",
     place: [it.subzone, it.zone].filter((x) => typeof x === "string" && x.trim()).join(", ") || null,
-    operation: operationLabel(it.operation, it.operations),
-    price: priceLabel({
-      operation: it.operation,
-      operations: it.operations,
-      price: it.price,
-      rentPrice: it.rent_price,
-      currency: it.currency,
-    }),
+    operation: shown.operation,
+    price: shown.price,
     reserved: it.status === "reserved",
     bedrooms: nonNegativeInt(it.bedrooms),
     bathrooms: nonNegativeInt(it.bathrooms),
@@ -216,11 +219,11 @@ export function toPublicItem(it: InternalItem): PublicItem {
   };
 }
 
-export function toPublicCatalog(snap: InternalSnapshot): PublicCatalog {
+export function toPublicCatalog(snap: InternalSnapshot, op: CatalogOperation = "any"): PublicCatalog {
   // Defensa en profundidad: la instantánea ya excluye vendidas y archivadas.
   const items = (snap.items ?? [])
     .filter((it) => it && it.status !== "sold" && it.status !== "archived")
-    .map(toPublicItem);
+    .map((it) => toPublicItem(it, op));
   const contact = snap.contact ?? null;
   return {
     title: String(snap.title ?? "").trim(),

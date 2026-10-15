@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { DEFAULT_CRITERIA, type CatalogCriteria } from "./criteria";
+import type { OperationPriceInput } from "./operation-price";
 import type { CatalogDetail, CatalogSummary } from "./types";
 
 const SAL_JUS: CatalogCriteria = {
@@ -57,6 +58,16 @@ export const fixtureCatalogs: CatalogSummary[] = [
   },
 ];
 
+/** K1: los importes de las cuatro viviendas del ejemplo manual (las etiquetas
+ *  de arriba están escritas a mano para un catálogo de venta; la gestión de
+ *  prueba las recalcula con priceDisplay si cambia la operación guardada). */
+export const fixtureManualPricing: Record<string, OperationPriceInput> = {
+  "e0000000-0000-0000-0000-000000000001": { operation: "sale", operations: ["sale"], price: 1450000, rent_price: null, currency: "eur" },
+  "e0000000-0000-0000-0000-000000000002": { operation: "sale", operations: ["sale", "rent"], price: 2100000, rent_price: 6800, currency: "eur" },
+  "e0000000-0000-0000-0000-000000000003": { operation: "rent", operations: ["rent"], price: 0, rent_price: 3900, currency: "eur" },
+  "e0000000-0000-0000-0000-000000000004": { operation: "rent", operations: ["rent"], price: 2100, rent_price: null, currency: "eur" },
+};
+
 export const fixtureCatalogDetail: CatalogDetail = {
   id: "f0000000-0000-0000-0000-000000000001",
   title: "Salamanca y Chamberí",
@@ -85,8 +96,11 @@ export const fixtureCatalogDetail: CatalogDetail = {
   },
   items: [
     { propertyId: "e0000000-0000-0000-0000-000000000001", position: 100, slug: "atico-demo", bcReference: "BC-9001", title: "Ático con terraza sobre los tejados de Jerónimos", zone: "Jerónimos, Madrid", status: "available", operation: "Venta", price: "1.450.000 €", bedrooms: 3, bathrooms: 2, squareMeters: 142, photoUrl: syntheticPhoto(28, 320, 240, "1") },
-    { propertyId: "e0000000-0000-0000-0000-000000000002", position: 200, slug: "piso-demo", bcReference: "BC-9002", title: "Piso señorial con galería acristalada, molduras originales y suelos de madera restaurados en la calle Almagro", zone: "Almagro, Madrid", status: "available", operation: "Venta y alquiler", price: "Venta 2.100.000 € · Alquiler 6.800 €/mes", bedrooms: 4, bathrooms: 3, squareMeters: 186, photoUrl: syntheticPhoto(205, 240, 320, "2") },
-    { propertyId: "e0000000-0000-0000-0000-000000000003", position: 300, slug: "duplex-demo", bcReference: "BC-9003", title: "Dúplex con patio", zone: null, status: "reserved", operation: "Alquiler", price: "Precio · sin dato", bedrooms: null, bathrooms: 2, squareMeters: null, photoUrl: null },
+    // K1 (DS-2, catálogo de venta): la dual se ve como venta, con el alquiler aparte (solo gestión).
+    { propertyId: "e0000000-0000-0000-0000-000000000002", position: 200, slug: "piso-demo", bcReference: "BC-9002", title: "Piso señorial con galería acristalada, molduras originales y suelos de madera restaurados en la calle Almagro", zone: "Almagro, Madrid", status: "available", operation: "Venta", price: "2.100.000 €", priceAlso: "También en alquiler: 6.800 €/mes", bedrooms: 4, bathrooms: 3, squareMeters: 186, photoUrl: syntheticPhoto(205, 240, 320, "2") },
+    // Inclusión de otra operación (alquiler en un catálogo de venta): lo suyo real.
+    // P-ALQ (D-QA16): sin precio principal y 3.900 €/mes en el campo secundario → «sin dato» y aviso interno.
+    { propertyId: "e0000000-0000-0000-0000-000000000003", position: 300, slug: "duplex-demo", bcReference: "BC-9003", title: "Dúplex con patio", zone: null, status: "reserved", operation: "Alquiler", price: "Precio · sin dato", priceWarning: "La ficha no tiene precio principal: el campo secundario dice 3.900 €/mes, pero no se usa. Corrige el precio en la ficha.", bedrooms: null, bathrooms: 2, squareMeters: null, photoUrl: null },
     { propertyId: "e0000000-0000-0000-0000-000000000004", position: 400, slug: "estudio-demo", bcReference: null, title: "Estudio de diseño", zone: "Recoletos, Madrid", status: "available", operation: "Alquiler", price: "2.100 €/mes", bedrooms: 1, bathrooms: 1, squareMeters: 54, photoUrl: syntheticPhoto(330, 320, 240, "4") },
   ],
 };

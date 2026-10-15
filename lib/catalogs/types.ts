@@ -47,8 +47,13 @@ export interface CatalogItemView {
   title: string;
   zone: string | null;
   status: "available" | "reserved" | "sold" | "archived";
+  /** K1: la operación y el precio que ve el lector en ESTE catálogo (DS-1/DS-2). */
   operation: string;
   price: string;
+  /** K1 (solo gestión): la otra operación de una dual («También en venta: …»). */
+  priceAlso?: string | null;
+  /** P-ALQ, D-QA16 (solo gestión): importes de alquiler incoherentes en la ficha. */
+  priceWarning?: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
   squareMeters: number | null;

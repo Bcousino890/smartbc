@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { catalogNumberLabel, editionLabel, operationLabel, priceLabel } from "./format";
+import { catalogNumberLabel, editionLabel } from "./format";
+import { managerPriceFields, type CatalogOperation } from "./operation-price";
 import { DEFAULT_CRITERIA, normalizeCriteria, type CatalogCriteria } from "./criteria";
 import { explainProperty, INCLUDED_UNAVAILABLE } from "./explain";
 import { type AdjustmentKind, type CandidateProperty, type Via } from "./selection";
@@ -121,7 +122,9 @@ function toCandidate(p: any): CandidateProperty {
 /** Explicación de gestión (C1) para una vivienda, con su ajuste. */
 type ExplainCtx = { criteria: CatalogCriteria; adjustments: Map<string, AdjustmentKind>; via?: Map<string, Via> };
 
-function toItemView(p: any, position: number): CatalogItemView {
+/** Vista de gestión de una vivienda. `op` es la operación GUARDADA del
+ *  catálogo (o la del borrador en «Ver qué entraría»): K1, DS-1/DS-2. */
+function toItemView(p: any, position: number, op: CatalogOperation): CatalogItemView {
   return {
     propertyId: p.id,
     position,
@@ -130,14 +133,10 @@ function toItemView(p: any, position: number): CatalogItemView {
     title: p.title,
     zone: [p.subzone, p.zone].filter(Boolean).join(", ") || null,
     status: p.archived_at ? "archived" : (p.status as CatalogItemView["status"]),
-    operation: operationLabel(p.operation, p.operations),
-    price: priceLabel({
-      operation: p.operation,
-      operations: p.operations,
-      price: p.price,
-      rentPrice: p.rent_price,
-      currency: p.currency,
-    }),
+    ...managerPriceFields(
+      { operation: p.operation, operations: p.operations, price: p.price, rent_price: p.rent_price, currency: p.currency },
+      op,
+    ),
     bedrooms: p.bedrooms ?? null,
     bathrooms: p.bathrooms ?? null,
     squareMeters: p.square_meters ?? null,
@@ -147,14 +146,14 @@ function toItemView(p: any, position: number): CatalogItemView {
 
 /** Vistas de propiedades en el orden de `ids` (solo lectura). Con `ctx`,
  *  cada una lleva su explicación y su ajuste (solo gestión). */
-export async function propertyViews(ids: string[], ctx?: ExplainCtx): Promise<CatalogItemView[]> {
+export async function propertyViews(ids: string[], op: CatalogOperation, ctx?: ExplainCtx): Promise<CatalogItemView[]> {
   if (ids.length === 0) return [];
   const { data } = await db().from("properties").select(PROPERTY_VIEW_COLUMNS).in("id", ids);
   const byId = new Map(((data ?? []) as any[]).map((p) => [p.id, p]));
   return ids.flatMap((id, i) => {
     const p = byId.get(id);
     if (!p) return [];
-    const view = toItemView(p, (i + 1) * 100);
+    const view = toItemView(p, (i + 1) * 100, op);
     if (!ctx) return [view];
     const adjustment = ctx.adjustments.get(id) ?? null;
     return [{ ...view, adjustment, via: ctx.via?.get(id), explain: explainProperty(toCandidate(p), ctx.criteria, adjustment) }];
@@ -193,7 +192,7 @@ export async function autoSelection(
     via: new Map(rows.map((r) => [r.property_id as string, r.via as Via])),
   };
   return {
-    items: await propertyViews(rows.map((r) => r.property_id), ctx),
+    items: await propertyViews(rows.map((r) => r.property_id), crit.operation, ctx),
     total: rows.length ? Number(rows[0].total) : 0,
     matched: rows.length ? Number(rows[0].matched ?? rows[0].total) : 0,
   };
@@ -258,20 +257,20 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     .eq("catalog_id", catalogId)
     .order("position", { ascending: true });
 
-  const manual: CatalogItemView[] = ((items ?? []) as any[])
-    .filter((it) => it.properties)
-    .map((it) => toItemView(it.properties, it.position));
-
   const mode: "manual" | "auto" = cat.mode === "auto" ? "auto" : "manual";
   const criteria = criteriaOf(cat.criteria);
+  // K1: también en manual, la operación y el precio del catálogo guardado.
+  const manual: CatalogItemView[] = ((items ?? []) as any[])
+    .filter((it) => it.properties)
+    .map((it) => toItemView(it.properties, it.position, criteria.operation));
   const auto = mode === "auto" ? await autoSelection(ownerId, catalogId, null) : null;
 
   // Ajustes guardados (C1): las excluidas y las inclusiones que hoy no pueden
   // aparecer se enseñan aparte, con su explicación.
   const adj = await catalogAdjustments(catalogId);
   const ctx: ExplainCtx = { criteria, adjustments: adj };
-  const excluded = await propertyViews([...adj].filter(([, k]) => k === "exclude").map(([id]) => id), ctx);
-  const includedViews = await propertyViews([...adj].filter(([, k]) => k === "include").map(([id]) => id), ctx);
+  const excluded = await propertyViews([...adj].filter(([, k]) => k === "exclude").map(([id]) => id), criteria.operation, ctx);
+  const includedViews = await propertyViews([...adj].filter(([, k]) => k === "include").map(([id]) => id), criteria.operation, ctx);
   const unavailable = includedViews.filter((v) => v.explain?.headline === INCLUDED_UNAVAILABLE);
   const included = includedViews.length - unavailable.length;
   const snap = await internalSnapshot(catalogId);
@@ -330,7 +329,8 @@ export async function searchCatalogProperties(
   const { data: cat } = await db().from("catalogs").select("criteria").eq("id", catalogId).maybeSingle();
   const adjustments = new Map<string, AdjustmentKind>();
   for (const r of rows) if (r.adjustment === "include" || r.adjustment === "exclude") adjustments.set(r.property_id, r.adjustment);
-  const views = await propertyViews(rows.map((r) => r.property_id), { criteria: criteriaOf(cat?.criteria), adjustments });
+  const saved = criteriaOf(cat?.criteria);
+  const views = await propertyViews(rows.map((r) => r.property_id), saved.operation, { criteria: saved, adjustments });
   const inCat = new Map(rows.map((r) => [r.property_id, r.in_catalog === true]));
   return {
     items: views.map((v) => ({ ...v, inCatalog: inCat.get(v.propertyId) ?? false })),
@@ -347,9 +347,11 @@ export async function modePreview(
   const { data, error } = await db().rpc("catalog_mode_preview", { p_actor: ownerId, p_catalog: catalogId, p_mode: mode });
   if (error) throw new Error(`catalog_mode_preview: ${error.message}`);
   const d = data as any;
+  const { data: cat } = await db().from("catalogs").select("criteria").eq("id", catalogId).eq("owner_id", ownerId).maybeSingle();
+  const op = criteriaOf(cat?.criteria).operation;
   return {
-    entering: await propertyViews((d?.entering ?? []) as string[]),
-    leaving: await propertyViews((d?.leaving ?? []) as string[]),
+    entering: await propertyViews((d?.entering ?? []) as string[], op),
+    leaving: await propertyViews((d?.leaving ?? []) as string[], op),
     autoTotal: Number(d?.auto_total ?? 0),
     manualCount: Number(d?.manual_count ?? 0),
   };

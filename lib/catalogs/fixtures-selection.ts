@@ -7,7 +7,7 @@
 // isCatalogFixtureMode().
 // ============================================================================
 
-import { operationLabel, priceLabel } from "./format";
+import { managerPriceFields, type CatalogOperation } from "./operation-price";
 import { fixtureCatalogDetail, syntheticPhoto } from "./fixtures";
 import type { CatalogMaterial } from "./material";
 import type { CandidateProperty } from "./selection";
@@ -118,7 +118,7 @@ export function fixtureMaterial(p: FixtureProperty): CatalogMaterial {
 export function fixtureLargeCatalogDetail(): CatalogDetail {
   const byN = (n: number) => fixturePropertiesLarge[n - 1];
   const list = [1, 2, 6, 10, ...Array.from({ length: 18 }, (_, i) => 19 + i)].map(byN);
-  const items = list.map((p, i) => fixtureView(p, (i + 1) * 100));
+  const items = list.map((p, i) => fixtureView(p, (i + 1) * 100, "sale"));
   return {
     ...fixtureCatalogDetail,
     title: "Selección grande para pruebas (E2)",
@@ -135,7 +135,9 @@ export function fixtureLargeCatalogDetail(): CatalogDetail {
   };
 }
 
-export function fixtureView(p: FixtureProperty, position = 100): CatalogItemView {
+/** Vista de gestión de una vivienda sintética en un catálogo de operación
+ *  `op` (la guardada; K1), con las mismas reglas que queries.ts. */
+export function fixtureView(p: FixtureProperty, position: number, op: CatalogOperation): CatalogItemView {
   return {
     propertyId: p.id,
     position,
@@ -144,8 +146,7 @@ export function fixtureView(p: FixtureProperty, position = 100): CatalogItemView
     title: p.title,
     zone: [p.subzone, p.zone].filter(Boolean).join(", ") || null,
     status: p.status as CatalogItemView["status"],
-    operation: operationLabel(p.operation, p.operations),
-    price: priceLabel({ operation: p.operation, operations: p.operations, price: p.price, rentPrice: p.rent_price, currency: "eur" }),
+    ...managerPriceFields({ operation: p.operation, operations: p.operations, price: p.price, rent_price: p.rent_price, currency: "eur" }, op),
     bedrooms: p.bedrooms,
     bathrooms: p.bathrooms,
     squareMeters: p.square_meters,

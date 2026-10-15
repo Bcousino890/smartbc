@@ -144,7 +144,8 @@ export function criteriaFromRaw(raw: CriteriaRaw): CatalogCriteria | null {
     operation: raw.operation,
     zones: raw.zones,
     sort: raw.sort,
-    max: raw.max.trim() === "" ? NaN : Number(raw.max),
+    // K5: el texto tal cual; normalizeCriteria decide (vacío o «12.0» no valen).
+    max: raw.max.trim() === "" ? NaN : raw.max,
     price_min: priceOff ? null : raw.pmin.trim() || null,
     price_max: priceOff ? null : raw.pmax.trim() || null,
   });

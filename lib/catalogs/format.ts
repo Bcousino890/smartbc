@@ -21,7 +21,8 @@ export function catalogNumberLabel(n: number | null | undefined): string | null 
 
 const CURRENCY_SYMBOL: Record<string, string> = { eur: "€", usd: "US$", clp: "CLP", uf: "UF" };
 
-function money(amount: number, currency: string | null | undefined): string {
+/** «4.800 €», «1.450.000 €», «UF 5.000». */
+export function formatMoney(amount: number, currency?: string | null): string {
   const cur = (currency ?? "eur").toLowerCase();
   const sym = CURRENCY_SYMBOL[cur] ?? cur.toUpperCase();
   // es-ES no agrupa las cifras de 4 dígitos («4800»); los portales y el resto
@@ -45,20 +46,23 @@ function num(v: number | string | null | undefined): number | null {
 }
 
 /** Texto del precio: «1.450.000 €», «4.800 €/mes», las dos si es dual, o
- *  «Precio · sin dato» si no hay un importe positivo. */
+ *  «Precio · sin dato» si no hay un importe positivo. Sin contexto de
+ *  catálogo (el contextual está en operation-price.ts → priceDisplay). */
 export function priceLabel(p: PriceInput): string {
   const ops = new Set((p.operations && p.operations.length ? p.operations : [p.operation]).filter(Boolean) as string[]);
   const base = num(p.price);
   const rent = num(p.rentPrice);
   const parts: string[] = [];
   if (ops.has("sale") && ops.has("rent")) {
-    if (base) parts.push(`Venta ${money(base, p.currency)}`);
-    if (rent) parts.push(`Alquiler ${money(rent, p.currency)}/mes`);
+    if (base) parts.push(`Venta ${formatMoney(base, p.currency)}`);
+    if (rent) parts.push(`Alquiler ${formatMoney(rent, p.currency)}/mes`);
   } else if (ops.has("rent")) {
-    const r = rent ?? base;
-    if (r) parts.push(`${money(r, p.currency)}/mes`);
+    // K2/P-ALQ (D-QA16): una vivienda SOLO de alquiler muestra su `price`, el
+    // mismo importe con el que la selecciona SQL; nunca el `rent_price`.
+    const r = p.operation === "rent" ? base : rent;
+    if (r) parts.push(`${formatMoney(r, p.currency)}/mes`);
   } else if (base) {
-    parts.push(money(base, p.currency));
+    parts.push(formatMoney(base, p.currency));
   }
   return parts.length ? parts.join(" · ") : "Precio · sin dato";
 }

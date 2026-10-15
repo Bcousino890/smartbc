@@ -10,12 +10,15 @@
  *     scripts/test-catalogs-manager.mts
  */
 import { materialLabels, materialOf, type CatalogMaterial } from "../lib/catalogs/material.ts";
+import { fixtureCatalogDetail, fixtureManualPricing } from "../lib/catalogs/fixtures.ts";
+import { managerPriceFields } from "../lib/catalogs/operation-price.ts";
 import { materialByProperty } from "../lib/catalogs/material-data.ts";
 import type { InternalItem } from "../lib/catalogs/to-public.ts";
 import {
   beginSave,
   contactAdapter,
   criteriaAdapter,
+  criteriaFromRaw,
   criteriaRawOf,
   editDraft,
   editTextDraft,
@@ -159,6 +162,13 @@ function testRaw() {
   // Precio no válido: cuenta como cambio y no se pierde.
   const d5 = editDraft(d4, savedKey, { ...d4.value, freeName: "", pmax: "12a" });
   check("precio no válido: cambio y texto intacto", isEdited(criteriaAdapter, d5) && d5.value.pmax === "12a");
+  // K5: «5.5» ya no se lee como 55: no válido, cuenta como cambio y se conserva tal cual.
+  const d6 = editDraft(d5, savedKey, { ...d5.value, pmax: "5.5" });
+  check("K5 «5.5»: no válido (criteriaFromRaw → null)", criteriaFromRaw(d6.value) === null);
+  check("K5 «5.5»: cambio sin guardar y texto intacto", isEdited(criteriaAdapter, d6) && d6.value.pmax === "5.5");
+  const d7 = editDraft(d6, savedKey, { ...d6.value, pmax: "1.200.000", max: "12.0" });
+  check("K5 máximo «12.0»: no válido y se conserva", criteriaFromRaw(d7.value) === null && d7.value.max === "12.0");
+  check("K5 «1.200.000» y máximo «12»: válido = 1200000", criteriaFromRaw({ ...d7.value, max: "12" })?.price_max === 1200000);
 
   // Teléfono: «600 111 222» frente a +34600111222 guardado.
   const savedContact = contactAdapter.key({ name: "Ana", phone: "+34600111222", role: "asesora" });
@@ -295,6 +305,30 @@ function testFilters() {
   check("búsqueda por referencia", matchesQuery("bc-9002", { title: "Piso", bcReference: "BC-9002" }) && !matchesQuery("bc-1", { title: "Piso", bcReference: "BC-9002" }));
 }
 
+function testManagerPrices() {
+  section("K1 · etiquetas del gestor con la operación guardada (DS-1/DS-2, P-ALQ)");
+  // Las del ejemplo manual (catálogo de venta) están escritas a mano en fixtures.ts:
+  // tienen que ser exactamente las que calcula la regla única.
+  for (const it of fixtureCatalogDetail.items) {
+    const f = managerPriceFields(fixtureManualPricing[it.propertyId], fixtureCatalogDetail.criteria.operation);
+    check(`ejemplo manual «${it.title.slice(0, 24)}»: ${f.operation} · ${f.price}`,
+      it.operation === f.operation && it.price === f.price && (it.priceAlso ?? null) === f.priceAlso && (it.priceWarning ?? null) === f.priceWarning,
+      JSON.stringify({ literal: [it.operation, it.price, it.priceAlso ?? null, it.priceWarning ?? null], regla: f }));
+  }
+  const piso = fixtureManualPricing["e0000000-0000-0000-0000-000000000002"];
+  const rent = managerPriceFields(piso, "rent");
+  check("la misma dual en un catálogo de alquiler: «Alquiler · 6.800 €/mes» y la venta aparte",
+    rent.operation === "Alquiler" && rent.price === "6.800 €/mes" && rent.priceAlso === "También en venta: 2.100.000 €");
+  const any = managerPriceFields(piso, "any");
+  check("y en «venta y alquiler», como siempre", any.operation === "Venta y alquiler" && any.price === "Venta 2.100.000 € · Alquiler 6.800 €/mes" && any.priceAlso === null);
+  const duplex = managerPriceFields(fixtureManualPricing["e0000000-0000-0000-0000-000000000003"], "rent");
+  check("P-ALQ en un catálogo de alquiler: sin dato y el aviso con 3.900 €/mes",
+    duplex.price === "Precio · sin dato" && /3\.900 €\/mes/.test(String(duplex.priceWarning)));
+  const estudioSale = managerPriceFields(fixtureManualPricing["e0000000-0000-0000-0000-000000000004"], "sale");
+  check("inclusión de alquiler en venta: lo suyo real", estudioSale.operation === "Alquiler" && estudioSale.price === "2.100 €/mes" && estudioSale.priceAlso === null);
+}
+
+testManagerPrices();
 testMaterial();
 testMaterialByProperty();
 testSections();

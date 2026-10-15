@@ -140,6 +140,9 @@ async function main() {
   check("precio 0 → sin dato (nunca «0 €»)", priceLabel({ operation: "sale", price: 0 }) === "Precio · sin dato");
   check("precio nulo → sin dato", priceLabel({ operation: "rent", price: null }) === "Precio · sin dato");
   check("precio en texto numérico", priceLabel({ operation: "sale", price: "350000.00" }) === "350.000 €");
+  // K2 / P-ALQ (D-QA16): solo alquiler → su price, nunca el rent_price.
+  check("solo alquiler sin precio principal → sin dato (no el rent_price)", priceLabel({ operation: "rent", operations: ["rent"], price: 0, rentPrice: 6000 }) === "Precio · sin dato");
+  check("solo alquiler con dos importes → el price", priceLabel({ operation: "rent", operations: ["rent"], price: 6000, rentPrice: 9000 }) === "6.000 €/mes");
   check("otra divisa", priceLabel({ operation: "sale", price: 5000, currency: "uf" }) === "UF 5.000");
   check("operación dual", operationLabel("sale", ["sale", "rent"]) === "Venta y alquiler");
   check("operación desconocida", operationLabel(null) === "Operación · sin dato");

@@ -77,8 +77,12 @@ for (let i = 0; i < 500; i++) {
     status: pick(["available", "available", "available", "available", "reserved", "sold", "archived"]),
     operation: op,
     operations: dual ? ["sale", "rent"] : [op],
-    price: rnd() < 0.06 ? 0 : basePrice,
-    rent_price: dual ? (rnd() < 0.1 ? null : 1500 + Math.floor(rnd() * 20) * 250) : null,
+    // Solo alquiler con un segundo importe (corrección de selección, T1): una de
+    // cada 5 lleva rent_price distinto de price y una de cada 10, además, price 0
+    // (sin precio principal). Por índice, sin consumir el generador aleatorio:
+    // el resto del conjunto sale igual que antes.
+    price: ((r) => (op === "rent" && i % 10 === 0 ? 0 : r))(rnd() < 0.06 ? 0 : basePrice),
+    rent_price: dual ? (rnd() < 0.1 ? null : 1500 + Math.floor(rnd() * 20) * 250) : op === "rent" && i % 5 === 0 ? basePrice + 500 : null,
     zone: zoneSrc,
     subzone: subSrc,
     // Fechas repetidas a propósito: el desempate final es el id.
@@ -171,5 +175,11 @@ out.push(`SELECT test_util.ok((SELECT count(*) FROM sel_mismatch) = 0,
   coalesce((SELECT string_agg(n::text || ' ' || crit::text || ' ts=' || ts_total || '/' || ts_matched || ' ' || ts_via::text || ' sql=' || sql_total || '/' || sql_matched || ' ' || sql_via::text, ' | ') FROM sel_mismatch), 'ninguno') || ')');`);
 out.push(`\\echo 'paridad con ajustes: ${withIncl} juegos con inclusiones, ${withOutside} con inclusiones fuera de criterios, ${overMax} con más inclusiones que el máximo, ${otherOp} con inclusiones de otra operación en la lista'`);
 out.push(`SELECT test_util.ok((SELECT count(*) FROM properties WHERE slug LIKE 'par-%') = 500, 'paridad: 500 propiedades sintéticas cargadas');`);
+const rentOnly = props.filter((p) => p.operation === "rent" && !p.operations.includes("sale"));
+const rentSecond = rentOnly.filter((p) => p.rent_price !== null).length;
+const rentNoPrimary = rentOnly.filter((p) => p.rent_price !== null && !(p.price && p.price > 0)).length;
+out.push(`SELECT test_util.ok((SELECT count(*) FROM properties WHERE slug LIKE 'par-%' AND operation = 'rent' AND rent_price > 0) = ${rentSecond}
+  AND (SELECT count(*) FROM properties WHERE slug LIKE 'par-%' AND operation = 'rent' AND rent_price > 0 AND price <= 0) = ${rentNoPrimary},
+  'paridad: ${rentSecond} viviendas de solo alquiler con rent_price, ${rentNoPrimary} de ellas sin precio principal');`);
 out.push("\\echo 'paridad TS ↔ SQL: todo en verde'");
 process.stdout.write(out.join("\n") + "\n");
