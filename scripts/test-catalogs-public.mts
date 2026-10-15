@@ -20,6 +20,7 @@ import { criteriaSummary, normalizeCriteria } from "../lib/catalogs/criteria.ts"
 import { autoSelect, candidates, type CandidateProperty } from "../lib/catalogs/selection.ts";
 import { fitsOperation as fitsOp, operationPrice, priceDisplay, rentDataWarning } from "../lib/catalogs/operation-price.ts";
 import { composeFingerprint } from "../lib/catalogs/public-fingerprint.ts";
+import { effectivePhotos, isPhotoKey, photoSrc, pickProxyPhoto, withWidth } from "../lib/catalogs/photo-selection.ts";
 import { CoherentReadError, readCoherent, readCoherentBatch, type CatalogMeta } from "../lib/catalogs/coherent-read.ts";
 import { explainProperty, zoneRedundancies } from "../lib/catalogs/explain.ts";
 import { ENGINE_VERSION, isStorySourceCurrent, storySourceHash } from "../lib/services/story/source-hash.ts";
@@ -1510,6 +1511,80 @@ async function main() {
     throwFor = null;
     await clock.advance(HUB_CHECK_MS);
     check("vigilante: en la pasada siguiente, el saltado recibe su versión", evA.some((e) => e.type === "update"));
+  }
+
+  section("E3 · una sola regla de fotos por catálogo (photo-selection.ts; resultados escritos a mano)");
+  {
+    // P: A (portada del CRM), B, C, D y E (MISMA URL que B). Claves opacas fa…fe.
+    const K = (c: string) => c.repeat(16);
+    const U = (c: string) => `${c}${"0".repeat(31)}`;
+    const P = [
+      { u: U("a"), f: K("a"), w: 1600, h: 1067, c: true, k: "living_room" },
+      { u: U("b"), f: K("b"), w: 1600, h: 1067, c: false },
+      { u: U("c"), f: K("c"), w: 1000, h: 1500, c: false, k: "floor_plan" },
+      { u: U("d"), f: K("d"), w: 1600, h: 1067, c: false },
+      { u: U("b"), f: K("e"), w: 1600, h: 1067, c: false },
+    ];
+    const ids = (e: ReturnType<typeof effectivePhotos>) => e.photos.map((p) => p.u[0]).join("");
+    let e = effectivePhotos(P, null);
+    check("sin ajustes: A B C D (E es B) y apertura A (portada del CRM)", ids(e) === "abcd" && e.openingIndex === 0 && e.openingSource === "crm-cover");
+    check("índices del proxy sin duplicados: 0 1 2 3", e.photos.map((p) => p.proxyIdx).join() === "0,1,2,3");
+    e = effectivePhotos(P, { x: [K("b")], o: null });
+    check("excluir B: A C D, con los índices del proxy de cada una (0 2 3)", ids(e) === "acd" && e.photos.map((p) => p.proxyIdx).join() === "0,2,3");
+    check("excluir E (misma URL) = excluir B", ids(effectivePhotos(P, { x: [K("e")], o: null })) === "acd");
+    e = effectivePhotos(P, { x: [K("a")], o: null });
+    check("excluida la portada del CRM: apertura = primera en uso (B)", ids(e) === "bcd" && e.openingIndex === 0 && e.openingSource === "first" && e.photos[0].u[0] === "b");
+    e = effectivePhotos(P, { x: [], o: K("c") });
+    check("apertura elegida C (índice 2 de A B C D)", e.openingIndex === 2 && e.openingSource === "chosen");
+    e = effectivePhotos(P, { x: [], o: K("e") });
+    check("apertura elegida por la clave del duplicado E = B", e.openingIndex === 1 && e.openingSource === "chosen");
+    e = effectivePhotos(P, { x: [K("a")], o: K("a") });
+    check("apertura excluida (no debería pasar): respaldo a la primera en uso", e.openingSource === "first" && e.photos[e.openingIndex].u[0] === "b");
+    e = effectivePhotos(P, { x: [K("a"), K("b"), K("c"), K("d")], o: null });
+    check("todas excluidas (SQL lo impide): ninguna, apertura «none»", e.photos.length === 0 && e.openingSource === "none");
+    e = effectivePhotos(P, { x: [K("z"), K("b")], o: K("y") });
+    check("ajustes que ya no aplican: 1 exclusión y la apertura, sin tocar el resto", e.stale.excluded === 1 && e.stale.opening === true && ids(e) === "acd" && e.openingSource === "crm-cover");
+    check("estado en la gestión: B excluida, C sin marcar", e.all.find((p) => p.u[0] === "b")?.excluded === true && e.all.find((p) => p.u[0] === "c")?.excluded === false);
+    const legacy = effectivePhotos(P.map(({ f: _f, ...p }) => p), null);
+    check("instantánea anterior a 0202 (sin clave): ruta de siempre", photoSrc("piso", legacy.photos[2]) === "/p/piso/2.webp" && legacy.photos[2].key === null);
+    check("ruta por clave y versión", photoSrc("piso a", effectivePhotos(P, { x: [K("b")], o: null }).photos[1]) === `/p/piso%20a/2.webp?f=${K("c")}&v=c0000000`);
+    check("ancho: con y sin parámetros", withWidth("/p/x/0.webp?f=1&v=2", 640) === "/p/x/0.webp?f=1&v=2&w=640" && withWidth("/p/x/0.webp", 640) === "/p/x/0.webp?w=640");
+    check("clave válida: 16 hex", isPhotoKey("0123456789abcdef") && !isPhotoKey("0123456789ABCDEF") && !isPhotoKey("123") && !isPhotoKey(null));
+
+    // Proxy (N1): la foto SERVIDA. Filas de la ficha tras reordenar, empatar, realojar y borrar.
+    type Row = { id: string; url: string; position: number };
+    const keyOf = (r: Row) => K(r.id);
+    const rows: Row[] = [
+      { id: "a", url: "u-a", position: 3 }, { id: "b", url: "u-b", position: 0 },
+      { id: "c", url: "u-c", position: 1 }, { id: "d", url: "u-d", position: 1 }, { id: "e", url: "u-b", position: 2 },
+    ];
+    check("proxy con clave: la foto de esa clave aunque se haya reordenado (C)", pickProxyPhoto(rows, 0, K("c"), keyOf)?.id === "c");
+    check("proxy con clave: empate de posición C/D, sirve D si se pide D", pickProxyPhoto(rows, 1, K("d"), keyOf)?.id === "d");
+    check("proxy con clave del duplicado E: su URL (la de B)", pickProxyPhoto(rows, 9, K("e"), keyOf)?.url === "u-b");
+    check("proxy con clave borrada: ninguna (nunca otra foto)", pickProxyPhoto(rows, 0, K("z"), keyOf) === null);
+    const realojada = rows.map((r) => (r.id === "c" ? { ...r, url: "u-c-nueva" } : r));
+    check("proxy tras realojar: la misma clave sirve la URL nueva", pickProxyPhoto(realojada, 0, K("c"), keyOf)?.url === "u-c-nueva");
+    check("proxy sin clave: lo de siempre (posición, sin duplicados)", pickProxyPhoto(rows, 0, null, keyOf)?.id === "b" && pickProxyPhoto(rows, 3, null, keyOf)?.id === "a" && pickProxyPhoto(rows, 4, null, keyOf) === null);
+
+    // Proyección pública: lo que ve el lector.
+    const it = item({ key: "kE3000000001", slug: "piso-e3", photos: P, pp: { x: [K("b")], o: K("d") } });
+    const pub = toPublicItem(it);
+    check("lector: solo las fotos en uso, con su ruta por clave", pub.photos.map((p) => p.src).join(" ") === [0, 2, 3].map((i) => `/p/piso-e3/${i}.webp?f=${K("acd"[[0, 2, 3].indexOf(i)])}&v=${"acd"[[0, 2, 3].indexOf(i)]}0000000`).join(" "));
+    check("lector: apertura = la elegida (D, índice 2 de la lista filtrada)", pub.coverIndex === 2 && pub.photos[2].key === K("d"));
+    check("lector: secciones y mosaico solo con índices de la lista filtrada",
+      pub.sections.every((x) => x.photo === null || (x.photo >= 0 && x.photo < pub.photos.length)) && pub.mosaic.every((i) => i >= 0 && i < pub.photos.length));
+    const json = JSON.stringify(toPublicCatalog(snap([it])));
+    check("privacidad: ni claves internas de ajustes, ni md5 de URL, ni ids, ni URLs de storage",
+      !json.includes('"pp"') && !json.includes(U("a")) && !UUID_RE.test(json) && !/supabase|storage\.example/.test(json) && findForbiddenKeys(JSON.parse(json), FORBIDDEN_PUBLIC_KEYS).length === 0);
+    // Portada del catálogo (E3-3).
+    const Q = item({ key: "kE3000000002", slug: "q-e3", photos: [{ u: U("q"), f: K("q"), w: 1600, h: 1067, c: true }] });
+    const cov = (pp: { x: string[]; o: string | null } | null, cover: { key: string | null; photo: string | null } | null, items = [item({ ...it, pp }), Q]) =>
+      toPublicCatalog(snap(items, cover ? { cover } : {})).coverPhoto;
+    check("portada: la elegida en uso (C)", cov(null, { key: "kE3000000001", photo: U("c") }) === `/p/piso-e3/2.webp?f=${K("c")}&v=c0000000`);
+    check("portada: la elegida excluida → apertura efectiva de esa vivienda (D elegida)", cov({ x: [K("c")], o: K("d") }, { key: "kE3000000001", photo: U("c") }) === `/p/piso-e3/3.webp?f=${K("d")}&v=d0000000`);
+    check("portada: la elegida es la portada del CRM excluida → primera en uso (B)", cov({ x: [K("a")], o: null }, { key: "kE3000000001", photo: U("a") }) === `/p/piso-e3/1.webp?f=${K("b")}&v=b0000000`);
+    check("portada: vivienda fuera de la lista → apertura de la primera con fotos", cov({ x: [K("a")], o: null }, { key: null, photo: null }) === `/p/piso-e3/1.webp?f=${K("b")}&v=b0000000`);
+    check("portada: sin elección → apertura efectiva de la primera con fotos", cov({ x: [], o: K("c") }, null) === `/p/piso-e3/2.webp?f=${K("c")}&v=c0000000`);
   }
 
   await liveTests();
