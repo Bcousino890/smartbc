@@ -1473,3 +1473,8 @@ cliente cambia su foto después).
   proxy, `app/api/admin/zinto/media/route.ts`, sin cambios ahí. El
   componente `ContactAvatar` (`whatsapp-chat.tsx`) la muestra en vez de las
   iniciales cuando existe.
+
+## Particulares ↔ propiedades de agencias del CRM (migración 0198)
+- `lib/particulares/agency-matching.ts` cruza `particulares_link_rows` con `properties` (agencias colaboradoras, país `es`, no archivadas) reutilizando `linking-core` (propiedad = fila sin teléfono, portal `agencia`: solo valen dirección + m² + hab. + baños + precio). Lo ejecuta `runParticularesLinking` (cron `link-twins`); guarda pares en `particulares_agency_matches`.
+- «cierto» suma la fuente «Agencia» al `link_summary` del principal (listado y ficha); «probable» solo sale como sugerencia en la ficha. Si 0198 no está aplicada el cruce se salta sin romper nada.
+- Test: `npm run test:particulares-agency`. Aplicar 0198 a mano (psql) antes de desplegar.

@@ -2,7 +2,8 @@
 
 import { addressLine } from "@/lib/particulares/address-title";
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Link2, Users } from "lucide-react";
+import { Building2, ExternalLink, Link2, Users } from "lucide-react";
+import { useParams } from "next/navigation";
 import { groupThousands } from "./_ficha/format";
 import type {
   LinkedAd,
@@ -196,6 +197,7 @@ export function LinkedAdsSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showContact, setShowContact] = useState(false);
+  const country = String(useParams()?.country ?? "es");
 
   const load = useCallback(async () => {
     try {
@@ -226,7 +228,8 @@ export function LinkedAdsSection({
 
   if (!data) return null;
   const { members, suggestions, same_contact, contacts } = data;
-  if (members.length < 2 && suggestions.length === 0 && same_contact.length === 0) return null;
+  const agencyMatches = data.agency_matches ?? [];
+  if (members.length < 2 && suggestions.length === 0 && same_contact.length === 0 && agencyMatches.length === 0) return null;
 
   const ops = [...new Set(members.map((m) => m.operation))] as Array<"rent" | "sale" | null>;
   const otherPhotos = members.filter((m) => m.id !== rowId && m.photos.length > 0);
@@ -293,6 +296,52 @@ export function LinkedAdsSection({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {agencyMatches.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink/45">
+            <Building2 size={13} /> Fuente Agencia — propiedades del CRM
+          </p>
+          <ul className="flex flex-col gap-2">
+            {agencyMatches.map((m) => {
+              const p = m.property;
+              const reasons = describeEvidence(m.evidence);
+              const sure = m.status === "confirmado" || m.level === "cierto";
+              return (
+                <li key={m.id} className="rounded-lg border border-ink/10 bg-white p-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-ink">Agencia</span>
+                    {p.agency_name && <span className="text-xs font-medium text-ink/70">{p.agency_name}</span>}
+                    {p.reference && <span className="font-mono text-xs text-ink/50">{p.reference}</span>}
+                    <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(p.operation)}</span>
+                    <span className="text-sm font-semibold text-ink">{priceText({ price: p.price, operation: p.operation })}</span>
+                    <span
+                      title={reasons.join(" · ") || m.rule}
+                      className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${sure ? "border-gold/40 bg-gold/10 text-gold-dark" : "border-amber-300 bg-amber-50 text-amber-700"}`}
+                    >
+                      {m.status === "confirmado" ? "Confirmado" : m.level === "cierto" ? "Seguro" : "Posible"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-ink/55">
+                    {[p.square_meters ? `${p.square_meters} m²` : null, p.bedrooms ? `${p.bedrooms} hab.` : null, p.bathrooms ? `${p.bathrooms} baños` : null, addressLine(p.address)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {!sure && reasons.length > 0 && <p className="mt-1 text-xs text-amber-700">Por qué se propone: {reasons.join(" · ")}</p>}
+                  {p.slug && (
+                    <a
+                      href={`/${country}/admin/propiedades/${p.slug}`}
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-ink/70 underline-offset-2 hover:underline"
+                    >
+                      Abrir propiedad <ExternalLink size={11} />
+                    </a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

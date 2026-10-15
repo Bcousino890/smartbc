@@ -7,6 +7,12 @@ import {
   type LinkRelation,
   type RowGroupState,
 } from "./linking-core";
+import {
+  applyAgencyToState,
+  computeAgencyMatches,
+  type AgencyDecision,
+  type AgencyPropertyInput,
+} from "./agency-matching";
 
 /**
  * Job de enlazado de anuncios de particulares (migración 0176).
@@ -38,6 +44,7 @@ export type LinkingRunSummary = {
   changedRows: number;
   linksWritten: number;
   linksPruned: number;
+  agencyMatches?: number;
   error?: string;
 };
 
@@ -88,6 +95,53 @@ async function loadDecisions(db: Db): Promise<LinkDecision[]> {
   return out;
 }
 
+// ── Propiedades de agencias del CRM (migración 0198) ────────────────────────
+// Si la migración o alguna columna aún no existen, el cruce se salta sin romper el
+// enlazado de particulares (devuelve null).
+
+const PROPERTY_COLUMNS =
+  "id, operation, status, archived_at, price, bedrooms, bathrooms, square_meters, address, latitude, longitude, location_precision, created_at, agencies(name)";
+
+async function loadAgencyProperties(db: Db): Promise<AgencyPropertyInput[] | null> {
+  const out: AgencyPropertyInput[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("properties")
+      .select(PROPERTY_COLUMNS)
+      .is("archived_at", null)
+      .eq("country", "es")
+      .not("agency_id", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.warn("[particulares-linking] properties:", error.message);
+      return null;
+    }
+    for (const r of data ?? []) {
+      const ag = Array.isArray(r.agencies) ? r.agencies[0] : r.agencies;
+      out.push({ ...r, agency_name: ag?.name ?? null });
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
+async function loadAgencyDecisions(db: Db): Promise<AgencyDecision[] | null> {
+  const out: AgencyDecision[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("particulares_agency_matches")
+      .select("particular_id, property_id, status")
+      .in("status", ["confirmado", "descartado"])
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return null; // migración 0198 sin aplicar
+    out.push(...(data as AgencyDecision[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 // jsonb de Postgres NO conserva el orden de las claves (las reordena por
 // longitud y luego alfabéticamente), así que comparar con JSON.stringify
 // "a pelo" daba siempre distinto y cada pasada reescribía ~530 filas. Se
@@ -125,6 +179,21 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     const [rows, decisions] = await Promise.all([loadRows(db), loadDecisions(db)]);
     const result = computeLinks(rows, decisions);
 
+    // Propiedades de agencias del CRM: mismo piso en otro portal → fuente «Agencia».
+    let agencyMatches: ReturnType<typeof computeAgencyMatches> = [];
+    let agencyReady = false;
+    const [props, agencyDecisions] = await Promise.all([loadAgencyProperties(db), loadAgencyDecisions(db)]);
+    if (props && agencyDecisions) {
+      agencyReady = true;
+      // Solo el anuncio principal de cada grupo: sus copias (otro portal, mismo piso) serían
+      // «gemelos parecidos» y degradarían a «probable» un enlace que es cierto.
+      const primaries = rows.filter((r) => !result.state.get(r.id)?.duplicate_of);
+      agencyMatches = computeAgencyMatches(primaries, props, agencyDecisions);
+      applyAgencyToState(result, primaries, props, agencyMatches);
+      result.stats.agency_matches = agencyMatches.length;
+      result.stats.agency_matches_cierto = agencyMatches.filter((m) => m.level === "cierto").length;
+    }
+
     const changes: Array<Record<string, unknown>> = [];
     for (const cur of rows) {
       const want = result.state.get(cur.id);
@@ -153,6 +222,15 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
       if (pruned.error) throw new Error(`prune_particulares_links: ${pruned.error.message}`);
       linksPruned = Number(pruned.data ?? 0);
 
+      if (agencyReady) {
+        for (let i = 0; i < agencyMatches.length; i += CHUNK) {
+          const { error } = await db.rpc("apply_particulares_agency_matches", { p: agencyMatches.slice(i, i + CHUNK) });
+          if (error) throw new Error(`apply_particulares_agency_matches: ${error.message}`);
+        }
+        const pr = await db.rpc("prune_particulares_agency_matches", { p_before: runStart });
+        if (pr.error) throw new Error(`prune_particulares_agency_matches: ${pr.error.message}`);
+      }
+
       for (let i = 0; i < changes.length; i += CHUNK) {
         const { error } = await db.rpc("apply_particulares_groups", { p: changes.slice(i, i + CHUNK) });
         if (error) throw new Error(`apply_particulares_groups: ${error.message}`);
@@ -167,6 +245,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
       changedRows: changes.length,
       linksWritten,
       linksPruned,
+      agencyMatches: agencyMatches.length,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : "linking_failed";

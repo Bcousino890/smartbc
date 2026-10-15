@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import type {
+  AgencyMatchInfo,
   LinkedAd,
   LinkedChange,
   LinkInfo,
@@ -173,5 +174,60 @@ export async function getParticularLinks(id: string): Promise<ParticularLinksPay
     .limit(600);
   if (!ch.error) changes = (ch.data ?? []) as LinkedChange[];
 
-  return { root_id: rootId, members, suggestions, same_contact, contacts, changes };
+  // Propiedades de agencias del CRM que son el mismo piso (migración 0198; si no existe, vacío).
+  const agency_matches = await getAgencyMatches(db, memberIds);
+
+  return { root_id: rootId, members, suggestions, same_contact, contacts, changes, agency_matches };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getAgencyMatches(db: any, memberIds: string[]): Promise<AgencyMatchInfo[]> {
+  const res = await db
+    .from("particulares_agency_matches")
+    .select("id, particular_id, property_id, level, status, rule, evidence")
+    .in("particular_id", memberIds)
+    .neq("status", "descartado");
+  if (res.error || !res.data?.length) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const matches: any[] = res.data;
+  const props = await db
+    .from("properties")
+    .select(
+      "id, slug, title, operation, status, price, address, square_meters, bedrooms, bathrooms, external_id, property_reference, bc_reference, agencies(name)",
+    )
+    .in("id", [...new Set(matches.map((m) => m.property_id as string))]);
+  if (props.error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byId = new Map<string, any>((props.data ?? []).map((p: any) => [p.id, p]));
+  return matches
+    .flatMap((m): AgencyMatchInfo[] => {
+      const p = byId.get(m.property_id);
+      if (!p) return [];
+      const ag = Array.isArray(p.agencies) ? p.agencies[0] : p.agencies;
+      return [
+        {
+          id: m.id,
+          particular_id: m.particular_id,
+          property_id: m.property_id,
+          level: m.level,
+          status: m.status,
+          rule: m.rule,
+          evidence: m.evidence ?? {},
+          property: {
+            slug: p.slug ?? null,
+            title: p.title ?? null,
+            agency_name: ag?.name ?? null,
+            reference: p.property_reference ?? p.bc_reference ?? p.external_id ?? null,
+            operation: p.operation ?? null,
+            price: p.price == null ? null : Number(p.price),
+            status: p.status ?? null,
+            address: p.address ?? null,
+            square_meters: p.square_meters ?? null,
+            bedrooms: p.bedrooms ?? null,
+            bathrooms: p.bathrooms ?? null,
+          },
+        },
+      ];
+    })
+    .sort((a, b) => Number(b.level === "cierto") - Number(a.level === "cierto"));
 }
