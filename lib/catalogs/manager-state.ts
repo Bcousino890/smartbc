@@ -325,3 +325,81 @@ export function matchesQuery(q: string, v: { title: string; bcReference: string 
   if (!t) return true;
   return fold(`${v.bcReference ?? ""} ${v.title}`).includes(t);
 }
+
+// ── Vista previa de los criterios («Ver qué entraría») ───────────────────────
+// Corrección tras la QA de K1–K5 (plan-vista-previa.md). Una vista previa solo
+// se enseña mientras el borrador sea EXACTAMENTE el que la pidió:
+//   · cada cambio del borrador sube su revisión (también A→B→A: volver a los
+//     mismos valores es otra revisión, y no revive una vista previa invalidada);
+//   · cada petición lleva un número; solo cuenta la última pedida, y solo si el
+//     borrador no ha cambiado mientras tanto;
+//   · el resumen es el de los criterios con los que se pidió, no el de ahora.
+// No guarda nada ni toca el borrador: solo decide qué se enseña.
+
+export interface DraftRevision {
+  key: string;
+  rev: number;
+}
+
+/** Revisión del borrador: sube con cada cambio de contenido (no con un
+ *  objeto nuevo con lo mismo). `key` es el contenido serializado. */
+export function nextDraftRevision(prev: DraftRevision | null, key: string): DraftRevision {
+  if (!prev) return { key, rev: 0 };
+  return prev.key === key ? prev : { key, rev: prev.rev + 1 };
+}
+
+export interface PreviewSlot<T> {
+  /** Número de la última petición. */
+  lastSeq: number;
+  pending: { seq: number; rev: number; summary: string } | null;
+  result: { seq: number; rev: number; summary: string; data: T } | null;
+}
+
+export function emptyPreview<T>(): PreviewSlot<T> {
+  return { lastSeq: 0, pending: null, result: null };
+}
+
+/** Se pide una vista previa con el borrador de revisión `rev`. */
+export function previewStart<T>(s: PreviewSlot<T>, rev: number, summary: string): { slot: PreviewSlot<T>; seq: number } {
+  const seq = s.lastSeq + 1;
+  return { slot: { ...s, lastSeq: seq, pending: { seq, rev, summary } }, seq };
+}
+
+/** Llega la respuesta de la petición `seq` con el borrador en `currentRev`.
+ *  Se acepta solo si es la última pedida y el borrador no ha cambiado. Una
+ *  respuesta descartada no toca nada (ni enseña su error). */
+export function previewSettle<T>(
+  s: PreviewSlot<T>,
+  seq: number,
+  currentRev: number,
+  outcome: { ok: true; data: T } | { ok: false; error: string },
+): { slot: PreviewSlot<T>; accepted: boolean; error: string | null } {
+  const p = s.pending;
+  if (!p || p.seq !== seq || seq !== s.lastSeq || p.rev !== currentRev) {
+    // Respuesta vieja o de un borrador que ya cambió: no se enseña ni cambia
+    // nada (la nota «los criterios han cambiado» sigue mientras no se pida otra).
+    return { slot: s, accepted: false, error: null };
+  }
+  if (!outcome.ok) return { slot: { ...s, pending: null, result: null }, accepted: true, error: outcome.error };
+  return { slot: { ...s, pending: null, result: { seq, rev: p.rev, summary: p.summary, data: outcome.data } }, accepted: true, error: null };
+}
+
+/** Los criterios escritos no son válidos: fuera la vista previa y cualquier
+ *  petición en curso (se ignorará si llega). */
+export function previewInvalid<T>(s: PreviewSlot<T>): PreviewSlot<T> {
+  return { lastSeq: s.lastSeq + 1, pending: null, result: null };
+}
+
+export type PreviewView<T> =
+  | { kind: "none" }
+  | { kind: "loading" }
+  | { kind: "changed" }
+  | { kind: "result"; data: T; summary: string };
+
+/** Qué se enseña con el borrador en la revisión `rev`. */
+export function previewView<T>(s: PreviewSlot<T>, rev: number): PreviewView<T> {
+  if (s.pending && s.pending.rev === rev) return { kind: "loading" };
+  if (s.result && s.result.rev === rev) return { kind: "result", data: s.result.data, summary: s.result.summary };
+  if (s.result || s.pending) return { kind: "changed" };
+  return { kind: "none" };
+}

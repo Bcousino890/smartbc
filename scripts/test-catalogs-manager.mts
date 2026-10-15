@@ -19,6 +19,12 @@ import {
   contactAdapter,
   criteriaAdapter,
   criteriaFromRaw,
+  emptyPreview,
+  nextDraftRevision,
+  previewInvalid,
+  previewSettle,
+  previewStart,
+  previewView,
   criteriaRawOf,
   editDraft,
   editTextDraft,
@@ -328,6 +334,73 @@ function testManagerPrices() {
   check("inclusión de alquiler en venta: lo suyo real", estudioSale.operation === "Alquiler" && estudioSale.price === "2.100 €/mes" && estudioSale.priceAlso === null);
 }
 
+function testPreview() {
+  section("Vista previa de los criterios: nunca resultados de otro borrador (corrección tras la QA)");
+  type D = { n: number };
+  // Revisión del borrador: sube con cada cambio de contenido, también A→B→A.
+  let r = nextDraftRevision(null, "A");
+  const r0 = r.rev;
+  r = nextDraftRevision(r, "A");
+  check("mismo contenido (objeto nuevo): misma revisión", r.rev === r0);
+  r = nextDraftRevision(r, "B");
+  r = nextDraftRevision(r, "A");
+  check("A→B→A: la revisión sube dos veces (no vuelve a la de A)", r.rev === r0 + 2);
+
+  // Pedir → «Calculando…» → resultado con el resumen de lo pedido.
+  let s = emptyPreview<D>();
+  check("sin pedir nada: no se enseña nada", previewView(s, 0).kind === "none");
+  let st = previewStart(s, 0, "Alquiler · 5.000–7.000 €/mes");
+  s = st.slot;
+  check("pedida: «Calculando…»", previewView(s, 0).kind === "loading");
+  let out = previewSettle(s, st.seq, 0, { ok: true, data: { n: 1 } });
+  s = out.slot;
+  const v1 = previewView(s, 0);
+  check("respuesta de la última petición con el mismo borrador: se enseña", out.accepted && v1.kind === "result" && v1.data.n === 1);
+  check("el resumen es el de los criterios pedidos", v1.kind === "result" && v1.summary === "Alquiler · 5.000–7.000 €/mes");
+
+  // Editar después del resultado: fuera, con la nota; volver a A no lo revive.
+  check("editar tras el resultado: se oculta con la nota", previewView(s, 1).kind === "changed");
+  check("A→B→A: volver a los mismos valores no revive la vista previa", previewView(s, 2).kind === "changed");
+
+  // Criterios no válidos: fuera todo, también la petición en camino.
+  st = previewStart(s, 2, "X");
+  s = previewInvalid(st.slot);
+  check("con un error: no se enseña nada (ni la anterior)", previewView(s, 2).kind === "none");
+  out = previewSettle(s, st.seq, 2, { ok: true, data: { n: 9 } });
+  check("la petición anterior al error, si llega, se descarta", !out.accepted && previewView(out.slot, 2).kind === "none");
+  s = out.slot;
+
+  // Respuestas desordenadas: la 1 (lenta) llega después de la 2.
+  const a = previewStart(s, 3, "uno");
+  const b = previewStart(a.slot, 3, "dos");
+  s = b.slot;
+  out = previewSettle(s, b.seq, 3, { ok: true, data: { n: 2 } });
+  s = out.slot;
+  out = previewSettle(s, a.seq, 3, { ok: true, data: { n: 1 } });
+  const v2 = previewView(out.slot, 3);
+  check("desordenadas: gana la última pedida; la vieja que llega tarde no la pisa",
+    !out.accepted && v2.kind === "result" && v2.data.n === 2 && v2.summary === "dos");
+  s = out.slot;
+
+  // Editar mientras se calcula: la respuesta se descarta y queda la nota.
+  st = previewStart(s, 3, "tres");
+  s = st.slot;
+  check("editar mientras se calcula: deja de decir «Calculando…»", previewView(s, 4).kind === "changed");
+  out = previewSettle(s, st.seq, 4, { ok: true, data: { n: 3 } });
+  check("…y su respuesta no se enseña", !out.accepted && previewView(out.slot, 4).kind === "changed");
+  check("…ni si vuelves a los valores de antes (A→B→A)", previewView(out.slot, 5).kind === "changed");
+  s = out.slot;
+
+  // Errores del servidor: el de la última petición se enseña; el de una vieja, no.
+  const e1 = previewStart(s, 5, "e1");
+  const e2 = previewStart(e1.slot, 5, "e2");
+  out = previewSettle(e2.slot, e1.seq, 5, { ok: false, error: "viejo" });
+  check("error de una petición vieja: no se enseña", !out.accepted && out.error === null);
+  out = previewSettle(out.slot, e2.seq, 5, { ok: false, error: "No se pudo" });
+  check("error de la última: se enseña y no queda resultado", out.accepted && out.error === "No se pudo" && previewView(out.slot, 5).kind === "none");
+}
+
+testPreview();
 testManagerPrices();
 testMaterial();
 testMaterialByProperty();

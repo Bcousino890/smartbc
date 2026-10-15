@@ -49,13 +49,19 @@ Fabricio aprueba **DS-1, DS-2 y el alcance de K1–K5, solo para planificar**. L
 - D-QA15 queda aquí y en el diagnóstico, como D-QA14.
 - La fila de la enmienda (§0) se añade cuando se reconcilie con la rama de E3, que es la que lleva D-QA13. Así no se crea un conflicto.
 
-**G-ALQ sustituida por decisión de Fabricio (D-QA17, 15 de octubre de 2026).** Fabricio no tiene acceso SSH a producción (lo tiene la empresa) y decide no ejecutar las consultas previas. Acepta en bloque, sin revisar las fichas antes del merge:
-- **Sin precio principal válido** (caso 1): el cliente ve «Precio · sin dato», aunque la ficha tenga un importe en `rent_price`.
-- **Dos importes distintos** (caso 2): el cliente ve el precio principal.
-- **Después del despliegue**, las fichas afectadas se detectan en el propio gestor: el aviso ⚠ en la fila y, en el panel de la vivienda, el texto con la cifra secundaria y lo que ve el cliente. Solo aparecen las que estén en algún catálogo.
-- Las corrige una persona en el formulario de la ficha, confirmando el alquiler en la fuente. **Nunca se copia el `rent_price` a ciegas**, y ningún agente toca fichas.
-
-Orden de cierre: Fabricio hace el merge → despliegue automático → QA en producción.
+**G-ALQ: PENDIENTE (registro corregido el 15 de octubre de 2026, D-QA18).**
+- **El 15 de octubre, antes del merge**, Fabricio dijo que no tiene la clave SSH (la tiene la empresa) y que había que «ir directamente al funcionamiento».
+  - Lo registré como D-QA17, «aceptación en bloque» de lo que ve el cliente.
+  - **Eso fue una interpretación mía, no una decisión suya.** Fabricio **no** aceptó excepciones sin revisar **ni** renunció a la puerta.
+- **Fabricio pedirá los recuentos a una persona autorizada de la empresa.** Ningún agente pide credenciales SSH ni ejecuta las consultas de producción.
+- **G-ALQ sigue PENDIENTE aunque K1–K5 ya estén fusionados y desplegados.** El merge y el despliegue no la cumplen, y no se propone deshacerlos.
+- **Para cerrarla hace falta:**
+  - los resultados de las consultas de §5, que aporta la empresa;
+  - la revisión de las fichas afectadas;
+  - la aceptación expresa de Fabricio, ficha por ficha o por grupo, de las que se queden sin corregir, con lo que ve el cliente:
+    - sin precio principal válido: «Precio · sin dato»;
+    - con dos importes distintos: el precio principal.
+- **Ni la corrección de la vista previa** (PR aparte) **ni las pruebas sintéticas** cumplen G-ALQ ni resuelven el caso original de Recoletos.
 
 ## 0 ter. P-ALQ decidido: opción A + G-ALQ (D-QA16, 15 de octubre de 2026)
 
