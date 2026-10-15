@@ -161,6 +161,62 @@ SELECT test_util.expect_error($q$SELECT catalog_criteria_normalize('{"operation"
 SELECT test_util.ok((catalog_criteria_normalize('{"operation":"rent","price_min":5000,"price_max":1200000}')->>'price_max')::numeric = 1200000,
   'criterios: 5000 y 1200000 como número se aceptan');
 
+-- ── catalogs.version como guarda de la lectura coherente (plan §3.2) ───────
+-- Lo que tiene que cumplirse para que «misma versión antes y después» pruebe
+-- que la operación leída es la de la instantánea: cada escritura de los
+-- criterios o del modo sube la versión exactamente en 1, en la misma
+-- sentencia, y nadie más que service_role puede escribir la tabla.
+SET ROLE service_role;
+SELECT catalog_create(:'owner', 'Op G', NULL) AS cat_g \gset
+SELECT catalog_set_criteria(:'owner', :'cat_g', '{"operation":"rent","zones":[{"kind":"barrio","name":"Recoletos"}],"price_min":5000,"price_max":7000,"sort":"price_asc","max":24}') AS g_v_crit \gset
+SELECT catalog_set_mode(:'owner', :'cat_g', 'auto', NULL) AS g_v_mode \gset
+SELECT token AS tok_g FROM catalog_share_create(:'owner', :'cat_g', 60) \gset
+RESET ROLE;
+SELECT test_util.ok(:'g_v_crit'::bigint = 2 AND :'g_v_mode'::bigint = 3, 'version: crear = 1, guardar criterios = 2, pasar a automático = 3');
+SELECT test_util.ok((SELECT version FROM catalogs WHERE id = :'cat_g') = 3, 'version: crear el enlace no la sube');
+-- Lectura 1 (operación A = alquiler) …
+SELECT version AS g_v1, criteria->>'operation' AS g_op1 FROM catalogs WHERE id = :'cat_g' \gset
+-- … A→B: se guarda venta y la instantánea se lee en B …
+SET ROLE service_role;
+SELECT catalog_set_criteria(:'owner', :'cat_g', '{"operation":"sale","zones":[{"kind":"barrio","name":"Recoletos"}],"price_min":5000,"price_max":7000,"sort":"price_asc","max":24}');
+RESET ROLE;
+SELECT (SELECT array_agg(it->>'slug' ORDER BY n) FROM jsonb_array_elements((get_public_catalog(:'tok_g'))->'snapshot'->'items') WITH ORDINALITY AS x(it, n))::text AS g_snap_b \gset
+-- … B→A: se vuelve a alquiler antes de la lectura 2.
+SET ROLE service_role;
+SELECT catalog_set_criteria(:'owner', :'cat_g', '{"operation":"rent","zones":[{"kind":"barrio","name":"Recoletos"}],"price_min":5000,"price_max":7000,"sort":"price_asc","max":24}');
+RESET ROLE;
+SELECT version AS g_v2, criteria->>'operation' AS g_op2 FROM catalogs WHERE id = :'cat_g' \gset
+SELECT test_util.ok(:'g_op1' = 'rent' AND :'g_op2' = 'rent', 'A→B→A: la operación antes y después es la misma (comparar solo la operación lo daría por bueno)');
+SELECT test_util.ok(:'g_snap_b' = '{op-s6000,op-ds6}', 'A→B→A: la instantánea leída en medio es la de VENTA (S6000, DS6), no la de alquiler · ' || :'g_snap_b');
+SELECT test_util.ok(:'g_v2'::bigint = :'g_v1'::bigint + 2, 'A→B→A: la versión sube 2 (' || :'g_v1' || ' → ' || :'g_v2' || '): la guarda por versión lo rechaza');
+SELECT test_util.ok(test_util.op_list(:'cat_g') = ARRAY['r5000','ds0','d6000','e6r6','x6r9','r6000','r7000'], 'A→B→A: al final la lista vuelve a ser la de alquiler');
+-- Cambios repetidos: cada guardado sube exactamente 1, también si no cambia nada.
+SET ROLE service_role;
+CREATE TEMP TABLE g_vs (n int, v bigint);
+GRANT ALL ON g_vs TO service_role;
+\set g_sale '{"operation":"sale","zones":[{"kind":"barrio","name":"Recoletos"}],"price_min":5000,"price_max":7000,"max":24}'
+\set g_rent '{"operation":"rent","zones":[{"kind":"barrio","name":"Recoletos"}],"price_min":5000,"price_max":7000,"max":24}'
+INSERT INTO g_vs VALUES (1, catalog_set_criteria(:'owner', :'cat_g', :'g_sale'));
+INSERT INTO g_vs VALUES (2, catalog_set_criteria(:'owner', :'cat_g', :'g_rent'));
+INSERT INTO g_vs VALUES (3, catalog_set_criteria(:'owner', :'cat_g', :'g_sale'));
+INSERT INTO g_vs VALUES (4, catalog_set_criteria(:'owner', :'cat_g', :'g_rent'));
+INSERT INTO g_vs VALUES (5, catalog_set_criteria(:'owner', :'cat_g', :'g_sale'));
+INSERT INTO g_vs VALUES (6, catalog_set_criteria(:'owner', :'cat_g', :'g_sale'));
+INSERT INTO g_vs VALUES (7, catalog_set_mode(:'owner', :'cat_g', 'manual', 'restore'));
+RESET ROLE;
+SELECT test_util.ok((SELECT array_agg(v ORDER BY n) FROM g_vs) = ARRAY[:'g_v2'::bigint + 1, :'g_v2'::bigint + 2, :'g_v2'::bigint + 3, :'g_v2'::bigint + 4, :'g_v2'::bigint + 5, :'g_v2'::bigint + 6, :'g_v2'::bigint + 7],
+  'cambios repetidos: 5 cambios de operación, uno idéntico y uno de modo suben la versión de 1 en 1 · ' || (SELECT array_agg(v ORDER BY n) FROM g_vs)::text);
+-- En un catálogo MANUAL (la operación no cambia la lista) guardar criterios también la sube.
+SET ROLE service_role;
+SELECT catalog_create(:'owner', 'Op H', NULL) AS cat_h \gset
+SELECT catalog_set_criteria(:'owner', :'cat_h', '{"operation":"rent","max":12}') AS h_v \gset
+RESET ROLE;
+SELECT test_util.ok(:'h_v'::bigint = 2 AND (SELECT mode FROM catalogs WHERE id = :'cat_h') = 'manual', 'manual: guardar la operación sube la versión (1 → 2)');
+-- Solo service_role escribe la tabla (las demás escrituras pasan por las funciones de arriba).
+SELECT test_util.ok(NOT has_table_privilege('authenticated', 'catalogs', 'UPDATE') AND NOT has_table_privilege('anon', 'catalogs', 'UPDATE')
+  AND NOT has_table_privilege('authenticated', 'catalogs', 'INSERT') AND NOT has_table_privilege('anon', 'catalogs', 'INSERT'),
+  'catalogs: ni authenticated ni anon pueden escribir la tabla');
+
 DROP FUNCTION test_util.op_list(uuid);
 DROP FUNCTION test_util.op_via(uuid);
 DROP FUNCTION test_util.op_counts(uuid);
