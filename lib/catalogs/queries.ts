@@ -5,6 +5,7 @@ import { DEFAULT_CRITERIA, normalizeCriteria, type CatalogCriteria } from "./cri
 import { explainProperty, INCLUDED_UNAVAILABLE } from "./explain";
 import { type AdjustmentKind, type CandidateProperty, type Via } from "./selection";
 import { coverPhotoOf, type InternalSnapshot } from "./to-public";
+import { materialByProperty } from "./material-data";
 import type { CatalogAdView, CatalogCoverState, CatalogDetail, CatalogItemView, CatalogSummary, CoverPhotoOption } from "./types";
 
 // ============================================================================
@@ -274,6 +275,7 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
   const unavailable = includedViews.filter((v) => v.explain?.headline === INCLUDED_UNAVAILABLE);
   const included = includedViews.length - unavailable.length;
   const snap = await internalSnapshot(catalogId);
+  const effective = auto ? auto.items : manual;
 
   return {
     id: cat.id,
@@ -284,7 +286,7 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     createdAt: cat.created_at,
     updatedAt: cat.updated_at,
     edition: editionLabel(new Date(cat.created_at)),
-    items: auto ? auto.items : manual,
+    items: effective,
     contact: {
       name: cat.contact_name ?? null,
       phone: cat.contact_phone ?? null,
@@ -298,6 +300,8 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     autoMatched: auto ? auto.matched : null,
     adjustments: { included, excluded, unavailable, overMax: included > criteria.max },
     cover: await coverState(catalogId, cat, snap),
+    // E2 (D-QA8): con la MISMA instantánea que ya se ha leído; sin consultas nuevas.
+    material: materialByProperty(snap, effective),
   };
 }
 

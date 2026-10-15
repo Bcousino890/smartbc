@@ -76,7 +76,7 @@ export function createFixtureTexts(opts: {
   const actions: TextActions = {
     prepare: async ({ propertyId }) => {
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
-      await wait(700);
+      await wait(Number((globalThis as { __fxAiDelay?: number }).__fxAiDelay ?? 700));
       const s = sourceOf(f.it, f.i);
       if (!s.hasText) return { ok: false as const, error: "La ficha no tiene texto que preparar. Escríbelo a mano o pide un borrador con IA a partir de los datos." };
       const proposal = { body: `${s.description} Los dormitorios dan a un patio tranquilo.`, lead: null, origin: "ai_clean" as const };
@@ -84,7 +84,7 @@ export function createFixtureTexts(opts: {
     },
     draft: async ({ propertyId }) => {
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
-      await wait(700);
+      await wait(Number((globalThis as { __fxAiDelay?: number }).__fxAiDelay ?? 700));
       const proposal = {
         lead: `${f.it.title}: luz y calma.`,
         body: `Una vivienda de ${f.it.squareMeters ?? "—"} m² con ${f.it.bedrooms ?? "—"} dormitorios. Tiene piscina comunitaria.`,
@@ -148,5 +148,11 @@ export function createFixtureTexts(opts: {
 
   /** Solo pruebas: simula que la ficha cambió (el publicado deja de valer). */
   const changeSource = (propertyId: string) => sourceRev.set(propertyId, (sourceRev.get(propertyId) ?? 0) + 1);
-  return { actions, views, changeSource };
+  /** E2 · solo pruebas: otro guardado del borrador (sube la revisión). */
+  const externalSave = (propertyId: string, body: string) => {
+    remember();
+    const st = store.get(propertyId);
+    store.set(propertyId, { draft: { body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
+  };
+  return { actions, views, changeSource, externalSave };
 }

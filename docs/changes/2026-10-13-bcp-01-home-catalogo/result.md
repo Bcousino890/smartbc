@@ -912,3 +912,283 @@ Capturas en [`qa-c2/capturas-e1/`](qa-c2/capturas-e1/) (JPEG): apertura y recorr
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+
+# E2 · Gestor en cuatro secciones
+
+Plan: [`qa-c2/plan-e2.md`](qa-c2/plan-e2.md), aprobado el 15 de octubre de 2026 con A1–A4 y cuatro ajustes obligatorios (registro: [enmienda §0, D-QA12](qa-c2/enmienda.md)).
+
+## Base y commits
+
+- **Base:** `origin/main` = `87bf218`. Comprobada antes de empezar y de nuevo antes del push (sin cambios: `87bf218`). Respecto al merge de E1 (`78bfa15`) solo añade un commit de particulares, ajeno a catálogos.
+- **Rama:** `fabri/bcp-01-e2`, en el worktree `wt/bcp-01-e2`. El checkout original (en `main`, limpio), su stash y los demás worktrees no se han tocado.
+- **Commits**, uno por tarea; los arreglos de T9 van aparte y cada commit compila:
+
+| Commit | Tarea |
+| --- | --- |
+| `5f08885` | Plan (borrador) |
+| `9b04e75` | T0 · aprobación (D-QA12) y ajustes en el plan |
+| `a907e83` | T1 · modelos puros (material, secciones, borradores en bruto, guardados en curso), sus pruebas y el paso en la CI |
+| `c004360` | T2 · `material` en `CatalogDetail` con la instantánea del lector |
+| `5b7c17b` | T3 · fixtures de E2 |
+| `6abf705` | T4 · cuatro secciones, URL, cabecera |
+| `8354b2d` | T5 · valores sin guardar, aviso al salir, A1–A3 |
+| `6c23bf0` | T6 · Viviendas |
+| `1260894` | T7 · Contenido |
+| `57f5e4d` | T8 · Diseño y Compartir |
+| `e6046ce`, `75213a6`, `fb1359d` | T9 · arreglos encontrados por la matriz (abajo) |
+| (T10) | Este resultado y las capturas; el enlace del PR y la CI, en un commit posterior |
+| (CI) | Arreglo del paso de CI de T1: el nombre llevaba «: » sin comillas y GitHub rechazaba el YAML entero (las dos primeras ejecuciones fallaron por eso). Ahora va entre comillas, validado en local |
+
+## Qué hay
+
+**Estructura.** El gestor tiene cabecera y cuatro pestañas, con la sección en la URL (`?seccion=viviendas|contenido|diseno|compartir`) y la vivienda abierta en `&vivienda=`.
+- Las secciones cambian con `history.pushState`, sin pedir nada al servidor; Atrás y Adelante recorren secciones y paneles.
+- La barra lateral del CRM y Lato no cambian.
+
+**Cabecera:**
+- muestra el nombre (fijo al desplazar, en escritorio), el estado, el modo, el número de viviendas, la validez del enlace y «Cambios sin guardar (N)», que lleva a cada formulario;
+- **«Vista previa»** abre `/seleccion/<token>` en otra pestaña si el enlace está activo. Si no, lleva a Compartir con el motivo («Aún no hay enlace», «El enlace caducó», «Reactiva el catálogo») y el foco en el enlace;
+- **«Compartir»** cambia de sección;
+- **⋯** contiene Archivar/Reactivar.
+- Ninguno de ellos guarda, publica, crea enlaces ni llama a la IA. Lo comprueban los contadores de la fixture.
+
+**Viviendas:**
+- **Criterios:** resumen con «Modificar criterios», que despliega el panel de siempre.
+- **Vistas:** «En el catálogo», «Coincidencias» y «Excluidas» en automático; «En el catálogo» y «Añadir» en manual.
+- **Lista compacta:** sin párrafos ni desplazamiento horizontal, con insignias y avisos con su número. Las acciones de selección son las de siempre.
+- **Panel de la vivienda:** «Por qué está en el catálogo» y las mismas acciones. Es lado a lado en escritorio ancho y pantalla propia en móvil.
+
+**Contenido:**
+- filtros con su número (Todas, Por revisar, Borradores, Publicados, Sin texto propio, Sin descripción, Cambios sin guardar) y búsqueda;
+- columnas «Qué ve el cliente» (con «Por qué»: la prioridad y la fuente), «Texto» y «Material» (D-QA8);
+- **un solo editor**, con «‹ ›». «Guardar borrador» y «Publicar» van en el pie fijo, con el mensaje al lado;
+- «Textos en reserva», y lo escrito para viviendas que ya no están, con «Copiar» y «Descartar».
+
+**Diseño:** título, introducción y portada (vivienda y foto, con los respaldos de C1). La vista previa usa lo escrito y lo marca si no está guardado; con enlace activo, ofrece «Abrir la vista previa completa».
+
+**Compartir:**
+- contacto y enlace, como antes;
+- «Organización interna · anuncios de origen», plegado;
+- medición con `?medir=1`.
+
+**Valores sin guardar (D-QA9 y ajustes 1 y 2).** Un único dueño, `manager/drafts-store.ts`, fuera de React, guarda lo escrito en los cinco formularios. Las reglas son puras y están probadas (`lib/catalogs/manager-state.ts`):
+- lo escrito se conserva **en bruto** («1.200.000», «600 111 222», un distrito sin añadir). La normalización solo decide los indicadores;
+- un guardado reconoce **solo la instantánea enviada**. Lo escrito durante el guardado se conserva tanto si sale bien como si falla;
+- lo guardado que cambia «en otra pestaña» se enseña como conflicto, con «Descartar mis cambios» o «Mantener los míos» (que no guarda);
+- sobrevive a cambiar de sección, cerrar el editor, cambiar de vivienda, refrescar y navegar dentro del CRM. **No** sobrevive a una recarga, y la interfaz no lo sugiere.
+
+**Aviso al salir.** `beforeunload` cubre recargar y cerrar. Un clic en fase de captura cubre los enlaces internos (barra lateral, «‹ Mi espacio»…) y otro cubre «Cerrar sesión». Aceptar descarta los cambios de ese catálogo.
+
+**Decisiones aprobadas:**
+- **A1:** «Atrás» que sale del gestor no se intercepta. Al volver dentro del mismo documento, los valores siguen ahí con el aviso «Tienes cambios sin guardar de antes».
+- **A2:** con la revisión cambiada, el servidor rechaza como siempre. Lo escrito se conserva, se enseña la versión guardada y se decide. El siguiente guardado sigue comprobando la revisión.
+- **A3:** cerrar, cambiar de vivienda o salir de Contenido cancela la IA pendiente, y reabrir no la vuelve a llamar.
+- **A4:** solo se descarta la portada sin confirmar cuya vivienda sale de la lista, con aviso.
+
+**Diagnósticos (D-QA8).** `getCatalogDetail` ya leía `catalog_internal_snapshot` para la portada. Con esa misma instantánea calcula `material` (`toPublicItem` → `materialOf`), **sin consultas nuevas ni IA**:
+- «Sin descripción»;
+- «N capítulos sin foto adecuada»;
+- «Sin fotos».
+
+**Lo que no cambia** (comprobado con `git diff 87bf218` → 0 líneas):
+- `actions.ts` y la página real del gestor;
+- SQL, migraciones y permisos;
+- el contrato público, `to-public`, la composición del lector y la huella;
+- las rutas públicas y el middleware.
+
+La medición envuelve exactamente las mismas acciones que antes, en un único sitio (`wrapped`).
+
+## Decisiones y desviaciones anotadas
+
+- **`materialByProperty` va en `lib/catalogs/material-data.ts`**, no en `material.ts` como decía el plan. Usa `to-public`, que importa `node:crypto`, y así `material.ts` sigue sirviendo en el navegador.
+- **Panel lado a lado solo desde 1280 px.** El plan decía 1024, pero con la barra lateral del CRM (260 px) la lista se desbordaba a 1024 con el panel abierto (lo encontró la matriz). Entre 1024 y 1279 px el panel ocupa el ancho, como en móvil.
+- **«Coincidencias · N»** es lo que coincide para el automático (con foto). La búsqueda de esa vista es la de siempre, que también enseña las que coinciden pero no pueden entrar solas (sin foto), con su motivo; una línea lo explica.
+- **Accesibilidad:** el botón «Quitar» de la lista manual se llama ahora «Quitar «título»» (antes, solo «Quitar»). Las filas abren el panel con «Ver «título»».
+- **Mensajes:** con un panel abierto, el mensaje del gestor sale en su pie, junto a las acciones; si no, encima de la sección.
+- **En móvil no hay barras fijas arriba,** por el botón de menú fijo del CRM. La cabecera es fija solo en escritorio.
+- **Búsqueda:** el texto y el alcance se conservan entre vistas como estado de interfaz (no cuentan como cambio sin guardar). Faltaba en T6, la matriz lo encontró y se corrigió en T9.
+- **Esc** cierra el panel también cuando el foco se ha quedado en la página (al desactivarse el botón pulsado). Lo encontró la matriz.
+
+## Verificaciones (locales, datos sintéticos, entorno aislado)
+
+**Aislamiento (plan §2.1).** El servidor de fixtures y la compilación corrieron en una copia temporal sin ningún `.env*`, con `env -i` y solo variables ficticias, y con Supabase en `127.0.0.1:9`. Antes de cada arranque se verificó:
+- 0 archivos `.env*`;
+- **lista blanca** de variables (solo las permitidas, más `__CF_USER_TEXT_ENCODING` de macOS);
+- `@next/env` informa de 0 archivos cargados en desarrollo y en producción.
+
+Ninguna línea `Environments:` en los registros. Ningún `.env` se abrió, imprimió ni copió. IA solo falsa. `npm ci` con el lockfile existente; `package-lock.json` no cambia.
+
+| Comprobación | Resultado |
+| --- | --- |
+| `test:catalogs-manager` (nueva, también en la CI) | **68 en verde**. Casos escritos a mano: material, secciones y URL, lo escrito en bruto, guardado con retraso (éxito y fallo), conflictos, texto con revisión (A2) y filtros |
+| `test:catalogs`, `test:catalogs-public` | 81 y 263 en verde |
+| `tsc`, `test:smartlink`, `test:particulares`, `test:idealista`, `test:lead-merge`, `test:zinto-v2`, `test:viewing-collections`, `test:client-shortlist`, `test:portal-links`, `lint-migrations` | En verde |
+| `test:typography` | Las mismas 15 infracciones que la base, todas en archivos ajenos. Las 6 que había metido E2 se corrigieron |
+| Lint (ESLint) | **No disponible:** el repo no tiene configuración de ESLint ni el paquete instalado, y `next lint` pediría crear una. No se ha añadido nada (ajuste 4) |
+| Compilación aislada (`npm run build`) | Correcta. Sin `.env` cargados ni línea `Environments:`; las llamadas a Supabase van al puerto cerrado |
+| Matriz E2 en el navegador | **980 en verde** en la tanda final, sobre el último código (tabla siguiente) |
+| Regresiones | Lector 52, índice 187, PR-A 54, PR-B 40, enlace 10, C1 31 y C2 186 en verde, **los mismos números que en E1**. Mediciones sintéticas 20 × 2 de fase 2, C1 y C2: **PASA** (máximos 0,21, 0,30 y 0,23 s). Es local y sintético: no demuestra D13 |
+
+**Matriz E2** (fixtures por defecto y `?grande=1`; recuentos escritos a mano en T3: 22 en manual, «24 de 29 coinciden» en automático, primera la nº 25 y última la nº 26; 5 «Sin descripción»: las nº 19, 23, 27, 31 y 35):
+
+| Prueba | 1280 × 720 | 1440 × 900 | 1024 × 768 | 362 × 740 | 320 × 568 |
+| --- | --- | --- | --- | --- | --- |
+| Navegación, cabecera y teclado (T4) | — | 32 | — | — | — |
+| D-QA9: valores sin guardar y salidas | — | 59 | — | 59 | 59 |
+| Ajustes 1 y 2, conflictos y A2 | — | 31 | — | 31 | 31 |
+| IA (A3 y AC-G4) | — | 15 | — | 15 | 15 |
+| Viviendas (AC-G2) | 56 | 56 | 57 | 57 | 57 |
+| Contenido (AC-G3, AC-G4 y DQ8) | 33 | 33 | 34 | 34 | 34 |
+| Diseño y Compartir (AC-G5, AC-G6 y A4) | 34 | 34 | — | 34 | 34 |
+| Barras fijas, pestañas y desbordes (AC-G7) | ✓ | ✓ | ✓ | ✓ | ✓ (46 en total) |
+
+Qué cubre:
+- **AC-G1 (navegación):**
+  - URL, recarga, sección desconocida, Atrás/Adelante;
+  - 0 peticiones al servidor al cambiar de sección;
+  - teclado de las pestañas (← → Inicio Fin Intro Espacio);
+  - parámetros conservados.
+- **Cabecera:**
+  - «Vista previa» con y sin enlace (con el motivo y el foco), «Compartir» y ⋯ Archivar/Reactivar;
+  - un recorrido solo de navegación: **0 escrituras y 0 llamadas a la IA**.
+- **AC-G2 (Viviendas):**
+  - todas las acciones de selección con su **mensaje literal de `87bf218`**: subir y bajar (desactivados en los extremos), quitar con confirmación, añadir por búsqueda y por referencia (también no válida), criterios no válidos, zonas redundantes, «Ver qué entraría», pasar a automático, excluir desde la fila y el panel, Excluidas y volver a permitir, Coincidencias e incluir, el máximo que bloquea, quitar inclusión, volver a la lista anterior y convertir;
+  - 22 y 24 filas sin desplazamiento horizontal, también con el panel abierto;
+  - motivos solo en el panel;
+  - el panel: URL, foco en el título, «‹ ›», Esc con el foco de vuelta a la fila y Atrás.
+- **AC-G3 y D-QA9:**
+  - valores exactos en los cinco formularios tras cambiar de sección, cerrar, abrir otra vivienda y Atrás/Adelante;
+  - «Cambios sin guardar (6)», un punto en cada pestaña y las marcas de las filas;
+  - «‹ Mi espacio», la barra lateral **real** del CRM y «Cerrar sesión» piden confirmación (al cancelar, se queda);
+  - recarga con `beforeunload` (cancelar se queda; aceptar no recupera nada ni lo sugiere);
+  - A1: Atrás sale sin diálogo, y Adelante vuelve con los valores y su aviso;
+  - aceptar salir descarta.
+- **Ajustes 1 y 2 (en los cinco formularios):**
+  - guardado con 1,5 s de retraso mientras se sigue escribiendo: con éxito se envía exactamente la instantánea (`__fxLast`) y lo escrito después sigue y se marca, sin conflicto;
+  - con fallo, se conserva todo y sale el mensaje de error;
+  - «900.000», «600 111 222» y un distrito sin añadir se conservan tal cual.
+- **A2 y conflictos:**
+  - un guardado «en otra pestaña» enseña el conflicto con lo guardado y no toca lo escrito;
+  - «Mantener los míos» no guarda, y el siguiente guardado usa la revisión nueva;
+  - con la revisión vieja, el servidor rechaza con su mensaje y se puede decidir;
+  - «Descartar» enseña lo guardado;
+  - conflicto también en el título.
+- **AC-G4 (IA falsa):**
+  - 0 llamadas al abrir;
+  - A3 al cerrar, al cambiar de vivienda y al salir de Contenido (sin llamada al reabrir);
+  - «Cancelar», respuesta tardía con «Usar la propuesta», aviso «piscina» confirmable uno a uno (también al reabrir) y bloqueo por teléfono.
+- **Contenido y DQ8:**
+  - filtros y material con los números escritos a mano, búsqueda y «Por qué»;
+  - guardar, publicar, fuente cambiada, retirar y borrar con sus mensajes literales;
+  - reserva, lo escrito de viviendas que ya no están (Copiar y Descartar) y Atrás.
+- **AC-G5 (Diseño):**
+  - vivienda y foto, «Usar su foto de portada», «Volver a la portada automática»;
+  - respaldo de C1 cuando la portada guardada sale;
+  - A4 sin tocar los otros formularios;
+  - vista previa con lo escrito.
+- **AC-G6 (Compartir):**
+  - validaciones del contacto;
+  - crear (duración inválida desactiva), copiar, renovar y revocar con confirmación;
+  - archivado y anuncios plegados;
+  - escrituras exactas en los contadores.
+- **AC-G7 (móvil):**
+  - las 4 pestañas en una fila;
+  - sin desbordes en ninguna sección (con los criterios desplegados y cada vista);
+  - con Tab por cada campo y botón del editor y del panel, nada queda bajo el pie fijo ni bajo el botón de menú del CRM;
+  - avisos desplazados al final por encima del pie;
+  - el último bloque, por encima del pie.
+
+**Regresiones y cambios de selector.** Ninguna expectativa (número, mensaje o estado) ha cambiado. Solo se ha adaptado cómo se llega a cada control:
+- **Lector e índice:** sin ningún cambio.
+- **PR-A y enlace:** el gestor se abre en `&seccion=compartir`.
+- **PR-B:**
+  - «Modificar criterios» al empezar;
+  - la búsqueda manual, en la vista «Añadir»;
+  - la lista se comprueba en «En el catálogo»;
+  - el buscador de incluir, en «Coincidencias»;
+  - los anuncios, en Compartir, abriendo «Organización interna».
+- **C1:**
+  - `titles()` pasa antes a «En el catálogo»;
+  - `search()` va a «Coincidencias»;
+  - los motivos y avisos de cada vivienda (`item-reason`, `item-warning`) se leen en su panel;
+  - «Excluidas» para su lista y «Volver a permitir»;
+  - la portada, en Diseño;
+  - «el buscador lo marca…» repite antes la búsqueda.
+- **C2:**
+  - el gestor se abre en Contenido;
+  - pasar a automático, excluir y volver a permitir se hacen en Viviendas.
+  - La espera fija tras «Volver a permitir» se cambió en T3 por «esperar a la condición (máx. 5 s)», porque con la barra lateral real la página tarda un poco más; la expectativa es la misma.
+- **Mediciones (fase 2, C1 y C2):**
+  - el gestor se abre en Compartir (el panel de medición está ahí) y cada paso va antes a su sección;
+  - el «Quitar» de la lista manual se busca como «Quitar «…»».
+
+**Errores de las pruebas (míos) corregidos durante la verificación,** sin tocar la aplicación:
+- un recuento de guardados mal esperado;
+- leer recuentos antes de que se pintaran;
+- buscar la reserva quitando en manual (la fixture solo refleja la reserva excluyendo en automático, como ya hacía C2);
+- pulsar el «Mi espacio» de la barra lateral en vez del del gestor, lo que llevó a `/login` del servidor local, con Supabase en el puerto cerrado;
+- el menú móvil del CRM, que se queda abierto.
+
+**Incidencias de entorno, no de E2:**
+- con ese clic a `/login`, una petición del servidor de desarrollo se quedó colgada y tumbó por tiempo dos pruebas de esa tanda (repetidas, en verde);
+- en la tanda final, tras horas de carga del servidor de desarrollo:
+  - **el lector** dio 3 fallos en gestos de deslizar en móvil. E2 no toca el lector (0 líneas), y repetido solo dio 52 en verde dos veces;
+  - **Contenido a 362 px** leyó una fila antes de pintarse. La lectura pasó a «esperar a la condición (máx. 5 s)», con la misma expectativa, y repetida dio 34 en verde dos veces.
+- Una tanda intermedia de la matriz se paró a medias para no mezclar versiones de código; la tabla es la tanda final completa.
+
+Capturas en [`qa-c2/capturas-e2/`](qa-c2/capturas-e2/) (JPEG, datos sintéticos). La franja negra inferior («Fuentes…») y la «N» son superposiciones de desarrollo de la página de fixtures y de Next, no del producto. En móvil, el botón de menú del CRM flota sobre el contenido al desplazar, como en todo el CRM; ningún campo con foco queda debajo (AC-G7). Contienen:
+- Viviendas en manual (22), los criterios, el automático con el panel abierto y Coincidencias;
+- el editor con avisos y cambios sin guardar, y el filtro «Sin descripción»;
+- Diseño con la vista previa, la cabecera con «Cambios sin guardar» y Compartir;
+- a 362 y 320 px: Viviendas, el panel de una vivienda, Contenido, el editor con el pie fijo y Compartir.
+
+## Recuperación
+
+- **E2 es solo código:**
+  - sin migración, sin cambios de datos, sin cambio de huella ni del contrato público;
+  - los valores sin guardar solo viven en la memoria de la pestaña.
+- **Revertir:** `git revert` del merge en una rama y PR, que fusiona Fabricio. Vuelve el gestor de E1 y no se pierde ningún dato guardado.
+- **Durante el despliegue:** quien tenga el gestor abierto sigue con su versión hasta recargar.
+
+## QA en vivo de Fabricio (tras el merge)
+
+1. Abre un catálogo en Mi espacio. Comprueba:
+   - las cuatro pestañas;
+   - que la URL cambia (`?seccion=`);
+   - que Atrás y Adelante recorren secciones.
+2. **Viviendas:**
+   - «Modificar criterios»;
+   - en automático, «Coincidencias» y «Excluidas», incluir y excluir;
+   - el panel de una vivienda con «Por qué está en el catálogo».
+3. **Contenido:**
+   - filtros y material;
+   - abre un texto, escribe sin guardar, cambia de vivienda y de sección, y vuelve: lo escrito sigue ahí;
+   - «Guardar borrador» y «Publicar» como antes.
+4. **Diseño:** cambia el título sin guardar y mira la vista previa. Elige la portada.
+5. **Compartir:** contacto, enlace, «Vista previa» desde la cabecera, y los anuncios en «Organización interna».
+6. **Con algo sin guardar:**
+   - pulsa otro enlace del menú del CRM: debe pedir confirmación;
+   - recarga: el navegador avisa.
+7. **En el móvil real:**
+   - la barra de cuatro pestañas;
+   - el editor como pantalla propia, con «Guardar borrador» y «Publicar» abajo sin tapar los campos.
+8. **D13:** `?medir=1` en el VPS (sigue pendiente; lo de aquí es sintético).
+
+## Pendiente o no demostrado
+
+- La QA completa de Fabricio, D13 en vivo (VPS) y las pruebas en dispositivos reales. Las comprobaciones de aquí son locales y sintéticas.
+- **Lint con ESLint:** no disponible en el repo (ajuste 4).
+- **«Atrás» que sale del gestor** no se intercepta (A1). Los valores no sobreviven a una recarga ni a otro documento, por diseño (D-QA9).
+- **Fuera de alcance:** E3 (fotos por catálogo) y PDF, que no se han empezado.
+
+## PR, CI y merge (E2)
+
+- PR: [#318](https://github.com/Bcousino890/smartbc/pull/318), `fabri/bcp-01-e2` → `main`.
+- `origin/main` antes del push: `87bf218…`, sin cambios desde la base.
+- CI del último commit: se comprueba tras el push; su resultado está en el PR. Incluye el paso nuevo `test:catalogs-manager`.
+- Merge: lo decide Fabricio. Puede desplegar; no hay migración.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.

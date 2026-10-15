@@ -4,6 +4,22 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { DraftCheck, DraftProposal } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
+import {
+  editTextDraft,
+  isEdited,
+  keepMineText,
+  saveFailed,
+  savedTextOf,
+  shownTextOf,
+  textAdapter,
+  textKey,
+  textPendingSave,
+  textSaveSucceeded,
+  type TextDraft,
+  type TextRaw,
+} from "@/lib/catalogs/manager-state";
+import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
+import { SidePanelFooter } from "./manager/side-panel";
 
 // Textos de las viviendas del catálogo (BCP-01 ampliación C2, Z5). Todo se
 // queda en el catálogo: nunca toca la ficha global ni las historias.
@@ -15,6 +31,8 @@ import type { CatalogTextView } from "@/lib/catalogs/texts";
 //   · Publicar: sin contacto, URL ni precio, y cada aviso corregido o
 //     confirmado. Si la ficha cambia, lo publicado deja de verse y aquí se
 //     dice qué cambió; el texto se conserva para revisarlo.
+// E2: la lista vive en manager/content-section.tsx; aquí quedan el editor
+// (controlado por el almacén de borradores del gestor) y sus tipos.
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 type Proposal = ActionResult<{ proposal: DraftProposal; check: DraftCheck }>;
@@ -40,19 +58,19 @@ export interface TextActions {
   preview: (i: { catalogId: string; propertyId: string; body: string | null; lead: string | null; highlights: string[] }) => Promise<Preview>;
 }
 
-const LEVEL: Record<CatalogTextView["level"], string> = {
+export const LEVEL: Record<CatalogTextView["level"], string> = {
   text: "Texto del catálogo",
   story: "Historia aprobada",
   clean: "Descripción limpia de la ficha",
   facts: "Solo datos y fotos",
 };
-const CLEAN: Record<CatalogTextView["source"]["clean"], string> = {
+export const CLEAN: Record<CatalogTextView["source"]["clean"], string> = {
   none: "Sin versión limpia para clientes",
   stale: "Versión limpia caducada (la ficha cambió)",
   current: "Versión limpia vigente",
   empty: "La ficha no tiene texto",
 };
-const STORY: Record<CatalogTextView["source"]["story"], string> = {
+export const STORY: Record<CatalogTextView["source"]["story"], string> = {
   none: "Sin historia",
   pending: "Historia pendiente de revisar",
   current: "Historia aprobada vigente",
@@ -63,49 +81,94 @@ const BLOCKER: Record<string, string> = {
   text_has_price: "Menciona un precio (el precio ya se ve aparte y se actualiza solo)",
 };
 
-function TextEditor({
+type TextSession = {
+  origin: "manual" | "ai_clean" | "ai_draft";
+  check: DraftCheck | null;
+  confirmed: string[];
+  proposal: DraftProposal | null;
+  preview: JourneyPreview | null;
+};
+const EMPTY_SESSION: TextSession = { origin: "manual", check: null, confirmed: [], proposal: null, preview: null };
+const EMPTY_KEY = textKey({ lead: null, body: null, highlights: [] });
+
+export const textDraftKey = (propertyId: string) => `text:${propertyId}`;
+export const textSessionKey = (propertyId: string) => `textSession:${propertyId}`;
+
+/** E2 · ¿Hay cambios sin guardar (D-QA9) en el texto de esta vivienda? */
+export function textEdited(catalogId: string, propertyId: string): boolean {
+  return isEdited(textAdapter, draftsStore.draft<TextDraft>(catalogId, textDraftKey(propertyId)));
+}
+
+export function TextEditor({
   catalogId,
   view,
   actions,
   run,
   pending,
   storyHref,
+  refresh,
+  message = null,
 }: {
   catalogId: string;
   view: CatalogTextView;
+  /** E2 · mensaje del gestor, junto a las acciones fijas. */
+  message?: React.ReactNode;
   actions: TextActions;
   run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
   pending: boolean;
   storyHref: string;
+  /** E2 · pedir los datos guardados actuales (tras un guardado rechazado). */
+  refresh: () => void;
 }) {
-  const saved = view.draft;
-  const [body, setBody] = useState(saved?.body ?? view.published?.body ?? "");
-  const [lead, setLead] = useState(saved?.lead ?? view.published?.lead ?? "");
-  const [highlights, setHighlights] = useState<string[]>(saved?.highlights ?? view.published?.highlights ?? []);
-  const [origin, setOrigin] = useState<"manual" | "ai_clean" | "ai_draft">("manual");
-  const [rev, setRev] = useState<number | null>(saved ? saved.rev : null);
-  const [base, setBase] = useState({ body: saved?.body ?? "", lead: saved?.lead ?? "", highlights: (saved?.highlights ?? []).join("\n") });
-  const [check, setCheck] = useState<DraftCheck | null>(null);
-  const [confirmed, setConfirmed] = useState<string[]>([]);
-  const [proposal, setProposal] = useState<DraftProposal | null>(null);
-  const [preview, setPreview] = useState<JourneyPreview | null>(null);
+  // E2: lo escrito y la sesión del editor viven en el almacén del gestor
+  // (dueño único). Cerrar el editor, cambiar de vivienda o de sección no
+  // pierde nada; nada se guarda ni se publica solo.
+  useDraftsVersion();
+  const dKey = textDraftKey(view.propertyId);
+  const sKey = textSessionKey(view.propertyId);
+  const d = draftsStore.draft<TextDraft>(catalogId, dKey);
+  const sess = draftsStore.session<TextSession>(catalogId, sKey) ?? EMPTY_SESSION;
+  const setSess = (fn: (s: TextSession) => Partial<TextSession>) =>
+    draftsStore.updateSession<TextSession>(catalogId, sKey, (prev) => {
+      const base = prev ?? EMPTY_SESSION;
+      return { ...base, ...fn(base) };
+    });
+  const savedNow = savedTextOf(view);
+  const value: TextRaw = d ? d.value : shownTextOf(view);
+  const { body, lead, highlights } = value;
+  const currentValue = () => draftsStore.draft<TextDraft>(catalogId, dKey)?.value ?? shownTextOf(view);
+  const setValue = (patch: Partial<TextRaw>) =>
+    draftsStore.updateDraft<TextDraft>(catalogId, dKey, (prev) => editTextDraft(prev, view, { ...(prev ? prev.value : shownTextOf(view)), ...patch }));
+  const setBody = (v: string) => setValue({ body: v });
+  const setLead = (v: string) => setValue({ lead: v });
+  const setHighlights = (fn: (h: string[]) => string[]) => setValue({ highlights: fn(currentValue().highlights) });
+
+  const savedKey = d ? d.saved.key : savedNow.key;
+  const rev = d ? d.saved.rev : savedNow.rev;
+  const { check, confirmed, proposal, preview, origin } = sess;
   const [error, setError] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<null | "prepare" | "draft">(null);
   const [busy, start] = useTransition();
   const req = useRef(0);
-  // Valores ACTUALES del editor (para saber si cambiaron mientras la IA trabajaba).
-  const current = useRef({ body, lead });
-  current.current = { body, lead };
 
-  const dirty = body !== base.body || lead !== base.lead || highlights.join("\n") !== base.highlights;
-  const hasSaved = rev !== null && (base.body || base.lead);
+  // «Pendiente de guardar» (C2): lo escrito ≠ el último borrador guardado.
+  const dirty = textPendingSave(value, savedKey);
+  // «Cambios sin guardar» (D-QA9): lo cambió la persona en esta sesión.
+  const edited = isEdited(textAdapter, d);
+  const hasSaved = rev !== null && savedKey !== EMPTY_KEY;
   const pendingWarnings = (check?.warnings ?? []).filter((w) => !confirmed.includes(w.id));
-  const canPublish = !!hasSaved && !dirty && (check?.blockers.length ?? 0) === 0 && pendingWarnings.length === 0;
+  const canPublish = !!hasSaved && !dirty && !d?.conflict && (check?.blockers.length ?? 0) === 0 && pendingWarnings.length === 0;
+
+  // A3: cerrar el editor, cambiar de vivienda o salir de Contenido cancela la
+  // IA pendiente (la respuesta tardía se ignora; lo escrito se conserva).
+  useEffect(() => () => {
+    req.current++;
+  }, []);
 
   function askAi(kind: "prepare" | "draft") {
     setError(null);
     const id = ++req.current;
-    const snapshot = { ...current.current };
+    const snapshot = { body, lead };
     setAiBusy(kind);
     (kind === "prepare" ? actions.prepare : actions.draft)({ catalogId, propertyId: view.propertyId }).then((r) => {
       if (id !== req.current) return; // cancelada o sustituida: se ignora
@@ -115,8 +178,9 @@ function TextEditor({
         return;
       }
       // Si el texto cambió mientras la IA trabajaba, no se pisa.
-      if (current.current.body !== snapshot.body || current.current.lead !== snapshot.lead) {
-        setProposal(r.proposal);
+      const cur = currentValue();
+      if (cur.body !== snapshot.body || cur.lead !== snapshot.lead) {
+        setSess(() => ({ proposal: r.proposal }));
         return;
       }
       applyProposal(r.proposal, r.check);
@@ -124,23 +188,21 @@ function TextEditor({
   }
 
   function applyProposal(p: DraftProposal, c?: DraftCheck) {
-    setBody(p.body);
-    if (p.lead) setLead(p.lead);
-    setOrigin(p.origin);
-    setProposal(null);
-    if (c) setCheck(c);
-    setConfirmed([]);
+    setValue(p.lead ? { body: p.body, lead: p.lead } : { body: p.body });
+    setSess(() => ({ origin: p.origin, proposal: null, confirmed: [], ...(c ? { check: c } : {}) }));
   }
 
   // Al abrir un borrador ya guardado, su comprobación (solo lectura, sin IA):
   // los avisos y bloqueos se ven siempre, no solo justo después de guardar.
+  // Si la sesión ya la tiene (editor reabierto), no se vuelve a pedir.
   useEffect(() => {
-    if (!saved || !(saved.body || saved.lead)) return;
+    const saved = view.draft;
+    if (sess.check || !saved || !(saved.body || saved.lead)) return;
     let alive = true;
     actions
       .preview({ catalogId, propertyId: view.propertyId, body: saved.body, lead: saved.lead, highlights: saved.highlights })
       .then((r) => {
-        if (alive && r.ok) setCheck((c) => c ?? r.check);
+        if (alive && r.ok) setSess((s) => (s.check ? {} : { check: r.check }));
       })
       .catch(() => {});
     return () => {
@@ -152,15 +214,8 @@ function TextEditor({
 
   /** Tras «Borrar texto»: el editor vuelve a empezar vacío. */
   function resetAfterDelete() {
-    setBody("");
-    setLead("");
-    setHighlights([]);
-    setRev(null);
-    setBase({ body: "", lead: "", highlights: "" });
-    setCheck(null);
-    setConfirmed([]);
-    setPreview(null);
-    setOrigin("manual");
+    draftsStore.discardDraft(catalogId, dKey);
+    draftsStore.updateSession(catalogId, sKey, () => undefined);
   }
 
   function cancelAi() {
@@ -169,23 +224,29 @@ function TextEditor({
   }
 
   function save() {
+    // Ajuste 2: se envía ESTA instantánea; lo escrito después se conserva.
+    const submitted = { ...value, highlights: [...value.highlights] };
+    const k = textKey(submitted);
+    draftsStore.updateDraft<TextDraft>(catalogId, dKey, (prev) => (prev ? { ...prev, pending: k } : prev));
     run(
       async () => {
         const r = await actions.save({
           catalogId,
           propertyId: view.propertyId,
-          body: body.trim() || null,
-          lead: lead.trim() || null,
-          highlights,
+          body: submitted.body.trim() || null,
+          lead: submitted.lead.trim() || null,
+          highlights: submitted.highlights,
           origin,
           expectedRev: rev,
         });
         if (r.ok) {
-          setRev(r.rev);
-          setBase({ body, lead, highlights: highlights.join("\n") });
-          setCheck(r.check);
-          setConfirmed((c) => c.filter((id) => r.check.warnings.some((w) => w.id === id)));
-          setOrigin("manual");
+          draftsStore.updateDraft<TextDraft>(catalogId, dKey, (prev) => (prev ? textSaveSucceeded(prev, k, r.rev) : prev));
+          setSess((s) => ({ check: r.check, confirmed: s.confirmed.filter((id) => r.check.warnings.some((w) => w.id === id)), origin: "manual" }));
+        } else {
+          draftsStore.updateDraft<TextDraft>(catalogId, dKey, (prev) => (prev ? saveFailed(prev, k) : prev));
+          // A2: con la revisión cambiada, se piden los datos guardados actuales
+          // (lo escrito se conserva y se decide en el aviso de conflicto).
+          refresh();
         }
         return r;
       },
@@ -204,13 +265,36 @@ function TextEditor({
         setError(r.error);
         return;
       }
-      setPreview(r.preview);
-      setCheck(r.check);
+      setSess(() => ({ preview: r.preview, check: r.check }));
     });
   }
 
   return (
-    <div className="space-y-3 border-t border-gold/15 pt-3" data-testid="text-editor">
+    <div className="space-y-3" data-testid="text-editor">
+      {d?.conflict ? (
+        <div role="status" className="space-y-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="text-conflict">
+          <p className="font-semibold">El borrador guardado cambió (en otra pestaña o con otra acción). Tus cambios siguen aquí y no se han guardado.</p>
+          <p>
+            Guardado ahora: {d.conflict.raw.lead ? <em>{d.conflict.raw.lead} </em> : null}
+            <span className="line-clamp-3">{d.conflict.raw.body || "—"}</span>
+          </p>
+          <div className="flex flex-wrap gap-3 pt-1">
+            <button
+              type="button"
+              className="underline"
+              onClick={() => {
+                draftsStore.discardDraft(catalogId, dKey);
+                setSess(() => ({ check: null, confirmed: [], proposal: null, preview: null, origin: "manual" }));
+              }}
+            >
+              Descartar mis cambios
+            </button>
+            <button type="button" className="underline" onClick={() => draftsStore.updateDraft<TextDraft>(catalogId, dKey, (prev) => (prev ? keepMineText(prev) : prev))}>
+              Mantener los míos
+            </button>
+          </div>
+        </div>
+      ) : null}
       {view.published && !view.published.current ? (
         <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="text-stale">
           Lo publicado ya no se muestra: cambió {view.published.changed.join(", ") || "la ficha"}. Revísalo y vuelve a publicar; mientras tanto el cliente ve{" "}
@@ -308,7 +392,7 @@ function TextEditor({
             Usar la propuesta
           </button>{" "}
           ·{" "}
-          <button type="button" className="underline" onClick={() => setProposal(null)}>
+          <button type="button" className="underline" onClick={() => setSess(() => ({ proposal: null }))}>
             Descartarla
           </button>
         </div>
@@ -331,7 +415,10 @@ function TextEditor({
               <input
                 type="checkbox"
                 checked={confirmed.includes(w.id)}
-                onChange={(e) => setConfirmed((c) => (e.target.checked ? [...c, w.id] : c.filter((x) => x !== w.id)))}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setSess((s) => ({ confirmed: on ? [...s.confirmed, w.id] : s.confirmed.filter((x) => x !== w.id) }));
+                }}
                 aria-label={`Confirmar: ${w.message}`}
               />
               <span>
@@ -358,25 +445,6 @@ function TextEditor({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || busy || !dirty}
-          className="rounded-lg bg-gold/90 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-        >
-          Guardar borrador
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Texto publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
-          }
-          disabled={pending || busy || !canPublish}
-          title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}
-          className="rounded-lg border border-gold bg-white px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-50"
-        >
-          Publicar
-        </button>
         {view.published ? (
           <button
             type="button"
@@ -400,101 +468,40 @@ function TextEditor({
             Borrar texto
           </button>
         ) : null}
-        {dirty ? <span className="text-xs text-ink/50">Cambios sin guardar</span> : null}
         <a href={storyHref} className="ml-auto text-xs text-ink/60 underline" target="_blank" rel="noreferrer">
           Historia de la ficha (revisión aparte)
         </a>
       </div>
-    </div>
-  );
-}
-
-export function CatalogTextsPanel({
-  catalogId,
-  texts,
-  actions,
-  run,
-  pending,
-  storyHref,
-}: {
-  catalogId: string;
-  texts: CatalogTextView[];
-  actions: TextActions;
-  run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
-  pending: boolean;
-  storyHref: (slug: string) => string;
-}) {
-  const [open, setOpen] = useState<string | null>(null);
-  const inList = texts.filter((t) => t.inList);
-  const reserve = texts.filter((t) => !t.inList);
-
-  function row(t: CatalogTextView) {
-    const state = t.published
-      ? t.published.current
-        ? "Texto publicado"
-        : `Publicado · revisar (cambió ${t.published.changed.join(", ") || "la ficha"})`
-      : t.draft && (t.draft.body || t.draft.lead)
-        ? "Borrador sin publicar"
-        : "Sin texto propio";
-    return (
-      <li key={t.propertyId} className="rounded-xl border border-gold/15 bg-white/60 p-3" data-testid="text-row" data-check-overflow="texto">
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
-          <div className="min-w-0 flex-1 basis-48">
-            <p className="crm-body-strong text-ink">
-              {t.bcReference ? <span className="mr-2 text-xs text-ink/45">{t.bcReference}</span> : null}
-              {t.title}
-            </p>
-            <p className="text-xs text-ink/60" data-testid="text-level">
-              El cliente ve: <strong>{LEVEL[t.level]}</strong> · {CLEAN[t.source.clean]} · {STORY[t.source.story]}
-            </p>
-            <p className={`text-xs ${t.published && !t.published.current ? "text-amber-800" : "text-ink/60"}`} data-testid="text-state">
-              {state}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setOpen(open === t.propertyId ? null : t.propertyId)}
-            className="shrink-0 rounded-lg border border-gold/40 px-3 py-1 text-xs text-ink/80 hover:bg-white"
-            aria-expanded={open === t.propertyId}
-            aria-label={`${open === t.propertyId ? "Cerrar" : "Editar"} el texto de «${t.title}»`}
-          >
-            {open === t.propertyId ? "Cerrar" : "Editar texto"}
-          </button>
-        </div>
-        {open === t.propertyId ? (
-          <TextEditor
-            key={t.propertyId}
-            catalogId={catalogId}
-            view={t}
-            actions={actions}
-            run={run}
-            pending={pending}
-            storyHref={storyHref(t.slug)}
-          />
+      <SidePanelFooter message={message}>
+        <div className="flex w-full flex-wrap items-center gap-2" data-testid="text-actions">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || busy || !dirty}
+          className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          Guardar borrador
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Texto publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
+          }
+          disabled={pending || busy || !canPublish}
+          title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}
+          className="rounded-lg border border-gold bg-white px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+        >
+          Publicar
+        </button>
+        {edited ? (
+          <span className="text-xs font-semibold text-amber-800" data-testid="text-unsaved">
+            Cambios sin guardar
+          </span>
+        ) : dirty ? (
+          <span className="text-xs text-ink/50">Aún sin guardar como borrador</span>
         ) : null}
-      </li>
-    );
-  }
-
-  return (
-    <section className="space-y-3 rounded-xl border border-gold/20 bg-white/40 p-3" aria-labelledby="ct-title" data-testid="texts-panel">
-      <div>
-        <h3 id="ct-title" className="crm-label-sm text-ink/70">
-          Textos de las viviendas
-        </h3>
-        <p className="text-xs text-ink/55">
-          Solo para este catálogo: la ficha de la propiedad no cambia. Manda el texto publicado aquí; si no hay, la historia aprobada; si no, la
-          descripción limpia; si no, solo datos y fotos.
-        </p>
-      </div>
-      {inList.length === 0 ? <p className="text-xs text-ink/50">Este catálogo todavía no tiene viviendas.</p> : <ul className="space-y-2">{inList.map(row)}</ul>}
-      {reserve.length ? (
-        <div className="space-y-2" data-testid="texts-reserve">
-          <h4 className="crm-label-sm text-ink/60">Textos en reserva ({reserve.length})</h4>
-          <p className="text-xs text-ink/50">Viviendas que ya no están en la lista: su texto se conserva por si vuelven. Bórralo solo si ya no lo quieres.</p>
-          <ul className="space-y-2">{reserve.map(row)}</ul>
         </div>
-      ) : null}
-    </section>
+      </SidePanelFooter>
+    </div>
   );
 }

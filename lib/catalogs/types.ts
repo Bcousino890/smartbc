@@ -2,6 +2,7 @@
 // pasaron la guarda del dueño; nada de esto llega a ninguna superficie pública.
 
 import type { CatalogCriteria } from "./criteria";
+import type { CatalogMaterial } from "./material";
 import type { Explanation } from "./explain";
 import type { AdjustmentKind, Via } from "./selection";
 
@@ -108,6 +109,9 @@ export interface CatalogDetail {
     overMax: boolean;
   };
   cover: CatalogCoverState;
+  /** E2 (solo gestión, D-QA8): material de cada vivienda de la lista según lo
+   *  que ve hoy el cliente, por propertyId. Sin entrada = sin diagnóstico. */
+  material: Record<string, CatalogMaterial>;
 }
 
 /** Contacto público guardado en el catálogo (0194). */

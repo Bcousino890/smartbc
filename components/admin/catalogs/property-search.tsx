@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import { criteriaSummary, type CatalogCriteria } from "@/lib/catalogs/criteria";
 import type { CatalogItemView } from "@/lib/catalogs/types";
+import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
 
 // Búsqueda de viviendas en la gestión (BCP-01 ampliación X7, C1). Usa los
 // criterios del panel (zonas, operación, precio y orden) más un texto
@@ -38,7 +39,15 @@ export function PropertySearch({
   onClear,
   disabled,
   refreshKey,
+  autoRun = false,
+  uiKey,
 }: {
+  /** E2 · clave del estado de interfaz (texto y alcance) en el almacén del
+   *  gestor: sobreviven a cambiar de vista o de sección (no es un formulario
+   *  que se guarde, no cuenta como cambio sin guardar). */
+  uiKey?: string;
+  /** E2 · busca al montarse (vista «Coincidencias»: solo lectura). */
+  autoRun?: boolean;
   /** Cambia cuando cambia la lista o sus ajustes (también desde la lista):
    *  los resultados que se ven se vuelven a pedir para no quedar desfasados. */
   refreshKey?: string;
@@ -54,8 +63,13 @@ export function PropertySearch({
   onClear?: (it: CatalogItemView) => Promise<boolean>;
   disabled: boolean;
 }) {
-  const [text, setText] = useState("");
-  const [scope, setScope] = useState<"criteria" | "all">("criteria");
+  useDraftsVersion();
+  const [localText, setLocalText] = useState("");
+  const [localScope, setLocalScope] = useState<"criteria" | "all">("criteria");
+  const text = uiKey ? draftsStore.ui<string>(catalogId, `${uiKey}:text`) ?? "" : localText;
+  const scope = uiKey ? draftsStore.ui<"criteria" | "all">(catalogId, `${uiKey}:scope`) ?? "criteria" : localScope;
+  const setText = (v: string) => (uiKey ? draftsStore.setUi(catalogId, `${uiKey}:text`, v) : setLocalText(v));
+  const setScope = (v: "criteria" | "all") => (uiKey ? draftsStore.setUi(catalogId, `${uiKey}:scope`, v) : setLocalScope(v));
   const [results, setResults] = useState<Found[] | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +108,11 @@ export function PropertySearch({
       setResults(items);
     });
   }
+
+  useEffect(() => {
+    if (autoRun) run(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const lastKey = useRef(refreshKey);
   useEffect(() => {
