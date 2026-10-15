@@ -1175,6 +1175,15 @@ Capturas en [`qa-c2/capturas-e2/`](qa-c2/capturas-e2/) (JPEG, datos sintéticos)
    - el editor como pantalla propia, con «Guardar borrador» y «Publicar» abajo sin tapar los campos.
 8. **D13:** `?medir=1` en el VPS (sigue pendiente; lo de aquí es sintético).
 
+### Estado tras el merge (15 de octubre de 2026)
+
+- **Merge:** PR #318 fusionado (`84538e7`). CI de `main` sobre el merge: **en verde** (comprobado en solo lectura).
+- **QA en vivo de Fabricio, aceptada:**
+  - las cuatro secciones;
+  - lo escrito sin guardar se conserva al cambiar de sección y de vivienda;
+  - pide confirmación al salir por el menú del CRM.
+- **Sigue pendiente** (no se da por hecho): las pruebas en dispositivos reales y D13 en vivo.
+
 ## Pendiente o no demostrado
 
 - La QA completa de Fabricio, D13 en vivo (VPS) y las pruebas en dispositivos reales. Las comprobaciones de aquí son locales y sintéticas.
