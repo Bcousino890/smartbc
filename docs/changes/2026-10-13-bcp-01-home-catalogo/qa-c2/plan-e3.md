@@ -99,6 +99,11 @@ En cualquiera de ellos, el lector puede enseñar **otra** foto, incluida una exc
   - el proxy sin `f` (incluido su orden solo por `position`, que es un riesgo de hoy y se documenta);
   - el acceso general a las fotos (E3-6).
 
+**Precisión de la ejecución (T1):**
+- La clave `f` la calcula la propia SQL (`catalog_photo_key`) y va en la instantánea interna en lugar del `id`. `pp` lleva claves, no ids.
+- Así ni la instantánea ni el código del navegador tienen identificadores internos, y no hace falta calcular hashes en el cliente.
+- El proxy calcula la misma clave en el servidor.
+
 **Consecuencia al desplegar (decisión nueva N2):**
 - La instantánea pasa a llevar el `id` interno de cada foto (`i`) y todos los `src` cambian.
 - La huella de **todos** los catálogos cambia **una vez**. Los lectores abiertos reciben una actualización o hay que recargarlos.

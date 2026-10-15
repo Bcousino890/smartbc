@@ -78,6 +78,31 @@ echo "== 2k. operación e importe: alquiler, duales, precio principal ausente e 
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-operations.sql
 
+echo "== 2l. 0202 (E3): fotos por catálogo (catálogo previo + aplicada dos veces, concurrencia y reversión)"
+M8=supabase/migrations/0202_catalog_photo_prefs.sql
+RB8=docs/changes/2026-10-13-bcp-01-home-catalogo/rollback-0202.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M8 $S/test-catalog-photos.sql
+# E3-1 con dos transacciones independientes y simultáneas.
+$R sql $S/test-catalog-photos-conc-a.sql &
+CONC_A=$!
+sleep 0.5
+$R sql $S/test-catalog-photos-conc-b.sql
+wait $CONC_A
+$R sql $S/test-catalog-photos-conc-check.sql
+$R sql $RB8 $S/test-rollback-0202.sql $M8
+$R sql $S/test-util.sql
+echo "   0202 se vuelve a aplicar tras su reversión"
+
+echo "== 2m. 0202 sobre la selección (2k) y la paridad TS ↔ SQL"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $S/test-catalog-operations.sql
+PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")
+node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-catalog-parity.mts > "$PAR" 2>/dev/null
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 "$PAR"
+rm -f "$PAR"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
