@@ -75,6 +75,14 @@ export const fixtureCatalogDetail: CatalogDetail = {
   autoMatched: null,
   adjustments: { included: 0, excluded: [], unavailable: [], overMax: false },
   cover: { chosenPropertyId: null, chosenPhotoId: null, effectivePhotoUrl: syntheticPhoto(28, 320, 240, "1"), warnings: [] },
+  // E2 · material sintético (escrito a mano; la página real lo calcula con la
+  // instantánea del lector). El dúplex está reservado y sin foto.
+  material: {
+    "e0000000-0000-0000-0000-000000000001": { noText: false, sections: 3, sectionsWithoutPhoto: 0, photos: 4 },
+    "e0000000-0000-0000-0000-000000000002": { noText: false, sections: 4, sectionsWithoutPhoto: 2, photos: 6 },
+    "e0000000-0000-0000-0000-000000000003": { noText: true, sections: 0, sectionsWithoutPhoto: 0, photos: 0 },
+    "e0000000-0000-0000-0000-000000000004": { noText: true, sections: 0, sectionsWithoutPhoto: 0, photos: 3 },
+  },
   items: [
     { propertyId: "e0000000-0000-0000-0000-000000000001", position: 100, slug: "atico-demo", bcReference: "BC-9001", title: "Ático con terraza sobre los tejados de Jerónimos", zone: "Jerónimos, Madrid", status: "available", operation: "Venta", price: "1.450.000 €", bedrooms: 3, bathrooms: 2, squareMeters: 142, photoUrl: syntheticPhoto(28, 320, 240, "1") },
     { propertyId: "e0000000-0000-0000-0000-000000000002", position: 200, slug: "piso-demo", bcReference: "BC-9002", title: "Piso señorial con galería acristalada, molduras originales y suelos de madera restaurados en la calle Almagro", zone: "Almagro, Madrid", status: "available", operation: "Venta y alquiler", price: "Venta 2.100.000 € · Alquiler 6.800 €/mes", bedrooms: 4, bathrooms: 3, squareMeters: 186, photoUrl: syntheticPhoto(205, 240, 320, "2") },

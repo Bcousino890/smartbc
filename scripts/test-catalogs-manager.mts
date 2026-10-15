@@ -10,6 +10,8 @@
  *     scripts/test-catalogs-manager.mts
  */
 import { materialLabels, materialOf, type CatalogMaterial } from "../lib/catalogs/material.ts";
+import { materialByProperty } from "../lib/catalogs/material-data.ts";
+import type { InternalItem } from "../lib/catalogs/to-public.ts";
 import {
   beginSave,
   contactAdapter,
@@ -86,6 +88,38 @@ function testMaterial() {
   check("descripción sin capítulos: sin avisos", same(materialLabels(d), []));
   // Sin nada.
   check("sin texto ni fotos", same(materialLabels(materialOf(item({}))), ["Sin descripción", "Sin fotos"]));
+}
+
+function internal(over: Partial<InternalItem> & { key: string; slug: string }): InternalItem {
+  return {
+    title: "T", zone: "Madrid", subzone: null, operation: "sale", operations: null, price: null, rent_price: null,
+    currency: "eur", status: "available", bedrooms: null, bathrooms: null, square_meters: null, description: null,
+    features: null, features_manual: null, floor_override: null, clean: null, photos: [],
+    ...over,
+  } as InternalItem;
+}
+
+function testMaterialByProperty() {
+  section("E2 · material desde la instantánea del lector");
+  const photo = (u: string) => ({ u, w: 800, h: 600, c: null });
+  const snap = {
+    items: [
+      // Orden distinto al de la lista; «b» sin texto ni limpia → ficha breve.
+      internal({ key: "kb", slug: "b", photos: [photo("1"), photo("2")] }),
+      // «a» con texto del catálogo vigente → hay descripción.
+      internal({ key: "ka", slug: "a", text: { b: "Un piso luminoso con salón amplio.", l: null, h: null } }),
+      // Vendida: el cliente no la ve.
+      internal({ key: "kc", slug: "c", status: "sold", photos: [photo("3")] }),
+      // Slug que no está en la lista: se ignora.
+      internal({ key: "kd", slug: "zz" }),
+    ],
+  };
+  const items = [{ propertyId: "id-a", slug: "a" }, { propertyId: "id-b", slug: "b" }, { propertyId: "id-c", slug: "c" }];
+  const m = materialByProperty(snap, items);
+  check("solo las de la lista que ve el cliente (a y b)", same(Object.keys(m).sort(), ["id-a", "id-b"]));
+  check("b: ficha breve con 2 fotos", m["id-b"]?.noText === true && m["id-b"]?.photos === 2 && m["id-b"]?.sections === 0);
+  check("a: con descripción y sin fotos", m["id-a"]?.noText === false && m["id-a"]?.photos === 0);
+  check("sin instantánea → vacío", same(materialByProperty(null, items), {}));
 }
 
 // --- Secciones y URL ----------------------------------------------------------
@@ -262,6 +296,7 @@ function testFilters() {
 }
 
 testMaterial();
+testMaterialByProperty();
 testSections();
 testRaw();
 testPendingSave();
