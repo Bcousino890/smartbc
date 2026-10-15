@@ -177,7 +177,7 @@ function RefsCell({ m }: { m: LinkedAd }) {
         </a>
       )}
       {r.internal && (
-        <p className="whitespace-nowrap font-mono text-[11px] text-ink/55" title="Referencia interna del CRM">
+        <p className="whitespace-nowrap font-mono text-xs text-ink/55" title="Referencia interna del CRM">
           {r.internal}
         </p>
       )}
@@ -204,7 +204,7 @@ function SourceRow({ m }: { m: LinkedAd }) {
               {portalName(m.portal)}
               <ExternalLink size={11} aria-hidden />
             </span>
-            <SourceKindBadge kind={kind} className="mt-0.5 text-[11px]" />
+            <SourceKindBadge kind={kind} className="mt-0.5 text-xs" />
             <span className="block max-w-[170px] truncate text-xs font-normal text-ink/65" title={sourceLabel({ kind, portal: m.portal, agency: who })}>
               {who || "—"}
             </span>
@@ -279,10 +279,10 @@ function WebSourceRow({ w }: { w: AgencyMatchInfo }) {
               <span>{sourceLabel({ kind: "agencia_web", agency: p.agency_name })}</span>
             )}
             <span className="mt-0.5 flex flex-wrap items-center gap-1">
-              <SourceKindBadge kind="agencia_web" className="text-[11px]" />
+              <SourceKindBadge kind="agencia_web" className="text-xs" />
               <span
                 title={reasons.join(" · ") || w.rule}
-                className={cn("rounded-md border px-1.5 py-0.5 text-[11px] font-semibold", sure ? "border-gold/40 bg-gold/10 text-gold-dark" : "border-amber-300 bg-amber-50 text-amber-700")}
+                className={cn("rounded-md border px-1.5 py-0.5 text-xs font-semibold", sure ? "border-gold/40 bg-gold/10 text-gold-dark" : "border-amber-300 bg-amber-50 text-amber-700")}
               >
                 {w.status === "confirmado" ? "Confirmado" : w.level === "cierto" ? "Seguro" : "Posible"}
               </span>
@@ -292,7 +292,7 @@ function WebSourceRow({ w }: { w: AgencyMatchInfo }) {
       </td>
       <td className="px-3 py-2.5 text-xs text-ink/80">
         {p.reference ? <p className="whitespace-nowrap font-mono font-semibold text-ink" title="Referencia en el CRM / web de la agencia">{p.reference}</p> : <span className="text-ink/60">—</span>}
-        {reasons.length > 0 && <p className="mt-0.5 max-w-[200px] text-[11px] text-ink/60">{reasons.join(" · ")}</p>}
+        {reasons.length > 0 && <p className="mt-0.5 max-w-[200px] text-xs text-ink/60">{reasons.join(" · ")}</p>}
       </td>
       <td className="px-3 py-2.5 text-ink/60">—</td>
       <td className="whitespace-nowrap px-3 py-2.5 font-semibold tabular-nums text-ink">

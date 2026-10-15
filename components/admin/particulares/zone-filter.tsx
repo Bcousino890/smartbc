@@ -213,9 +213,9 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
     return (
       <div role="group" aria-label={title} className="pb-2">
         <div className="sticky top-0 z-10 flex items-center gap-3 bg-cream-50 px-3 pb-1.5 pt-3">
-          <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink/55">{title}</span>
+          <span className="text-xs font-semibold uppercase tracking-widest text-ink/55">{title}</span>
           <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
-          <span className="text-[11px] tabular-nums text-ink/40">{total.toLocaleString("es-ES")} anuncios</span>
+          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} anuncios</span>
         </div>
         <div className="px-1.5">
           {list.map((g) => {
@@ -265,7 +265,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                     className="flex min-h-10 min-w-0 flex-1 items-center gap-3 py-1.5 pr-2.5 text-left"
                   >
                     <Box state={st} />
-                    <span className="min-w-0 flex-1 break-words text-[14px] font-medium leading-snug text-ink">
+                    <span className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-ink">
                       <Highlight text={flat ? g.district : `Todo ${g.district}`} query={query} />
                     </span>
                     <Counts total={g.total} missing={g.missingPhone} />
@@ -296,7 +296,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                             className="flex min-h-9 w-full items-center gap-2.5 px-2.5 py-1 text-left"
                           >
                             <Box state={on ? "on" : "off"} small />
-                            <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-ink/80">
+                            <span className="min-w-0 flex-1 break-words text-sm leading-snug text-ink/80">
                               <Highlight text={r.zone.name} query={query} />
                             </span>
                             <Counts total={r.zone.total} missing={r.zone.missingPhone} small />
@@ -353,7 +353,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
             <span aria-hidden className="mx-auto mt-2 h-1 w-10 rounded-full bg-ink/15 sm:hidden" />
             <header className="flex items-start justify-between gap-3 px-4 pb-3 pt-3 sm:pt-4">
               <div>
-                <h2 className="font-serif text-lg leading-tight text-ink">Zona</h2>
+                <h2 className="crm-section-title leading-tight text-ink">Zona</h2>
                 <p className="mt-0.5 text-xs text-ink/50">Elige distritos, barrios o municipios.</p>
               </div>
               <button
@@ -451,7 +451,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gold/15 text-gold-dark">
                     <Search size={18} strokeWidth={1.75} />
                   </span>
-                  <p className="mt-3 font-serif text-base text-ink">
+                  <p className="mt-3 text-base font-semibold text-ink">
                     {onlyMissing && !searching ? "Todo con teléfono" : "Sin resultados"}
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-ink/55">
@@ -523,7 +523,7 @@ function Counts({ total, missing, small }: { total: number; missing: number; sma
       {missing > 0 && (
         <span
           title={`${missing} sin teléfono`}
-          className="inline-flex items-center gap-1 whitespace-nowrap text-[10.5px] text-amber-700/85"
+          className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-amber-700/85"
         >
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500/80" />
           {missing} sin tel.
@@ -531,7 +531,7 @@ function Counts({ total, missing, small }: { total: number; missing: number; sma
       )}
       <span
         className={`min-w-[2rem] rounded-full bg-ink/[0.06] px-2 text-center tabular-nums text-ink/65 ${
-          small ? "py-px text-[11px]" : "py-0.5 text-xs font-medium"
+          small ? "py-px text-xs" : "py-0.5 text-xs font-medium"
         }`}
       >
         {total.toLocaleString("es-ES")}
