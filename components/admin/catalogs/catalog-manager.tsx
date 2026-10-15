@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
@@ -10,8 +9,8 @@ import { formatContactPhone } from "@/lib/catalogs/contact-format";
 import { ContactFields } from "./contact-fields";
 import { MeasurePanel, useHomeMeasure } from "./measure-panel";
 import { SharePanel, type ShareActions, type ShareView } from "./share-panel";
-import { SelectionPanel, type SelectionActions } from "./selection-panel";
-import { PropertySearch, type SearchAction } from "./property-search";
+import type { SelectionActions } from "./selection-panel";
+import type { SearchAction } from "./property-search";
 import { AdsPanel, type AdActions } from "./ads-panel";
 import { CoverPicker, type CoverActions } from "./cover-picker";
 import { CatalogTextsPanel, textDraftKey, type TextActions } from "./catalog-texts-panel";
@@ -39,6 +38,7 @@ import { useFormDraft } from "./manager/use-form-draft";
 import { useLeaveGuard } from "./manager/use-leave-guard";
 import { ManagerHeader, type NoLinkReason, type UnsavedEntry } from "./manager/manager-header";
 import { SectionTabs } from "./manager/section-tabs";
+import { HomesSection } from "./manager/homes-section";
 import { useManagerUrl } from "./manager/use-manager-url";
 import { ConflictNote } from "./manager/conflict-note";
 
@@ -77,22 +77,6 @@ export interface CatalogManagerActions {
   cover: CoverActions;
   /** Ampliación C2 */
   texts: TextActions;
-}
-
-const STATUS_LABEL: Record<CatalogItemView["status"], string | null> = {
-  available: null,
-  reserved: "Reservada",
-  sold: "Vendida",
-  archived: "Archivada",
-};
-
-function facts(it: CatalogItemView): string {
-  const parts = [
-    it.squareMeters ? `${it.squareMeters} m²` : "m² · sin dato",
-    it.bedrooms !== null ? `${it.bedrooms} dorm.` : "dorm. · sin dato",
-    it.bathrooms !== null ? `${it.bathrooms} baño${it.bathrooms === 1 ? "" : "s"}` : "baños · sin dato",
-  ];
-  return parts.join(" · ");
 }
 
 export function CatalogManager({
@@ -385,6 +369,18 @@ export function CatalogManager({
     return parts.join(" · ");
   }
 
+  // El mensaje del gestor se ve junto a las acciones: dentro del panel abierto
+  // (Viviendas o Contenido) o, si no hay panel, encima de la sección.
+  const panelOpen = section === "viviendas" && !!vivienda;
+  const messageEl = message ? (
+    <p
+      role={message.kind === "error" ? "alert" : "status"}
+      className={`rounded-lg px-3 py-2 text-sm ${message.kind === "error" ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}
+    >
+      {message.text}
+    </p>
+  ) : null;
+
   const panel = (s: Section) => ({
     role: "tabpanel" as const,
     id: `cm-panel-${s}`,
@@ -421,271 +417,47 @@ export function CatalogManager({
         </div>
       ) : null}
 
-      {message ? (
-        <p
-          role={message.kind === "error" ? "alert" : "status"}
-          className={`rounded-lg px-3 py-2 text-sm ${message.kind === "error" ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}
-        >
-          {message.text}
-        </p>
-      ) : null}
+      {panelOpen ? null : messageEl}
 
-      <section {...panel("viviendas")} className="min-w-0 space-y-4 focus:outline-none">
-          <div className="flex items-end justify-between gap-3">
-            <h2 id="cm-props" className="crm-section-title text-ink">
-              Propiedades
-            </h2>
-            <span className="text-sm text-ink/55" data-testid="items-count">
-              {auto ? autoCount() : `${items.length} en el catálogo`}
-            </span>
-          </div>
-
-          <SelectionPanel
-            catalogId={catalog.id}
-            mode={catalog.mode}
-            manualCount={catalog.manualCount}
-            actions={wrapped.selection}
-            run={run}
-            pending={pending}
-            form={criteriaForm}
-            summarize={(raw) => criteriaSummary(criteriaFromRaw(raw) ?? catalog.criteria) || "todas las zonas y precios"}
-          />
-
-          {auto ? (
-            <>
-              <p className="rounded-xl border border-gold/20 bg-gold/10 px-3 py-2 text-xs text-ink/70" data-testid="auto-note">
-                Lista automática: sale de los criterios y se actualiza sola. Puedes incluir o excluir viviendas a mano; para ordenar a mano, pásalo a manual.
-              </p>
-              {adj.overMax ? (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="over-max">
-                  Hay más inclusiones disponibles ({adj.included}) que el máximo ({catalog.criteria.max}): solo entran las primeras en el orden. Sube el máximo o quita una inclusión.
-                </p>
-              ) : null}
-              <PropertySearch
-                catalogId={catalog.id}
-                criteria={draftCriteria}
-                search={actions.search}
-                mode="auto"
-                refreshKey={`${items.map((x) => x.propertyId).join()}|${adj.included}|${nExcluded}|${adj.unavailable.length}`}
-                disabled={archived || pending}
-                onAdjust={(it, kind) => adjust(it, kind)}
-                onClear={(it) => adjust(it, "clear")}
-              />
-            </>
-          ) : (
-            <PropertySearch
-              catalogId={catalog.id}
-              criteria={draftCriteria}
-              search={actions.search}
-              disabled={archived || pending}
-              onAdd={(it) =>
-                new Promise<boolean>((resolve) => {
-                  run(
-                    () => wrapped.addPropertyById({ catalogId: catalog.id, propertyId: it.propertyId }),
-                    "Propiedad añadida.",
-                    () => {
-                      if (onLocalAdd) setItems((xs) => [...xs, it]);
-                      resolve(true);
-                    },
-                    () => resolve(false),
-                    "alta",
-                  );
-                })
-              }
-            />
-          )}
-
-          {auto ? null : (
-          <form onSubmit={add} className="flex flex-col gap-2 rounded-xl border border-gold/20 bg-white/60 p-3 sm:flex-row sm:items-center">
-            <label className="sr-only" htmlFor="cm-ref">
-              Referencia BC, slug o URL de la ficha
-            </label>
-            <input
-              id="cm-ref"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              disabled={archived}
-              placeholder="BC-1234, slug o URL de la ficha"
-              className="min-w-0 flex-1 rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={pending || archived || !reference.trim()}
-              className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-50"
-            >
-              Añadir
-            </button>
-          </form>
-          )}
-          {auto ? null : (
-          <p className="text-xs text-ink/50">
-            Solo propiedades que ya están en el CRM. Importar desde portales o PDF llega en la fase 3.
-          </p>
-          )}
-          {!auto && (adj.included + adj.unavailable.length + nExcluded) > 0 ? (
-            <p className="text-xs text-ink/55" data-testid="stored-adjustments">
-              Ajustes del modo automático guardados ({adj.included + adj.unavailable.length} inclusiones, {nExcluded} exclusiones): se vuelven a aplicar si pasas a automático.
-            </p>
-          ) : null}
-
-          {items.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-10 text-center text-sm text-ink/55">
-              {auto ? "Ninguna vivienda encaja ahora con los criterios (o les falta foto)." : "Este catálogo todavía no tiene propiedades."}
-            </div>
-          ) : (
-            <ol className="space-y-2">
-              {items.map((it, i) => {
-                const badge = STATUS_LABEL[it.status];
-                return (
-                  <li
-                    key={it.propertyId}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-gold/15 bg-white/60 p-2 pr-3 sm:flex-nowrap"
-                    data-check-overflow="fila"
-                  >
-                    <span className="w-6 shrink-0 text-center text-xs text-ink/45">{i + 1}</span>
-                    <div className="h-12 w-16 shrink-0 overflow-hidden rounded-md bg-cream-200 sm:h-14 sm:w-20">
-                      {it.photoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={it.photoUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      ) : (
-                        <span className="flex h-full items-center justify-center text-xs text-ink/45">Sin foto</span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1 basis-40">
-                      <p className="crm-body-strong line-clamp-2 text-ink">
-                        {it.bcReference ? <span className="mr-2 text-xs text-ink/45">{it.bcReference}</span> : null}
-                        {it.title}
-                      </p>
-                      <p className="text-xs text-ink/55">
-                        {[it.zone ?? "Zona · sin dato", it.operation].join(" · ")}
-                      </p>
-                      <p className="text-xs text-ink/55">
-                        <span className="text-ink/80">{it.price}</span> · {facts(it)}
-                      </p>
-                      {auto && it.explain ? (
-                        <p className="text-xs text-ink/60" data-testid="item-reason">
-                          <span className={it.via === "include" ? "text-gold" : "text-ink/70"}>{it.explain.headline}</span>
-                          {it.explain.details.length ? ` · ${it.explain.details.join(" · ")}` : ""}
-                        </p>
-                      ) : null}
-                      {auto && it.explain?.warnings.length ? (
-                        <p className="text-xs text-amber-800" data-testid="item-warning">
-                          {it.explain.warnings.join(" · ")}
-                        </p>
-                      ) : null}
-                    </div>
-                    {badge ? (
-                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">{badge}</span>
-                    ) : null}
-                    {auto ? (
-                    <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
-                      {it.via === "include" || it.via === "both" ? (
-                        <button
-                          type="button"
-                          onClick={() => void adjust(it, "clear")}
-                          disabled={pending || archived}
-                          aria-label={`Quitar la inclusión de «${it.title}»`}
-                          className="rounded-md border border-gold/40 px-2 py-1 text-xs text-ink/80 hover:bg-white disabled:opacity-40"
-                        >
-                          Quitar inclusión
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => void adjust(it, "exclude")}
-                        disabled={pending || archived}
-                        aria-label={`Excluir «${it.title}»`}
-                        className="rounded-md px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                    ) : (
-                    <div className="ml-auto flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => move(i, -1)}
-                        disabled={pending || i === 0}
-                        aria-label={`Subir «${it.title}»`}
-                        className="rounded-md p-1.5 text-ink/60 hover:bg-white disabled:opacity-30"
-                      >
-                        <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => move(i, 1)}
-                        disabled={pending || i === items.length - 1}
-                        aria-label={`Bajar «${it.title}»`}
-                        className="rounded-md p-1.5 text-ink/60 hover:bg-white disabled:opacity-30"
-                      >
-                        <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove(it)}
-                        disabled={pending}
-                        className="ml-1 rounded-md px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-
-          {auto && adj.unavailable.length ? (
-            <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3" data-testid="unavailable-inclusions" aria-label="Inclusiones no disponibles">
-              <h3 className="crm-label-sm text-amber-900">Inclusiones que hoy no aparecen ({adj.unavailable.length})</h3>
-              <ul className="space-y-1">
-                {adj.unavailable.map((it) => (
-                  <li key={it.propertyId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/70" data-check-overflow="no-disponible">
-                    <span className="min-w-0 flex-1 basis-40">
-                      {it.bcReference ? <span className="mr-2 text-ink/45">{it.bcReference}</span> : null}
-                      {it.title} · {it.explain?.warnings.join(" · ")}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void adjust(it, "clear")}
-                      disabled={pending}
-                      aria-label={`Quitar la inclusión de «${it.title}»`}
-                      className="rounded-md border border-gold/40 px-2 py-1 text-xs text-ink/80 hover:bg-white disabled:opacity-40"
-                    >
-                      Quitar inclusión
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {auto && nExcluded ? (
-            <section className="space-y-2 rounded-xl border border-gold/20 bg-white/60 p-3" data-testid="excluded-list" aria-label="Excluidas">
-              <h3 className="crm-label-sm text-ink/70">Excluidas a mano ({nExcluded})</h3>
-              <ul className="space-y-1">
-                {adj.excluded.map((it) => (
-                  <li key={it.propertyId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/70" data-check-overflow="excluida">
-                    <span className="min-w-0 flex-1 basis-40">
-                      {it.bcReference ? <span className="mr-2 text-ink/45">{it.bcReference}</span> : null}
-                      {it.title} · {it.explain?.headline}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void adjust(it, "clear")}
-                      disabled={pending}
-                      aria-label={`Volver a permitir «${it.title}»`}
-                      className="rounded-md border border-gold/40 px-2 py-1 text-xs text-ink/80 hover:bg-white disabled:opacity-40"
-                    >
-                      Volver a permitir
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
+      <section {...panel("viviendas")} className="min-w-0 focus:outline-none">
+        <HomesSection
+          catalog={catalog}
+          items={items}
+          auto={auto}
+          archived={archived}
+          pending={pending}
+          countLabel={auto ? autoCount() : `${items.length} en el catálogo`}
+          openId={section === "viviendas" ? vivienda : null}
+          onOpen={(pid) => navigate({ seccion: "viviendas", vivienda: pid })}
+          onEditText={(pid) => navigate({ seccion: "contenido", vivienda: pid })}
+          message={section === "viviendas" && vivienda ? messageEl : null}
+          criteriaForm={criteriaForm}
+          summarize={(raw) => criteriaSummary(criteriaFromRaw(raw) ?? catalog.criteria) || "todas las zonas y precios"}
+          searchCriteria={draftCriteria}
+          selectionActions={wrapped.selection}
+          search={actions.search}
+          run={run}
+          move={move}
+          remove={remove}
+          adjust={adjust}
+          addById={(it) =>
+            new Promise<boolean>((resolve) => {
+              run(
+                () => wrapped.addPropertyById({ catalogId: catalog.id, propertyId: it.propertyId }),
+                "Propiedad añadida.",
+                () => {
+                  if (onLocalAdd) setItems((xs) => [...xs, it]);
+                  resolve(true);
+                },
+                () => resolve(false),
+                "alta",
+              );
+            })
+          }
+          reference={reference}
+          setReference={setReference}
+          addByReference={add}
+        />
       </section>
 
       <section {...panel("contenido")} className="min-w-0 space-y-4 focus:outline-none">

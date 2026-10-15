@@ -38,7 +38,10 @@ export function PropertySearch({
   onClear,
   disabled,
   refreshKey,
+  autoRun = false,
 }: {
+  /** E2 · busca al montarse (vista «Coincidencias»: solo lectura). */
+  autoRun?: boolean;
   /** Cambia cuando cambia la lista o sus ajustes (también desde la lista):
    *  los resultados que se ven se vuelven a pedir para no quedar desfasados. */
   refreshKey?: string;
@@ -94,6 +97,11 @@ export function PropertySearch({
       setResults(items);
     });
   }
+
+  useEffect(() => {
+    if (autoRun) run(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const lastKey = useRef(refreshKey);
   useEffect(() => {
