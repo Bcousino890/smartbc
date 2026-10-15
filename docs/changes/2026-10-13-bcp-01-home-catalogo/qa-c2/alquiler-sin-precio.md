@@ -126,6 +126,11 @@ Las ejecuta **Fabricio**: ningún agente accede a producción (política P-1).
 - Dentro de una transacción, he añadido una vivienda archivada, una vendida, una de Chile y una dual con los mismos importes, y he deshecho la transacción al terminar. La consulta no contó ninguna de las cuatro.
 
 **Dónde se ejecutan.** Por la vía que ya usa el repo para la base de producción: el terminal de Fabricio, SSH al VPS y `psql` dentro del contenedor `supabase-db` (igual que el encabezado de `scripts/apply-migrations.sh`).
+- **Documentado, no verificado por ningún agente:**
+  - el host `root@178.105.185.125` y la ruta `/opt/smartbc-app` («verificados en producción el 2026-08-11», según `CLAUDE.md`);
+  - el contenedor `supabase-db` y el usuario `postgres`, según `scripts/apply-migrations.sh`.
+- **Verificado:** nada del entorno de producción actual. Las consultas solo se han probado en el Postgres temporal con datos sintéticos.
+- Si el comando falla (otro host, otro contenedor), se trae el mensaje de error; no se improvisa otra vía.
 1. Abrir el **Terminal** del Mac.
 2. Pegar el bloque entero de abajo, desde `ssh` hasta la última línea `SQL`, y pulsar Intro.
    - Si pide la frase de la clave SSH, es la tuya.
@@ -208,6 +213,13 @@ Antes de fusionar y desplegar K2:
    - **No** se da por cumplida por las pruebas sintéticas ni suponiendo que las fichas reales están bien.
    - Sin G-ALQ cumplida, el PR no se fusiona.
    - Se puede desarrollar y abrir el PR antes: es una puerta **antes del merge**.
+
+**Orden de cierre (corregido el 15 de octubre de 2026, a petición de Fabricio):**
+1. **G-ALQ**, con la evidencia que aportan Fabricio o su equipo y la aceptación expresa de cada excepción sin resolver.
+2. **Merge**, que decide y hace Fabricio.
+3. **Después del despliegue**, Fabricio hace la QA en producción del comportamiento nuevo.
+
+La QA en producción de este PR no puede ir antes del despliegue. Ni la CI ni las pruebas sintéticas cumplen G-ALQ ni confirman el caso original de Recoletos.
 
 **Los agentes no modifican esas fichas ni ninguna otra.**
 

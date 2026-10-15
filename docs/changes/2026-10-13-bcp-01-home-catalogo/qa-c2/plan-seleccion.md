@@ -384,6 +384,11 @@ No hace falta para preparar ni ejecutar este plan. Sirve para saber qué le pas�
 ## 11. Fase y siguiente paso
 
 - **Fase actual:** T0–T8 hechos y verificados ([`result.md`](../result.md), sección «Corrección de selección»). T9: rama publicada y PR abierto, con **G-ALQ: PENDIENTE**.
-- **Siguiente paso:**
-  - Fabricio o su equipo aportan la evidencia de G-ALQ ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §5.2) y la QA en vivo.
-  - Después, Fabricio decide el merge.
+- **Siguiente paso:** Fabricio o su equipo ejecutan las consultas de solo lectura de G-ALQ ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §5) y traen los resultados. Ningún agente propone correcciones de fichas antes de verlos.
+
+**Orden de cierre (corregido el 15 de octubre de 2026, a petición de Fabricio):**
+1. **G-ALQ**, con la evidencia que aportan Fabricio o su equipo y la aceptación expresa de cada excepción sin resolver.
+2. **Merge**, que decide y hace Fabricio.
+3. **Después del despliegue**, Fabricio hace la QA en producción del comportamiento nuevo.
+
+La QA en producción de este PR no puede ir antes del despliegue. Ni la CI ni las pruebas sintéticas cumplen G-ALQ ni confirman el caso original de Recoletos.

@@ -1376,12 +1376,19 @@ Ningún agente modifica fichas.
 
 ## Pendiente o no demostrado
 
-- **G-ALQ** (arriba) y la QA de Fabricio.
+- **G-ALQ** (arriba).
+
+**Orden de cierre (corregido el 15 de octubre de 2026, a petición de Fabricio):**
+1. **G-ALQ**, con la evidencia que aportan Fabricio o su equipo y la aceptación expresa de cada excepción sin resolver.
+2. **Merge**, que decide y hace Fabricio.
+3. **Después del despliegue**, Fabricio hace la QA en producción del comportamiento nuevo.
+
+La QA en producción de este PR no puede ir antes del despliegue. Ni la CI ni las pruebas sintéticas cumplen G-ALQ ni confirman el caso original de Recoletos.
 - **La causa del caso real de Recoletos:** sin confirmar.
 - **El camino real con la base de datos:** las lecturas de versión y operación con PostgREST (`catalog_shares` → `catalogs(version, criteria)`) y la medición no se pueden ejecutar en local, porque no hay Supabase.
   - Lo cubren el algoritmo puro, que es el mismo, y el almacén sintético.
   - El patrón de consulta embebida ya se usa en producción (`catalog_items` → `properties(…)`).
-  - Hay que comprobarlo en la QA en vivo: abrir un enlace de alquiler y cambiar su operación con el lector abierto.
+  - Se comprueba en la QA en producción, **después del despliegue**: abrir un enlace de alquiler y cambiar su operación con el lector abierto.
 - **Fuera de alcance:**
   - el texto de la IA, que usa la operación real de la ficha;
   - las fichas con `operation = 'rent'` y venta en `operations`, que se cuentan en la consulta 1 de G-ALQ;
@@ -1391,7 +1398,9 @@ Ningún agente modifica fichas.
 ## PR, CI y merge
 
 - Rama `fabri/bcp-01-seleccion` → `main`. El enlace del PR y el estado de la CI están en el PR.
-- **El merge espera a G-ALQ y lo decide Fabricio.** No hay migración. Puede desplegar.
+- PR: [#319](https://github.com/Bcousino890/smartbc/pull/319). CI en verde en `712a82f`.
+- **El merge espera a G-ALQ y lo decide y hace Fabricio.** No hay migración. Puede desplegar.
+- La QA en producción viene **después** del despliegue (orden de cierre, arriba).
 
 ## Revisión
 
