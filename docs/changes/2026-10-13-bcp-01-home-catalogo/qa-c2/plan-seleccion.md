@@ -1,6 +1,8 @@
 # BCP-01 · Plan de la corrección «Operación y precio del catálogo, criterios y coincidencias» (K1–K5)
 
-**Estado: EJECUCIÓN AUTORIZADA CON UNA CONDICIÓN (D-QA15).** Están autorizados y hechos la preparación aislada, la documentación y la verificación SQL sintética (T1). **La implementación de la aplicación (T2–T9), el push y el PR esperan** a que se resuelva el prerrequisito P-ALQ: el alquiler sin precio principal ([`alquiler-sin-precio.md`](alquiler-sin-precio.md)).
+**Estado: EN EJECUCIÓN (D-QA16).** P-ALQ está resuelto: opción A + G-ALQ.
+- **Autorizado:** T2–T9, los commits, el push y el PR.
+- **Se para antes del merge**, que además espera a G-ALQ (§0 ter).
 
 Diagnóstico de origen: [`diagnostico-seleccion-auto.md`](diagnostico-seleccion-auto.md). Esta corrección va **separada de E3**, que tiene sus decisiones aprobadas (D-QA13) y el plan en pausa.
 
@@ -46,6 +48,29 @@ Fabricio aprueba **DS-1, DS-2 y el alcance de K1–K5, solo para planificar**. L
 **Registro:**
 - D-QA15 queda aquí y en el diagnóstico, como D-QA14.
 - La fila de la enmienda (§0) se añade cuando se reconcilie con la rama de E3, que es la que lleva D-QA13. Así no se crea un conflicto.
+
+## 0 ter. P-ALQ decidido: opción A + G-ALQ (D-QA16, 15 de octubre de 2026)
+
+**Regla aprobada para las viviendas de solo alquiler:**
+- El importe es el `price` principal positivo, igual que la selección SQL y el resto del CRM.
+- **Sin respaldo a `rent_price`.**
+- **Avisos internos** cuando falta el precio principal o hay dos importes de alquiler distintos, con la cifra secundaria cuando la hay.
+- **Lo que ve el cliente:**
+  - el precio principal cuando es válido, aunque haya otro importe incoherente;
+  - «Precio · sin dato» **solo** cuando no hay precio principal válido.
+- Los agentes no modifican fichas.
+
+**G-ALQ, la puerta antes del merge** ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §5.2), no antes de desarrollar ni de abrir el PR:
+- Fabricio o su equipo ejecutan las consultas de solo lectura, revisan las fichas afectadas y confirman sus alquileres correctos.
+- Toda excepción sin resolver necesita la aceptación expresa de Fabricio, con lo que verá el cliente.
+- El PR recoge la evidencia **que aportan ellos**. Hasta entonces marca **G-ALQ: PENDIENTE**.
+- Ni las pruebas sintéticas ni ninguna suposición sobre los datos reales la cumplen.
+
+**Se conserva todo lo aprobado antes:**
+- DS-1/DS-2: también en los catálogos manuales; las inclusiones incompatibles conservan lo suyo real;
+- K3 a K5;
+- la lectura guardada por versión (§3.2);
+- las protecciones de E2, la privacidad y las actualizaciones en vivo.
 
 ## 1. Alcance
 
@@ -123,9 +148,10 @@ export function priceDisplay(p: OperationPriceInput & { currency?: string | null
     - `also` (solo para el gestor): en una dual, la otra operación, por ejemplo «También en venta: 2.100.000 €».
   - **No encaja** (inclusión incompatible): la operación y el precio **reales**, por ejemplo «Venta» · «6.000 €», con `contextual: false`. Nunca se presenta como del catálogo.
 - **`rentDataWarning`:** si `operation = 'rent'`, no tiene venta y `rent_price` es positivo y distinto de `price` → «Dato de alquiler incoherente en la ficha: se usa el precio (X €/mes); hay otro importe de alquiler (Y €/mes)». Solo para el gestor. **La ficha no se toca.**
-- **Prerrequisito abierto (P-ALQ, D-QA15):** una vivienda solo de alquiler con `price` vacío, 0 o negativo y el importe en `rent_price` hoy enseña ese importe, aunque la selección no lo use.
-  - Fabricio **no** acepta que pase a «Precio · sin dato» en silencio.
-  - La regla de esta fila se decide en [`alquiler-sin-precio.md`](alquiler-sin-precio.md) **antes de T2**. Las demás filas de K2 no cambian.
+- **P-ALQ (D-QA16):** una vivienda solo de alquiler sin `price` válido (0, negativo o vacío) se ve «Precio · sin dato», aunque tenga `rent_price`. **No** se usa el `rent_price`.
+  - El gestor lo avisa con la cifra: «La ficha no tiene precio principal; hay X €/mes en el campo secundario. Corrige el precio en la ficha».
+  - Con dos importes positivos distintos, se ve el `price` y el gestor avisa con la cifra secundaria.
+  - `rentDataWarning` cubre los dos casos.
 
 **Consumidores** (cambian en el mismo commit que la función o en el de su tarea, §4):
 
@@ -236,7 +262,7 @@ Cada tarea pasa `npx tsc --noEmit`, `test:catalogs`, `test:catalogs-public` y `t
 | --- | --- | --- | --- | --- |
 | **T0** | Registro de las aprobaciones D-QA14 y D-QA15 (aquí y en el diagnóstico; la fila de la enmienda, al reconciliar con E3) | `qa-c2/plan-seleccion.md`, `qa-c2/diagnostico-seleccion-auto.md`, `qa-c2/alquiler-sin-precio.md` | — | `git log` · **hecho** |
 | **T1** | **Verificación SQL de la base, sin cambiar código.** En el Postgres temporal: `0192`–`0197` y los datos sintéticos de §6, con la tabla de resultados **escrita a mano antes de ejecutar**: `catalog_select` (orden, `via`, `total`, `matched`), `catalog_property_search` con los criterios guardados, `catalog_criteria_normalize` con «5.5», «5000», `5.5` y `5000`. Más la paridad TS ↔ SQL de siempre (2e), con el generador ampliado (adelantado de T2): una de cada 5 viviendas de solo alquiler lleva `rent_price` y una de cada 10, además, `price` 0. **Si algo no cuadra, me paro y planteo el cambio de alcance antes de seguir** | `scripts/sql/test-catalog-operations.sql` (nuevo), `scripts/sql/test-catalogs-core.sh` (escenario «2k»), `scripts/sql/gen-catalog-parity.mts` | T0 | La base temporal y `test-catalogs-core.sh` entero en verde · **hecho: 22/22 a la primera, paridad en verde (35 alquileres con `rent_price`, 19 sin precio principal) y ningún defecto SQL** |
-| **T2** ⛔ P-ALQ | **K2:** `operation-price.ts`; `selection.ts` y `format.ts` lo usan; pruebas puras con la tabla de §6 | `lib/catalogs/operation-price.ts` (nuevo), `selection.ts`, `format.ts`, `scripts/test-catalogs.mts` (`priceLabel` solo alquiler), `scripts/test-catalogs-public.mts` (sección «Operación y precio») | T1 | Resultados escritos a mano. La **paridad TS ↔ SQL** se vuelve a ejecutar con el generador ya ampliado en T1 |
+| **T2** | **K2:** `operation-price.ts`; `selection.ts` y `format.ts` lo usan; pruebas puras con la tabla de §6 | `lib/catalogs/operation-price.ts` (nuevo), `selection.ts`, `format.ts`, `scripts/test-catalogs.mts` (`priceLabel` solo alquiler), `scripts/test-catalogs-public.mts` (sección «Operación y precio») | T1 | Resultados escritos a mano. La **paridad TS ↔ SQL** se vuelve a ejecutar con el generador ya ampliado en T1 |
 | **T3** | **K5:** los importes en `normalizeCriteria` | `lib/catalogs/criteria.ts`, `scripts/test-catalogs-public.mts` (aceptados y rechazados, uno a uno), `scripts/test-catalogs-manager.mts` («5.5» es un cambio no válido y se conserva en bruto) | T0 | Casos escritos a mano |
 | **T4** | **K4:** el resumen con el solapamiento y el aviso en la barra | `lib/catalogs/criteria.ts`, `components/admin/catalogs/manager/homes-section.tsx`, `scripts/test-catalogs-public.mts` | T3 | Casos a mano: con y sin solapamiento, barrio dentro de distrito, texto libre dentro de barrio y alias (Chueca → Justicia) |
 | **T5** | **K1 en el gestor:** `priceDisplay` en las vistas, `priceAlso` y `priceWarning`; las fixtures del gestor | `lib/catalogs/types.ts`, `queries.ts`, `fixtures-selection.ts` (`fixtureView(p, pos, op)`), `fixtures.ts`, `app/dev-fixtures/…/fixture-manager.tsx` (recalcula las etiquetas al cambiar la operación, también en la lista manual), `homes-section.tsx` (panel) | T2 | `tsc` y pruebas puras de `priceDisplay` (en T2) |
@@ -307,7 +333,7 @@ Cada caso guiona m1, s y m2 por intento: la versión, la operación y si falla.
 | D6000 | dual, venta 2.100.000, alquiler 6.000 | sí | 6.000 | «Alquiler» · «6.000 €/mes» (+ «También en venta: 2.100.000 €» en el gestor) | «Venta y alquiler» · «Venta 2.100.000 € · Alquiler 6.000 €/mes» |
 | Dnull | dual, venta 6.000, sin alquiler | no | — | (incluida a mano) «Alquiler» · «Precio · sin dato» | «Venta y alquiler» · «Venta 6.000 €» |
 | Mnull / M0 | solo alquiler, sin precio o a 0, **sin** `rent_price` | no | — | «Precio · sin dato» | igual |
-| Z0R6 | solo alquiler, `price` 0, `rent_price` 6.000 | **P-ALQ, pendiente** | — | **P-ALQ, pendiente** | **P-ALQ, pendiente** |
+| Z0R6 | solo alquiler, `price` 0, `rent_price` 6.000 | no | — (sin importe) | «Alquiler» · «Precio · sin dato» + aviso «sin precio principal… 6.000 €/mes» | «Alquiler» · «Precio · sin dato» (**hoy «6.000 €/mes»**) |
 | G6000 | Salamanca / Goya | no (sí con el distrito Salamanca) | 6.000 | «Alquiler» · «6.000 €/mes» | igual |
 | C6000 | Chamberí / Almagro | no (sí incluida a mano) | 6.000 | «Alquiler» · «6.000 €/mes» | igual |
 | Xstale | solo alquiler, `price` 6.000, `rent_price` 9.000 | sí | 6.000 | «Alquiler» · «6.000 €/mes» + aviso interno | «Alquiler» · «6.000 €/mes» (**hoy «9.000»**) |
@@ -345,7 +371,7 @@ Cada caso guiona m1, s y m2 por intento: la versión, la operación y si falla.
 | La SQL real no hace lo que dice la lectura | T1 va **primero** y se para si algo no cuadra |
 | Las tres huellas se desincronizan | Una sola función (`composeFingerprint`) con pruebas, y la medición sintética 20 × 2 en verde |
 | Lectores abiertos durante el despliegue | No se promete nada: recarga documentada |
-| Una vivienda solo de alquiler pierde el importe que se veía (estaba en `rent_price`) | **No aceptado (D-QA15).** Es el prerrequisito P-ALQ, que se resuelve antes de T2: [`alquiler-sin-precio.md`](alquiler-sin-precio.md) |
+| Una vivienda solo de alquiler sin precio principal deja de enseñar el importe de `rent_price` | D-QA16: el gestor lo avisa con la cifra, y la puerta G-ALQ (antes del merge) revisa y corrige esas fichas, o Fabricio acepta la excepción expresamente |
 | Una consulta más por pasada del vigilante (la operación de los enlaces) | Una sola consulta por pasada para todos los enlaces; se mide en la prueba de carga de la HOME de siempre (D13 sintética) |
 
 ## 10. Evidencia que falta para confirmar el caso real de Fabricio
@@ -357,15 +383,5 @@ No hace falta para preparar ni ejecutar este plan. Sirve para saber qué le pas�
 
 ## 11. Fase y siguiente paso
 
-- **Fase actual:** ejecución autorizada con condición (D-QA15).
-  - **Hecho:**
-    - `npm ci` (el lockfile no cambia), el Postgres temporal, T0 y T1. T1 confirma que la SQL real hace lo que dice la lectura;
-    - §3.2 corregido: la lectura coherente se guarda por `catalogs.version`, no por la operación. Que la versión sube con cada escritura está verificado en SQL, y los casos V1–V11 para T6 están escritos.
-  - **Parado, a la espera del prerrequisito P-ALQ:** T2–T9, el push y el PR.
-  - La copia aislada para las fixtures se prepara al llegar a T8.
-  - La causa del caso real **sigue sin confirmar**.
-- **Siguiente paso:** Fabricio decide P-ALQ ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §6). Las salidas:
-  - A + G-ALQ → T2;
-  - B → antes, el cambio de alcance para su aprobación;
-  - otra regla.
-  - Las consultas del §5 de ese documento puede ejecutarlas cuando quiera. Son necesarias para cumplir G-ALQ, pero no para decidir.
+- **Fase actual:** en ejecución (D-QA16). T0, T1 y la corrección del §3.2 están hechos. Siguen T2–T9.
+- **Siguiente paso:** T2–T9, y el PR con **G-ALQ: PENDIENTE** hasta que Fabricio aporte la evidencia.

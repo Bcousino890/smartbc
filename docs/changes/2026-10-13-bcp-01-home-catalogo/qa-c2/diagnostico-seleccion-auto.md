@@ -9,6 +9,11 @@
 - El caso del alquiler sin precio principal queda como **prerrequisito sin resolver** (P-ALQ, [`alquiler-sin-precio.md`](alquiler-sin-precio.md)). Mientras no se decida, no se implementa la aplicación, no se hace push y no se abre el PR.
 - T1 ya se ha ejecutado en el Postgres temporal. Confirma con las funciones SQL **reales** lo que este diagnóstico leía en el código (§1, «lo que esto NO demuestra», punto 2): 22 de 22 comprobaciones y la paridad en verde.
 
+**P-ALQ decidido (15 de octubre de 2026, D-QA16):**
+- Opción A + G-ALQ: la regla canónica `price`, con avisos internos y sin respaldo a `rent_price`.
+- G-ALQ es una puerta antes del merge ([`plan-seleccion.md`](plan-seleccion.md) §0 ter).
+- La causa del caso real **sigue sin confirmar**.
+
 **Correcciones a este diagnóstico, pedidas por Fabricio:**
 - La causa de su caso **no está confirmada** (ver arriba).
 - **Error mío en §7:** decía que con K1 «la huella cambia una vez al desplegar». **No es así.** Cambiar solo cómo se proyectan la operación y el precio **no cambia la huella del SQL** (`md5` de la instantánea), porque la instantánea no lleva los criterios. Lo que pasa con los lectores abiertos y con los cambios de operación guardados se resuelve en el plan (§3.4), sin prometer una actualización automática al desplegar.

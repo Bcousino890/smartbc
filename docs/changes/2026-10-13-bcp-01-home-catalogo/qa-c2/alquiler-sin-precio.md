@@ -1,8 +1,16 @@
 # BCP-01 · Prerrequisito P-ALQ: alquiler sin precio principal
 
-**Estado: ANÁLISIS PARA DECISIÓN DE FABRICIO (15 de octubre de 2026).** Es el prerrequisito de D-QA15 ([`plan-seleccion.md`](plan-seleccion.md) §0 bis).
-- Mientras no se decida, no se implementa la aplicación, no se hace push y no se abre el PR.
-- El respaldo a `rent_price` del §4 es una **propuesta**, no una regla aprobada.
+**Estado: DECIDIDO (D-QA16, 15 de octubre de 2026): opción A + puerta G-ALQ.** El texto que sigue es el análisis que llevó a la decisión. Lo que manda está aquí:
+- En una vivienda **solo de alquiler**, el importe es el `price` principal positivo, igual que la selección SQL y el resto del CRM. **No hay respaldo a `rent_price`.**
+- **Avisos internos** (solo en el gestor):
+  - cuando falta el precio principal;
+  - cuando hay dos importes de alquiler distintos.
+  - Los dos llevan la cifra secundaria cuando la hay.
+- **Lo que ve el cliente:**
+  - con un precio principal válido, **ese precio**, aunque haya otro importe incoherente;
+  - **«Precio · sin dato» solo cuando no hay precio principal válido**.
+- **G-ALQ es una puerta antes del merge**, no antes de desarrollar ni de abrir el PR (§5.2). Los agentes no modifican fichas.
+- La opción B (§4) **no** se adopta.
 - La causa del caso real de Fabricio (Recoletos · Alquiler · 5.000–7.000) **sigue sin confirmar**.
 
 ## 1. El caso
@@ -59,8 +67,8 @@ Una vivienda **solo de alquiler** (`operation = 'rent'`) sin precio principal v�
 
 | Vivienda | Selección y orden | Explicación (gestor) | Etiqueta |
 | --- | --- | --- | --- |
-| Z0R6 / NEG6 / Z0R8 | **sin cambios** (sin importe) | «Sin precio» + aviso: «La ficha no tiene precio principal; hay 6.000 €/mes en el campo secundario. Corrige el precio en la ficha» | gestor: «Precio · sin dato» **y** el aviso con la cifra; lector: «Precio · sin dato» |
-| X6R9 · Y9R6 | sin cambios | la de hoy + aviso de dato incoherente | **6.000** y **9.000**: ahora coincide con lo que se selecciona |
+| Z0R6 / NEG6 / Z0R8 | **sin cambios** (sin importe) | «Sin precio» + aviso: «La ficha no tiene precio principal; hay 6.000 €/mes en el campo secundario. Corrige el precio en la ficha» | gestor: «Precio · sin dato» **y** el aviso con la cifra; lector: «Precio · sin dato» (no hay precio principal válido) |
+| X6R9 · Y9R6 | sin cambios | la de hoy + aviso de dato incoherente, con la cifra secundaria | **6.000** y **9.000**: el precio principal, el mismo con el que se selecciona. **Nunca** «sin dato»; el cliente no ve la cifra secundaria |
 | Duales · ventas | sin cambios | sin cambios | DS-1/DS-2 del plan |
 
 **Consecuencias:**
@@ -91,9 +99,9 @@ Una vivienda **solo de alquiler** (`operation = 'rent'`) sin precio principal v�
 | DS6 (dual sin alquiler) | sin importe | **sin importe** («Precio · sin dato» en alquiler; nunca 6.000 de venta) |
 | X6R9 · Y9R6 | etiqueta distinta de la selección | igual que la opción A: `price` + aviso |
 
-**Lo que exigiría** (no está implementado ni entra en el plan actual: es un **cambio de alcance**, de tamaño «grande o sensible» según el flujo):
+**Lo que habría exigido** (no adoptado por D-QA16; era un **cambio de alcance**, de tamaño «grande o sensible» según el flujo):
 1. **Especificación:** la regla de arriba, en «venta y alquiler» también, con el texto exacto de los avisos.
-2. **Migración `0198`:**
+2. **Una migración nueva** (la `0198` ya la usa otro cambio de `main`):
    - `CREATE OR REPLACE` de `catalog_candidates`, en la expresión `eff` de `base`;
    - y de `catalog_select`, en la expresión `eff` de las inclusiones (`i`).
    - Para `operation = 'rent'`: `coalesce(nullif(greatest(coalesce(price, 0), 0), 0), nullif(greatest(coalesce(rent_price, 0), 0), 0))`.
@@ -192,9 +200,14 @@ SQL
 Antes de fusionar y desplegar K2:
 1. Fabricio ejecuta las consultas del §5.
 2. Revisa **cada** referencia de los casos 1 y 2: todas pueden aparecer en un catálogo, estén hoy en uno o no.
-3. Confirma con la fuente el alquiler correcto de cada una y lo corrige en la ficha. Si alguna no se puede confirmar, decide expresamente dejarla así: el gestor la avisará y el lector dirá «Precio · sin dato».
-4. Vuelve a ejecutar la consulta 1. El PR recoge la fecha, los recuentos antes y después, y las referencias que se dejan así a sabiendas.
-5. La descripción del PR lleva una casilla «G-ALQ cumplida», que solo marca Fabricio. Sin ella, el PR no se fusiona.
+3. Confirma con la fuente el alquiler correcto de cada una y lo corrige en la ficha. Si alguna no se puede confirmar, **acepta expresamente** dejarla así, con lo que verá el cliente:
+   - **caso 1** (sin precio principal): el lector dice «Precio · sin dato» y el gestor avisa, con la cifra secundaria;
+   - **caso 2** (dos importes): el lector enseña el **precio principal** y el gestor avisa, con la cifra secundaria.
+4. Vuelve a ejecutar la consulta 1. El PR recoge la evidencia **que aporta Fabricio o su equipo**: fecha, recuentos antes y después, referencias revisadas y excepciones aceptadas con su comportamiento visible.
+5. Hasta que llegue esa evidencia, el PR marca **G-ALQ: PENDIENTE**.
+   - **No** se da por cumplida por las pruebas sintéticas ni suponiendo que las fichas reales están bien.
+   - Sin G-ALQ cumplida, el PR no se fusiona.
+   - Se puede desarrollar y abrir el PR antes: es una puerta **antes del merge**.
 
 **Los agentes no modifican esas fichas ni ninguna otra.**
 
@@ -203,9 +216,9 @@ Antes de fusionar y desplegar K2:
 **Recomiendo la opción A con la puerta G-ALQ:**
 - se mantiene la regla canónica `price`;
 - el gestor enseña la cifra secundaria y pide corregir la ficha, sin cambiarla;
-- el lector dice «Precio · sin dato» solo en las fichas que, después de la puerta, se dejen sin corregir a sabiendas.
+- el lector dice «Precio · sin dato» **solo** cuando no hay precio principal válido (caso 1 sin corregir). Con dos importes (caso 2), enseña el precio principal.
 
-**La decisión que falta (P-ALQ), una de estas:**
+**La decisión (P-ALQ):** Fabricio eligió **1 (A + G-ALQ)** el 15 de octubre de 2026 (D-QA16). Las opciones eran:
 1. **A + G-ALQ.** → Sigo con T2, añadiendo el aviso, y la puerta queda en el plan y en el PR.
 2. **B (respaldo a `rent_price`).** → Cambio de alcance: preparo la especificación y el plan de la migración `0198` (§4) para su aprobación. No implemento nada hasta entonces.
 3. **A con otra puerta** (por ejemplo, ninguna ficha sin corregir) **u otra regla.**
