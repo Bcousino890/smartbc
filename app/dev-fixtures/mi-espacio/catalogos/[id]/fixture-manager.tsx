@@ -6,7 +6,9 @@ import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
 import { useEffect, useRef, useState } from "react";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
-import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
+import { normalizeCriteria, type CatalogCriteria, type CatalogOperation } from "@/lib/catalogs/criteria";
+import { fixtureManualPricing } from "@/lib/catalogs/fixtures";
+import { managerPriceFields } from "@/lib/catalogs/operation-price";
 import { autoSelect, candidates, isAvailable, sortCandidates, type AdjustmentKind } from "@/lib/catalogs/selection";
 import { explainProperty, INCLUDED_UNAVAILABLE } from "@/lib/catalogs/explain";
 import { fixtureMaterial, fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView, type FixtureProperty } from "@/lib/catalogs/fixtures-selection";
@@ -156,7 +158,7 @@ export function FixtureCatalogManager({
   const explained = (id: string, c: CatalogCriteria, pos: number) => {
     const p = byId.get(id)!;
     const adjustment = adjRef.current.get(id) ?? null;
-    return { ...fixtureView(p, pos), adjustment, explain: explainProperty(p, c, adjustment) };
+    return { ...fixtureView(p, pos, c.operation), adjustment, explain: explainProperty(p, c, adjustment) };
   };
   const autoItems = (c: CatalogCriteria) => {
     const r = autoSelect(pool, c, [...adjRef.current].map(([propertyId, kind]) => ({ propertyId, kind })));
@@ -199,12 +201,20 @@ export function FixtureCatalogManager({
     }
     return { chosenPropertyId: propertyId, chosenPhotoId: photoId, effectivePhotoUrl: effective, warnings };
   };
+  /** K1: etiquetas de la lista manual con la operación guardada (también las
+   *  cuatro del ejemplo, con sus importes de fixtures.ts). */
+  const relabel = (xs: CatalogItemView[], op: CatalogOperation) =>
+    xs.map((it) => {
+      const p = byId.get(it.propertyId) ?? fixtureManualPricing[it.propertyId];
+      if (!p) return it;
+      return { ...it, ...managerPriceFields({ operation: p.operation, operations: p.operations, price: p.price, rent_price: p.rent_price, currency: "eur" }, op) };
+    });
   /** Recalcula la lista efectiva, los ajustes y la portada. */
   const refresh = (patch: Partial<CatalogDetail> = {}) =>
     setCat((c0) => {
       const c = { ...c0, ...patch };
       const a = c.mode === "auto" ? autoItems(c.criteria) : null;
-      const items = a ? a.items : manualRef.current;
+      const items = a ? a.items : relabel(manualRef.current, c.criteria.operation);
       // E2 · material: el sintético del universo; las de la lista manual de
       // siempre conservan el suyo (escrito a mano en fixtures.ts).
       const material = Object.fromEntries(
@@ -237,7 +247,7 @@ export function FixtureCatalogManager({
     },
     addPropertyById: async ({ propertyId, skipNotify }) => {
       const p = byId.get(propertyId);
-      if (p) manualRef.current = [...manualRef.current, fixtureView(p)];
+      if (p) manualRef.current = [...manualRef.current, fixtureView(p, 100, catRef.current.criteria.operation)];
       return live({ op: "add", title: p?.title ?? "Propiedad de prueba", skipNotify });
     },
     search: async ({ criteria, text, offset = 0 }) => {

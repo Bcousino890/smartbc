@@ -84,6 +84,17 @@ export function rentDataWarning(p: OperationPriceInput): string | null {
   return null;
 }
 
+/** Etiquetas de una vivienda en la GESTIÓN de un catálogo de operación `op`:
+ *  las mismas que verá el lector, más la otra operación de una dual y el
+ *  aviso de importes de alquiler (P-ALQ). Nada de esto llega al lector. */
+export function managerPriceFields(
+  p: OperationPriceInput,
+  op: CatalogOperation,
+): { operation: string; price: string; priceAlso: string | null; priceWarning: string | null } {
+  const d = priceDisplay(p, op);
+  return { operation: d.operation, price: d.price, priceAlso: d.also, priceWarning: rentDataWarning(p) };
+}
+
 /** Operación y precio de una vivienda en un catálogo de operación `op`
  *  (DS-1/DS-2): en venta o alquiler, la del catálogo con su importe; una
  *  inclusión de otra operación, con su operación y su precio reales; en

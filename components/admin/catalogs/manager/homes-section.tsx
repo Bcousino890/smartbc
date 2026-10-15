@@ -347,7 +347,8 @@ function HomeRow({
   adjust,
 }: HomesSectionProps & { it: CatalogItemView; i: number; n: number; compact: boolean; active: boolean }) {
   const badge = STATUS_LABEL[it.status];
-  const warnings = auto ? it.explain?.warnings.length ?? 0 : 0;
+  // P-ALQ: el aviso de importes de la ficha cuenta también en manual.
+  const warnings = (auto ? it.explain?.warnings.length ?? 0 : 0) + (it.priceWarning ? 1 : 0);
   const manualPick = it.via === "include" || it.via === "both";
   const btn = "rounded-md px-2 py-1 text-xs disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold";
   return (
@@ -476,12 +477,19 @@ function HomePanelBody({
           )}
         </div>
         <div className="min-w-0 text-xs text-ink/60">
-          <p className="text-sm text-ink/85">{it.price}</p>
-          <p>{it.operation}</p>
+          <p className="text-sm text-ink/85" data-testid="item-price">{it.price}</p>
+          <p data-testid="item-operation">{it.operation}</p>
+          {it.priceAlso ? <p data-testid="item-price-also">{it.priceAlso}</p> : null}
           <p>{facts(it)}</p>
           {badge ? <p className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">{badge}</p> : null}
         </div>
       </div>
+
+      {it.priceWarning ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="item-price-warning">
+          {it.priceWarning} El cliente ve «{it.price}».
+        </p>
+      ) : null}
 
       <section aria-labelledby="hp-why" className="space-y-1 rounded-lg border border-gold/15 bg-cream-50/60 p-2">
         <h3 id="hp-why" className="crm-label-sm text-ink/70">
