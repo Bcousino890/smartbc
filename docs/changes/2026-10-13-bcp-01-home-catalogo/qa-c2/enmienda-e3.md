@@ -1,6 +1,9 @@
 # BCP-01 · E3 «Fotos por catálogo»: especificación y decisiones
 
-**Estado: ESPECIFICACIÓN CON DECISIONES APROBADAS (15 de octubre de 2026); PLAN PENDIENTE.** Fabricio decidió E3-1 a E3-7 (§5, registro en [enmienda §0, D-QA13](enmienda.md)). Eso autoriza a **documentar** E3, no a implementarlo. El plan de implementación queda **pendiente**: la prioridad pasa al diagnóstico y la corrección de la selección automática, que viven **en su propia rama** (`fabri/bcp-01-seleccion`, `diagnostico-seleccion-auto.md` y `plan-seleccion.md`), separada de E3. Este documento no autoriza implementar, ejecutar migraciones, instalar nada, hacer push ni abrir un PR.
+**Estado (16 de octubre de 2026): ESPECIFICACIÓN CON DECISIONES APROBADAS; PLAN EN BORRADOR** en [`plan-e3.md`](plan-e3.md).
+- **La migración pasa a ser `0202_catalog_photo_prefs.sql`:** `0198`–`0201` ya las usan otros cambios de `main`. Donde este documento dice `0198`, léase `0202`.
+- **El requisito técnico de abajo se resuelve en el plan, §3:** el proxy sirve las fotos por clave opaca y no por posición. Queda pendiente de la decisión N1.
+- **La promesa de §3.2** («instantánea idéntica sin ajustes») queda sustituida por la decisión N2 del plan.
 
 **Requisito técnico abierto (no resuelto en esta especificación).** Un `src` posicional (`/p/{slug}/{idx}`) **no** es una identidad estable de la foto cuando el CRM reordena. El diseño de E3 tiene que resolver la identidad de la foto que se **sirve de verdad**, no solo la que se elige, y comprobarlo con pruebas que miren la foto servida. Eso incluye las limitaciones actuales del proxy: ordena solo por `position` (mientras la instantánea desempata por `position, id`) y guarda cada respuesta 24 h en caché. Mientras eso no esté demostrado, nada de lo escrito en §3.3 y §3.5 se da por resuelto.
 
