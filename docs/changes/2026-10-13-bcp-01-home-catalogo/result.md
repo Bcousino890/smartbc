@@ -1192,3 +1192,204 @@ Capturas en [`qa-c2/capturas-e2/`](qa-c2/capturas-e2/) (JPEG, datos sintéticos)
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.
+
+# Corrección de selección · operación y precio del catálogo, criterios y coincidencias (K1–K5)
+
+Plan: [`qa-c2/plan-seleccion.md`](qa-c2/plan-seleccion.md). Aprobaciones:
+- D-QA14: alcance y DS-1/DS-2;
+- D-QA15: ejecución, con las correcciones de lectura coherente y de fallo seguro;
+- D-QA16: P-ALQ resuelto como opción A + G-ALQ.
+
+Diagnóstico de origen: [`qa-c2/diagnostico-seleccion-auto.md`](qa-c2/diagnostico-seleccion-auto.md). Caso del alquiler sin precio principal: [`qa-c2/alquiler-sin-precio.md`](qa-c2/alquiler-sin-precio.md).
+
+**La causa del caso real de Fabricio (Recoletos · Alquiler · 5.000–7.000) sigue SIN CONFIRMAR.** Esta corrección no la resuelve por sí misma; hace falta la evidencia del §10 del plan.
+
+## Base y commits
+
+- **Base:** `origin/main` = `f906cb6`.
+  - El plan se hizo sobre `84538e7`. Entre medias entraron dos commits de clientes (con la migración `0198_client_search_polygons`), ajenos a catálogos.
+  - Los commits locales se rebasaron sobre `f906cb6` antes de implementar.
+- **Rama:** `fabri/bcp-01-seleccion`, en el worktree `wt/bcp-01-sel`. El checkout original, su stash, la rama de E3 y los demás worktrees no se han tocado.
+
+- **Commits** (uno por tarea; cada uno compila y pasa las tres suites):
+
+| Commit | Tarea |
+| --- | --- |
+| `5d6634a` | Diagnóstico con D-QA14 y plan en borrador |
+| `d02be92`, `a27a3c4` | T1 · verificación SQL (operación e importe; `catalogs.version`) y paridad ampliada |
+| `33f3278`, `8df43b8`, `028b868` | T0 · D-QA15, §3.2 guardado por versión, opción A de P-ALQ y D-QA16 |
+| `63a8b37` | T2 · K2, una sola regla de operación e importe |
+| `2841b1f` | T3 · K5, importes enteros |
+| `bc49b38` | T4 · K4, solapamiento en el resumen |
+| `8a0aeb1` | T5 · K1 en el gestor |
+| `36b765c` | T6 · K1 en el lector, huella compuesta y lectura coherente |
+| `8dc8485` | T7 · K3, «Coincidencias» con los guardados |
+| (T9) | Este resultado, las capturas y una precisión del plan |
+
+## Qué cambia
+
+**K2: una sola regla** (`lib/catalogs/operation-price.ts`):
+- Decide si una vivienda encaja en la operación y con qué importe, igual que `catalog_candidates`/`catalog_select`.
+- La usan el filtro y el orden de la referencia TS, la explicación y las etiquetas del gestor y del lector.
+- Una vivienda solo de alquiler usa su `price`, **nunca** el `rent_price` (P-ALQ, D-QA16).
+- `rentDataWarning` avisa, solo en el gestor y con la cifra secundaria:
+  - cuando no hay precio principal («La ficha no tiene precio principal: el campo secundario dice X €/mes, pero no se usa. Corrige el precio en la ficha.»);
+  - cuando hay dos importes distintos («Dos importes de alquiler en la ficha: se usa el precio (X €/mes); el campo secundario dice Y €/mes. Revisa la ficha.»).
+- **Lo que ve el cliente:**
+  - con un precio principal válido, ese precio;
+  - «Precio · sin dato» solo sin precio principal válido.
+- La ficha no se toca.
+
+**K1: la operación y el precio del catálogo** (DS-1/DS-2):
+- En un catálogo de alquiler o de venta, también manual, el gestor y el lector muestran la operación del catálogo y su importe. Por ejemplo, una dual en alquiler: «Alquiler · 6.800 €/mes».
+- Una inclusión de otra operación conserva lo suyo real: una venta incluida en alquiler sigue siendo «Venta · 950.000 €».
+- «Venta y alquiler» queda como estaba.
+- **En el gestor**, el panel de la vivienda añade:
+  - la otra operación de una dual («También en venta: 2.100.000 €»);
+  - el aviso P-ALQ con lo que ve el cliente.
+  - El aviso también marca la fila, en manual.
+- **En el lector** no aparece ni la otra operación ni ningún importe secundario.
+
+**Huella y lectores abiertos** (§3.3):
+- La huella pública es la del SQL más la operación (`:rent`/`:sale`). «Venta y alquiler» conserva la del SQL exacta.
+- Guardar una operación nueva actualiza el lector abierto también en un catálogo **manual**, y la medición lo cuenta como cambio público.
+- **Al desplegar no se promete actualización automática:** los lectores abiertos de catálogos de una sola operación pueden recibirla o no. Basta con recargar el enlace.
+
+**Lectura coherente por versión** (§3.2, `lib/catalogs/coherent-read.ts`):
+- La operación y la instantánea se aceptan juntas solo si `catalogs.version` no cambia entre la lectura anterior y la posterior. A→B→A se rechaza.
+- 3 intentos.
+- **Si falla la lectura de la operación**, o la operación no es válida, es un fallo explícito, sin reintento. **Nunca** se cae en «venta y alquiler».
+- **Cada consumidor:**
+  - carga del lector: como hoy ante un fallo de la base (la página dice «no disponible» y las rutas de estado y eventos responden 503);
+  - vigilante: salta solo ese enlace en esa pasada, sin emitir nada y conservando su huella; un fallo de contenido de un enlace ya no frena a los demás;
+  - medición: `null`.
+- La base y el almacén sintético usan el mismo camino.
+
+**K3:**
+- «Coincidencias» busca con los criterios **guardados**, los que deciden la lista.
+- Con cambios sin guardar, avisa de que son los guardados y de que «Ver qué entraría» enseña el borrador.
+- «Añadir» del modo manual sigue con el borrador (PR-B/C1).
+- Lo escrito sin guardar no se toca.
+
+**K4:**
+- El resumen nombra el solapamiento: «Salamanca (incluye Recoletos)», «Justicia (incluye «Chueca»)».
+- La barra de Viviendas enseña el aviso de redundancia.
+- La selección no cambia: sigue la regla «o», comprobado.
+
+**K5:**
+- Se aceptan solo «5000», «5.000», «1.200.000» o enteros. El máximo, solo entero.
+- «5.5», «5,000», «5 000», «12.0», «1e3»… se rechazan: antes «5.5» se leía como 55.
+- Vacío sigue siendo «sin límite».
+- La misma validación vale para el formulario, las acciones del servidor y las fixtures. La SQL ya era estricta.
+
+## Verificaciones (locales, datos sintéticos)
+
+**Entorno aislado:**
+- `npm ci` con Node 22.23.3 y el lockfile existente (sin cambios en `package-lock.json`);
+- Postgres 16 temporal (`run-local.sh`, `127.0.0.1:54329`, `bcp_test`);
+- copia aislada sin `.env*`, con variables en lista blanca y `@next/env` con 0 archivos, verificada antes de arrancar;
+- Chromium 1208 en caché, con salida a la red bloqueada.
+
+**SQL:**
+- `test-catalogs-core.sh` entero en verde, 715 comprobaciones.
+- **Escenario «2k» nuevo** (`test-catalog-operations.sql`): 31 resultados escritos a mano, todos a la primera.
+  - Las funciones **reales** `0192`–`0197` con alquileres, duales, precio principal ausente, importes incoherentes, inclusiones de otra operación, búsqueda con los criterios guardados y criterios no enteros.
+  - `catalogs.version`: qué escrituras la suben, A→B→A, cambios repetidos, catálogo manual y permisos.
+- **Paridad TS ↔ SQL** en verde, con el generador ampliado (35 alquileres con `rent_price`, 19 sin precio principal), antes y después de T2.
+- **No se ha cambiado ninguna función SQL.**
+
+**TypeScript y pruebas de la CI:**
+- `tsc --noEmit` limpio.
+- `test:catalogs`, `test:catalogs-public` y `test:catalogs-manager` en verde. Pruebas nuevas:
+  - K2, con los casos del plan §6;
+  - K5, uno a uno;
+  - K4;
+  - K1 en el gestor y en el lector, con contrato y privacidad;
+  - huella compuesta;
+  - V1–V11 de la lectura coherente;
+  - el vigilante con enlaces saltados.
+
+**Navegador:**
+- `sel.mjs` (nuevo), a 1440 × 900 y 362 × 740: 39/39 en cada tamaño. Cubre:
+  - el lector de alquiler, de venta y «venta y alquiler»;
+  - cambiar la operación con el lector abierto (D12 y medición), también desde la gestión de un catálogo **manual**;
+  - el gestor: filas, panel, la otra operación y el aviso P-ALQ;
+  - K3, K4 y K5.
+- **Matriz de E2 y regresiones de siempre**, sin cambiar expectativas: **1.553 comprobaciones, 0 fallos.**
+- t4: 32.
+- dqa9 (3 tamaños): 59 en cada uno.
+- saves (3 tamaños): 31 en cada uno.
+- ai (3 tamaños): 15 en cada uno.
+- homes (5 tamaños): 56–57.
+- content (5 tamaños): 33–34.
+- design-share (4 tamaños): 34 en cada uno.
+- bars (5 tamaños): 46.
+- Regresiones:
+  - lector: 52;
+  - índice: 187;
+  - PR-A: 54;
+  - PR-B: 40;
+  - enlace: 10;
+  - C1: 31;
+  - C2: 186;
+  - mediciones de fase 2, C1 y C2: PASA, 20/20 ensayos, máximo de 0,21 a 0,31 s.
+- El lector del enlace «venta y alquiler» sigue diciendo «Venta 2.100.000 € · Alquiler 6.800 €/mes».
+
+**Tipografía:** los mismos 15 avisos de la base, ninguno en archivos de este cambio.
+
+**Compilación aislada (`next build`):** Correcta en la copia aislada, sin `.env*` cargados ni líneas `Environments:`.
+- El primer intento falló en `next/font`: la descarga de Google Fonts al compilar devolvió una respuesta inesperada.
+- Google Fonts respondía 200 justo después.
+- El segundo intento, con el mismo código, compiló.
+
+**Capturas:** [`qa-c2/capturas-sel/`](qa-c2/capturas-sel/), en escritorio y en móvil:
+- lector de alquiler (índice y dual);
+- gestor de venta (la dual con el alquiler aparte);
+- aviso P-ALQ;
+- «Coincidencias» con los guardados y un borrador.
+
+**Expectativas que corrigió la ejecución.** Eran mías, no del código:
+1. En una inclusión fuera de criterios, `details` lista los incumplimientos, no la zona (guion de P-ALQ).
+2. En el lector de alquiler, 6.800 €/mes es el alquiler de la dual y **sí** debe verse; lo que no debe verse es su venta.
+3. Tras «Añadir» un barrio, «Barrio en…» se queda elegido. La regla de E2 lo cuenta como cambio sin guardar, así que el aviso de K3 sigue. La prueba lo documenta y comprueba que desaparece al vaciarlo.
+
+## Puerta G-ALQ: PENDIENTE (antes del merge)
+
+**No se ha cumplido.** Ni las pruebas sintéticas ni ninguna suposición sobre las fichas reales la cumplen. Hace falta lo que aporten Fabricio o su equipo:
+1. las consultas de solo lectura de [`alquiler-sin-precio.md`](qa-c2/alquiler-sin-precio.md) §5 (recuento y referencias de viviendas activas en España);
+2. la revisión de cada referencia de los casos 1 y 2, con el alquiler confirmado en la fuente y corregido en la ficha por una persona;
+3. las excepciones que se dejen sin corregir, aceptadas expresamente por Fabricio con lo que verá el cliente:
+   - caso 1: «Precio · sin dato»;
+   - caso 2: el precio principal;
+4. la consulta 1 repetida, con la fecha y los recuentos antes y después.
+
+Ningún agente modifica fichas.
+
+## Compatibilidad del despliegue y recuperación
+
+- **Sin migración, sin cambios de datos y sin tocar fichas.** El despliegue es solo de código.
+- Las huellas de los catálogos de una sola operación cambian al desplegar. Los lectores abiertos pueden actualizarse o no: **recargad el enlace**.
+- **Recuperación:** `git revert` del merge, en una rama y PR, que fusiona Fabricio. Las huellas vuelven a ser las del SQL.
+
+## Pendiente o no demostrado
+
+- **G-ALQ** (arriba) y la QA de Fabricio.
+- **La causa del caso real de Recoletos:** sin confirmar.
+- **El camino real con la base de datos:** las lecturas de versión y operación con PostgREST (`catalog_shares` → `catalogs(version, criteria)`) y la medición no se pueden ejecutar en local, porque no hay Supabase.
+  - Lo cubren el algoritmo puro, que es el mismo, y el almacén sintético.
+  - El patrón de consulta embebida ya se usa en producción (`catalog_items` → `properties(…)`).
+  - Hay que comprobarlo en la QA en vivo: abrir un enlace de alquiler y cambiar su operación con el lector abierto.
+- **Fuera de alcance:**
+  - el texto de la IA, que usa la operación real de la ficha;
+  - las fichas con `operation = 'rent'` y venta en `operations`, que se cuentan en la consulta 1 de G-ALQ;
+  - E3, los grupos de la HOME y PDF.
+- **Lint con ESLint:** no disponible en el repo.
+
+## PR, CI y merge
+
+- Rama `fabri/bcp-01-seleccion` → `main`. El enlace del PR y el estado de la CI están en el PR.
+- **El merge espera a G-ALQ y lo decide Fabricio.** No hay migración. Puede desplegar.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.

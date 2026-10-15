@@ -204,7 +204,7 @@ export function priceDisplay(p: OperationPriceInput & { currency?: string | null
   - **lector y vigilante:** `catalog_shares` por token, con `catalogs(version, criteria)` embebido; una sola consulta para todos los tokens de la pasada;
   - **medición:** `catalogs` por `id` y `owner_id`.
 - **Cada consumidor, igual de explícito:**
-  - **Carga inicial** (`getPublicCatalogState`): 3 intentos. Si falla, lanza, como hoy un fallo de la base, y la página enseña su error temporal.
+  - **Carga inicial** (`getPublicCatalogState`): 3 intentos. Si falla, lanza, como hoy un fallo de la base: la página del lector dice «no disponible» y las rutas de estado y de eventos responden 503 (temporal). *(Precisión en la ejecución: antes decía «error temporal» también para la página.)*
   - **Vigilante** (`getCatalogTokenStates`):
     - una m1 y una m2 por pasada, para todos los enlaces;
     - los que cambian de versión se reintentan **solo ellos**, hasta 3 intentos dentro de la pasada;
@@ -383,5 +383,7 @@ No hace falta para preparar ni ejecutar este plan. Sirve para saber qué le pas�
 
 ## 11. Fase y siguiente paso
 
-- **Fase actual:** en ejecución (D-QA16). T0, T1 y la corrección del §3.2 están hechos. Siguen T2–T9.
-- **Siguiente paso:** T2–T9, y el PR con **G-ALQ: PENDIENTE** hasta que Fabricio aporte la evidencia.
+- **Fase actual:** T0–T8 hechos y verificados ([`result.md`](../result.md), sección «Corrección de selección»). T9: rama publicada y PR abierto, con **G-ALQ: PENDIENTE**.
+- **Siguiente paso:**
+  - Fabricio o su equipo aportan la evidencia de G-ALQ ([`alquiler-sin-precio.md`](alquiler-sin-precio.md) §5.2) y la QA en vivo.
+  - Después, Fabricio decide el merge.
