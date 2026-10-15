@@ -36,5 +36,6 @@ export function useGroupLinks(rowId: string) {
   }, [rowId]);
   const members = data?.members ?? null;
   const events: SourceEvent[] = useMemo(() => (data ? buildGroupEvents(data.members, data.changes ?? []) : []), [data]);
-  return { members, events, loading };
+  const agencyMatches = data?.agency_matches ?? [];
+  return { members, events, loading, agencyMatches };
 }

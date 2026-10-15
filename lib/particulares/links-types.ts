@@ -6,6 +6,10 @@ export type LinkOffer = {
   portal: string;
   price: number | null;
   active: boolean;
+  /** Tipo de fuente (source-kind.ts). Sin él: «particular» (anuncios anteriores a 0199). */
+  kind?: "particular" | "agencia_portal" | "agencia_web";
+  /** Nombre de la agencia (agencia_portal / agencia_web). */
+  agency?: string;
 };
 
 /** Resumen ya calculado en el anuncio PRINCIPAL de un grupo (`particulares.link_summary`). */
@@ -17,6 +21,8 @@ export type LinkSummaryLite = {
   phones: number;
   names: string[];
   offers?: LinkOffer[];
+  /** Agencias del CRM (`properties`) que tienen este mismo inmueble (fuente «Agencia»). */
+  agencies?: string[];
 };
 
 export type LinkLevel = "cierto" | "probable" | "informativo";
@@ -88,4 +94,30 @@ export type ParticularLinksPayload = {
   contacts: Array<{ phone: string | null; name: string | null; portals: string[] }>;
   /** Historial de cambios de todas las fuentes del inmueble (más reciente primero). */
   changes?: LinkedChange[];
+  /** Propiedades de agencias del CRM que coinciden con este inmueble (migración 0198). */
+  agency_matches?: AgencyMatchInfo[];
+};
+
+/** Propiedad de una agencia del CRM que es (o podría ser) el mismo inmueble que el anuncio. */
+export type AgencyMatchInfo = {
+  id: string;
+  property_id: string;
+  level: LinkLevel;
+  status: LinkStatus;
+  rule: string;
+  evidence: Record<string, unknown>;
+  particular_id: string;
+  property: {
+    slug: string | null;
+    title: string | null;
+    agency_name: string | null;
+    reference: string | null;
+    operation: "rent" | "sale" | null;
+    price: number | null;
+    status: string | null;
+    address: string | null;
+    square_meters: number | null;
+    bedrooms: number | null;
+    bathrooms: number | null;
+  };
 };
