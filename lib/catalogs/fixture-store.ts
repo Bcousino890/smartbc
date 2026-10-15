@@ -445,7 +445,9 @@ export type FixtureOp =
   // (cambia su URL —y su `u`— pero conserva su clave).
   | { op: "photos"; token: string; key: string; x: string[]; o: string | null }
   | { op: "photo-relocate"; token: string; key: string; index: number }
-  | { op: "photo-delete"; token: string; key: string; index: number };
+  | { op: "photo-delete"; token: string; key: string; index: number }
+  // E3: otra fila con la MISMA URL (duplicado) y su propia clave, al final.
+  | { op: "photo-dup"; token: string; key: string; index: number; f: string };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -469,7 +471,12 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       break;
     case "photo-relocate":
       snap.items = snap.items.map((it) =>
-        it.key === op.key ? { ...it, photos: it.photos.map((ph, i) => (i === op.index ? { ...ph, u: `${ph.u}-r${++seq}` } : ph)) } : it,
+        it.key === op.key ? { ...it, photos: it.photos.map((ph, i) => (i === op.index ? { ...ph, u: `r${++seq}${ph.u}` } : ph)) } : it,
+      );
+      break;
+    case "photo-dup":
+      snap.items = snap.items.map((it) =>
+        it.key === op.key && it.photos[op.index] ? { ...it, photos: [...it.photos, { ...it.photos[op.index], c: false, f: op.f }] } : it,
       );
       break;
     case "photo-delete":

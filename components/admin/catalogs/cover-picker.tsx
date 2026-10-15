@@ -30,6 +30,7 @@ export function CoverPicker({
   run,
   pending,
   form,
+  refreshKey,
 }: {
   catalogId: string;
   items: CatalogItemView[];
@@ -39,6 +40,8 @@ export function CoverPicker({
   pending: boolean;
   /** E2 · la vivienda elegida en el selector (dueño: el almacén del gestor). */
   form: FormDraft<CoverRaw>;
+  /** E3: cambia tras cada guardado; vuelve a leer las fotos en uso. */
+  refreshKey?: string;
 }) {
   const propertyId = form.value.propertyId;
   const setPropertyId = (v: string) => form.set({ propertyId: v });
@@ -58,7 +61,7 @@ export function CoverPicker({
       if (r.ok) setPhotos(r.photos);
       else setError(r.error);
     });
-  }, [catalogId, propertyId]);
+  }, [catalogId, propertyId, refreshKey]);
 
   function choose(photoId: string | null) {
     if (!propertyId) return;

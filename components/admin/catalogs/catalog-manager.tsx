@@ -110,6 +110,11 @@ export function CatalogManager({
   storyHref?: (slug: string) => string;
 }) {
   const router = useRouter();
+  // E3: sube cada vez que llega un catálogo nuevo (tras guardar y refrescar),
+  // para que las listas de fotos se vuelvan a leer.
+  const catalogRev = useRef({ cat: catalog, n: 0 });
+  if (catalogRev.current.cat !== catalog) catalogRev.current = { cat: catalog, n: catalogRev.current.n + 1 };
+  const photoRefreshKey = String(catalogRev.current.n);
   const [items, setItems] = useState(catalog.items);
   const [status, setStatus] = useState(catalog.status);
   const [reference, setReference] = useState("");
@@ -484,7 +489,7 @@ export function CatalogManager({
           message={section === "contenido" && vivienda ? messageEl : null}
           photoActions={wrapped.photos}
           photoRun={run}
-          refreshKey={`${catalog.version}|${catalog.cover.chosenPropertyId ?? ""}|${catalog.cover.chosenPhotoId ?? ""}`}
+          refreshKey={photoRefreshKey}
         />
       </section>
 
@@ -496,6 +501,7 @@ export function CatalogManager({
           pending={pending}
           run={run}
           coverActions={wrapped.cover}
+          coverRefreshKey={photoRefreshKey}
           metaForm={metaForm}
           coverForm={coverForm}
           contactName={contactName}
