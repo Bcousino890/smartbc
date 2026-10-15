@@ -231,6 +231,7 @@ export function HomesSection(props: HomesSectionProps) {
           search={props.search}
           mode="auto"
           autoRun
+          uiKey="search-auto"
           refreshKey={`${items.map((x) => x.propertyId).join()}|${adj.included}|${nExcluded}|${adj.unavailable.length}`}
           disabled={archived || pending}
           onAdjust={(it, kind) => props.adjust(it, kind)}
@@ -269,7 +270,7 @@ export function HomesSection(props: HomesSectionProps) {
 
       {view === "anadir" ? (
         <div className="space-y-2">
-          <PropertySearch catalogId={catalog.id} criteria={props.searchCriteria} search={props.search} disabled={archived || pending} onAdd={props.addById} />
+          <PropertySearch catalogId={catalog.id} criteria={props.searchCriteria} search={props.search} disabled={archived || pending} onAdd={props.addById} uiKey="search-manual" autoRun={!!draftsStore.ui<string>(catalog.id, "search-manual:text")} />
           <form onSubmit={props.addByReference} className="flex flex-col gap-2 rounded-xl border border-gold/20 bg-white/60 p-3 sm:flex-row sm:items-center">
             <label className="sr-only" htmlFor="cm-ref">
               Referencia BC, slug o URL de la ficha

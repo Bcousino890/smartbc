@@ -55,12 +55,61 @@ export function SidePanel({
   useEffect(() => {
     titleRef.current?.focus({ preventScroll: false });
   }, [heading]);
-  // En móvil el desplazamiento es el de la página: se reserva el pie.
+  // El pie fijo no tapa nada: el margen reservado abajo (scroll-padding de la
+  // página en móvil y del cuerpo del panel en escritorio) se mide con la altura
+  // REAL del pie (crece con el mensaje o si los botones bajan de línea), y al
+  // recibir el foco, si un campo queda debajo del pie (o del botón de menú del
+  // CRM), se desplaza lo justo.
   useEffect(() => {
+    const aside = asideRef.current;
+    if (!aside) return;
     const html = document.documentElement;
     const before = html.style.scrollPaddingBottom;
-    html.style.scrollPaddingBottom = "6rem";
+    const parts = () => ({
+      foot: aside.querySelector<HTMLElement>("[data-testid=side-panel-footer]"),
+      body: aside.querySelector<HTMLElement>("[data-testid=side-panel-body]"),
+    });
+    const scroller = (body: HTMLElement | null) =>
+      body && body.scrollHeight > body.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(body).overflowY) ? body : null;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const { foot, body } = parts();
+        const pad = `${Math.ceil((foot?.getBoundingClientRect().height ?? 0) + 16)}px`;
+        html.style.scrollPaddingBottom = pad;
+        if (body) body.style.scrollPaddingBottom = pad;
+      });
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      requestAnimationFrame(() => {
+        const { foot, body } = parts();
+        if (!el || !foot || foot.contains(el)) return;
+        const a = el.getBoundingClientRect();
+        const f = foot.getBoundingClientRect();
+        const box = scroller(body);
+        // Arriba: el cuerpo del panel (escritorio) o la zona del botón de menú (móvil).
+        const top = box ? box.getBoundingClientRect().top + 8 : 72;
+        const bottom = f.top - 8;
+        let dy = 0;
+        if (a.bottom > bottom) dy = Math.min(a.bottom - bottom, a.top - top);
+        else if (a.top < top) dy = a.top - top;
+        if (Math.abs(dy) < 1) return;
+        if (box) box.scrollTop += dy;
+        else window.scrollBy(0, dy);
+      });
+    };
+    measure();
+    const mo = new MutationObserver(measure);
+    mo.observe(aside, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("resize", measure);
+    aside.addEventListener("focusin", onFocusIn);
     return () => {
+      cancelAnimationFrame(raf);
+      mo.disconnect();
+      window.removeEventListener("resize", measure);
+      aside.removeEventListener("focusin", onFocusIn);
       html.style.scrollPaddingBottom = before;
     };
   }, []);
@@ -96,7 +145,6 @@ export function SidePanel({
       </div>
       <div
         className="min-w-0 space-y-3 p-3 lg:flex-1 lg:overflow-y-auto [&_:is(input,textarea,select,button,a,label)]:scroll-mb-28 [&_:is(input,textarea,select,button,a,label)]:scroll-mt-4"
-        style={{ scrollPaddingBottom: "6rem" }}
         data-testid="side-panel-body"
       >
         <div>
