@@ -3,6 +3,7 @@ import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import type { ItemLayout, JourneyPage } from "@/lib/catalogs/journey-layout";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { shareExpiryLabel } from "@/lib/catalogs/share";
+import { PdfDownload, type ReaderPdf } from "./pdf-download";
 import { ReaderImage } from "./reader-image";
 import { ScrollRegion } from "./scroll-region";
 import styles from "./reader.module.css";
@@ -110,17 +111,21 @@ export function IndexPage({
   catalog,
   onOpen,
   folioOf,
+  pdf = null,
 }: {
   catalog: PublicCatalog;
   onOpen: (key: string) => void;
   /** Folio de la apertura de cada vivienda (cuenta todas sus partes). */
   folioOf: (key: string) => number;
+  /** Descarga del PDF; null = no se ofrece (sin conexión). */
+  pdf?: ReaderPdf | null;
 }) {
   return (
     <section className={`${styles.page} ${styles.indexPage}`} aria-label="Índice">
       <header className={styles.indexHead}>
         <p className={styles.kicker}>Índice</p>
         <h2 className={styles.indexTitle}>En esta selección</h2>
+        {pdf && catalog.items.length ? <PdfDownload pdf={pdf} variant="index" /> : null}
       </header>
       {catalog.items.length === 0 ? (
         <div className={styles.emptyBox} data-testid="empty-state">
@@ -656,7 +661,7 @@ export function ItemSheetPage({
 
 /** Cierre «Hablemos» (D20): marca, tarjeta del asesor y UNA acción (llamar).
  *  El contacto es el guardado en el catálogo; si falta un dato, no se pinta. */
-export function ClosingPage({ catalog, expiresAt }: { catalog: PublicCatalog; expiresAt: string }) {
+export function ClosingPage({ catalog, expiresAt, pdf = null }: { catalog: PublicCatalog; expiresAt: string; pdf?: ReaderPdf | null }) {
   const hasCard = !!catalog.preparedBy || !!catalog.phone;
   return (
     <section className={`${styles.page} ${styles.closingPage}`} aria-label="Contacto">
@@ -683,6 +688,7 @@ export function ClosingPage({ catalog, expiresAt }: { catalog: PublicCatalog; ex
           ) : null}
         </div>
       ) : null}
+      {pdf && catalog.items.length ? <PdfDownload pdf={pdf} variant="closing" /> : null}
       <p className={styles.closingFoot}>
         Selección preparada para ti. Se actualiza sola cuando hay cambios · disponible hasta el {shareExpiryLabel(expiresAt)}.
       </p>

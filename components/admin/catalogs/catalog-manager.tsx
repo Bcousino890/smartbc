@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { formatContactPhone } from "@/lib/catalogs/contact-format";
+import { usePdfDownload } from "@/lib/catalogs/export/download-client";
 import { useHomeMeasure } from "./measure-panel";
 import type { ShareActions, ShareView } from "./share-panel";
 import type { SelectionActions } from "./selection-panel";
@@ -136,6 +137,10 @@ export function CatalogManager({
   const auto = catalog.mode === "auto";
   const { section, vivienda, navigate } = useManagerUrl();
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  // PDF del catálogo: el mismo botón desde «⋯» y desde Compartir. El mensaje
+  // sale junto al botón de Compartir y, desde el menú, también arriba.
+  const pdf = usePdfDownload(`/api/admin/catalogos/${encodeURIComponent(catalog.id)}/pdf`, { notFound: "No se encontró este catálogo. Recarga la página." });
+  const [pdfMessage, setPdfMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const focusAfter = useRef<string | null>(null);
 
   // Acciones con la medición (?medir=1, «sin aviso inmediato»): las MISMAS que
@@ -373,6 +378,15 @@ export function CatalogManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function downloadPdf(fromMenu: boolean) {
+    setPdfMessage(null);
+    if (fromMenu) setMessage(null);
+    const r = await pdf.download();
+    const m = { kind: r.ok ? ("ok" as const) : ("error" as const), text: r.ok && unsaved.length ? `${r.text} Sale con lo último guardado.` : r.text };
+    setPdfMessage(m);
+    if (fromMenu) setMessage(m);
+  }
+
   function toggleStatus() {
     const next = status === "active" ? "archived" : "active";
     run(() => wrapped.setStatus({ catalogId: catalog.id, status: next }), next === "archived" ? "Catálogo archivado." : "Catálogo reactivado.", () => setStatus(next));
@@ -427,6 +441,8 @@ export function CatalogManager({
           setShareNotice(null);
           go("compartir", "sp-title");
         }}
+        onDownloadPdf={() => void downloadPdf(true)}
+        pdfBusy={pdf.busy}
         unsaved={unsaved}
         onOpenGroups={groups && groupsState?.available ? (trigger) => setGroupsOpen(trigger) : undefined}
       />
@@ -549,6 +565,7 @@ export function CatalogManager({
           adActions={actions.ads}
           measureMode={measureMode}
           measure={measure}
+          pdf={{ busy: pdf.busy, message: pdfMessage, onDownload: () => void downloadPdf(false), unsaved: unsaved.length > 0 }}
         />
       </section>
     </div>

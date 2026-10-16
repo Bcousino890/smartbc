@@ -67,10 +67,9 @@ mut '{"op":"reset"}'
 echo "· Cambio a mitad: un PDF de una versión, o 409"
 mut '{"op":"photo-delay","ms":150}'
 ( get $B/api/seleccion/fixtureMainToken000000000001/pdf $O/ch1.pdf > $O/ch1.code ) &
-sleep 0.4; mut '{"op":"price","token":"fixtureMainToken000000000001","key":"fxMain00001","price":1234567"}' ; mut "{\"op\":\"price\",\"token\":\"fixtureMainToken000000000001\",\"key\":\"$(curl -s $B/api/seleccion/fixtureMainToken000000000001/estado | python3 -c 'import json,sys;print(json.load(sys.stdin)["catalog"]["items"][0]["key"])')\",\"price\":1234567}"; wait
+sleep 0.4; mut "{\"op\":\"price\",\"token\":\"fixtureMainToken000000000001\",\"key\":\"$(curl -s $B/api/seleccion/fixtureMainToken000000000001/estado | python3 -c 'import json,sys;print(json.load(sys.stdin)["catalog"]["items"][0]["key"])')\",\"price\":1234567}"; wait
 c=$(cat $O/ch1.code)
 chk "un cambio → se repite una vez → 200" $([ "$c" = 200 ] && echo 1) "$c"
-echo "$c" > $O/ch1.result
 ( get $B/api/seleccion/fixtureLongToken000000000002/pdf $O/ch2 > $O/ch2.code ) &
 K=$(curl -s $B/api/seleccion/fixtureLongToken000000000002/estado | python3 -c 'import json,sys;print(json.load(sys.stdin)["catalog"]["items"][0]["key"])')
 for i in $(seq 1 60); do mut "{\"op\":\"price\",\"token\":\"fixtureLongToken000000000002\",\"key\":\"$K\",\"price\":$((500000+i))}"; sleep 0.25; [ -s $O/ch2.code ] && break; done; wait
