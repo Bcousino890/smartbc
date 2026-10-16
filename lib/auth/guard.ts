@@ -1,7 +1,10 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { getEffectivePermissions } from "@/lib/db/queries/permissions";
+import {
+  getEffectivePermissions,
+  getEffectiveRoleAndPermissions,
+} from "@/lib/db/queries/permissions";
 import { getCountryConfig, isCountry, type Country } from "@/lib/country-config";
 import type { ProfileRow } from "@/lib/db/queries/session";
 import type { PermissionResource, PermissionAction } from "@/lib/permissions";
@@ -115,6 +118,49 @@ export async function assertPermission(
   }
 
   return profile;
+}
+
+/**
+ * Gate por ROL EFECTIVO (rol por país si lo tiene; si no, el global) para
+ * acciones que no encajan en la matriz recurso×acción: publicar con la cuenta
+ * de la agencia en un portal, conectar credenciales, etc.
+ *
+ * Es un parche de la Fase 0: se sustituirá por `requirePermission` con las
+ * claves nuevas (`publicacion.publish`, `configuracion.secrets`…) cuando entre
+ * el motor de 3 roles. Mientras tanto evita comparar `profile.role` a pelo:
+ * usa el rol efectivo en `opts.country`.
+ *
+ *   const gate = await requireRoles(["owner", "admin"], { country: "cl" });
+ *   if (!gate.ok) return gate.response;
+ */
+export async function requireRoles(
+  roles: readonly string[],
+  opts?: { country?: string; message?: string },
+): Promise<GuardResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return {
+      ok: false,
+      response: Response.json({ error: "No autenticado" }, { status: 401 }),
+    };
+  }
+
+  const { effectiveRole } = await getEffectiveRoleAndPermissions(
+    profile.id,
+    profile.role,
+    opts?.country,
+  );
+  if (!roles.includes(effectiveRole)) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: opts?.message ?? "No tienes permisos para realizar esta acción" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return { ok: true, profile };
 }
 
 /** Resultado de `checkPermission`: o pasa (con el profile) o trae un mensaje listo para mostrar. */

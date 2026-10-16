@@ -1,27 +1,20 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { publishPropertyToML } from "@/lib/sync/portalinmobiliario/ml-publisher";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requireRoles } from "@/lib/auth/guard";
 import type { MlPropertyInput } from "@/lib/sync/portalinmobiliario/ml-publisher";
 import { watermarkPhotosForPortal } from "@/lib/services/portalinmobiliario/watermark-photos";
 
 export async function POST(request: Request) {
   try {
-    const profile = await getCurrentProfile();
-    if (!profile) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Usuarios de Chile o admins multi-país (el layout deja a los admin
-    // cambiar de país libremente; este gate los bloqueaba igual).
-    const userCountry = (profile as any).country ?? "es";
-    const isMultiCountryAdmin = profile.role === "admin" || (profile.role as string) === "owner";
-    if (userCountry !== "cl" && !isMultiCountryAdmin) {
-      return NextResponse.json(
-        { error: "Solo usuarios de Chile pueden publicar en Portal Inmobiliario" },
-        { status: 403 }
-      );
-    }
+    // Publicar en Portal Inmobiliario usa la cuenta de MercadoLibre de la
+    // agencia. Antes bastaba con tener sesión y ser de Chile (cualquier rol,
+    // incluida la captadora); ahora solo Propietario y Administrador.
+    const gate = await requireRoles(["owner", "admin"], {
+      country: "cl",
+      message: "Solo el Propietario o un Administrador pueden publicar en Portal Inmobiliario",
+    });
+    if (!gate.ok) return gate.response;
 
     const { propertyId } = await request.json();
     if (!propertyId) {
