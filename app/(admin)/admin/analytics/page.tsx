@@ -1,3 +1,4 @@
+import { guardPageRoles } from "@/lib/auth/guard-roles";
 import { AnalyticsDashboard } from "@/components/admin/analytics/analytics-dashboard";
 import {
   getAnalyticsSummary,
@@ -49,6 +50,11 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
+  // Analíticas web: IP (enmascarada), ciudad y recorrido de los visitantes de
+  // toda la web. Antes no tenía ningún gate: lo abría cualquier staff por URL
+  // directa (también la captadora). Solo Propietario y Administrador.
+  await guardPageRoles(["owner", "admin"]);
+
   const params = await searchParams;
 
   const { startDate, endDate } = getDateRange(

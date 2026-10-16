@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import {
-  getActiveCollectionTokenByItineraryId,
-  getPreviewCollection,
-} from "@/lib/db/queries/viewing-collections";
+import { getPreviewCollection } from "@/lib/db/queries/viewing-collections";
 import { CollectionUnavailableView } from "../../[token]/collection-unavailable-view";
 import { ViewingCollectionView } from "../../[token]/viewing-collection-view";
 
@@ -20,11 +16,13 @@ import { ViewingCollectionView } from "../../[token]/viewing-collection-view";
  * `middleware.ts` deja pasar /v porque la ruta con token debe ser anónima, así
  * que la autorización de esta ruta vive entera en la query.
  *
- * Si la abre alguien sin sesión de equipo (o sin permiso) — típicamente el
- * cliente, al que le han mandado esta URL copiada de la barra del navegador —
- * no ve el 404 genérico: si el book está publicado y tiene un enlace vigente
- * se le redirige a `/v/{token}`; si no (borrador, revocado, caducado), ve la
- * misma vista de "no disponible" que `/v/{token}`.
+ * Si la abre alguien sin sesión de equipo o sin permiso (típicamente el
+ * cliente, al que le han mandado esta URL copiada de la barra del navegador) ve
+ * la vista de "no disponible", igual que un enlace caducado. NO se le redirige
+ * a `/v/{token}`: antes, conocer el id del itinerario (un UUID que se copia de
+ * la barra de direcciones y se reenvía) bastaba para llegar al enlace real y
+ * saltarse el permiso de ver y el alcance del cliente. El enlace que se le
+ * manda al cliente es el de `/v/{token}`, no el de la previsualización.
  */
 export const dynamic = "force-dynamic";
 
@@ -43,9 +41,6 @@ export default async function ViewingCollectionPreviewPage({
   const { itineraryId } = await params;
   const result = await getPreviewCollection(itineraryId);
   if (!result.ok) {
-    // `redirect` lanza: fuera de cualquier try/catch a propósito.
-    const token = await getActiveCollectionTokenByItineraryId(itineraryId);
-    if (token) redirect(`/v/${token}`);
     return <CollectionUnavailableView />;
   }
 
