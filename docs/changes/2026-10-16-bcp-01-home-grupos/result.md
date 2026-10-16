@@ -194,7 +194,11 @@ El commit `1de0bb0` solo registra el merge de #321 y la QA de E3 en el expedient
 
 ## QA de Fabricio
 
-Pendiente, después del despliegue. Ver «Pendiente».
+- **Merge:** PR #322 fusionado por Fabricio en el commit `94b513f` de `main`, el 16 de octubre de 2026 a las 18:33 UTC. La CI de `main` en ese commit, en verde.
+- **Despliegue:** comprobado solo desde fuera, en solo lectura. El identificador del build público cambió de `MZ1Il_u884oJWTSvMvW6u` a `7B48neqNGUSUgJmsRRh8j` después del merge.
+  - **`0207`:** no se ha verificado en la base de datos. Se da por aplicada porque, si las migraciones fallan, el despliegue no cambia de versión, y la funcionalidad que depende de ella funciona.
+- **Aceptación de Fabricio** (16 de octubre de 2026): la funcionalidad de grupos desplegada en la HOME funciona correctamente.
+  - El informe es general: no detalla qué comprobaciones hizo ni en qué dispositivos, así que aquí no se da por cubierto ningún dispositivo real concreto.
 
 ## Revisión
 
@@ -202,7 +206,7 @@ No se pidió revisión adicional de Codex.
 
 ## Pendiente o no demostrado
 
-- **La QA de Fabricio en producción,** después del despliegue:
+- **La QA de Fabricio en producción:** aceptada el 16 de octubre de 2026 (ver «QA de Fabricio»). Esta era la lista propuesta, y el informe no dice punto por punto qué se revisó:
   - crear su árbol (Salamanca → Recoletos, Castellana, Lista, Goya; Chamberí; Retiro);
   - asignar catálogos, también uno a dos barrios;
   - comprobar «Todas» y «Sin organizar»;
@@ -212,7 +216,7 @@ No se pidió revisión adicional de Codex.
   - y lo mismo en el móvil.
 - **No ejecutado en local:** el camino real con PostgREST (`listOwnerGroups` y las RPC) y la sesión real. Lo cubren las mismas funciones SQL, probadas en el Postgres temporal, y las fixtures, que aplican las mismas reglas.
 - **Primera carga sin `?grupo`:** el servidor no conoce lo recordado, así que la estantería puede enseñar «Todas» un instante hasta que el navegador lo aplica. Está documentado en la especificación.
-- **Siguen pendientes, sin relación con esta tarea:** G-ALQ, el caso original de Recoletos y D13 en vivo.
+- **Siguen pendientes, sin relación con esta tarea:** G-ALQ y el caso original de Recoletos. D13 en vivo tampoco se ha medido.
 - **Fuera de alcance:** el PDF y las sugerencias a partir de los criterios (D2).
 
 ## Despliegue y recuperación
