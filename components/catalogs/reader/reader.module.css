@@ -1194,6 +1194,34 @@
   display: block;
 }
 
+.lbNotice {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font: 14px/1.4 var(--text);
+  background: #efe3cf;
+  color: #5b3a22;
+  border-left: 3px solid var(--accent);
+}
+
+.lightbox .lbNotice button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  min-width: 32px;
+  height: 32px;
+}
+
 .lbBottom {
   display: flex;
   justify-content: center;

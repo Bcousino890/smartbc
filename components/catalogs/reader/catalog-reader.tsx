@@ -610,6 +610,8 @@ export function CatalogReader({
           url={url}
           onStep={(delta) => dispatch({ type: "galleryStep", delta })}
           onClose={() => dispatch({ type: "closeGallery" })}
+          notice={state.notice}
+          onDismiss={() => dispatch({ type: "dismiss" })}
         />
       ) : null}
 
