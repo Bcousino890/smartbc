@@ -14,7 +14,7 @@
 //   crm_importada   propiedad del CRM de la agencia «Portales externos» (u otra SIN feed
 //                   de sindicación): es el cajón donde el CRM importa propiedades de
 //                   portales, NO la web de ninguna agencia
-//                   → «CRM · propiedad importada de portal»
+//                   → «Nuestra ficha en el CRM»
 //   agencia_web_propia  la ficha en la web propia de la agencia anunciante (el «Enlace
 //                   adicional» del anuncio del portal: Mobilia, Inmoweb…)
 //                   → «Web de Domus Aurea Capital»
@@ -44,8 +44,8 @@ export const KIND_META: Record<SourceKind, { short: string; description: string;
     icon: "globe",
   },
   crm_importada: {
-    short: "CRM · importada",
-    description: "Propiedad del CRM importada desde un portal (no es la web de ninguna agencia)",
+    short: "En el CRM",
+    description: "Nuestra ficha en el CRM (importada desde un portal; no es la web de ninguna agencia)",
     tone: "border-ink/20 bg-ink/5 text-ink/80",
     icon: "folder",
   },
@@ -103,7 +103,7 @@ export function kindOfAdvertiser(advertiserType: string | null | undefined): Sou
 export function sourceLabel(src: { kind?: SourceKind | null; portal?: string | null; agency?: string | null }): string {
   const kind = src.kind ?? "particular";
   const agency = (src.agency ?? "").trim();
-  if (kind === "crm_importada") return "CRM · propiedad importada de portal";
+  if (kind === "crm_importada") return "Nuestra ficha en el CRM";
   if (kind === "agencia_web_propia") return agency ? `Web de ${agency}` : "Web de la agencia";
   if (kind === "agencia_web") return agency ? `Web de ${agency}` : "Web de agencia";
   if (kind === "agencia_portal") return `${portalLabel(src.portal)} · ${agency ? `Agencia ${agency}` : "Agencia"}`;

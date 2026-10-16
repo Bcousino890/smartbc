@@ -18,6 +18,7 @@ import {
 } from "@/app/(admin)/admin/propiedades/actions";
 import { postUploadForm } from "@/lib/http/upload-form";
 import { Modal } from "@/components/ui/modal";
+import { PropertyPhotosFromWeb } from "@/components/admin/property-photos-from-web";
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
@@ -218,6 +219,8 @@ export function PropertyPhotosModal({
             {t("adminProps.photos.uploadHint")}
           </p>
         </div>
+
+        <PropertyPhotosFromWeb slug={slug} onChanged={setPhotos} />
 
         {error && (
           <p className="mt-3 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">

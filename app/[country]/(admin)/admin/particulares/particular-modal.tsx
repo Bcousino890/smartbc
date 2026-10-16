@@ -20,6 +20,7 @@ import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } fr
 import { Gallery, type MediaItem } from "./_ficha/gallery";
 import { Lightbox } from "./_ficha/lightbox";
 import { PhotoSourcePicker } from "./_ficha/photo-source-picker";
+import { PropertyPhotosFromWeb } from "@/components/admin/property-photos-from-web";
 import { buildPhotoSources } from "./_ficha/photo-sources";
 import { useGroupLinks } from "./_ficha/use-group-links";
 import { HistoryTab } from "./_ficha/history-tab";
@@ -787,7 +788,7 @@ export function ParticularModal({
 
   // Fuente de fotos: por defecto la de la ficha abierta; la última elegida se
   // recuerda mientras el modal siga abierto en ESTA ficha (no pasa a otras).
-  const { members: groupMembers, agencyWebs } = useGroupLinks(row.id);
+  const { members: groupMembers, agencyWebs, agencyMatches } = useGroupLinks(row.id);
   const [pickedSource, setPickedSource] = useState<{ rowId: string; sourceId: string } | null>(null);
   const photoSources = useMemo(() => {
     const list = buildPhotoSources(groupMembers, currentRow.id, agencyWebs);
@@ -1181,6 +1182,12 @@ export function ParticularModal({
                     }}
                   />
                 )}
+                {/* Fotos sin marca de la web de la agencia → nuestra ficha del CRM (solo si hay una ficha enlazada y la web es verificable). */}
+                {activeSource?.id.startsWith("web:") &&
+                  agencyMatches
+                    .filter((m) => m.property.slug && (m.level === "cierto" || m.status === "confirmado"))
+                    .slice(0, 1)
+                    .map((m) => <PropertyPhotosFromWeb key={m.id} slug={m.property.slug as string} onChanged={() => undefined} />)}
 
                 {/* Precio y dirección: en móvil bajo la foto; en escritorio, en la columna derecha */}
                 <div className="lg:hidden">{priceBlock}</div>

@@ -117,7 +117,9 @@ export type AgencyMatchInfo = {
     agency_name: string | null;
     /** true = agencia colaboradora de sindicación (feed); false = propiedad importada de portal («Portales externos»). */
     agency_collab?: boolean;
+    /** Referencia principal: la BC del CRM (BC-1542); si no hay, la de la agencia. */
     reference: string | null;
+    bc_reference?: string | null;
     operation: "rent" | "sale" | null;
     price: number | null;
     status: string | null;

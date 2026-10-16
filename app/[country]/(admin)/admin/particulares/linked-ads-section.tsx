@@ -14,6 +14,7 @@ import type {
 import { setParticularLinkStatus } from "./link-actions";
 import { kindOfAdvertiser, kindOfCrmProperty } from "@/lib/particulares/source-kind";
 import { SourceKindBadge } from "./_ficha/source-kind-badge";
+import { pairAgencyInmuebles, webLinks } from "@/lib/particulares/agency-pairs";
 
 /**
  * Ficha unificada de un particular (migración 0176): el MISMO inmueble puede
@@ -123,7 +124,6 @@ function AdRow({
   /** member: ya está en la ficha (solo se puede corregir) · suggestion: por confirmar. */
   mode?: "member" | "suggestion";
 }) {
-  const reasons = ad.link ? describeEvidence(ad.link.evidence) : [];
   return (
     <li className="flex items-start gap-3 rounded-lg border border-ink/10 bg-white p-2.5">
       {ad.cover_url ? (
@@ -153,9 +153,6 @@ function AdRow({
           {ad.phone ?? (ad.owner_name ? "" : "Sin contacto")}
           {ad.n_photos > 0 ? ` · ${ad.n_photos} fotos` : ""}
         </p>
-        {reasons.length > 0 && ad.link && ad.link.level !== "cierto" && (
-          <p className="mt-1 text-xs text-amber-700">Por qué se propone: {reasons.join(" · ")}</p>
-        )}
         {onDecide && ad.link && (
           <div className="mt-1.5 flex gap-2">
             {mode === "suggestion" && (
@@ -307,70 +304,67 @@ export function LinkedAdsSection({
         </div>
       )}
 
-      {agencyWebs.length > 0 && (
+      {(agencyWebs.length > 0 || agencyMatches.length > 0) && (
         <div className="mb-3">
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink/45">
-            <Link2 size={13} /> Web propia de la agencia
+            <Building2 size={13} /> Fichas en nuestro CRM y web de la agencia
           </p>
           <ul className="flex flex-col gap-2">
-            {agencyWebs.map((w) => (
-              <li key={w.key} className="rounded-lg border border-ink/10 bg-white p-2.5">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <SourceKindBadge kind="agencia_web_propia" full agency={w.agency_name} />
-                  {w.ref && <span className="font-mono text-xs text-ink/50">{w.ref}</span>}
-                  <span className="text-xs text-ink/55">{w.domain}</span>
-                  <span className="rounded-md border border-ink/15 px-1.5 py-0.5 text-xs font-semibold text-ink/70">
-                    {w.verdict.state === "verificada" ? "Verificada" : w.verdict.state === "no_coincide" ? "No coincide" : "Sin leer"}
-                  </span>
-                  {w.photos.length > 0 && <span className="text-xs text-ink/55">{w.photos.length} fotos sin marca</span>}
-                </div>
-                <a href={w.canonical_url ?? w.url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-ink/70 underline-offset-2 hover:underline">
-                  Abrir ficha en la web <ExternalLink size={11} />
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {agencyMatches.length > 0 && (
-        <div className="mb-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink/45">
-            <Building2 size={13} /> Propiedades del CRM (agencias colaboradoras y propiedades importadas de portales)
-          </p>
-          <ul className="flex flex-col gap-2">
-            {agencyMatches.map((m) => {
-              const p = m.property;
-              const reasons = describeEvidence(m.evidence);
-              const sure = m.status === "confirmado" || m.level === "cierto";
+            {pairAgencyInmuebles(agencyWebs, agencyMatches).map((it) => {
+              const p = it.crm?.property ?? null;
+              const w = it.web;
+              const crmKind = p ? kindOfCrmProperty(p.agency_collab) : null;
+              const sure = it.crm ? it.crm.status === "confirmado" || it.crm.level === "cierto" : null;
+              const agency = w?.agency_name?.trim() || (p?.agency_name && p.agency_name !== "Portales externos" ? p.agency_name : null) || w?.domain || "Agencia";
+              const links = w ? webLinks(w) : null;
               return (
-                <li key={m.id} className="rounded-lg border border-ink/10 bg-white p-2.5">
+                <li key={w?.key ?? it.crm?.id} className="rounded-lg border border-ink/10 bg-white p-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <SourceKindBadge kind={kindOfCrmProperty(p.agency_collab)} full agency={p.agency_name} />
-                    {p.reference && <span className="font-mono text-xs text-ink/50">{p.reference}</span>}
-                    <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(p.operation)}</span>
-                    <span className="text-sm font-semibold text-ink">{priceText({ price: p.price, operation: p.operation })}</span>
-                    <span
-                      title={reasons.join(" · ") || m.rule}
-                      className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${sure ? "border-gold/40 bg-gold/10 text-gold-dark" : "border-amber-300 bg-amber-50 text-amber-700"}`}
-                    >
-                      {m.status === "confirmado" ? "Confirmado" : m.level === "cierto" ? "Seguro" : "Posible"}
-                    </span>
+                    <span className="text-sm font-semibold text-ink">{agency}</span>
+                    {w && <SourceKindBadge kind="agencia_web_propia" />}
+                    {crmKind && <SourceKindBadge kind={crmKind} />}
+                    {p && <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(p.operation)}</span>}
+                    {p && <span className="text-sm font-semibold text-ink">{priceText({ price: p.price, operation: p.operation })}</span>}
+                    {sure != null && (
+                      <span
+                        title={describeEvidence(it.crm?.evidence ?? {}).join(" · ") || it.crm?.rule}
+                        className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${sure ? "border-gold/40 bg-gold/10 text-gold-dark" : "border-amber-300 bg-amber-50 text-amber-700"}`}
+                      >
+                        {it.crm?.status === "confirmado" ? "Confirmado" : sure ? "Seguro" : "Posible"}
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-ink/55">
-                    {[p.square_meters ? `${p.square_meters} m²` : null, p.bedrooms ? `${p.bedrooms} hab.` : null, p.bathrooms ? `${p.bathrooms} baños` : null, addressLine(p.address)]
-                      .filter(Boolean)
-                      .join(" · ")}
+                  <p className="mt-1 text-xs text-ink/60">
+                    {w && (
+                      <span className="mr-3">
+                        Ref. en su web: <span className="font-mono font-semibold text-ink/80">{w.ref ?? "—"}</span>
+                      </span>
+                    )}
+                    {p && (
+                      <span>
+                        Ref. en nuestro CRM: <span className="font-mono font-semibold text-ink/80">{p.bc_reference ?? p.reference ?? "—"}</span>
+                      </span>
+                    )}
                   </p>
-                  {!sure && reasons.length > 0 && <p className="mt-1 text-xs text-amber-700">Por qué se propone: {reasons.join(" · ")}</p>}
-                  {p.slug && (
-                    <a
-                      href={`/${country}/admin/propiedades/${p.slug}`}
-                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-ink/70 underline-offset-2 hover:underline"
-                    >
-                      Abrir propiedad <ExternalLink size={11} />
-                    </a>
+                  {p && (
+                    <p className="mt-0.5 truncate text-xs text-ink/55">
+                      {[p.square_meters ? `${p.square_meters} m²` : null, p.bedrooms ? `${p.bedrooms} hab.` : null, p.bathrooms ? `${p.bathrooms} baños` : null, addressLine(p.address)]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
                   )}
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {p?.slug && (
+                      <a href={`/${country}/admin/propiedades/${p.slug}`} className="inline-flex items-center gap-1 rounded-md border border-ink/20 px-2 py-1 text-xs font-semibold text-ink hover:border-gold/60">
+                        Ficha en el CRM <ExternalLink size={11} />
+                      </a>
+                    )}
+                    {links && (
+                      <a href={links.main} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-teal-300 px-2 py-1 text-xs font-semibold text-teal-900 hover:bg-teal-50">
+                        Ver en la web <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
                 </li>
               );
             })}

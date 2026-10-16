@@ -348,14 +348,17 @@ export function buildAgencyWebSources(members: MemberLite[], cache: Map<string, 
 
 // ── Qué leer y cómo guardarlo (puro) ────────────────────────────────────────
 //
-// Política de refresco: la web de la agencia se lee UNA vez cuando se detecta su enlace. NO se
-// sigue de forma continua. Solo se vuelve a leer si cambia el anuncio del portal que sí rastreamos
-// (precio, estado, referencia o el propio agency_url) o a petición manual («Releer web»).
+// Política de refresco: la web de la agencia se lee cuando se detecta su enlace y se refresca cada
+// 14 días (WEB_REFRESH_DAYS). Antes de eso solo se vuelve a leer si cambia el anuncio del portal que sí
+// rastreamos (precio, estado, referencia o el propio agency_url) o a petición manual («Releer web»).
 
 /** Tope de URLs por pasada del job: no se martillea webs ajenas. */
 export const MAX_WEB_FETCHES_PER_RUN = 30;
 /** Tras tantos fallos seguidos se deja de reintentar sola (solo «Releer web» o un cambio del anuncio). */
 export const MAX_WEB_ATTEMPTS = 6;
+
+/** Refresco automático de una web ya leída. */
+export const WEB_REFRESH_DAYS = 14;
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -422,6 +425,11 @@ export function planAgencyWebFetches(rows: WebRowLite[], cache: Map<string, WebC
       fresh.push({ n, sig, attempts: 0 });
     } else if (c.trigger_sig != null && c.trigger_sig !== sig) {
       changed.push({ n, sig, attempts: 0 });
+    } else if (c.status === "ok") {
+      // Leída bien: se refresca a los 14 días (next_retry_at); si no hay fecha (filas antiguas) no se toca.
+      const due = c.next_retry_at ? Date.parse(c.next_retry_at) : NaN;
+      if (Number.isFinite(due) && due <= now) retry.push({ n, sig, attempts: 0, due });
+      else if (c.trigger_sig == null) backfill.push({ key, sig });
     } else if (c.status === "error") {
       const due = c.next_retry_at ? Date.parse(c.next_retry_at) : NaN;
       if (attempts < MAX_WEB_ATTEMPTS && Number.isFinite(due) && due <= now) retry.push({ n, sig, attempts, due });
@@ -438,14 +446,15 @@ export function retryDelayMs(attempts: number): number {
   return Math.min(7 * DAY, HOUR * 2 ** Math.max(0, attempts - 1));
 }
 
-/** Resultado de una lectura → fila de `particulares_agency_webs`. No hay refresco automático por el paso del tiempo. */
+/** Resultado de una lectura → fila de `particulares_agency_webs`. Una lectura buena se refresca a los 14 días; ficha retirada o bloqueada, no. */
 export function toCacheRow(n: NormalizedAgencyUrl, res: WebFetchResult, prevAttempts: number, now: number, sig: string | null = null) {
   const base = { url_key: n.key, url: n.url, domain: n.domain, fetched_at: new Date(now).toISOString(), trigger_sig: sig };
   if (res.kind === "ok") {
     const { photos, ref, canonical_url, ...data } = res.parsed;
     return {
       ...base, cms: res.cms, final_url: res.finalUrl, canonical_url: canonical_url ?? res.finalUrl, ref, status: "ok" as const,
-      http_status: res.httpStatus, data, photos, attempts: 0, error: null, next_retry_at: null as string | null,
+      http_status: res.httpStatus, data, photos, attempts: 0, error: null,
+      next_retry_at: new Date(now + WEB_REFRESH_DAYS * DAY).toISOString(),
     };
   }
   if (res.kind === "gone") {

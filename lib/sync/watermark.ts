@@ -19,6 +19,9 @@ const WEBP_QUALITY = 86;
 export type WatermarkedPhoto = {
   url: string;
   storagePath: string;
+  /** Dimensiones reales del fichero guardado. */
+  width?: number;
+  height?: number;
 };
 
 export type WatermarkResult =
@@ -114,7 +117,7 @@ export async function downloadAndWatermark(params: {
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
     return {
       ok: true,
-      photo: { url: data.publicUrl, storagePath },
+      photo: { url: data.publicUrl, storagePath, width: targetWidth, height: meta.width && meta.height ? Math.round((targetWidth * meta.height) / meta.width) : undefined },
     };
   } catch (err) {
     return {

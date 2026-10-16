@@ -49,7 +49,7 @@ export type AgencyPropertyInput = {
   agency_name: string | null;
   /**
    * ¿Agencia colaboradora de sindicación (tiene feed en `agency_feeds`)? false = cajón de
-   * importación («Portales externos»): la fuente es «CRM · propiedad importada de portal», no
+   * importación («Portales externos»): la fuente es «Nuestra ficha en el CRM», no
    * una web de agencia. Sin dato = colaboradora (comportamiento anterior).
    */
   agency_collab?: boolean | null;

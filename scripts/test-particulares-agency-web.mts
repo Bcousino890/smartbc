@@ -23,6 +23,7 @@ import {
 } from "../lib/particulares/agency-web.ts";
 import { parseAgencyWebHtml, parseGenericFicha, parseInmowebFicha, robotsAllows, toOriginalImageUrl } from "../lib/particulares/agency-web-readers.ts";
 import { computeAgencyPortalLinks, propertyToLinkRow, viewRowToLinkRow } from "../lib/particulares/agency-matching.ts";
+import { pairAgencyInmuebles, webLinks } from "../lib/particulares/agency-pairs.ts";
 import { isCollaboratingAgency, kindOfCrmProperty, sourceLabel } from "../lib/particulares/source-kind.ts";
 import { buildPhotoSources } from "../app/[country]/(admin)/admin/particulares/_ficha/photo-sources.ts";
 
@@ -42,7 +43,7 @@ check("sin dato de feeds: el cajón por slug", isCollaboratingAgency({ hasFeed: 
 check("sin dato de feeds: otra agencia = colaboradora", isCollaboratingAgency({ hasFeed: null, slug: "level" }) === true);
 check("kind colaboradora", kindOfCrmProperty(true) === "agencia_web");
 check("kind importada de portal", kindOfCrmProperty(false) === "crm_importada");
-check("etiqueta CRM importada", sourceLabel({ kind: "crm_importada", agency: "Portales externos" }) === "CRM · propiedad importada de portal");
+check("etiqueta de nuestra ficha en el CRM", sourceLabel({ kind: "crm_importada", agency: "Portales externos" }) === "Nuestra ficha en el CRM");
 check("etiqueta web de colaboradora", sourceLabel({ kind: "agencia_web", agency: "Housingo" }) === "Web de Housingo");
 check("etiqueta web propia", sourceLabel({ kind: "agencia_web_propia", agency: "Domus Aurea Capital" }) === "Web de Domus Aurea Capital");
 const propImportada = propertyToLinkRow({
@@ -119,7 +120,7 @@ const srcs = buildPhotoSources([], "x", read);
 check("aparece la web de la agencia como origen", srcs.length === 1 && srcs[0].id.startsWith("web:") && srcs[0].photos.length === 26 && /sin marca/.test(srcs[0].label), srcs[0]);
 check("web que no coincide no ofrece fotos", buildPhotoSources([], "x", [{ ...read[0], verdict: { state: "no_coincide", reasons: [] } }]).length === 0);
 
-console.log("— Política de lectura: una vez, y solo si cambia el anuncio del portal");
+console.log("— Política de lectura: refresco a los 14 días o si cambia el anuncio del portal");
 const mkRows = (n: number, extra: Record<string, unknown> = {}) =>
   Array.from({ length: n }, (_, i) => ({ agency_url: `https://propiedades.domusaureacapital.com/Mobilia/VerInmueble/${1000 + i}/Ficha.html`, price: 5000, is_active: true, reference: "R" + i, agency_reference: "R" + i, ...extra }));
 const rows = mkRows(50);
@@ -131,15 +132,17 @@ check("lee cualquier web con ruta de ficha (CMS conocido o no)", planAgencyWebFe
 check("la portada no se lee", planAgencyWebFetches([{ agency_url: "http://dcinmobiliaria.com/" }], new Map(), now).fetch.length === 0);
 const k0 = normalizeAgencyUrl(rows[0].agency_url)!.key;
 const sig0 = webSigOf([rows[0]]);
-const okRow = { status: "ok", trigger_sig: sig0, next_retry_at: null, attempts: 0 };
-check("ya leída y sin cambios: NO se vuelve a leer (ni con el tiempo)", planAgencyWebFetches([rows[0]], new Map([[k0, okRow]]), now + 400 * 86_400_000).fetch.length === 0);
+const okRow = { status: "ok", trigger_sig: sig0, next_retry_at: new Date(now + 14 * 86_400_000).toISOString(), attempts: 0 };
+check("ya leída y sin cambios: no se relee antes de los 14 días", planAgencyWebFetches([rows[0]], new Map([[k0, okRow]]), now + 13 * 86_400_000).fetch.length === 0);
+check("pasados los 14 días se refresca sola", planAgencyWebFetches([rows[0]], new Map([[k0, okRow]]), now + 15 * 86_400_000).fetch.length === 1);
+check("el refresco usa intentos a cero", planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, attempts: 5 }]]), now + 15 * 86_400_000).fetch[0].attempts === 0);
 check("cambia el precio del anuncio: se vuelve a leer", planAgencyWebFetches([{ ...rows[0], price: 4800 }], new Map([[k0, okRow]]), now).fetch.length === 1);
 check("cambia el estado (baja): se vuelve a leer", planAgencyWebFetches([{ ...rows[0], is_active: false }], new Map([[k0, okRow]]), now).fetch.length === 1);
 check("cambia la referencia: se vuelve a leer", planAgencyWebFetches([{ ...rows[0], agency_reference: "OTRA" }], new Map([[k0, okRow]]), now).fetch.length === 1);
 check("cambia el agency_url: es otra clave, se lee", planAgencyWebFetches([{ ...rows[0], agency_url: rows[1].agency_url }], new Map([[k0, okRow]]), now).fetch.length === 1);
 const legacy = planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, trigger_sig: null }]]), now);
 check("fila anterior a la huella: se apunta la huella sin leer", legacy.fetch.length === 0 && legacy.backfill.length === 1 && legacy.backfill[0].sig === sig0, legacy);
-check("ficha bloqueada o retirada tampoco se relee sola", planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, status: "blocked" }]]), now).fetch.length === 0 && planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, status: "gone" }]]), now).fetch.length === 0);
+check("ficha bloqueada o retirada no se relee por tiempo", planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, status: "blocked", next_retry_at: null }]]), now).fetch.length === 0 && planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, status: "gone", next_retry_at: null }]]), now).fetch.length === 0);
 const errC = (attempts: number, due: number) => ({ status: "error", trigger_sig: sig0, next_retry_at: new Date(due).toISOString(), attempts });
 check("fallo con espera pendiente: no se reintenta aún", planAgencyWebFetches([rows[0]], new Map([[k0, errC(1, now + 1e6)]]), now).fetch.length === 0);
 check("fallo con la espera cumplida: se reintenta", planAgencyWebFetches([rows[0]], new Map([[k0, errC(1, now - 1e3)]]), now).fetch.length === 1);
@@ -150,7 +153,7 @@ check("espera creciente y con techo", retryDelayMs(1) === 3_600_000 && retryDela
 const errRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "error", httpStatus: 403, reason: "HTTP 403" }, 0, now, "s");
 check("un fallo guarda el error, la huella y reintenta más tarde", errRow.status === "error" && errRow.attempts === 1 && errRow.trigger_sig === "s" && Date.parse(errRow.next_retry_at!) > now);
 check("en el último intento ya no hay próximo reintento", toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "error", httpStatus: 500, reason: "x" }, MAX_WEB_ATTEMPTS - 1, now).next_retry_at === null);
-check("una lectura buena no programa refresco", cacheRow.next_retry_at === null);
+check("una lectura buena programa el refresco a los 14 días", cacheRow.next_retry_at === new Date(Date.UTC(2026, 9, 16) + 14 * 86_400_000).toISOString(), cacheRow.next_retry_at);
 const blockedRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "blocked", reason: "robots" }, 0, now);
 check("bloqueada por robots: estado blocked sin reintento", blockedRow.status === "blocked" && blockedRow.next_retry_at === null);
 const blockedSrc = buildAgencyWebSources(members, new Map([[blockedRow.url_key, { ...blockedRow, photos: [], data: {} } as never]]));
@@ -241,6 +244,23 @@ check("grupo propio manda sobre *", !robotsAllows("User-agent: smartbc\nDisallow
 check("Disallow vacío = todo permitido", robotsAllows("User-agent: *\nDisallow:\n", "/x"));
 check("sin robots: permitido", robotsAllows(null, "/x") && robotsAllows("", "/x"));
 check("Disallow: / bloquea todo", !robotsAllows("User-agent: *\nDisallow: /", "/es/pisos/1"));
+
+console.log("— Una fila por inmueble de agencia (web + ficha del CRM)");
+const crm = (id: string, particular_id: string) => ({
+  id, particular_id, property_id: "p" + id, level: "cierto" as const, status: "auto" as const, rule: "X1", evidence: { reasons: ["mismo id de portal"] },
+  property: { slug: "alquiler-claudio-coello", title: null, agency_name: "Portales externos", agency_collab: false, reference: "BC-1542", bc_reference: "BC-1542", operation: "rent" as const, price: 5000, status: "available", address: "Claudio Coello", square_meters: 140, bedrooms: 3, bathrooms: 3 },
+});
+const webs1 = buildAgencyWebSources(members);
+const pairs = pairAgencyInmuebles(webs1, [crm("m1", "a1")]);
+check("web + ficha del CRM del mismo anuncio = UNA fila", pairs.length === 1 && !!pairs[0].web && !!pairs[0].crm, pairs.length);
+check("ficha del CRM de otro anuncio queda aparte", pairAgencyInmuebles(webs1, [crm("m2", "zzz")]).length === 2);
+check("CRM sin web: fila solo del CRM", pairAgencyInmuebles([], [crm("m3", "a1")]).length === 1);
+check("referencia principal del CRM = BC", pairs[0].crm!.property.bc_reference === "BC-1542");
+check("«Ver en la web»: la URL antigua si aún no se leyó", webLinks(webs1[0]).main === LEGACY && webLinks(webs1[0]).original === null);
+const webs2 = buildAgencyWebSources(members, cache as never);
+check("«Ver en la web»: canónica principal y la del portal aparte", webLinks(webs2[0]).main === PRETTY || webLinks(webs2[0]).main === p.canonical_url, webLinks(webs2[0]));
+check("el nombre de la agencia sale del anuncio", webs1[0].agency_name === "Domus Aurea Capital");
+check("«Ref. en su web» sin leer sale de la URL/anuncio", webs1[0].ref === "3617");
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${ok} ok, ${fail} fallos`);
 process.exit(fail === 0 ? 0 : 1);
