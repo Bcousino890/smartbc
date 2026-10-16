@@ -213,9 +213,13 @@ export function ClientFichaView({
       .map((g) => g.label);
   }, [cc.prefs]);
 
+  // La cifra de la pestaña cuenta lo que sigue vivo (no descartado), igual que
+  // «En selección» del Resumen: antes sumaba también lo descartado y no cuadraba.
+  const liveSelections = selections.filter((s) => s.status !== "discarded").length;
+  const liveLinks = links.filter((l) => l.status !== "discarded").length;
   const counts: Partial<Record<CommandTab, number | null>> = {
     overview: cc.nextActions.length,
-    properties: selections.length + links.length,
+    properties: liveSelections + liveLinks,
     viewings: itineraries.length + visits.length,
     application: cc.applications.length,
     activity: null,
@@ -242,6 +246,10 @@ export function ClientFichaView({
         // Punto dorado en Propiedades cuando hay anuncios recién llegados: es
         // lo que avisa, sin entrar, de que la extensión ha mandado algo.
         alerts={{ properties: Boolean(portalLinks) && cc.portalSummary.fresh > 0 }}
+        titles={{
+          overview: `${cc.nextActions.length} ${cc.nextActions.length === 1 ? "cosa" : "cosas"} por hacer`,
+          properties: `${liveSelections} en selección + ${liveLinks} anuncios añadidos de portales (sin contar descartados)`,
+        }}
         onChange={(x) => goTab(x)}
       />
 
@@ -422,6 +430,7 @@ export function ClientFichaView({
                     canEdit={viewingCollections.canEdit}
                     canDelete={viewingCollections.canDelete}
                     canCreateItinerary={viewingCollections.canCreate}
+                    brief={cc.prefs?.brief ?? null}
                   />
                 </div>
                 <div id="cc-shortlist" className="scroll-mt-28">

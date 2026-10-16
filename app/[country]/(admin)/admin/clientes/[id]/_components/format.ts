@@ -26,13 +26,25 @@ function parse(iso: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Zona horaria fija según el país del cliente. Sin ella, `Intl` usa la del
+ * entorno: el servidor (UTC) y el navegador (Madrid) escriben horas distintas
+ * para la misma fecha ("23:30" / "01:30") y React lanza el error de
+ * hidratación #418 en cuanto la actividad pinta una hora.
+ */
+export function timeZoneForLocale(locale: string): string {
+  return /-CL$/i.test(locale) ? "America/Santiago" : "Europe/Madrid";
+}
+
 export function formatDate(
   iso: string | null | undefined,
   locale: string,
   opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" },
 ): string {
   const d = parse(iso);
-  return d ? new Intl.DateTimeFormat(locale, opts).format(d) : "—";
+  return d
+    ? new Intl.DateTimeFormat(locale, { timeZone: timeZoneForLocale(locale), ...opts }).format(d)
+    : "—";
 }
 
 export function formatDateTime(

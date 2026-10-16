@@ -1,5 +1,7 @@
 "use client";
 
+import { evaluateMatch, exclusionLabel } from "@/lib/clients/brief-match";
+import type { BriefInput } from "@/lib/clients/brief";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -59,6 +61,7 @@ export function SelectedPropertiesBlock({
   canEdit,
   canDelete,
   canCreateItinerary,
+  brief,
 }: {
   clientId: string;
   clientName: string;
@@ -67,6 +70,8 @@ export function SelectedPropertiesBlock({
   canEdit: boolean;
   canDelete: boolean;
   canCreateItinerary: boolean;
+  /** Encargo del cliente: sirve para avisar de lo seleccionado que se sale de él. */
+  brief?: BriefInput | null;
 }) {
   const config = getCountryConfig(country);
   const router = useRouter();
@@ -270,6 +275,7 @@ export function SelectedPropertiesBlock({
                     sel.property.currency,
                     sel.property.operation,
                   )}
+                  outOfBrief={outOfBriefReason(brief, sel.property)}
                   checked={checked.has(sel.id)}
                   onToggle={() => toggle(sel.id)}
                   canEdit={canEdit}
@@ -356,10 +362,31 @@ export function SelectedPropertiesBlock({
   );
 }
 
+/**
+ * Por qué una propiedad seleccionada se sale del encargo del cliente, o null
+ * si encaja (o no hay encargo). Es solo un aviso: el agente puede haberla
+ * elegido a propósito y no se quita nada.
+ */
+function outOfBriefReason(brief: BriefInput | null | undefined, p: SelectionWithProperty["property"]): string | null {
+  if (!brief) return null;
+  const outcome = evaluateMatch(brief, {
+    zone: p.zone,
+    subzone: p.subzone,
+    bedrooms: p.bedrooms,
+    bathrooms: p.bathrooms,
+    square_meters: p.squareMeters,
+    price: p.price,
+    operation: p.operation,
+    title: p.title,
+  });
+  return outcome.excluded ? exclusionLabel(outcome.reason) : null;
+}
+
 function SelectionRow({
   selection,
   country,
   priceLabel,
+  outOfBrief,
   checked,
   onToggle,
   canEdit,
@@ -379,6 +406,7 @@ function SelectionRow({
   selection: SelectionWithProperty;
   country: Country;
   priceLabel: string;
+  outOfBrief: string | null;
   checked: boolean;
   onToggle: () => void;
   canEdit: boolean;
@@ -510,6 +538,14 @@ function SelectionRow({
                 {prop.bathrooms}b
                 {prop.squareMeters ? ` · ${prop.squareMeters} m²` : ""}
               </p>
+              {outOfBrief && (
+                <p
+                  className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800"
+                  title="No encaja con lo que pidió el cliente. Es solo un aviso: sigue en su selección."
+                >
+                  Fuera del encargo: {outOfBrief.toLowerCase()}
+                </p>
+              )}
             </div>
             <div className="shrink-0 text-right">
               <p className="text-xs font-semibold text-ink">{priceLabel}</p>

@@ -180,6 +180,7 @@ function ItineraryCard({
               <span className="text-ink/50">
                 última{" "}
                 {new Date(share.lastOpenedAt).toLocaleDateString("es-ES", {
+                  timeZone: "Europe/Madrid",
                   day: "2-digit",
                   month: "short",
                 })}
@@ -189,6 +190,7 @@ function ItineraryCard({
               <Link2 size={11} />
               caduca{" "}
               {new Date(share.expires_at).toLocaleDateString("es-ES", {
+                timeZone: "Europe/Madrid",
                 day: "2-digit",
                 month: "short",
                 year: "numeric",

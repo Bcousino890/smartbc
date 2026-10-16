@@ -60,6 +60,7 @@ function ago(iso: string | null): string {
 function when(iso: string | null): string {
   if (!iso) return "";
   return new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
     day: "numeric",
     month: "short",
     hour: "2-digit",

@@ -204,6 +204,7 @@ export function Figure({
 // ─── Fechas ──────────────────────────────────────────────────────────────────
 
 const DATE_TIME_FMT = new Intl.DateTimeFormat("es-ES", {
+  timeZone: "Europe/Madrid",
   day: "2-digit",
   month: "short",
   hour: "2-digit",
@@ -211,6 +212,7 @@ const DATE_TIME_FMT = new Intl.DateTimeFormat("es-ES", {
 });
 
 const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
+  timeZone: "Europe/Madrid",
   weekday: "short",
   day: "2-digit",
   month: "short",

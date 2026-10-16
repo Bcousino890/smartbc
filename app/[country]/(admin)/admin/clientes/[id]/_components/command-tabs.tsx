@@ -22,6 +22,7 @@ export function CommandTabs({
   active,
   counts,
   alerts,
+  titles,
   onChange,
 }: {
   active: CommandTab;
@@ -29,6 +30,8 @@ export function CommandTabs({
   counts: Partial<Record<CommandTab, number | null>>;
   /** Punto dorado: hay algo recién llegado dentro (p.ej. anuncios nuevos). */
   alerts?: Partial<Record<CommandTab, boolean>>;
+  /** Qué suma cada cifra (tooltip): una cifra sin desglose no se sabe de dónde sale. */
+  titles?: Partial<Record<CommandTab, string>>;
   onChange: (tab: CommandTab) => void;
 }) {
   const t = useT();
@@ -55,6 +58,7 @@ export function CommandTabs({
               type="button"
               role="tab"
               aria-selected={on}
+              title={titles?.[tab]}
               onClick={() => onChange(tab)}
               className={cn(
                 "relative shrink-0 px-2 py-2.5 text-xs font-medium transition-colors sm:px-3",

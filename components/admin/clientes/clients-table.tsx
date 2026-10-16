@@ -57,7 +57,7 @@ export function ClientsTable({
   /** null = sin permiso o módulo apagado: la columna no se pinta. */
   portalSummaries: Record<string, PortalLinkSummary> | null;
   selectedId?: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | undefined) => void;
 }) {
   const t = useT();
   const prefix = getCountryConfig(country).prefix;
@@ -110,6 +110,15 @@ export function ClientsTable({
 
     return sorted;
   }, [clients, query, statusFilter, sortKey, portalSummaries]);
+
+  // El panel lateral sigue a la lista: si el cliente seleccionado ya no
+  // aparece con el filtro o la búsqueda actuales, pasa al primero que sí (o
+  // se vacía). Antes seguía enseñando a otro cliente que no estaba en la tabla.
+  useEffect(() => {
+    if (selectedId && filtered.some((c) => c.id === selectedId)) return;
+    onSelect(filtered[0]?.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, selectedId]);
 
   // Cambiar de filtro con la página 3 abierta dejaba la tabla vacía.
   useEffect(() => setPage(1), [query, statusFilter, sortKey]);

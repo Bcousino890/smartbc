@@ -1,3 +1,4 @@
+import { detectOperation, MAX_PLAUSIBLE_RENT } from "../detect-operation";
 import type { CheerioAPI } from "cheerio";
 import type { ImportPreview } from "../types";
 import type { LocationPrecision } from "@/lib/types";
@@ -147,7 +148,8 @@ function listingToPreview(
   const addressParts = [listing.address, listing.municipality, listing.province].filter(Boolean);
   const address = addressParts.length ? addressParts.join(", ") : null;
 
-  const operation = listing.operation === "rent" ? "rent" : "sale";
+  const operation =
+    listing.operation === "rent" && !(price !== null && price >= MAX_PLAUSIBLE_RENT) ? "rent" : "sale";
 
   // Fotos: `multimedia.images[].url` en formato WEB_LISTING-M → upgrade a
   // WEB_DETAIL_TOP-XL-L con el helper del scraper de imágenes.
@@ -290,20 +292,7 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
   // visible: el título y el og:description suelen empezar con "Alquiler de
   // piso..." o "Venta de piso..." según corresponda. Como último recurso,
   // un precio en "€/mes" indica alquiler.
-  let operation: "rent" | "sale" | null = null;
-  const operationCorpus = [title, description, ogTitle, ogDesc, priceText]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  if (/\balquile[rt]\b|\barrendam|€\s*\/\s*mes|\beur\s*\/\s*mes/i.test(operationCorpus)) {
-    operation = "rent";
-  } else if (/\bventa\b|\bcompra\b|\bvende\b|\ben venta\b/i.test(operationCorpus)) {
-    operation = "sale";
-  } else if (/\/alquiler-/i.test(sourceUrl)) {
-    operation = "rent";
-  } else if (/\/venta-/i.test(sourceUrl)) {
-    operation = "sale";
-  }
+  const operation = detectOperation({ title, ogTitle, description, ogDesc, priceText, sourceUrl, price });
 
   const featureSet = new Set<string>();
   $(".details-property_features li, .details-property-feature li").each((_, el) => {
