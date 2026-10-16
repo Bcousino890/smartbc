@@ -11,6 +11,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // Antes esta lectura no comprobaba ni sesión: devolvía nombre, teléfonos,
+  // email y RUT del dueño de CUALQUIER captación a quien conociera su id
+  // (service role, `select("*")`, y el middleware no protege /api). Ahora
+  // exige el mismo gate que el resto de operaciones sobre los contactos:
+  // sesión + poder trabajar esa captación (asignada, creada o con permiso).
+  const gate = await requireCaptacionWork(id);
+  if (!gate.ok) return gate.response;
+
   try {
     const db = createAdminClient() as any;
     const { data, error } = await db
