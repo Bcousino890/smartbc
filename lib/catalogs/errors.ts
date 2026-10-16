@@ -40,6 +40,13 @@ const MESSAGES: Record<string, string> = {
   cover_not_in_catalog: "La portada tiene que ser una vivienda que esté ahora en el catálogo.",
   invalid_cover_photo: "Esa foto no es de la vivienda elegida.",
   // E3 · fotos por catálogo (0202).
+  // HOME · grupos (0203)
+  invalid_name: "El nombre del grupo tiene que tener entre 1 y 60 caracteres.",
+  duplicate_name: "Ya hay un grupo con ese nombre en ese nivel (sin contar mayúsculas ni tildes).",
+  too_deep: "Solo hay dos niveles: un subgrupo no puede tener subgrupos, y un grupo con subgrupos no puede ir dentro de otro.",
+  too_many_groups: "Has llegado al máximo de 100 grupos (subgrupos incluidos).",
+  invalid_order: "Los grupos han cambiado en otra pestaña. Recarga la página e inténtalo de nuevo.",
+  invalid_move: "Solo se puede mover un subgrupo a otro grupo.",
   last_photo: "Es la última foto que se usa de esta vivienda en el catálogo. Para que no aparezca, quita la vivienda o exclúyela en Viviendas.",
   photo_excluded: "Esa foto no se usa en este catálogo. Vuelve a usarla antes de elegirla como foto de apertura.",
   photo_not_in_catalog: "Esa vivienda no está ahora en el catálogo.",
@@ -69,3 +76,16 @@ export function catalogErrorMessage(err: { message?: string | null; code?: strin
   }
   return GENERIC_ERROR;
 }
+
+/** Errores de las acciones de grupos: 'forbidden' aquí casi siempre es un
+ *  grupo que se acaba de borrar en otra pestaña (o un catálogo que ya no es
+ *  del dueño). Una carrera con el índice único se lee como nombre repetido. */
+export function groupErrorMessage(err: { message?: string | null; code?: string | null } | string | null | undefined): string {
+  const msg = typeof err === "string" ? err : (err?.message ?? "").trim();
+  if (msg === "forbidden") return "Ese grupo o catálogo ya no existe o no es tuyo. Recarga la página.";
+  if (typeof err === "object" && err?.code === "23505") return MESSAGES.duplicate_name;
+  return catalogErrorMessage(err);
+}
+
+/** Crear con la casilla marcada (C1): si la asignación falla no se crea nada. */
+export const CREATE_IN_GROUP_FAILED = "No se ha creado el catálogo: el grupo elegido ya no existe. Desmarca la casilla o elige otro grupo.";

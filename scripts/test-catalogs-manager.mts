@@ -9,6 +9,7 @@
  *   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
  *     scripts/test-catalogs-manager.mts
  */
+import { readFileSync } from "node:fs";
 import {
   ALL,
   applyGroupOp,
@@ -520,6 +521,21 @@ function testGroups() {
   check("asignar a un grupo borrado → forbidden (no se crea nada)", d1.ok && err(applyGroupOp(d1.state, { op: "member", groupId: "rec", catalogId: "k1", member: true }, own)) === "forbidden");
 }
 
+// Organizar no avisa a los lectores (AC4): las acciones de grupos viven en un
+// archivo propio que NO importa el vigilante ni guarda catálogos.
+function testGroupActionsDoNotNotify() {
+  section("HOME · grupos: las acciones de grupos no avisan a los lectores");
+  const src = readFileSync(new URL("../app/[country]/(admin)/admin/mi-espacio/group-actions.ts", import.meta.url), "utf8");
+  const code = src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const imports = [...code.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+  check("no importa el vigilante (sync-hub) ni la huella pública", !imports.some((i) => /sync-hub|public-data/.test(i)), imports.join(", "));
+  check("no llama a notifyCatalogChanged, saved() ni revalidatePath", !/notifyCatalogChanged|\bsaved\(|revalidatePath|revalidateCatalog/.test(code));
+  check("solo llama a funciones SQL de grupos (catalog_group_*)", [...code.matchAll(/rpc\(\s*"([^"]+)"/g)].every((m) => /^catalog_group_/.test(m[1]))
+    && /rpcThenState\(profile\.id, "catalog_group_/.test(code));
+  const rpcNames = [...code.matchAll(/"(catalog_[a-z_]+)"/g)].map((m) => m[1]);
+  check("ninguna función SQL de catálogos que suba la versión", rpcNames.every((n) => n.startsWith("catalog_group_")), rpcNames.join(", "));
+}
+
 testPreview();
 testManagerPrices();
 testMaterial();
@@ -531,6 +547,7 @@ testConflict();
 testText();
 testFilters();
 testGroups();
+testGroupActionsDoNotNotify();
 
 console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
 if (failures > 0) process.exit(1);
