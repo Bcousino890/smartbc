@@ -24,6 +24,7 @@ import {
 import { parseAgencyWebHtml, parseGenericFicha, parseInmowebFicha, robotsAllows, toOriginalImageUrl } from "../lib/particulares/agency-web-readers.ts";
 import { computeAgencyPortalLinks, propertyToLinkRow, viewRowToLinkRow } from "../lib/particulares/agency-matching.ts";
 import { pairAgencyInmuebles, webLinks } from "../lib/particulares/agency-pairs.ts";
+import { photosSig, planWebPhotoReplacements } from "../lib/particulares/web-photos-plan.ts";
 import { isCollaboratingAgency, kindOfCrmProperty, sourceLabel } from "../lib/particulares/source-kind.ts";
 import { buildPhotoSources } from "../app/[country]/(admin)/admin/particulares/_ficha/photo-sources.ts";
 
@@ -261,6 +262,20 @@ const webs2 = buildAgencyWebSources(members, cache as never);
 check("«Ver en la web»: canónica principal y la del portal aparte", webLinks(webs2[0]).main === PRETTY || webLinks(webs2[0]).main === p.canonical_url, webLinks(webs2[0]));
 check("el nombre de la agencia sale del anuncio", webs1[0].agency_name === "Domus Aurea Capital");
 check("«Ref. en su web» sin leer sale de la URL/anuncio", webs1[0].ref === "3617");
+
+console.log("— Reemplazo automático de fotos con marca (plan)");
+const urlsA = ["https://m.es/1-original.jpg", "https://m.es/2-original.jpg"];
+const sigA = photosSig(urlsA);
+check("huella estable y sensible al orden/contenido", sigA === photosSig([...urlsA]) && sigA !== photosSig([urlsA[1], urlsA[0]]) && sigA !== photosSig([urlsA[0]]));
+const base = { property_id: "p1", slug: "s1", photos_source: null as string | null, photos_source_sig: null as string | null, collab: false, web: { sig: sigA, n: 2 } };
+const one = (over: Partial<typeof base>) => planWebPhotoReplacements([{ ...base, ...over }])[0];
+check("web verificada + propiedad importada con marca: reemplazar", one({}).action === "replace" && one({}).sig === sigA);
+check("sin web verificada: nada", one({ web: null }).reason === "sin_web_verificada");
+check("ya tiene las limpias con la misma huella: idempotente", one({ photos_source: "web_clean", photos_source_sig: sigA }).reason === "ya_limpias");
+check("la web cambió de fotos (otra huella): se rehace", one({ photos_source: "web_clean", photos_source_sig: "otra" }).action === "replace");
+check("restaurada a mano: el job no vuelve a reemplazar", one({ photos_source: "restored" }).reason === "restaurada_a_mano");
+check("agencia colaboradora (feed): no se toca sola", one({ collab: true }).reason === "colaboradora");
+check("varias propiedades: cada una su plan", planWebPhotoReplacements([base, { ...base, property_id: "p2", slug: "s2", web: null }]).map((x) => x.action).join() === "replace,skip");
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${ok} ok, ${fail} fallos`);
 process.exit(fail === 0 ? 0 : 1);

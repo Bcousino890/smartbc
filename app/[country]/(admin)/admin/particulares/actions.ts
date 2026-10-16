@@ -11,6 +11,7 @@ import { normalizeContactPhone } from "@/lib/sync/particulares/phone-internation
 // el server action de abajo se llama igual de cara al cliente.
 import { createParticularShareLink as insertParticularShareLink } from "@/lib/db/queries/particulares-shares";
 import { PORTAL_URL } from "@/lib/portal-url";
+import { cleanPhotosForParticular } from "@/lib/particulares/web-photos";
 
 export type UpdatePhoneResult =
   | { ok: true }
@@ -146,7 +147,11 @@ export async function createPropertyFromParticular(
     .toString(36)
     .slice(2, 6)}`;
 
-  const cover = part.photos?.[0]?.url ?? null;
+  // Si su web de agencia (Mobilia) ya está leída y verificada, la propiedad nace con las fotos ORIGINALES sin
+  // marca de agua (no con las del portal, que llevan el rótulo). Si no, las del portal (el job las cambia luego).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clean = await cleanPhotosForParticular(createAdminClient() as any, part.id, "portales-externos");
+  const cover = clean?.photos[0]?.url ?? part.photos?.[0]?.url ?? null;
   const notes = [
     "Captado de un anuncio de particular.",
     part.source_url ? `Anuncio: ${part.source_url}` : null,
@@ -186,6 +191,7 @@ export async function createPropertyFromParticular(
       latitude: part.latitude,
       longitude: part.longitude,
       cover_photo_url: cover,
+      ...(clean ? { photos_source: "web_clean", photos_source_sig: clean.sig, photos_source_at: new Date().toISOString() } : {}),
     })
     .select("id, slug")
     .maybeSingle();
@@ -193,7 +199,7 @@ export async function createPropertyFromParticular(
   if (!ins.data) return { ok: false, error: "insert_no_row" };
 
   // 4) Copiar las fotos (referenciando las URLs del anuncio; uso interno).
-  const photos = part.photos ?? [];
+  const photos: Array<{ url: string; alt?: string; width?: number; height?: number }> = clean ? clean.photos : (part.photos ?? []);
   if (photos.length > 0) {
     const photosTbl = supabase.from("property_photos") as unknown as {
       insert: (
@@ -207,6 +213,7 @@ export async function createPropertyFromParticular(
         alt: ph.alt ?? null,
         position: i,
         is_cover: i === 0,
+        ...(clean ? { source_width: ph.width ?? null, source_height: ph.height ?? null } : {}),
       })),
     );
   }

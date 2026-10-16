@@ -41,7 +41,7 @@ export function buildPhotoSources(members: LinkedAd[] | null, currentId: string,
     out.push({
       id: `web:${w.key}`,
       portal: "web",
-      label: `Web de ${who}: fotos sin marca de agua`,
+      label: `Web de ${who} (sin marca de agua)`,
       portalLabel: `Web de ${who}`,
       sourceUrl: w.canonical_url ?? w.url,
       photos: w.photos,

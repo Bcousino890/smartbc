@@ -27,9 +27,12 @@ export async function POST(
 
   const { data: property } = await db
     .from("properties")
-    .select("id")
+    .select("id, photos_source")
     .eq("slug", slug)
     .maybeSingle();
+  if (property?.photos_source === "web_clean") {
+    return Response.json({ error: "Las fotos ya son las originales sin marca de la web de la agencia." }, { status: 409 });
+  }
   if (!property) {
     return Response.json({ error: "Propiedad no encontrada" }, { status: 404 });
   }

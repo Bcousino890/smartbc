@@ -182,7 +182,7 @@ export async function insertImportedProperty(
       eq: (c: string, v: string) => {
         eq: (c: string, v: string) => {
           maybeSingle: () => Promise<{
-            data: { id: string; slug: string; status: string | null } | null;
+            data: { id: string; slug: string; status: string | null; photos_source?: string | null } | null;
             error: { message: string } | null;
           }>;
         };
@@ -190,7 +190,7 @@ export async function insertImportedProperty(
     };
   };
   const existing = await lookupTbl
-    .select("id, slug, status")
+    .select("id, slug, status, photos_source")
     .eq("agency_id", agencyId)
     .eq("external_id", overrides.externalReference)
     .maybeSingle();
@@ -198,6 +198,9 @@ export async function insertImportedProperty(
 
   let propertyId: string;
   let resultSlug: string;
+  // Fotos limpias de la web de la agencia (photos_source = 'web_clean', 0206): una re-importación NO las pisa con
+  // las del portal (llevan la marca de agua).
+  const keepCleanPhotos = existing.data?.photos_source === "web_clean";
 
   if (existing.data) {
     // --- RE-IMPORTACIÓN: update + reemplazo de fotos ---
@@ -230,8 +233,10 @@ export async function insertImportedProperty(
         ) => Promise<{ error: { message: string } | null }>;
       };
     };
-    const del = await delTbl.delete().eq("property_id", propertyId);
-    if (del.error) return { ok: false, error: del.error.message };
+    if (!keepCleanPhotos) {
+      const del = await delTbl.delete().eq("property_id", propertyId);
+      if (del.error) return { ok: false, error: del.error.message };
+    }
   } else {
     // --- ALTA NUEVA ---
     const propsTbl = supabase.from("properties") as unknown as {
@@ -263,7 +268,7 @@ export async function insertImportedProperty(
   }
 
   // Insertar filas de foto con las URLs de ORIGEN (rápido).
-  if (sources.length > 0) {
+  if (sources.length > 0 && !keepCleanPhotos) {
     const photoRows = sources.map((url, idx) => ({
       property_id: propertyId,
       // La portada (idx 0) ya está re-alojada en nuestro storage; el resto van
@@ -369,12 +374,14 @@ export async function insertImportedProperty(
   // y destrozar las fotos (le pasó a un anuncio sin marca de Vip Consultores).
   // Se ejecuta SOLO a mano sobre anuncios concretos cuya agencia sí marca las
   // fotos (scripts/wmrm/clean-property-watermark.sh <slug>).
-  void rehostPhotosInBackground({
-    propertyId,
-    agencySlug,
-    externalId: overrides.externalReference,
-    sources,
-  }).catch(() => {});
+  if (!keepCleanPhotos) {
+    void rehostPhotosInBackground({
+      propertyId,
+      agencySlug,
+      externalId: overrides.externalReference,
+      sources,
+    }).catch(() => {});
+  }
 
   return {
     ok: true,

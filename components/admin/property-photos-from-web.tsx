@@ -13,6 +13,7 @@ type Offer = {
   photos: string[];
   current: Array<{ url: string; is_cover: boolean }>;
   backup: { batch_id: string; count: number; at: string } | null;
+  applied?: { source: string | null; same: boolean; at: string | null };
 };
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -79,6 +80,15 @@ export function PropertyPhotosFromWeb({
 
   return (
     <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50/50 p-3">
+      {offer.available && !confirming && offer.applied?.same && (
+        <p className="mb-2 text-xs font-medium text-teal-900">
+          <ShieldCheck size={13} className="mr-1 inline" aria-hidden />
+          Estas fotos ya son las originales sin marca de agua de la web de {who}{offer.applied.at ? ` (${fmtDate(offer.applied.at)})` : ""}. Se pusieron solas.
+        </p>
+      )}
+      {offer.available && !confirming && !offer.applied?.same && offer.applied?.source === "restored" && (
+        <p className="mb-2 text-xs text-ink/65">Se restauraron las fotos anteriores a mano: ya no se reemplazan solas.</p>
+      )}
       {offer.available && !confirming && (
         <button
           type="button"
@@ -86,7 +96,7 @@ export function PropertyPhotosFromWeb({
           disabled={busy !== null}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-teal-300 bg-white px-3 text-sm font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-50"
         >
-          <ShieldCheck size={16} aria-hidden /> Reemplazar por fotos sin marca de agua (web de {who})
+          <ShieldCheck size={16} aria-hidden /> {offer.applied?.same ? `Rehacer con las fotos sin marca (web de ${who})` : `Reemplazar por fotos sin marca de agua (web de ${who})`}
         </button>
       )}
       {offer.available && confirming && (

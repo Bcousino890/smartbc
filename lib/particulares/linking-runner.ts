@@ -18,6 +18,7 @@ import {
 } from "./agency-matching";
 import { mergeWebKeys, normalizeAgencyUrl } from "./agency-web";
 import { loadAgencyWebCache, refreshAgencyWebs } from "./agency-web-runner";
+import { autoReplaceWebPhotos, type AutoPhotosSummary } from "./web-photos";
 import { isCollaboratingAgency } from "./source-kind";
 
 /**
@@ -52,6 +53,8 @@ export type LinkingRunSummary = {
   linksPruned: number;
   agencyMatches?: number;
   /** Lectura de webs propias de agencias (0203): planificadas / leídas / buenas / fallidas. */
+  /** Reemplazo automático de fotos con marca por las limpias de la web de la agencia (0205/0206). */
+  webPhotos?: AutoPhotosSummary | null;
   webs?: { planned: number; fetched: number; ok: number; failed: number };
   error?: string;
 };
@@ -309,6 +312,8 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     // Lectura ligera de webs de agencias pendientes (≤ 30 por pasada, en serie): al final y sin
     // bloquear nada de lo anterior; lo leído ayuda al enlazado de la PRÓXIMA pasada.
     const webs = webCache ? await refreshAgencyWebs(db, allRows, webCache, { dryRun }) : undefined;
+    // Fotos limpias: propiedades importadas de portales con su web de agencia leída, verificada y enlazada (≤3 por pasada).
+    const webPhotos = webCache ? await autoReplaceWebPhotos(db, { dryRun }) : undefined;
 
     return {
       ok: true,
@@ -320,6 +325,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
       linksPruned,
       agencyMatches: agencyMatches.length,
       webs,
+      webPhotos,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : "linking_failed";
