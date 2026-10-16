@@ -27,6 +27,7 @@ import {
 import { itemLayout } from "@/lib/catalogs/journey-layout";
 import { SyncClient, type Connectivity, type EventSourceLike, type FetchStateResult } from "@/lib/catalogs/sync-client";
 import { Gallery } from "./gallery";
+import { useReaderPdf } from "./pdf-download";
 import {
   ClosingPage,
   CoverPage,
@@ -130,6 +131,9 @@ export function CatalogReader({
   const [state, dispatch] = useReducer(reducer, initial, (s) => initialState(s));
   const [unavailable, setUnavailable] = useState(false);
   const [connectivity, setConnectivity] = useState<Connectivity>("connecting");
+  // PDF: solo con conexión (el enlace no válido ya sustituye todo el lector).
+  const readerPdf = useReaderPdf(token);
+  const pdf = connectivity === "offline" ? null : readerPdf;
   const [scrollMode, setScrollMode] = useState(false);
   const [dir, setDir] = useState<1 | -1>(1);
   const [lowMotion, setLowMotion] = useState(false);
@@ -429,6 +433,7 @@ export function CatalogReader({
             catalog={c}
             folioOf={(key) => openingFolio(c, key, state.layout)}
             onOpen={(key) => go({ kind: "item", key, part: "open" })}
+            pdf={pdf}
           />
         </div>
       );
@@ -436,7 +441,7 @@ export function CatalogReader({
     if (p.kind === "closing") {
       return (
         <div key={`closing-${animate}`} {...common} className={`${styles.spread} ${anim}`}>
-          <ClosingPage catalog={c} expiresAt={state.expiresAt} />
+          <ClosingPage catalog={c} expiresAt={state.expiresAt} pdf={pdf} />
         </div>
       );
     }

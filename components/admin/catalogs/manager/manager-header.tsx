@@ -32,6 +32,8 @@ export function ManagerHeader({
   onToggleStatus,
   onPreviewWithoutLink,
   onShare,
+  onDownloadPdf,
+  pdfBusy = false,
   unsaved = [],
   onOpenGroups,
 }: {
@@ -45,6 +47,9 @@ export function ManagerHeader({
   onToggleStatus: () => void;
   onPreviewWithoutLink: (reason: NoLinkReason) => void;
   onShare: () => void;
+  /** PDF del catálogo: descarga lo guardado (también archivado o sin enlace). */
+  onDownloadPdf?: () => void;
+  pdfBusy?: boolean;
   unsaved?: UnsavedEntry[];
   /** HOME · grupos (C4): abre «Grupos» encima del gestor, sin navegar. Recibe
    *  el botón «⋯» para devolverle el foco al cerrar. */
@@ -95,7 +100,7 @@ export function ManagerHeader({
     <>
       <div ref={sentinel} aria-hidden="true" className="h-px" />
       <div
-        className={`z-20 -mx-4 space-y-2 bg-cream-50/95 px-4 py-2 backdrop-blur lg:sticky lg:top-0 lg:-mx-8 lg:px-8 ${stuck ? "lg:border-b lg:border-gold/20 lg:shadow-sm" : ""}`}
+        className={`relative z-20 -mx-4 space-y-2 bg-cream-50/95 px-4 py-2 backdrop-blur lg:sticky lg:top-0 lg:-mx-8 lg:px-8 ${stuck ? "lg:border-b lg:border-gold/20 lg:shadow-sm" : ""}`}
         data-testid="manager-header"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -148,6 +153,21 @@ export function ManagerHeader({
                   >
                     {archived ? "Reactivar" : "Archivar"}
                   </button>
+                  {onDownloadPdf ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={pdfBusy}
+                      onClick={() => {
+                        setMenu(false);
+                        onDownloadPdf();
+                      }}
+                      className="block w-full rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-cream-50 disabled:opacity-60"
+                      data-testid="menu-pdf"
+                    >
+                      {pdfBusy ? "Preparando el PDF…" : "Descargar PDF"}
+                    </button>
+                  ) : null}
                   {onOpenGroups ? (
                     <button
                       type="button"

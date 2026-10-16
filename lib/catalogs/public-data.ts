@@ -76,6 +76,21 @@ async function rawStates(tokens: string[]): Promise<Map<string, CatalogTokenStat
   return out;
 }
 
+/** PDF del catálogo (K1): los lectores del enlace para la captura fija, por
+ *  el MISMO camino que el estado público (versión de su catálogo e instantánea
+ *  pública, que ya decide la validez del enlace y la disponibilidad). */
+export function linkExportReaders(token: string): {
+  checkAccess: () => Promise<boolean>;
+  readMeta: () => Promise<CatalogMeta | null>;
+  readSnapshot: () => Promise<InternalSnapshot | null>;
+} {
+  return {
+    checkAccess: async () => isShareToken(token),
+    readMeta: async () => (await shareMetas([token])).get(token) ?? null,
+    readSnapshot: async () => (await rawPublic(token))?.snapshot ?? null,
+  };
+}
+
 /** Acceso + contenido público + huella. null = no disponible (inexistente,
  *  revocado, caducado o archivado: no se distingue). Lanza si falla la BD o
  *  si la operación no se puede leer de forma coherente (§3.2): nunca se
