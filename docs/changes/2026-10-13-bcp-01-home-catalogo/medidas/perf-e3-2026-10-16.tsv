@@ -1,0 +1,100 @@
+# tanda	n	fase	medida	reps	p50_ms	p95_ms	max_ms	bytes	items	total
+1 (cargado)	1000	E3	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	10.98	11.58	14.06	251446	24	51
+1 (cargado)	1000	E3+ajustes	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	11.43	11.91	14.18	252886	24	51
+1 (cargado)	1000	main	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	10.23	10.54	10.83	246646	24	51
+1 (cargado)	1000	E3	auto amplio (toda venta, 24) · instantánea	200	8.35	8.92	9.66	229344	24	523
+1 (cargado)	1000	E3+ajustes	auto amplio (toda venta, 24) · instantánea	200	8.75	9.48	14.29	230784	24	523
+1 (cargado)	1000	main	auto amplio (toda venta, 24) · instantánea	200	7.53	8.22	30.84	224544	24	523
+1 (cargado)	1000	E3	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	8.55	9.16	10.32	107529	12	131
+1 (cargado)	1000	E3+ajustes	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	8.76	9.24	10.78	108249	12	131
+1 (cargado)	1000	main	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	8.10	8.43	8.83	105129	12	131
+1 (cargado)	1000	E3	auto · get_catalog_states ×1	200	8.38	8.77	11.27			
+1 (cargado)	1000	E3+ajustes	auto · get_catalog_states ×1	200	8.82	9.18	9.70			
+1 (cargado)	1000	main	auto · get_catalog_states ×1	200	7.60	7.91	10.12			
+1 (cargado)	1000	E3	auto · get_catalog_states ×20	30	177.23	181.88	243.61			
+1 (cargado)	1000	E3+ajustes	auto · get_catalog_states ×20	30	184.13	197.22	202.15			
+1 (cargado)	1000	main	auto · get_catalog_states ×20	30	167.46	176.20	193.88			
+1 (cargado)	1000	E3	auto · get_catalog_states ×5	100	43.96	45.22	47.95			
+1 (cargado)	1000	E3+ajustes	auto · get_catalog_states ×5	100	45.93	50.25	137.38			
+1 (cargado)	1000	main	auto · get_catalog_states ×5	100	41.60	42.89	58.86			
+1 (cargado)	1000	E3	manual 12 · instantánea	200	3.30	3.91	6.09	114785	12	
+1 (cargado)	1000	E3+ajustes	manual 12 · instantánea	200	3.51	10.76	71.70	115505	12	
+1 (cargado)	1000	main	manual 12 · instantánea	200	2.62	2.75	2.90	112385	12	
+1 (cargado)	1000	E3	manual · get_catalog_states ×1	200	3.24	3.66	5.63			
+1 (cargado)	1000	E3+ajustes	manual · get_catalog_states ×1	200	3.45	4.12	6.39			
+1 (cargado)	1000	main	manual · get_catalog_states ×1	200	2.72	2.89	3.15			
+1 (cargado)	1000	E3	manual · get_catalog_states ×20	100	51.72	53.79	55.85			
+1 (cargado)	1000	E3+ajustes	manual · get_catalog_states ×20	100	56.10	63.48	157.90			
+1 (cargado)	1000	main	manual · get_catalog_states ×20	100	45.03	48.07	105.62			
+1 (cargado)	1000	E3	manual · get_catalog_states ×5	200	13.60	15.85	72.48			
+1 (cargado)	1000	E3+ajustes	manual · get_catalog_states ×5	200	14.43	16.24	20.92			
+1 (cargado)	1000	main	manual · get_catalog_states ×5	200	11.69	12.44	56.80			
+1 (cargado)	1000	E3	mixto · get_catalog_states 5 manual + 5 auto	100	57.10	61.04	92.02			
+1 (cargado)	1000	E3+ajustes	mixto · get_catalog_states 5 manual + 5 auto	100	59.58	63.61	66.01			
+1 (cargado)	1000	main	mixto · get_catalog_states 5 manual + 5 auto	100	54.78	61.04	74.96			
+1 (cargado)	2000	E3	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	11.68	12.48	14.33	225773	24	106
+1 (cargado)	2000	E3+ajustes	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	59.18	315.48	1046538.73	227213	24	106
+1 (cargado)	2000	main	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	10.88	11.63	12.57	220973	24	106
+1 (cargado)	2000	E3	auto amplio (toda venta, 24) · instantánea	200	10.09	12.29	63.56	222092	24	1046
+1 (cargado)	2000	E3+ajustes	auto amplio (toda venta, 24) · instantánea	200	25.38	89.33	1005060.87	223532	24	1046
+1 (cargado)	2000	main	auto amplio (toda venta, 24) · instantánea	200	9.28	10.36	13.20	217292	24	1046
+1 (cargado)	2000	E3	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	10.09	10.77	11.79	96551	12	268
+1 (cargado)	2000	E3+ajustes	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	20.75	98.90	279.94	97271	12	268
+1 (cargado)	2000	main	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	9.40	10.74	16.59	94151	12	268
+1 (cargado)	2000	E3	auto · get_catalog_states ×1	200	10.36	11.85	24.44			
+1 (cargado)	2000	E3+ajustes	auto · get_catalog_states ×1	200	17.53	56.55	911522.43			
+1 (cargado)	2000	main	auto · get_catalog_states ×1	200	9.38	9.88	14.03			
+1 (cargado)	2000	E3	auto · get_catalog_states ×20	30	203.50	215.76	272.11			
+1 (cargado)	2000	E3+ajustes	auto · get_catalog_states ×20	30	216.33	326.38	524104.44			
+1 (cargado)	2000	main	auto · get_catalog_states ×20	30	208.32	352.31	553.36			
+1 (cargado)	2000	E3	auto · get_catalog_states ×5	100	55.60	71.98	162.55			
+1 (cargado)	2000	E3+ajustes	auto · get_catalog_states ×5	100	72.23	194.56	1071938.10			
+1 (cargado)	2000	main	auto · get_catalog_states ×5	100	48.21	51.11	75.66			
+1 (cargado)	2000	E3	manual 12 · instantánea	200	3.39	5.98	14.99	114017	12	
+1 (cargado)	2000	E3+ajustes	manual 12 · instantánea	200	3.21	3.60	5.48	114677	12	
+1 (cargado)	2000	main	manual 12 · instantánea	200	2.61	2.81	3.02	111817	12	
+1 (cargado)	2000	E3	manual · get_catalog_states ×1	200	3.32	3.62	4.05			
+1 (cargado)	2000	E3+ajustes	manual · get_catalog_states ×1	200	3.30	3.50	4.80			
+1 (cargado)	2000	main	manual · get_catalog_states ×1	200	2.71	2.85	3.12			
+1 (cargado)	2000	E3	manual · get_catalog_states ×20	100	52.02	53.11	56.11			
+1 (cargado)	2000	E3+ajustes	manual · get_catalog_states ×20	100	56.01	63.78	154.03			
+1 (cargado)	2000	main	manual · get_catalog_states ×20	100	48.35	60.21	73.87			
+1 (cargado)	2000	E3	manual · get_catalog_states ×5	200	13.95	15.59	25.85			
+1 (cargado)	2000	E3+ajustes	manual · get_catalog_states ×5	200	14.40	15.43	17.46			
+1 (cargado)	2000	main	manual · get_catalog_states ×5	200	11.78	13.55	33.91			
+1 (cargado)	2000	E3	mixto · get_catalog_states 5 manual + 5 auto	100	64.21	72.67	113.27			
+1 (cargado)	2000	E3+ajustes	mixto · get_catalog_states 5 manual + 5 auto	100	77.64	154.27	145680.89			
+1 (cargado)	2000	main	mixto · get_catalog_states 5 manual + 5 auto	100	67.57	251.33	26815.58			
+2 (2000, repetida)	2000	E3	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	11.47	12.29	23.36	225778	24	105
+2 (2000, repetida)	2000	E3+ajustes	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	11.94	14.70	23.49	227218	24	105
+2 (2000, repetida)	2000	main	auto alquiler (3 zonas, ≤5.000, 24) · instantánea	200	11.35	15.16	25.94	220978	24	105
+2 (2000, repetida)	2000	E3	auto amplio (toda venta, 24) · instantánea	200	9.85	10.14	11.32	218412	24	1047
+2 (2000, repetida)	2000	E3+ajustes	auto amplio (toda venta, 24) · instantánea	200	10.35	11.75	15.61	219852	24	1047
+2 (2000, repetida)	2000	main	auto amplio (toda venta, 24) · instantánea	200	9.49	11.20	21.64	213612	24	1047
+2 (2000, repetida)	2000	E3	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	9.57	10.14	10.63	96544	12	268
+2 (2000, repetida)	2000	E3+ajustes	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	9.85	11.04	13.28	97264	12	268
+2 (2000, repetida)	2000	main	auto estrecho (Salamanca+Justicia, venta, rango, 12) · instantánea	200	10.09	16.69	84.87	94144	12	268
+2 (2000, repetida)	2000	E3	auto · get_catalog_states ×1	200	9.95	10.39	11.93			
+2 (2000, repetida)	2000	E3+ajustes	auto · get_catalog_states ×1	200	10.34	10.76	11.66			
+2 (2000, repetida)	2000	main	auto · get_catalog_states ×1	200	9.38	10.80	28.15			
+2 (2000, repetida)	2000	E3	auto · get_catalog_states ×20	30	201.14	219.88	221.36			
+2 (2000, repetida)	2000	E3+ajustes	auto · get_catalog_states ×20	30	207.55	482.47	681.08			
+2 (2000, repetida)	2000	main	auto · get_catalog_states ×20	30	199.32	273.53	296.74			
+2 (2000, repetida)	2000	E3	auto · get_catalog_states ×5	100	49.65	53.35	62.84			
+2 (2000, repetida)	2000	E3+ajustes	auto · get_catalog_states ×5	100	54.26	153.55	339.64			
+2 (2000, repetida)	2000	main	auto · get_catalog_states ×5	100	50.77	89.39	149.36			
+2 (2000, repetida)	2000	E3	manual 12 · instantánea	200	3.14	3.50	4.82	114017	12	
+2 (2000, repetida)	2000	E3+ajustes	manual 12 · instantánea	200	3.16	3.28	3.87	114677	12	
+2 (2000, repetida)	2000	main	manual 12 · instantánea	200	2.70	2.91	3.27	111817	12	
+2 (2000, repetida)	2000	E3	manual · get_catalog_states ×1	200	3.11	3.30	4.18			
+2 (2000, repetida)	2000	E3+ajustes	manual · get_catalog_states ×1	200	3.29	3.57	3.98			
+2 (2000, repetida)	2000	main	manual · get_catalog_states ×1	200	2.81	3.01	3.20			
+2 (2000, repetida)	2000	E3	manual · get_catalog_states ×20	100	51.88	69.25	92.27			
+2 (2000, repetida)	2000	E3+ajustes	manual · get_catalog_states ×20	100	54.64	58.02	63.37			
+2 (2000, repetida)	2000	main	manual · get_catalog_states ×20	100	49.37	69.11	263.68			
+2 (2000, repetida)	2000	E3	manual · get_catalog_states ×5	200	13.37	15.17	45.38			
+2 (2000, repetida)	2000	E3+ajustes	manual · get_catalog_states ×5	200	14.14	14.57	14.95			
+2 (2000, repetida)	2000	main	manual · get_catalog_states ×5	200	11.94	12.79	14.40			
+2 (2000, repetida)	2000	E3	mixto · get_catalog_states 5 manual + 5 auto	100	63.30	75.06	95.27			
+2 (2000, repetida)	2000	E3+ajustes	mixto · get_catalog_states 5 manual + 5 auto	100	64.87	71.69	93.83			
+2 (2000, repetida)	2000	main	mixto · get_catalog_states 5 manual + 5 auto	100	59.27	62.96	80.08			
