@@ -15,7 +15,11 @@ import type { ContactRole } from "./contact-format";
 export type PhotoOrientation = "landscape" | "portrait" | "square" | "unknown";
 
 export interface PublicPhoto {
-  /** Proxy neutro: /p/{slug}/{idx}.webp (sin ?w=; el lector añade el ancho). */
+  /** E3: identidad opaca de la foto en el catálogo (la clave del proxy). La
+   *  galería se reasigna por ella al llegar una versión nueva. */
+  key: string;
+  /** Proxy neutro: /p/{slug}/{idx}.webp?f={clave}&v={versión} (sin ancho; el
+   *  lector lo añade con withWidth). */
   src: string;
   width: number | null;
   height: number | null;

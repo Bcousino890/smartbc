@@ -7,6 +7,7 @@ import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { CLEAN, LEVEL, STORY, TextEditor, textDraftKey, textEdited, textSessionKey, type TextActions } from "../catalog-texts-panel";
 import { draftsStore, useDraftsVersion } from "./drafts-store";
 import { SidePanel } from "./side-panel";
+import { CatalogPhotosBlock, type PhotoActions } from "./catalog-photos-block";
 
 // Contenido (BCP-01 E2, plan §3.8): la lista con qué ve hoy el cliente, el
 // estado del texto y el material (D-QA8, sin IA), con filtros y búsqueda, y UN
@@ -29,6 +30,9 @@ export function ContentSection({
   onOpen,
   refresh,
   message,
+  photoActions,
+  photoRun,
+  refreshKey,
 }: {
   catalogId: string;
   texts: CatalogTextView[];
@@ -41,6 +45,10 @@ export function ContentSection({
   onOpen: (propertyId: string | null) => void;
   refresh: () => void;
   message: ReactNode;
+  /** E3 · fotos en este catálogo (se guardan al pulsar, aparte del texto). */
+  photoActions: PhotoActions;
+  photoRun: Parameters<typeof CatalogPhotosBlock>[0]["run"];
+  refreshKey: string;
 }) {
   useDraftsVersion();
   const filter = draftsStore.ui<ContentFilter>(catalogId, "contentFilter") ?? "todas";
@@ -251,6 +259,17 @@ export function ContentSection({
                 si no, solo datos y fotos.
                 {material[open.propertyId] && materialLabels(material[open.propertyId]).length ? ` Material: ${materialLabels(material[open.propertyId]).join(" · ")}.` : ""}
               </p>
+              {open.inList ? (
+                <CatalogPhotosBlock
+                  key={`photos-${open.propertyId}`}
+                  catalogId={catalogId}
+                  propertyId={open.propertyId}
+                  actions={photoActions}
+                  run={photoRun}
+                  pending={pending}
+                  refreshKey={refreshKey}
+                />
+              ) : null}
               <TextEditor
                 key={open.propertyId}
                 catalogId={catalogId}

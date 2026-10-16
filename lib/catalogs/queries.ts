@@ -7,7 +7,9 @@ import { explainProperty, INCLUDED_UNAVAILABLE } from "./explain";
 import { type AdjustmentKind, type CandidateProperty, type Via } from "./selection";
 import { coverPhotoOf, type InternalSnapshot } from "./to-public";
 import { materialByProperty } from "./material-data";
-import type { CatalogAdView, CatalogCoverState, CatalogDetail, CatalogItemView, CatalogSummary, CoverPhotoOption } from "./types";
+import { catalogPhotoData } from "./photo-data";
+import { photoSrc, withWidth } from "./photo-selection";
+import type { CatalogAdView, CatalogCoverState, CatalogDetail, CatalogItemView, CatalogPhotosView, CatalogSummary, CoverPhotoOption } from "./types";
 
 // ============================================================================
 // Lecturas de la HOME y de la gestión de catálogos (BCP-01). Siempre filtradas
@@ -20,9 +22,6 @@ import type { CatalogAdView, CatalogCoverState, CatalogDetail, CatalogItemView, 
 
 const db = () => createAdminClient() as any;
 
-export function coverPhotoUrl(slug: string | null | undefined, width = 640): string | null {
-  return slug ? `/p/${encodeURIComponent(slug)}/0.webp?w=${width}` : null;
-}
 
 export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary[]> {
   const { data: cats, error } = await db()
@@ -41,10 +40,8 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
 
   const adsByCatalog = await listCatalogAds(ids);
   const count = new Map<string, number>();
-  const firstSlug = new Map<string, string>();
   for (const it of (items ?? []) as any[]) {
     count.set(it.catalog_id, (count.get(it.catalog_id) ?? 0) + 1);
-    if (!firstSlug.has(it.catalog_id) && it.properties?.slug) firstSlug.set(it.catalog_id, it.properties.slug);
   }
   // Portada (C1) y, en automático, el número de viviendas: de la MISMA
   // instantánea que lee el lector, para que la HOME enseñe la misma portada.
@@ -54,7 +51,7 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
     const snap = await internalSnapshot(c.id);
     if (!snap) continue;
     const photo = coverPhotoOf(snap);
-    cover.set(c.id, photo ? `${photo}?w=640` : null);
+    cover.set(c.id, photo ? withWidth(photo, 640) : null);
     if (c.mode === "auto") count.set(c.id, (snap.items ?? []).filter((it) => it && it.status !== "sold" && it.status !== "archived").length);
   }
 
@@ -69,7 +66,9 @@ export async function listOwnerCatalogs(ownerId: string): Promise<CatalogSummary
     itemCount: count.get(c.id) ?? 0,
     numberLabel: catalogNumberLabel(i + 1),
     edition: editionLabel(new Date(c.created_at)),
-    coverPhotoUrl: cover.has(c.id) ? cover.get(c.id) ?? null : coverPhotoUrl(firstSlug.get(c.id)),
+    // E3: solo la regla única (instantánea). Sin instantánea, sin foto: nunca
+    // una foto por posición que podría estar excluida.
+    coverPhotoUrl: cover.get(c.id) ?? null,
     contactName: c.contact_name ?? null,
     mode: c.mode === "auto" ? "auto" : "manual",
     criteria: criteriaOf(c.criteria),
@@ -140,7 +139,8 @@ function toItemView(p: any, position: number, op: CatalogOperation): CatalogItem
     bedrooms: p.bedrooms ?? null,
     bathrooms: p.bathrooms ?? null,
     squareMeters: p.square_meters ?? null,
-    photoUrl: coverPhotoUrl(p.slug, 320),
+    // E3: la miniatura la pone withThumbs (apertura efectiva en el catálogo).
+    photoUrl: null,
   };
 }
 
@@ -157,6 +157,18 @@ export async function propertyViews(ids: string[], op: CatalogOperation, ctx?: E
     if (!ctx) return [view];
     const adjustment = ctx.adjustments.get(id) ?? null;
     return [{ ...view, adjustment, via: ctx.via?.get(id), explain: explainProperty(toCandidate(p), ctx.criteria, adjustment) }];
+  });
+}
+
+/** E3: la miniatura de cada vivienda en la gestión es su apertura EFECTIVA
+ *  en este catálogo (la misma regla que el lector), por clave. */
+async function withThumbs<T extends CatalogItemView>(catalogId: string | null, views: T[]): Promise<T[]> {
+  if (views.length === 0) return views;
+  const data = await catalogPhotoData(catalogId, views.map((v) => v.propertyId));
+  return views.map((v) => {
+    const eff = data.get(v.propertyId)?.eff;
+    const p = eff && eff.photos.length ? eff.photos[eff.openingIndex] : null;
+    return { ...v, photoUrl: p ? withWidth(photoSrc(v.slug, p), 320) : null };
   });
 }
 
@@ -192,14 +204,14 @@ export async function autoSelection(
     via: new Map(rows.map((r) => [r.property_id as string, r.via as Via])),
   };
   return {
-    items: await propertyViews(rows.map((r) => r.property_id), crit.operation, ctx),
+    items: await withThumbs(catalogId, await propertyViews(rows.map((r) => r.property_id), crit.operation, ctx)),
     total: rows.length ? Number(rows[0].total) : 0,
     matched: rows.length ? Number(rows[0].matched ?? rows[0].total) : 0,
   };
 }
 
-/** Estado de la portada (C1): la elección guardada, la foto que ve hoy el
- *  lector (misma instantánea) y los avisos. */
+/** Estado de la portada (C1; respaldos de E3-3): la elección guardada, la
+ *  foto que ve hoy el lector (misma instantánea) y los avisos. */
 async function coverState(catalogId: string, cat: any, snap: InternalSnapshot | null): Promise<CatalogCoverState> {
   const chosenPropertyId: string | null = cat.cover_property_id ?? null;
   const chosenPhotoId: string | null = cat.cover_photo_id ?? null;
@@ -210,36 +222,66 @@ async function coverState(catalogId: string, cat: any, snap: InternalSnapshot | 
   if (chosenPropertyId && snap) {
     const key = snap.cover?.key ?? null;
     if (key === null) {
-      warnings.push("La vivienda elegida para la portada ya no está en el catálogo: se usa la primera vivienda con foto.");
+      warnings.push("La vivienda elegida para la portada ya no está en el catálogo: se usa la apertura de la primera vivienda con foto.");
     } else {
       const it = items.find((x) => String(x.key) === key);
-      if (it && (it.photos ?? []).length === 0) warnings.push("La vivienda elegida no tiene fotos: se usa la primera vivienda con foto.");
-      else if (chosenPhotoId && !snap.cover?.photo) warnings.push("La foto elegida ya no existe: se usa la foto de portada de esa vivienda.");
+      const data = it ? (await catalogPhotoData(catalogId, [chosenPropertyId])).get(chosenPropertyId) : undefined;
+      if (it && (!data || data.eff.photos.length === 0)) warnings.push("La vivienda elegida no tiene fotos: se usa la apertura de la primera vivienda con foto.");
+      else if (chosenPhotoId && !snap.cover?.photo) warnings.push("La foto elegida ya no existe: se usa la foto de apertura de esa vivienda en este catálogo.");
+      else if (chosenPhotoId && data && !data.eff.photos.some((p) => p.keys.some((k) => data.idByKey.get(k) === chosenPhotoId))) {
+        warnings.push("La foto elegida no se usa en este catálogo: se usa la foto de apertura de esa vivienda.");
+      }
     }
   }
-  return { chosenPropertyId, chosenPhotoId, effectivePhotoUrl: photo ? `${photo}?w=640` : null, warnings };
+  return { chosenPropertyId, chosenPhotoId, effectivePhotoUrl: photo ? withWidth(photo, 640) : null, warnings };
 }
 
-/** Fotos de una vivienda para elegir portada, con la URL del proxy neutro
- *  (mismo índice que el lector: orden por posición, sin URL repetidas). */
+/** Fotos de una vivienda para elegir portada: solo las que se usan en este
+ *  catálogo (E3), con la miniatura por clave. */
 export async function listCoverPhotos(catalogId: string, propertyId: string): Promise<CoverPhotoOption[]> {
-  void catalogId;
   const { data: prop } = await db().from("properties").select("slug").eq("id", propertyId).maybeSingle();
   if (!prop?.slug) return [];
-  const { data } = await db()
-    .from("property_photos")
-    .select("id, url, is_cover, position")
-    .eq("property_id", propertyId)
-    .order("position", { ascending: true })
-    .order("id", { ascending: true });
-  const seen = new Set<string>();
-  const out: CoverPhotoOption[] = [];
-  for (const ph of (data ?? []) as any[]) {
-    if (!ph?.url || seen.has(ph.url)) continue;
-    seen.add(ph.url);
-    out.push({ id: ph.id, url: `/p/${encodeURIComponent(prop.slug)}/${out.length}.webp?w=320`, isCover: ph.is_cover === true });
-  }
-  return out;
+  const data = (await catalogPhotoData(catalogId, [propertyId])).get(propertyId);
+  if (!data) return [];
+  return data.eff.photos.flatMap((p) => {
+    const id = p.key ? data.idByKey.get(p.key) : undefined;
+    return id ? [{ id, url: withWidth(photoSrc(prop.slug, p), 320), isCover: p.crmCover }] : [];
+  });
+}
+
+/** E3 · bloque «Fotos en este catálogo» de una vivienda (solo gestión). */
+export async function listCatalogPhotos(catalogId: string, propertyId: string): Promise<CatalogPhotosView | null> {
+  const { data: prop } = await db().from("properties").select("slug").eq("id", propertyId).maybeSingle();
+  if (!prop?.slug) return null;
+  const { data: cat } = await db().from("catalogs").select("cover_property_id, cover_photo_id").eq("id", catalogId).maybeSingle();
+  const data = (await catalogPhotoData(catalogId, [propertyId])).get(propertyId);
+  if (!data) return null;
+  const eff = data.eff;
+  const openingKey = eff.photos.length ? eff.photos[eff.openingIndex].key : null;
+  const coverHere = cat?.cover_property_id === propertyId;
+  const photos = eff.all.flatMap((p) => {
+    const photoId = p.key ? data.idByKey.get(p.key) : undefined;
+    if (!photoId) return [];
+    const ids = p.keys.map((k) => data.idByKey.get(k));
+    return [{
+      photoId,
+      url: withWidth(photoSrc(prop.slug, p), 320),
+      excluded: p.excluded,
+      opening: !p.excluded && p.key === openingKey,
+      chosen: p.opening,
+      crmCover: p.crmCover,
+      catalogCover: coverHere && !!cat?.cover_photo_id && ids.includes(cat.cover_photo_id),
+    }];
+  });
+  return {
+    propertyId,
+    photos,
+    used: eff.photos.length,
+    total: eff.all.length,
+    openingSource: eff.openingSource,
+    stale: data.staleIds,
+    catalogCoverHere: coverHere,
+  };
 }
 
 export async function getCatalogDetail(ownerId: string, catalogId: string): Promise<CatalogDetail | null> {
@@ -260,17 +302,18 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
   const mode: "manual" | "auto" = cat.mode === "auto" ? "auto" : "manual";
   const criteria = criteriaOf(cat.criteria);
   // K1: también en manual, la operación y el precio del catálogo guardado.
-  const manual: CatalogItemView[] = ((items ?? []) as any[])
-    .filter((it) => it.properties)
-    .map((it) => toItemView(it.properties, it.position, criteria.operation));
+  const manual: CatalogItemView[] = await withThumbs(
+    catalogId,
+    ((items ?? []) as any[]).filter((it) => it.properties).map((it) => toItemView(it.properties, it.position, criteria.operation)),
+  );
   const auto = mode === "auto" ? await autoSelection(ownerId, catalogId, null) : null;
 
   // Ajustes guardados (C1): las excluidas y las inclusiones que hoy no pueden
   // aparecer se enseñan aparte, con su explicación.
   const adj = await catalogAdjustments(catalogId);
   const ctx: ExplainCtx = { criteria, adjustments: adj };
-  const excluded = await propertyViews([...adj].filter(([, k]) => k === "exclude").map(([id]) => id), criteria.operation, ctx);
-  const includedViews = await propertyViews([...adj].filter(([, k]) => k === "include").map(([id]) => id), criteria.operation, ctx);
+  const excluded = await withThumbs(catalogId, await propertyViews([...adj].filter(([, k]) => k === "exclude").map(([id]) => id), criteria.operation, ctx));
+  const includedViews = await withThumbs(catalogId, await propertyViews([...adj].filter(([, k]) => k === "include").map(([id]) => id), criteria.operation, ctx));
   const unavailable = includedViews.filter((v) => v.explain?.headline === INCLUDED_UNAVAILABLE);
   const included = includedViews.length - unavailable.length;
   const snap = await internalSnapshot(catalogId);
@@ -330,7 +373,7 @@ export async function searchCatalogProperties(
   const adjustments = new Map<string, AdjustmentKind>();
   for (const r of rows) if (r.adjustment === "include" || r.adjustment === "exclude") adjustments.set(r.property_id, r.adjustment);
   const saved = criteriaOf(cat?.criteria);
-  const views = await propertyViews(rows.map((r) => r.property_id), saved.operation, { criteria: saved, adjustments });
+  const views = await withThumbs(catalogId, await propertyViews(rows.map((r) => r.property_id), saved.operation, { criteria: saved, adjustments }));
   const inCat = new Map(rows.map((r) => [r.property_id, r.in_catalog === true]));
   return {
     items: views.map((v) => ({ ...v, inCatalog: inCat.get(v.propertyId) ?? false })),
@@ -350,8 +393,8 @@ export async function modePreview(
   const { data: cat } = await db().from("catalogs").select("criteria").eq("id", catalogId).eq("owner_id", ownerId).maybeSingle();
   const op = criteriaOf(cat?.criteria).operation;
   return {
-    entering: await propertyViews((d?.entering ?? []) as string[], op),
-    leaving: await propertyViews((d?.leaving ?? []) as string[], op),
+    entering: await withThumbs(catalogId, await propertyViews((d?.entering ?? []) as string[], op)),
+    leaving: await withThumbs(catalogId, await propertyViews((d?.leaving ?? []) as string[], op)),
     autoTotal: Number(d?.auto_total ?? 0),
     manualCount: Number(d?.manual_count ?? 0),
   };

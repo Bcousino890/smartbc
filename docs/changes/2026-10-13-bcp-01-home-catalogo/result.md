@@ -1175,6 +1175,15 @@ Capturas en [`qa-c2/capturas-e2/`](qa-c2/capturas-e2/) (JPEG, datos sintéticos)
    - el editor como pantalla propia, con «Guardar borrador» y «Publicar» abajo sin tapar los campos.
 8. **D13:** `?medir=1` en el VPS (sigue pendiente; lo de aquí es sintético).
 
+### Estado tras el merge (15 de octubre de 2026)
+
+- **Merge:** PR #318 fusionado (`84538e7`). CI de `main` sobre el merge: **en verde** (comprobado en solo lectura).
+- **QA en vivo de Fabricio, aceptada:**
+  - las cuatro secciones;
+  - lo escrito sin guardar se conserva al cambiar de sección y de vivienda;
+  - pide confirmación al salir por el menú del CRM.
+- **Sigue pendiente** (no se da por hecho): las pruebas en dispositivos reales y D13 en vivo.
+
 ## Pendiente o no demostrado
 
 - La QA completa de Fabricio, D13 en vivo (VPS) y las pruebas en dispositivos reales. Las comprobaciones de aquí son locales y sintéticas.
@@ -1489,3 +1498,216 @@ Plan aprobado: [`qa-c2/plan-vista-previa.md`](qa-c2/plan-vista-previa.md) (D-QA1
 **No cumple G-ALQ ni resuelve el caso original de Recoletos.**
 
 **Merge:** lo decide y hace Fabricio. Es solo código, sin migración.
+
+**Merge y QA en producción:**
+- PR #320 fusionado por Fabricio: commit `f39fda2`, el 15 de octubre de 2026 a las 22:12 UTC. CI de `main` en verde.
+- **QA de Fabricio en producción, superada** (16 de octubre de 2026), en sus dos comprobaciones:
+  - al editar el precio, la vista previa anterior se oculta;
+  - con «10.0000» y «Ver qué entraría», solo sale el error de validación, sin resultados antiguos.
+- **Esta QA no cierra nada más:**
+  - G-ALQ sigue pendiente de la evidencia de la empresa;
+  - el caso original de Recoletos sigue sin confirmar;
+  - siguen pendientes la medición D13 en vivo y la QA en dispositivos reales.
+
+# E3 · Fotos por catálogo
+
+**Plan:** [`qa-c2/plan-e3.md`](qa-c2/plan-e3.md). **Especificación:** [`qa-c2/enmienda-e3.md`](qa-c2/enmienda-e3.md). **Aprobaciones:**
+- D-QA13: decisiones E3-1 a E3-7;
+- D-QA19: ejecución, N1(a), N2 y cinco correcciones.
+
+## Base y commits
+
+- **Base:** `origin/main` = ``f39fda2` (merge de #320)`. La migración `0202` sigue libre: es la siguiente a `0201`, y ningún PR abierto la usa (comprobado antes de implementar y antes de publicar).
+- **Rama:** `fabri/bcp-01-e3`, rebasada sobre `f39fda2`. El checkout original, su stash y los demás worktrees no se han tocado.
+
+| Commit | Tarea |
+| --- | --- |
+| `b3c1745` | E3: especificación de fotos por catálogo y decisiones abiertas (borrador); E2 aceptado en vivo |
+| `327e888` | decisiones de E3 (D-QA13), diagnóstico de la selección automática y propuesta futura de grupos en la HOME |
+| `c3916d9` | E3: el diagnóstico de la selección pasa a su propia rama (separado de E3) |
+| `10cdd76` | QA de Fabricio en producción de la vista previa (#320) superada |
+| `07bab7a` | E3: plan de implementación en borrador (0202, identidad de la foto servida) |
+| `feca16d` | E3 T0: aprobación de la ejecución (D-QA19) y correcciones en el plan |
+| `bf4aa47` | E3 T1: 0202 ajustes de fotos por catálogo, rollback y pruebas SQL |
+| `a099232` | E3 T2–T3: una sola regla de fotos y la proyección pública por clave |
+| `b8f44f3` | E3 T4: el proxy /p sirve por clave opaca de la foto (?f=) |
+| `d375d4c` | E3 T5: la galería abierta se queda en la misma foto (por su clave) |
+| `eef39ba` | E3 T6: servidor del gestor con la regla única de fotos |
+| `9dda77c` | E3 T7: «Fotos en este catálogo» en el panel de Contenido |
+| `170c777` | E3 T8: arreglos encontrados en el navegador |
+| `063d6bc` | E3 T8: medición frente a main en las mismas condiciones (corrección 4) |
+| `53fb30c` | E3 T8: el aviso de foto quitada se ve dentro de la galería; capturas de E3 |
+| (este commit) | E3 T9: resultado y registro |
+
+## Qué cambia
+
+**Datos (`0202`):**
+- **`catalog_photo_prefs`:** ajustes de fotos por catálogo, por `property_photos.id`, sin clave foránea, así que un ajuste de una foto borrada o reimportada se conserva para avisar.
+- **`catalog_photo_key`:** clave opaca y estable de cada foto (16 hex).
+- **`catalog_photo_exclude` y `catalog_photo_opening`**, con estas reglas:
+  - guarda de dueño, vivienda en la lista efectiva y foto suya;
+  - **E3-1, también con concurrencia:** la guarda bloquea la fila del catálogo antes de contar las fotos en uso;
+  - **E3-2:** una foto excluida no se puede elegir como apertura;
+  - excluir la apertura elegida la devuelve a la automática;
+  - volver a usar una foto que ya no existe limpia su ajuste.
+- **La instantánea interna** lleva la clave de cada foto (`f`) y los ajustes (`pp`), y nunca ni ids ni URLs.
+- **Nada escribe** en fichas, fotos ni cachés del CRM.
+
+**Una sola regla** (`photo-selection.ts`):
+- decide qué fotos se usan en el catálogo: dos filas con la misma URL cuentan como una sola foto, y basta excluir cualquiera de ellas;
+- elige la apertura: la elegida → la portada del CRM → la primera en uso;
+- elige la portada del catálogo: la elegida en uso → la apertura de esa vivienda → la apertura de la primera vivienda con fotos;
+- y la ruta de cada foto.
+
+**La usan:**
+- el lector: apertura, recorrido, mosaico, miniaturas y galería;
+- la portada del catálogo y la tarjeta de la HOME;
+- los diagnósticos de material;
+- el selector de portada;
+- las miniaturas del gestor;
+- la vista previa del recorrido en el editor de textos.
+
+**Proxy `/p` (N1):**
+- **Con `?f=`** sirve la foto de esa clave, sin mirar el índice ni el orden. Si no existe, responde 404 sin caché y nunca sirve otra foto. Una clave mal formada da 400 sin caché.
+- **Sin `?f=`,** todo es como antes.
+- **`?v=`** sale de la URL: detecta un realojo, pero **no** un archivo sustituido en la misma URL (corrección 5).
+
+**Lector:**
+- solo las fotos en uso, con su ruta por clave;
+- la galería abierta se queda en la misma foto aunque se excluyan o reordenen otras;
+- si se quita la que se ve, la galería se queda en esa posición con el aviso «Esa foto ya no forma parte del catálogo», que se ve **dentro de la galería** y se puede cerrar desde ella.
+
+**Gestor:**
+- **En Contenido**, el bloque «Fotos en este catálogo»:
+  - recuento y estado de cada foto;
+  - «Usar como apertura», «No usar en este catálogo», «Volver a usarla» y «Volver a la apertura automática»;
+  - guardado al pulsar, aparte del texto (E3-4);
+  - la última foto en uso, desactivada, con su motivo;
+  - confirmaciones que dicen qué respaldo entra al excluir la apertura elegida o la foto de la portada del catálogo;
+  - aviso de los ajustes que ya no se aplican y botón para quitarlos (E3-5).
+- **Miniaturas** con la apertura efectiva.
+- **En Diseño**, solo las fotos en uso, con avisos de los respaldos.
+
+## Verificaciones (locales, datos sintéticos, entorno aislado)
+
+**Entorno:**
+- `npm ci` con el lockfile existente, sin cambios;
+- Postgres 16 temporal (`pg-bcp01`);
+- copia aislada sin `.env*`, con las variables en lista blanca y `@next/env` sin archivos cargados (comprobado antes de cada arranque);
+- Chromium 1208 en caché, con la red bloqueada.
+
+**SQL** (`test-catalogs-core.sh` entero en verde: 787 comprobaciones):
+- **Escenario «2l»** (resultados escritos a mano):
+  - N2: la huella cambia una vez y la instantánea no lleva ids ni URLs;
+  - permisos e INVOKER;
+  - guardas;
+  - E3-1, E3-2, duplicados por URL y apertura excluida;
+  - ninguna escritura en `properties` ni en `property_photos`;
+  - reordenar y realojar conservan los ajustes;
+  - una foto borrada deja de llegar al lector, pero su ajuste sigue en la tabla para el aviso;
+  - reimportar;
+  - una vivienda que sale de la lista y vuelve conserva sus ajustes.
+- **Concurrencia con dos transacciones independientes y simultáneas:** la segunda esperó 1,50 s al bloqueo y falló con `last_photo`, y la vivienda conserva una foto.
+  - **Contraprueba** solo en la base temporal: con la misma función sin el bloqueo, la segunda **no** falla.
+- **Reversión y reaplicación.** Además, el escenario «2m»: la selección (2k) y la paridad TS ↔ SQL siguen en verde sobre `0202`.
+
+**TS y CI:**
+- `tsc` limpio.
+- `test:catalogs`, `test:catalogs-public` y `test:catalogs-manager` en verde. Pruebas nuevas:
+  - la regla única;
+  - la ruta;
+  - la elección del proxy (reordenar, empate, duplicado, realojar, borrar y sin clave);
+  - la proyección y su privacidad;
+  - los cuatro respaldos de la portada;
+  - la galería en vivo.
+
+**Navegador** (`e3.mjs`, a 1440, 362 y 320: 41/41 en cada tamaño):
+- la imagen **servida** por clave tras reordenar, realojar (versión nueva), duplicar y borrar (404, nunca otra);
+- la galería abierta con exclusiones en vivo, y el aviso **visible** dentro de ella (no tapado por nada);
+- las excluidas no se pintan en ninguna imagen;
+- el bloque de la gestión con E3-1, E3-2, las confirmaciones y sus textos, la miniatura con la apertura efectiva, el selector de portada, el aviso de Diseño y E3-5.
+
+**Matriz de E2 y regresiones de siempre:** tanda completa, en secuencia y sin nada en paralelo (servidor de fixtures aislado):
+- **Matriz de E2:**
+  - `t4` 32/0;
+  - `dqa9` 59/0 a 362 y 320;
+  - `saves` 31/0 y `ai` 15/0 en los tres tamaños;
+  - `homes` 56–57/0 y `content` 33–34/0, ambos en los cinco tamaños (salvo `content` a 1280, abajo);
+  - `design-share` 34/0 en los cuatro tamaños;
+  - `bars` 46/0 en cinco tamaños.
+- **Regresiones:**
+  - `indice` 187/0, `prA` 54/0, `prB` 40/0, `enlace` 10/0, `c1` 31/0 y `c2` 186/0;
+  - las mediciones `medicion`, `c1-medicion` y `c2-medicion`: 20/20 ensayos, 0 fallos, **PASA** (máximos 0,20, 0,30 y 1,59 s).
+- **Pruebas nuevas:** `sel` 39/0 y `vista` 23/0 a 1440 y 362, y `e3` 41/0 a 1440, 362 y 320.
+- **Tres fallos de esa tanda que no se repiten.** Las tres pruebas son las mismas que pasaban en la tanda anterior. Desde entonces solo cambió la galería del lector.
+  - **`dqa9` a 1440:** se cortó al cargar `/dev-fixtures/mi-espacio`, por 30 s de espera mientras el servidor de desarrollo recompilaba. Repetida: una vez se volvió a cortar antes de terminar (49 ✅, ningún ❌) y después dio 59/0 cuatro veces seguidas.
+  - **`content` a 1280:** no vio el mensaje «Borrador guardado…», aunque el borrador sí se guardó («Borradores · 1»). Repetida dos veces: 33/0.
+  - **`lector`:** falló «cambio de precio visible (SSE)», un tiempo de espera. Repetida dos veces: 52/0.
+
+**Rendimiento** (corrección 4), en [`medidas/perf-e3-2026-10-16.tsv`](medidas/perf-e3-2026-10-16.tsv) con `scripts/sql/perf-e3.sh`:
+- **Mismas condiciones:** el mismo Postgres temporal, los mismos datos sintéticos y el mismo script. Las tres fases se miden en la misma tanda:
+  - **main:** `0192`–`0197` con los ajustes y portadas de C1 y los textos de C2;
+  - **E3:** `0202` sin ajustes;
+  - **E3 con ajustes:** el peor caso, una foto excluida y una apertura elegida en **todas** las viviendas de los 40 catálogos.
+- **Mediana (p50), main → E3 → E3 con ajustes:**
+
+| Medida | 1.000 propiedades | 2.000 propiedades |
+| --- | --- | --- |
+| Instantánea automática (alquiler, 24) | 10,23 → 10,98 → 11,43 ms | 11,35 → 11,47 → 11,94 ms |
+| Instantánea automática (amplia, 24) | 7,53 → 8,35 → 8,75 ms | 9,49 → 9,85 → 10,35 ms |
+| Instantánea automática (estrecha, 12) | 8,10 → 8,55 → 8,76 ms | 10,09 → 9,57 → 9,85 ms |
+| Instantánea manual (12) | 2,62 → 3,30 → 3,51 ms | 2,70 → 3,14 → 3,16 ms |
+| `get_catalog_states` ×20 automáticos | 167 → 177 → 184 ms | 199 → 201 → 208 ms |
+| `get_catalog_states` 5 manuales + 5 automáticos | 54,8 → 57,1 → 59,6 ms | 59,3 → 63,3 → 64,9 ms |
+
+- **Coste:** entre −5 % y +16 % con E3 y hasta +17 % con ajustes en todas las viviendas. Sale de la clave de cada foto y de leer los ajustes. Sin índices nuevos en `properties`.
+- **Tamaño:** la instantánea crece unos 4,8 KB en un catálogo automático de 24 viviendas (+1,9 %) y 2,4 KB en uno manual de 12, por las claves.
+- **Primera tanda descartada:** la primera tanda de 2.000 se midió con el equipo muy cargado (carga media ~20). Dio máximos absurdos con ajustes y un p95 de 352 ms en `get_catalog_states` ×20 de **main**. La repetición con menos carga no los reproduce.
+- **Ruido:** los p95 varían en las tres fases, main incluido, así que solo se compara la mediana.
+- **Alcance:** son cifras de este equipo con datos sintéticos; no demuestran el rendimiento en producción ni D13 en vivo.
+
+**Compilación aislada:** `next build` en la copia aislada, con `iso.sh verify` antes (sin `.env*`, variables en lista blanca y `@next/env` sin archivos cargados): compila y genera 156/156 páginas. Avisa de un `fetch failed: bad port` porque la URL de Supabase del entorno aislado es ficticia a propósito; no es un fallo del código.
+
+**Capturas:** [`qa-c2/capturas-e3/`](qa-c2/capturas-e3/).
+
+**Arreglos que salieron de las pruebas:**
+- el selector de portada y el bloque de fotos no volvían a leer las fotos tras un cambio;
+- con la galería abierta, el aviso «Esa foto ya no forma parte del catálogo» quedaba debajo de ella y no se veía. Salió en las capturas: la prueba solo miraba que el texto estuviera en la página, y ahora comprueba que se vea;
+- en las fixtures, la versión de una foto realojada no cambiaba.
+
+**Expectativas cambiadas a propósito:** los textos de la portada en `design-share.mjs` (E2) y en `c1.mjs` (C1). La regla nueva usa la apertura efectiva: «Usar su foto de apertura», «Automática: la foto de apertura de la primera vivienda con foto» y «…se usa la apertura de la primera vivienda con foto».
+
+## Despliegue, compatibilidad y recuperación
+
+- **Fusionar puede desplegar y aplicar `0202`.**
+- **N2:** las rutas de las fotos y la huella de **todos** los catálogos cambian una vez. Los lectores abiertos se actualizan o hay que **recargarlos**, y la caché de imágenes se enfría una vez.
+- **Código anterior con el esquema nuevo:** funciona, pero ignora los ajustes, así que **enseñaría también las fotos que E3 excluye**.
+- **Recuperación:**
+  - **del código:** `git revert` del merge. El esquema puede quedarse, pero con el código anterior vuelven a verse las fotos excluidas;
+  - **del esquema:** `rollback-0202.sql`, que ejecuta una persona.
+    - **Se pierden todos los ajustes de fotos.** Antes hay que copiarlos con `\copy`.
+    - La instantánea vuelve a la de `0197` y las huellas cambian otra vez.
+    - Las fichas no se tocan.
+
+## Pendiente o no demostrado
+
+- **La QA de Fabricio en producción**, después del despliegue: lector, galería, gestor, móvil y escritorio.
+- **No se ha ejecutado en local** (sin Supabase):
+  - el camino real con la base: el proxy `/p` contra Supabase Storage y las lecturas de `catalog_photo_prefs` con PostgREST;
+  - la vista previa del recorrido en el editor de textos.
+  - Los cubren la misma función de elección (`pickProxyPhoto`), sus pruebas y las fixtures.
+- **Fuera de E3:** el proxy sin `?f=` sigue ordenando solo por `position` (riesgo que ya existía), y la sustitución de un archivo en la misma URL no se detecta (corrección 5).
+- **Siguen pendientes:** G-ALQ, el caso original de Recoletos, D13 en vivo y la QA en dispositivos reales.
+- **Fuera de alcance:** la HOME editable y PDF. Toda exportación futura tendrá que usar la regla única.
+
+## PR, CI y merge
+
+- Rama `fabri/bcp-01-e3` → `main`. El enlace del PR y el estado de la CI están en el PR.
+- PR: [#321](https://github.com/Bcousino890/smartbc/pull/321). CI en verde en `d70e697`, con TypeScript, las pruebas de catálogos, `next build` y migraciones.
+  - El primer intento falló en `next/font`: Google Fonts no respondió dentro de la CI («Cannot read properties of null»), un fallo transitorio ajeno al código.
+  - Se relanzó solo el trabajo fallido y pasó.
+- **El agente no fusiona.** Fusionar despliega y aplica `0202` (ver «Despliegue, compatibilidad y recuperación»); lo decide Fabricio.
+
+## Revisión
+
+Revisión adicional de Codex: no solicitada.

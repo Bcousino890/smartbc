@@ -22,6 +22,7 @@ export function DesignSection({
   pending,
   run,
   coverActions,
+  coverRefreshKey,
   metaForm,
   coverForm,
   contactName,
@@ -35,6 +36,8 @@ export function DesignSection({
   pending: boolean;
   run: Run;
   coverActions: CoverActions;
+  /** E3: vuelve a leer las fotos de la portada tras cada cambio. */
+  coverRefreshKey?: string;
   metaForm: FormDraft<MetaRaw>;
   coverForm: FormDraft<CoverRaw>;
   contactName: string;
@@ -90,7 +93,7 @@ export function DesignSection({
             {coverNotice}
           </p>
         ) : null}
-        <CoverPicker catalogId={catalog.id} items={items} cover={catalog.cover} actions={coverActions} run={run} pending={pending} form={coverForm} />
+        <CoverPicker catalogId={catalog.id} items={items} cover={catalog.cover} actions={coverActions} run={run} pending={pending} form={coverForm} refreshKey={coverRefreshKey} />
       </div>
       <div className="min-w-0 space-y-2">
         <p className="crm-label-sm text-ink/60">Vista previa de la portada</p>

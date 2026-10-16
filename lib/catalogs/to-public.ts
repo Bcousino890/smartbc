@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { ATICO_FLOOR, resolveFloor } from "@/lib/floor";
 import { editionLabel, floorLabel } from "./format";
 import { priceDisplay, type CatalogOperation } from "./operation-price";
+import { effectivePhotos, photoSrc } from "./photo-selection";
 import { contactPhoneHref, formatContactPhone, isContactRole } from "./contact-format";
 import {
   type PhotoOrientation,
@@ -22,8 +23,9 @@ import {
 //   texto actual de la ficha (mismo hash que lib/services/properties/
 //   client-description.ts). Si no, se omiten: el texto del portal puede traer
 //   teléfonos o el nombre de otra inmobiliaria.
-// · Fotos: por el proxy /p/{slug}/{idx}.webp, con el índice que usa ese proxy
-//   (orden por posición, sin URLs repetidas).
+// · Fotos: las EN USO en este catálogo (photo-selection.ts, E3), por el proxy
+//   /p/{slug}/{idx}.webp?f={clave}&v={versión}: el proxy sirve por la clave
+//   opaca, no por el índice (N1). Ni ids ni URLs de storage.
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -64,8 +66,11 @@ export interface InternalItem {
   features_manual: string[] | null;
   floor_override: string | null;
   clean: { src: string | null; description: string | null; features: string[] | null } | null;
-  /** 0197: clase de la foto (`k`) solo si se conoce. */
-  photos: Array<{ u: string; w: number | null; h: number | null; c: boolean | null; k?: string | null }>;
+  /** 0197: clase de la foto (`k`) solo si se conoce. 0202 (E3): clave
+   *  opaca y estable de la foto (`f`). */
+  photos: Array<{ u: string; f?: string | null; w: number | null; h: number | null; c: boolean | null; k?: string | null }>;
+  /** 0202 (E3): ajustes de fotos de este catálogo, por clave (solo si hay). */
+  pp?: { x: string[]; o: string | null } | null;
   /** 0197 (C2): texto publicado del catálogo, solo si es vigente. */
   text?: { b: string | null; l: string | null; h: string[] | null } | null;
   /** 0197 (C2): historia aprobada (huella, entrada, capítulos aprobados). */
@@ -104,47 +109,32 @@ function cleanStrings(list: unknown): string[] {
     : [];
 }
 
-export function photoPath(slug: string, idx: number): string {
-  return `/p/${encodeURIComponent(slug)}/${idx}.webp`;
-}
 
 function toPublicPhotos(it: InternalItem): { photos: PublicPhoto[]; coverIndex: number; classes: Array<string | null> } {
-  const seen = new Set<string>();
-  const photos: PublicPhoto[] = [];
-  const classes: Array<string | null> = [];
-  let coverIndex = -1;
-  for (const ph of it.photos ?? []) {
-    if (!ph || typeof ph.u !== "string" || seen.has(ph.u)) continue;
-    seen.add(ph.u);
-    const idx = photos.length;
-    classes.push(typeof ph.k === "string" ? ph.k : null);
-    if (ph.c && coverIndex < 0) coverIndex = idx;
-    photos.push({
-      src: photoPath(it.slug, idx),
-      width: positiveInt(ph.w),
-      height: positiveInt(ph.h),
-      orientation: orientation(positiveInt(ph.w), positiveInt(ph.h)),
-    });
-  }
-  return { photos, coverIndex: coverIndex < 0 ? 0 : coverIndex, classes };
+  // E3: una sola regla (photo-selection.ts). Los índices (apertura, secciones,
+  // mosaico, galería) son de la lista YA filtrada; la ruta lleva la clave.
+  const eff = effectivePhotos(it.photos, it.pp);
+  const photos: PublicPhoto[] = eff.photos.map((p) => ({
+    key: p.key ?? photoSrc(it.slug, p),
+    src: photoSrc(it.slug, p),
+    width: positiveInt(p.w),
+    height: positiveInt(p.h),
+    orientation: orientation(positiveInt(p.w), positiveInt(p.h)),
+  }));
+  return { photos, coverIndex: eff.openingIndex, classes: eff.photos.map((p) => p.k) };
 }
 
-/** Índice público (el del proxy) de la foto `u` de una vivienda, o -1. */
+/** Índice (en la lista de fotos EN USO) de la foto `u` de una vivienda, o -1. */
 function photoIndexOf(it: InternalItem, u: string): number {
-  const seen = new Set<string>();
-  for (const ph of it.photos ?? []) {
-    if (!ph || typeof ph.u !== "string" || seen.has(ph.u)) continue;
-    if (ph.u === u) return seen.size;
-    seen.add(ph.u);
-  }
-  return -1;
+  return effectivePhotos(it.photos, it.pp).photos.findIndex((p) => p.u === u);
 }
 
 /**
- * Portada del catálogo (C1). Independiente del orden:
- *   1. la foto elegida, si sigue existiendo;
- *   2. si no, la foto de portada de la vivienda elegida;
- *   3. si la vivienda ya no está o no tiene fotos, la primera vivienda con foto;
+ * Portada del catálogo (C1; respaldos de E3-3). Independiente del orden:
+ *   1. la foto elegida, si sigue existiendo y está EN USO en el catálogo;
+ *   2. si no, la apertura efectiva de esa vivienda en este catálogo;
+ *   3. si la vivienda ya no está o no tiene fotos en uso, la apertura
+ *      efectiva de la primera vivienda con fotos;
  *   4. catálogo vacío (o sin fotos): sin foto.
  */
 export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, items?: PublicItem[]): string | null {

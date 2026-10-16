@@ -9,6 +9,8 @@ import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { normalizeCriteria, type CatalogCriteria, type CatalogOperation } from "@/lib/catalogs/criteria";
 import { fixtureManualPricing } from "@/lib/catalogs/fixtures";
 import { managerPriceFields } from "@/lib/catalogs/operation-price";
+import { effectivePhotos, type PhotoPrefs } from "@/lib/catalogs/photo-selection";
+import type { CatalogPhotosView } from "@/lib/catalogs/types";
 import { autoSelect, candidates, isAvailable, sortCandidates, type AdjustmentKind } from "@/lib/catalogs/selection";
 import { explainProperty, INCLUDED_UNAVAILABLE } from "@/lib/catalogs/explain";
 import { fixtureMaterial, fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView, type FixtureProperty } from "@/lib/catalogs/fixtures-selection";
@@ -42,7 +44,7 @@ type FxWindow = Window & {
   __fxFailNext?: boolean;
 };
 const AI_ACTIONS = new Set(["texts.prepare", "texts.draft"]);
-const READ_ACTIONS = new Set(["search", "selection.previewAuto", "selection.previewMode", "texts.preview", "cover.photos", "ads.searchListings"]);
+const READ_ACTIONS = new Set(["search", "selection.previewAuto", "selection.previewMode", "texts.preview", "cover.photos", "photos.list", "ads.searchListings"]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Envuelve un árbol de acciones con funciones estables que llaman a la versión
@@ -151,6 +153,13 @@ export function FixtureCatalogManager({
       bump((n) => n + 1);
       await live({ op: "text", index: i, body: null, lead: null });
     };
+    // E3: ajustes de fotos de prueba (p. ej. claves que ya no existen, como
+    // tras reimportar en el CRM) para comprobar el aviso de E3-5.
+    (w as unknown as { __fxPhotoPrefs?: (pid: string, prefs: PhotoPrefs) => void }).__fxPhotoPrefs = (pid, prefs) => {
+      photoPrefsRef.current.set(pid, prefs);
+      refresh();
+      bump((k) => k + 1);
+    };
     return () => {
       delete w.__fxChangeSource;
     };
@@ -158,7 +167,7 @@ export function FixtureCatalogManager({
   const explained = (id: string, c: CatalogCriteria, pos: number) => {
     const p = byId.get(id)!;
     const adjustment = adjRef.current.get(id) ?? null;
-    return { ...fixtureView(p, pos, c.operation), adjustment, explain: explainProperty(p, c, adjustment) };
+    return { ...fixtureView(p, pos, c.operation), photoUrl: thumbOf(id), adjustment, explain: explainProperty(p, c, adjustment) };
   };
   const autoItems = (c: CatalogCriteria) => {
     const r = autoSelect(pool, c, [...adjRef.current].map(([propertyId, kind]) => ({ propertyId, kind })));
@@ -175,28 +184,45 @@ export function FixtureCatalogManager({
     const included = incl.length - unavailable.length;
     return { included, unavailable, excluded: ids.filter(([, k]) => k === "exclude").map(([id]) => explained(id, c, 0)), overMax: included > c.max };
   };
-  /** Fotos de una vivienda de prueba (las del ejemplo manual: 2 si tiene foto). */
-  const photosOf = (propertyId: string) => {
+  // E3 · ajustes de fotos por vivienda (por clave; aquí la clave es «id#i»).
+  const photoPrefsRef = useRef(new Map<string, PhotoPrefs>());
+  const demoCount = useRef(new Map(catalog.items.map((it) => [it.propertyId, it.photoUrl ? 2 : 0])));
+  const rawPhotos = (propertyId: string) => {
     const p = byId.get(propertyId);
-    const n = p ? p.photo_count : manualRef.current.find((x) => x.propertyId === propertyId)?.photoUrl ? 2 : 0;
-    return Array.from({ length: n }, (_, i) => ({ id: `${propertyId}#${i}`, url: fixturePhotoUrl(propertyId, i), isCover: i === 0 }));
+    const n = p ? p.photo_count : demoCount.current.get(propertyId) ?? 0;
+    return Array.from({ length: n }, (_, i) => ({ u: `${propertyId}#${i}`, f: `${propertyId}#${i}`, w: 1600, h: 1067, c: i === 0 }));
   };
+  /** La regla única (photo-selection.ts) con los ajustes de prueba. */
+  const effOf = (propertyId: string) => effectivePhotos(rawPhotos(propertyId), photoPrefsRef.current.get(propertyId) ?? null);
+  /** Miniatura de la gestión: la apertura efectiva (D-QA19). */
+  const thumbOf = (propertyId: string) => {
+    const e = effOf(propertyId);
+    return e.photos.length ? fixturePhotoUrl(propertyId, e.photos[e.openingIndex].proxyIdx) : null;
+  };
+  /** Fotos EN USO de una vivienda de prueba (selector de portada). */
+  const photosOf = (propertyId: string) =>
+    effOf(propertyId).photos.map((p) => ({ id: p.key as string, url: fixturePhotoUrl(propertyId, p.proxyIdx), isCover: p.crmCover }));
   /** Misma regla de portada que el lector (to-public.ts → coverPhotoOf). */
   const coverOf = (items: CatalogItemView[]): CatalogDetail["cover"] => {
     const { propertyId, photoId } = coverRef.current;
     const warnings: string[] = [];
     if (items.length === 0) warnings.push("El catálogo está vacío: la portada sale sin foto.");
+    // E3-3: la elegida en uso → la apertura efectiva de esa vivienda → la de
+    // la primera con fotos (las miniaturas ya son la apertura efectiva).
     const first = items.find((x) => x.photoUrl)?.photoUrl ?? null;
     let effective = first;
     if (propertyId) {
       const it = items.find((x) => x.propertyId === propertyId);
-      const photos = photosOf(propertyId);
-      if (!it) warnings.push("La vivienda elegida para la portada ya no está en el catálogo: se usa la primera vivienda con foto.");
-      else if (photos.length === 0) warnings.push("La vivienda elegida no tiene fotos: se usa la primera vivienda con foto.");
+      const e = effOf(propertyId);
+      if (!it) warnings.push("La vivienda elegida para la portada ya no está en el catálogo: se usa la apertura de la primera vivienda con foto.");
+      else if (e.photos.length === 0) warnings.push("La vivienda elegida no tiene fotos: se usa la apertura de la primera vivienda con foto.");
       else {
-        const ph = photos.find((x) => x.id === photoId);
-        if (photoId && !ph) warnings.push("La foto elegida ya no existe: se usa la foto de portada de esa vivienda.");
-        effective = (ph ?? photos[0]).url;
+        const inUse = photoId ? e.photos.find((p) => p.keys.includes(photoId)) : undefined;
+        const exists = photoId ? e.all.some((p) => p.keys.includes(photoId)) : false;
+        if (photoId && !exists) warnings.push("La foto elegida ya no existe: se usa la foto de apertura de esa vivienda en este catálogo.");
+        else if (photoId && !inUse) warnings.push("La foto elegida no se usa en este catálogo: se usa la foto de apertura de esa vivienda.");
+        const p = inUse ?? e.photos[e.openingIndex];
+        effective = fixturePhotoUrl(propertyId, p.proxyIdx);
       }
     }
     return { chosenPropertyId: propertyId, chosenPhotoId: photoId, effectivePhotoUrl: effective, warnings };
@@ -214,7 +240,7 @@ export function FixtureCatalogManager({
     setCat((c0) => {
       const c = { ...c0, ...patch };
       const a = c.mode === "auto" ? autoItems(c.criteria) : null;
-      const items = a ? a.items : relabel(manualRef.current, c.criteria.operation);
+      const items = (a ? a.items : relabel(manualRef.current, c.criteria.operation)).map((it) => ({ ...it, photoUrl: thumbOf(it.propertyId) }));
       // E2 · material: el sintético del universo; las de la lista manual de
       // siempre conservan el suyo (escrito a mano en fixtures.ts).
       const material = Object.fromEntries(
@@ -349,6 +375,68 @@ export function FixtureCatalogManager({
         return live({ op: "cover", choose: propertyId ? cat.items.findIndex((x) => x.propertyId === propertyId) : null, skipNotify });
       },
       photos: async ({ propertyId }) => ({ ok: true as const, photos: photosOf(propertyId) }),
+    },
+    // E3 · las mismas reglas que catalog_photo_exclude / catalog_photo_opening.
+    photos: {
+      list: async ({ propertyId }) => {
+        const e = effOf(propertyId);
+        const pr = photoPrefsRef.current.get(propertyId) ?? { x: [], o: null };
+        const known = new Set(e.all.flatMap((p) => p.keys));
+        const openingKey = e.photos.length ? e.photos[e.openingIndex].key : null;
+        const view: CatalogPhotosView = {
+          propertyId,
+          photos: e.all.map((p) => ({
+            photoId: p.key as string,
+            url: fixturePhotoUrl(propertyId, p.proxyIdx),
+            excluded: p.excluded,
+            opening: !p.excluded && p.key === openingKey,
+            chosen: p.opening,
+            crmCover: p.crmCover,
+            catalogCover: coverRef.current.propertyId === propertyId && !!coverRef.current.photoId && p.keys.includes(coverRef.current.photoId),
+          })),
+          used: e.photos.length,
+          total: e.all.length,
+          openingSource: e.openingSource,
+          stale: { excluded: pr.x.filter((k) => !known.has(k)), opening: pr.o && !known.has(pr.o) ? pr.o : null },
+          catalogCoverHere: coverRef.current.propertyId === propertyId,
+        };
+        return { ok: true as const, view };
+      },
+      setExcluded: async ({ propertyId, photoId, excluded }) => {
+        if (!cat.items.some((x) => x.propertyId === propertyId)) return { ok: false as const, error: "Esa vivienda no está ahora en el catálogo." };
+        const e = effOf(propertyId);
+        const pr = photoPrefsRef.current.get(propertyId) ?? { x: [], o: null };
+        const group = e.all.find((p) => p.keys.includes(photoId));
+        if (!excluded) {
+          const drop = new Set(group ? group.keys : [photoId]);
+          if (!pr.x.some((k) => drop.has(k))) return { ok: true as const, version: 1, fingerprint: null, publicChange: false };
+          photoPrefsRef.current.set(propertyId, { ...pr, x: pr.x.filter((k) => !drop.has(k)) });
+        } else {
+          if (!group) return { ok: false as const, error: "Esa foto no es de esta vivienda o ya no existe." };
+          if (group.excluded) return { ok: true as const, version: 1, fingerprint: null, publicChange: false };
+          if (e.photos.filter((p) => p !== e.photos.find((q) => q.keys.includes(photoId))).length < 1) {
+            return { ok: false as const, error: "Es la última foto que se usa de esta vivienda en el catálogo. Para que no aparezca, quita la vivienda o exclúyela en Viviendas." };
+          }
+          photoPrefsRef.current.set(propertyId, { x: [...pr.x, photoId], o: pr.o && group.keys.includes(pr.o) ? null : pr.o });
+        }
+        refresh();
+        return { ok: true as const, version: 1, fingerprint: null, publicChange: true };
+      },
+      setOpening: async ({ propertyId, photoId }) => {
+        if (!cat.items.some((x) => x.propertyId === propertyId)) return { ok: false as const, error: "Esa vivienda no está ahora en el catálogo." };
+        const pr = photoPrefsRef.current.get(propertyId) ?? { x: [], o: null };
+        if (photoId === null) {
+          if (pr.o === null) return { ok: true as const, version: 1, fingerprint: null, publicChange: false };
+          photoPrefsRef.current.set(propertyId, { ...pr, o: null });
+        } else {
+          const group = effOf(propertyId).all.find((p) => p.keys.includes(photoId));
+          if (!group) return { ok: false as const, error: "Esa foto no es de esta vivienda o ya no existe." };
+          if (group.excluded) return { ok: false as const, error: "Esa foto no se usa en este catálogo. Vuelve a usarla antes de elegirla como foto de apertura." };
+          photoPrefsRef.current.set(propertyId, { ...pr, o: photoId });
+        }
+        refresh();
+        return { ok: true as const, version: 1, fingerprint: null, publicChange: true };
+      },
     },
     ads: {
       add: async ({ listingId, codeOrUrl }) => {

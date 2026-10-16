@@ -24,12 +24,13 @@ import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { getCatalogFingerprint } from "@/lib/catalogs/public-data";
 import {
   autoSelection,
+  listCatalogPhotos,
   listCoverPhotos,
   modePreview,
   searchCatalogProperties,
   searchSavedListings,
 } from "@/lib/catalogs/queries";
-import type { CatalogItemView, CoverPhotoOption } from "@/lib/catalogs/types";
+import type { CatalogItemView, CatalogPhotosView, CoverPhotoOption } from "@/lib/catalogs/types";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 import { AI_TIMEOUT_MS, checkDraft, draftFromFacts, pendingWarnings, prepareFromSource, type DraftCheck, type DraftProposal } from "@/lib/catalogs/ai-draft";
 import { previewJourney, textSourceFor } from "@/lib/catalogs/texts";
@@ -506,6 +507,71 @@ export async function listCoverPhotosAction(input: {
   }));
 }
 
+// ── Fotos por catálogo (E3, 0202) ───────────────────────────────────────────
+// Cada ajuste se guarda al pulsar (E3-4) y pasa por saved() como el resto:
+// aviso inmediato, vigilante y medición. Nunca escriben en las fichas ni en
+// las fotos del CRM (lo garantizan las funciones SQL).
+
+/** Fotos de una vivienda en este catálogo, con su estado (solo lectura). */
+export async function listCatalogPhotosAction(input: {
+  catalogId: string;
+  propertyId: string;
+}): Promise<ActionResult<{ view: CatalogPhotosView }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const { data: cat } = await db().from("catalogs").select("id").eq("id", input.catalogId).eq("owner_id", profile.id).maybeSingle();
+    if (!cat) return fail("forbidden");
+    const view = await listCatalogPhotos(input.catalogId, input.propertyId);
+    return view ? { ok: true as const, view } : fail("invalid_photo");
+  }));
+}
+
+/** No usar una foto en este catálogo, o volver a usarla (también limpia el
+ *  ajuste de una foto que ya no existe). */
+export async function setCatalogPhotoExcludedAction(input: {
+  catalogId: string;
+  propertyId: string;
+  photoId: string;
+  excluded: boolean;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (!isUuid(input?.propertyId) || !isUuid(input?.photoId) || typeof input?.excluded !== "boolean") return fail("invalid_photo");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_photo_exclude", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_photo: input.photoId,
+      p_exclude: input.excluded,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** Foto de apertura de una vivienda en este catálogo; null = automática. */
+export async function setCatalogPhotoOpeningAction(input: {
+  catalogId: string;
+  propertyId: string;
+  photoId: string | null;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const photoId = input.photoId ?? null;
+    if (!isUuid(input?.propertyId) || (photoId !== null && !isUuid(photoId))) return fail("invalid_photo");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_photo_opening", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_photo: photoId,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
 // ── Textos del catálogo (ampliación C2, 0197) ──────────────────────────────
 // Todo se queda en el catálogo: nunca properties.description, ni la caché de
 // descripciones limpias, ni historias. La IA solo PROPONE (no guarda ni
@@ -536,7 +602,7 @@ export async function prepareCatalogTextAction(input: {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
-    const src = await textSourceFor(input.propertyId);
+    const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!src) return fail("property_not_found");
     try {
       const proposal = await prepareFromSource(
@@ -559,7 +625,7 @@ export async function draftCatalogTextAction(input: {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
-    const src = await textSourceFor(input.propertyId);
+    const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!src) return fail("property_not_found");
     try {
       const proposal = await draftFromFacts(src.source, realAi, AbortSignal.timeout(AI_TIMEOUT_MS));
@@ -594,7 +660,7 @@ export async function saveCatalogTextDraftAction(input: {
       p_expected_rev: input.expectedRev,
     });
     if (error) return fail(error);
-    const src = await textSourceFor(input.propertyId);
+    const src = await textSourceFor(input.propertyId, input.catalogId);
     const check = src ? checkDraft({ body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) : { blockers: [], warnings: [] };
     return { ...(await saved(profile.id, input.catalogId, input.expectedRev ?? 0, before, input)), rev: Number(data), check };
   }));
@@ -618,7 +684,7 @@ export async function publishCatalogTextAction(input: {
       .maybeSingle();
     if (!row || !(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("text_not_found");
     if (Number(row.draft_rev) !== Number(input.expectedRev)) return fail("draft_changed");
-    const src = await textSourceFor(input.propertyId);
+    const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!src) return fail("property_not_found");
     const check = checkDraft({ body: row.draft_body, lead: row.draft_lead, highlights: row.draft_highlights ?? [] }, src.source);
     if (check.blockers.length) return fail(check.blockers[0].code);
@@ -668,8 +734,8 @@ export async function previewCatalogTextAction(input: {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
-    const preview = await previewJourney(input.propertyId, { body: input.body, lead: input.lead, highlights: input.highlights ?? [] });
-    const src = await textSourceFor(input.propertyId);
+    const preview = await previewJourney(input.propertyId, input.catalogId, { body: input.body, lead: input.lead, highlights: input.highlights ?? [] });
+    const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!preview || !src) return fail("property_not_found");
     return { ok: true as const, preview, check: checkDraft({ body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) };
   }));

@@ -39,6 +39,11 @@ const MESSAGES: Record<string, string> = {
   adjustment_not_found: "Esa vivienda ya no tenía ningún ajuste.",
   cover_not_in_catalog: "La portada tiene que ser una vivienda que esté ahora en el catálogo.",
   invalid_cover_photo: "Esa foto no es de la vivienda elegida.",
+  // E3 · fotos por catálogo (0202).
+  last_photo: "Es la última foto que se usa de esta vivienda en el catálogo. Para que no aparezca, quita la vivienda o exclúyela en Viviendas.",
+  photo_excluded: "Esa foto no se usa en este catálogo. Vuelve a usarla antes de elegirla como foto de apertura.",
+  photo_not_in_catalog: "Esa vivienda no está ahora en el catálogo.",
+  invalid_photo: "Esa foto no es de esta vivienda o ya no existe.",
   draft_changed: "El borrador ha cambiado desde que lo abriste (en otra pestaña o con otra acción). Recarga la página antes de guardar o publicar.",
   text_has_contact: "El texto tiene un teléfono, un correo o una web. Quítalo antes de publicar.",
   text_has_price: "El texto menciona un precio. El precio ya se ve aparte y se actualiza solo: quítalo del texto.",

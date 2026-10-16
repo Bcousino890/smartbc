@@ -83,6 +83,35 @@ export interface CoverPhotoOption {
   isCover: boolean;
 }
 
+/** E3 · una foto de una vivienda en la gestión de un catálogo. */
+export interface CatalogPhotoItem {
+  /** Id de la fila (solo gestión; nunca llega al lector). */
+  photoId: string;
+  /** Miniatura por el proxy, por clave. */
+  url: string;
+  excluded: boolean;
+  /** La apertura EFECTIVA de la vivienda en este catálogo. */
+  opening: boolean;
+  /** La apertura elegida a mano (la efectiva o no). */
+  chosen: boolean;
+  crmCover: boolean;
+  /** Es la foto elegida como portada del catálogo. */
+  catalogCover: boolean;
+}
+
+/** E3 · bloque «Fotos en este catálogo» de una vivienda. */
+export interface CatalogPhotosView {
+  propertyId: string;
+  photos: CatalogPhotoItem[];
+  used: number;
+  total: number;
+  openingSource: "chosen" | "crm-cover" | "first" | "none";
+  /** Ajustes que ya no aplican (fotos borradas o reimportadas, E3-5). */
+  stale: { excluded: string[]; opening: string | null };
+  /** La portada del catálogo es una foto de esta vivienda (o su apertura). */
+  catalogCoverHere: boolean;
+}
+
 export interface CatalogDetail {
   id: string;
   title: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { withWidth } from "@/lib/catalogs/photo-selection";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { catalogFontVariables } from "@/lib/catalogs/fonts";
 import { MEASURE_CHANNEL, ReaderMeter, formatLatency, isMeasureMsg, sharedClock } from "@/lib/catalogs/measurement";
@@ -108,7 +109,7 @@ function usePhotoUrl(photoBase: string): PhotoUrl {
   return useCallback(
     (src: string, width: number) => {
       const path = photoBase === "/p/" ? src : src.replace(/^\/p\//, photoBase);
-      return `${path}?w=${width}`;
+      return withWidth(path, width);
     },
     [photoBase],
   );
@@ -609,6 +610,8 @@ export function CatalogReader({
           url={url}
           onStep={(delta) => dispatch({ type: "galleryStep", delta })}
           onClose={() => dispatch({ type: "closeGallery" })}
+          notice={state.notice}
+          onDismiss={() => dispatch({ type: "dismiss" })}
         />
       ) : null}
 
