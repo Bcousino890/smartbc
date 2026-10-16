@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOME · Maqueta de grupos de catálogos</title>
+<!-- MAQUETA ESTÁTICA con datos sintéticos. No es código de la aplicación.
+     Paleta y tipografía del admin (Lato, crema, oro, tinta), como las maquetas
+     de BCP-01 (qa-c2/maquetas). Propuesta para revisión: no está aprobada. -->
+<style>
+@font-face { font-family: Lato; font-weight: 400; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/lato-400.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 700; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/lato-700.woff2) format("woff2"); }
+@font-face { font-family: Fraunces; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/fraunces.woff2) format("woff2"); }
+:root { --cream: #fbf8f3; --cream2: #f5f0e8; --gold: #c9a96e; --ink: #0a0a0a; --navy: #1b2a4a; --line: rgba(201,169,110,.28); --muted: rgba(10,10,10,.58); }
+* { box-sizing: border-box; }
+body { margin: 0; background: #e9e4dc; font-family: Lato, Arial, sans-serif; color: var(--ink); }
+.doc { padding: 24px; display: grid; gap: 28px; }
+.label { font: 700 13px Lato; letter-spacing: .08em; text-transform: uppercase; color: #6b5a3e; margin: 0 0 6px; }
+.note { font: 13px/1.45 Lato; color: #4a4036; max-width: 1100px; margin: 0 0 8px; }
+.frame { position: relative; overflow: hidden; background: var(--cream); font-size: 14px; line-height: 1.43; }
+.d1440 { width: 1440px; height: 860px; }
+.m362 { width: 362px; height: 760px; }
+.tag { position: absolute; top: 8px; right: 8px; z-index: 40; font: 700 11px Lato; letter-spacing: .06em; text-transform: uppercase; background: var(--navy); color: #fff; padding: 4px 8px; border-radius: 4px; }
+.side { position: absolute; inset: 0 auto 0 0; width: 64px; background: var(--navy); }
+.side i { display: block; width: 22px; height: 22px; margin: 22px auto; border-radius: 6px; background: rgba(255,255,255,.18); }
+.main { position: absolute; inset: 0 0 0 64px; padding: 22px 32px; overflow: hidden; }
+.m362 .main { inset: 0; padding: 14px 16px; }
+.h2 { font: 400 22px Lato; letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.between { justify-content: space-between; align-items: flex-end; }
+.btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(201,169,110,.55); background: #fff; font: 400 14px Lato; color: var(--ink); white-space: nowrap; }
+.btn.gold { background: var(--gold); border-color: var(--gold); color: #fff; font-weight: 700; }
+.btn.sm { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.btn.danger { color: #9b2c1c; border-color: rgba(155,44,28,.4); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; background: #fff; white-space: nowrap; }
+.chip b { font-weight: 400; color: var(--muted); }
+.chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.chip.on b { color: rgba(255,255,255,.7); }
+.chip.soft { background: rgba(201,169,110,.16); border-color: rgba(201,169,110,.5); }
+.chips.second { margin-top: 8px; padding-left: 14px; border-left: 2px solid rgba(201,169,110,.45); }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+.f { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 0 10px; display: inline-flex; align-items: center; font-size: 13px; color: var(--ink); }
+.f.search { width: 220px; color: var(--muted); }
+.count { font-size: 12px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 28px 20px; margin-top: 20px; }
+.m362 .grid { grid-template-columns: repeat(2, 1fr); gap: 20px 14px; margin-top: 14px; }
+.cover { aspect-ratio: 150/212; border-radius: 2px; box-shadow: 0 10px 24px -14px rgba(60,40,20,.45); display: flex; flex-direction: column; justify-content: flex-end; padding: 12px; color: #fff; font: 18px/1.1 Fraunces, Georgia, serif; }
+.m362 .cover { font-size: 14px; padding: 8px; }
+.c1 { background: linear-gradient(180deg, #8c9b86 0%, #3d4a3a 100%); }
+.c2 { background: linear-gradient(180deg, #b49a7a 0%, #5a4330 100%); }
+.c3 { background: linear-gradient(180deg, #9aa6b3 0%, #3a4553 100%); }
+.c4 { background: linear-gradient(180deg, #c3a98a 0%, #6d5238 100%); }
+.c5 { background: linear-gradient(180deg, #a3a08c 0%, #4c4a3a 100%); }
+.ct { font-weight: 700; font-size: 14px; margin: 10px 0 0; }
+.m362 .ct { font-size: 13px; }
+.cm { font-size: 12px; color: var(--muted); }
+.cg { font-size: 12px; color: #6b5a3e; margin-top: 2px; }
+.links { font-size: 12px; margin-top: 4px; color: var(--gold); display: flex; gap: 12px; }
+.overlay { position: absolute; inset: 0; background: rgba(10,10,10,.28); z-index: 20; }
+.panel { position: absolute; top: 0; right: 0; bottom: 0; width: 460px; background: #fff; z-index: 30; border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+.m362 .panel { width: 100%; }
+.ph { padding: 16px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+.ph h3 { margin: 0; font: 700 16px Lato; }
+.pb { padding: 14px 18px; flex: 1; overflow: hidden; display: grid; gap: 10px; align-content: start; }
+.pf { padding: 12px 18px; border-top: 1px solid var(--line); font-size: 13px; color: #276749; background: #f0fff4; }
+.hint { font-size: 12.5px; color: var(--muted); }
+.tree { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tr { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(201,169,110,.15); font-size: 14px; }
+.tr:last-child { border-bottom: 0; }
+.tr.childr { padding-left: 30px; background: var(--cream2); }
+.tr .n { flex: 1; min-width: 0; }
+.tr .n small { color: var(--muted); margin-left: 6px; }
+.ic { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; background: #fff; color: var(--ink); }
+.menu { font-size: 18px; color: var(--muted); padding: 0 4px; }
+.input { height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; display: flex; align-items: center; color: var(--muted); font-size: 13px; flex: 1; background: #fff; }
+.dialog { position: absolute; z-index: 30; background: #fff; border-radius: 12px; box-shadow: 0 20px 40px -12px rgba(0,0,0,.35); width: 420px; left: 50%; top: 120px; transform: translateX(-50%); }
+.m362 .dialog { width: auto; left: 12px; right: 12px; transform: none; top: 90px; }
+.check { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14px; }
+.check.childc { padding-left: 26px; }
+.box { width: 18px; height: 18px; border: 1.5px solid rgba(201,169,110,.8); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; }
+.box.on { background: var(--gold); border-color: var(--gold); }
+.warn { background: #fffaf0; border: 1px solid #f6e05e; color: #744210; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 150px; background: #fff; z-index: 30; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 30px -10px rgba(0,0,0,.3); padding: 14px 16px; }
+.grab { width: 40px; height: 4px; border-radius: 4px; background: rgba(10,10,10,.15); margin: 0 auto 10px; }
+.li { display: flex; justify-content: space-between; padding: 11px 6px; border-bottom: 1px solid rgba(201,169,110,.15); font-size: 15px; }
+.li.childl { padding-left: 26px; font-size: 14px; }
+.li.on { background: rgba(201,169,110,.16); border-radius: 6px; font-weight: 700; }
+.li b { font-weight: 400; color: var(--muted); }
+.mobsel { margin-top: 12px; display: flex; gap: 8px; }
+.mobsel .btn { flex: 1; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<section>
+  <p class="label">1 · Escritorio 1440 · estantería con grupos</p>
+  <p class="note">Encima de la estantería, una fila de grupos con su recuento (siguen el filtro de estado). Al elegir un grupo con subgrupos aparece una segunda fila. El grupo se suma a los filtros de siempre, que no cambian. Cada tarjeta lleva sus etiquetas y el enlace «Grupos». Con muchos grupos, la fila pasa a una segunda línea y, por encima de 12, aparece «Más grupos ▾».</p>
+  <div class="frame d1440">
+    <span class="tag">Propuesta</span>
+    <div class="side"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="main">
+      <div class="row between">
+        <div><h2 class="h2">Catálogos</h2><div class="sub">22 activos · 26 en total</div></div>
+        <div class="row"><span class="btn">Organizar</span><span class="btn gold">Nuevo catálogo</span></div>
+      </div>
+      <div class="chips" aria-label="Grupos">
+        <span class="chip">Todas <b>22</b></span>
+        <span class="chip">Sin organizar <b>5</b></span>
+        <span class="chip on">Salamanca <b>9</b></span>
+        <span class="chip">Chamberí <b>4</b></span>
+        <span class="chip">Retiro <b>3</b></span>
+        <span class="chip">Clientes internacionales <b>2</b></span>
+      </div>
+      <div class="chips second" aria-label="Subgrupos de Salamanca">
+        <span class="chip soft">Todo Salamanca <b>9</b></span>
+        <span class="chip">Recoletos <b>4</b></span>
+        <span class="chip">Castellana <b>3</b></span>
+        <span class="chip">Lista <b>2</b></span>
+        <span class="chip">Goya <b>2</b></span>
+      </div>
+      <div class="filters">
+        <span class="f search">Buscar por título o anuncio</span>
+        <span class="f">Todos los anuncios ▾</span>
+        <span class="f">Zona de los criterios ▾</span>
+        <span class="f">Venta y alquiler ▾</span>
+        <span class="f">Manual y automático ▾</span>
+        <span class="f">Activos ▾</span>
+        <span class="count">9 de 26</span>
+      </div>
+      <div class="grid">
+        <div><div class="cover c1">Recoletos y Castellana</div><p class="ct">Recoletos y Castellana · familias</p><div class="cm">Activo · Automático · 12 propiedades</div><div class="cg">Salamanca › Recoletos · Castellana</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+        <div><div class="cover c2">Áticos en Salamanca</div><p class="ct">Áticos en Salamanca</p><div class="cm">Activo · Manual · 8 propiedades</div><div class="cg">Salamanca</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+        <div><div class="cover c3">Lista, alquiler</div><p class="ct">Lista, alquiler hasta 5.000 €</p><div class="cm">Activo · Automático · 10 propiedades</div><div class="cg">Salamanca › Lista</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+        <div><div class="cover c4">Goya en venta</div><p class="ct">Goya en venta</p><div class="cm">Activo · Automático · 12 propiedades</div><div class="cg">Salamanca › Goya · Clientes internacionales</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+        <div><div class="cover c5">Recoletos premium</div><p class="ct">Recoletos premium</p><div class="cm">Activo · Manual · 6 propiedades</div><div class="cg">Salamanca › Recoletos</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="label">2 · Escritorio 1440 · panel «Organizar»</p>
+  <p class="note">Panel lateral, como el del gestor. Cada grupo con su recuento (sin filtros), ▲▼ para ordenar dentro de su nivel y un menú «⋯» con Renombrar, Añadir subgrupo, Mover a… (si se aprueba) y Borrar. Cada cambio se guarda al pulsar y el pie da el mensaje. La nota recuerda que organizar no toca los catálogos.</p>
+  <div class="frame d1440">
+    <span class="tag" style="right:auto;left:72px">Propuesta</span>
+    <div class="side"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="main" style="opacity:.55">
+      <div class="row between"><div><h2 class="h2">Catálogos</h2><div class="sub">22 activos · 26 en total</div></div><div class="row"><span class="btn">Organizar</span><span class="btn gold">Nuevo catálogo</span></div></div>
+      <div class="chips"><span class="chip on">Todas <b>22</b></span><span class="chip">Sin organizar <b>5</b></span><span class="chip">Salamanca <b>9</b></span><span class="chip">Chamberí <b>4</b></span><span class="chip">Retiro <b>3</b></span></div>
+      <div class="grid"><div class="cover c1"></div><div class="cover c2"></div><div class="cover c3"></div><div class="cover c4"></div><div class="cover c5"></div></div>
+    </div>
+    <div class="overlay"></div>
+    <div class="panel">
+      <div class="ph"><h3>Organizar catálogos</h3><span class="ic">✕</span></div>
+      <div class="pb">
+        <p class="hint">Los grupos solo ordenan tu HOME: no cambian qué propiedades entran en cada catálogo ni lo que ve el cliente. Hasta dos niveles.</p>
+        <div class="row"><span class="input">Nombre del grupo nuevo</span><span class="btn sm gold">Crear grupo</span></div>
+        <div class="tree">
+          <div class="tr"><span class="n">Salamanca <small>9 catálogos</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr childr"><span class="n">Recoletos <small>4</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr childr"><span class="n">Castellana <small>3</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr childr"><span class="n">Lista <small>2</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr childr"><span class="n">Goya <small>2</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr"><span class="n">Chamberí <small>4 catálogos</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr"><span class="n">Retiro <small>3 catálogos</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+          <div class="tr"><span class="n">Clientes internacionales <small>2 catálogos</small></span><span class="ic">▲</span><span class="ic">▼</span><span class="menu">⋯</span></div>
+        </div>
+        <p class="hint">⋯ → Renombrar · Añadir subgrupo · Mover a… · Borrar</p>
+      </div>
+      <div class="pf">Orden guardado.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="label">3 · Diálogo «Grupos» de un catálogo · y 4 · confirmación al borrar un grupo con subgrupos</p>
+  <p class="note">Casillas por grupo y subgrupo; se puede marcar un grupo y uno de sus subgrupos a la vez. Cada casilla se guarda al pulsar. La confirmación de borrado nombra los subgrupos y dice cuántos catálogos pierden etiquetas, y que ninguno se borra.</p>
+  <div class="row" style="align-items:flex-start;gap:24px">
+    <div class="frame" style="width:520px;height:520px">
+      <span class="tag">Propuesta</span>
+      <div class="overlay"></div>
+      <div class="dialog" style="top:40px">
+        <div class="ph"><h3>Grupos de «Recoletos y Castellana · familias»</h3><span class="ic">✕</span></div>
+        <div class="pb">
+          <p class="hint">Los grupos solo ordenan tu HOME: no cambian qué propiedades entran en el catálogo.</p>
+          <div>
+            <div class="check"><span class="box on">✓</span>Salamanca</div>
+            <div class="check childc"><span class="box on">✓</span>Recoletos</div>
+            <div class="check childc"><span class="box on">✓</span>Castellana</div>
+            <div class="check childc"><span class="box"></span>Lista</div>
+            <div class="check childc"><span class="box"></span>Goya</div>
+            <div class="check"><span class="box"></span>Chamberí</div>
+            <div class="check"><span class="box"></span>Retiro</div>
+            <div class="check"><span class="box"></span>Clientes internacionales</div>
+          </div>
+        </div>
+        <div class="pf">Añadido a «Castellana».</div>
+      </div>
+    </div>
+    <div class="frame" style="width:520px;height:520px">
+      <span class="tag">Propuesta</span>
+      <div class="overlay"></div>
+      <div class="dialog" style="top:80px">
+        <div class="ph"><h3>¿Borrar «Salamanca»?</h3></div>
+        <div class="pb">
+          <div class="warn">Se borrarán también sus 4 subgrupos: Recoletos, Castellana, Lista y Goya.<br>9 catálogos perderán estas etiquetas; 3 de ellos quedarán en «Sin organizar».<br><b>Ningún catálogo se borra ni cambia.</b></div>
+          <div class="row" style="justify-content:flex-end"><span class="btn">Cancelar</span><span class="btn danger">Borrar «Salamanca» y sus subgrupos</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="label">5 · Móvil 362 · estantería · y 6 · lista de grupos</p>
+  <p class="note">En el móvil la fila de grupos se sustituye por un botón con el grupo actual. Abre una hoja con la lista completa (grupos y subgrupos sangrados, con su recuento), que funciona igual con 3 que con 100 grupos y nunca desplaza la página en horizontal. Los filtros de siempre siguen como hoy. «Organizar» abre el mismo panel a pantalla completa.</p>
+  <div class="row" style="align-items:flex-start;gap:24px">
+    <div class="frame m362">
+      <span class="tag">Propuesta</span>
+      <div class="main">
+        <div class="row between"><div><h2 class="h2" style="font-size:18px">Catálogos</h2><div class="sub">22 activos · 26 en total</div></div></div>
+        <div class="row" style="margin-top:10px"><span class="btn sm">Organizar</span><span class="btn sm gold">Nuevo catálogo</span></div>
+        <div class="mobsel"><span class="btn">Grupo: Salamanca › Recoletos <span>▾</span></span></div>
+        <div class="filters"><span class="f search" style="width:100%">Buscar por título o anuncio</span><span class="f">Todos los anuncios ▾</span><span class="f">Zona de los criterios ▾</span><span class="f">Venta y alquiler ▾</span><span class="f">Manual y automático ▾</span><span class="f">Activos ▾</span><span class="count">4 de 26</span></div>
+        <div class="grid">
+          <div><div class="cover c1">Recoletos y Castellana</div><p class="ct">Recoletos y Castellana · familias</p><div class="cm">Activo · Automático · 12</div><div class="cg">Salamanca › Recoletos · Castellana</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+          <div><div class="cover c5">Recoletos premium</div><p class="ct">Recoletos premium</p><div class="cm">Activo · Manual · 6</div><div class="cg">Salamanca › Recoletos</div><div class="links"><span>Gestionar</span><span>Grupos</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame m362">
+      <span class="tag">Propuesta</span>
+      <div class="main" style="opacity:.5"><h2 class="h2" style="font-size:18px">Catálogos</h2><div class="mobsel"><span class="btn">Grupo: Salamanca › Recoletos ▾</span></div></div>
+      <div class="overlay"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <p class="label" style="margin-bottom:4px">Elegir grupo</p>
+        <div class="li">Todas <b>22</b></div>
+        <div class="li">Sin organizar <b>5</b></div>
+        <div class="li">Salamanca <b>9</b></div>
+        <div class="li childl on">Recoletos <b>4</b></div>
+        <div class="li childl">Castellana <b>3</b></div>
+        <div class="li childl">Lista <b>2</b></div>
+        <div class="li childl">Goya <b>2</b></div>
+        <div class="li">Chamberí <b>4</b></div>
+        <div class="li">Retiro <b>3</b></div>
+        <div class="li">Clientes internacionales <b>2</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
