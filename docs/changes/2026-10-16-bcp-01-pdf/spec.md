@@ -84,7 +84,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
    - **Introducción:** la del catálogo, firmada por el contacto del catálogo.
    - **Índice:** las viviendas en su orden efectivo, con su número, título, zona, precio de la operación, «Reservada» y **número de página correcto**. Cada línea es un **enlace interno** a su vivienda (P7).
    - **Cada vivienda:**
-     - **apertura:** la foto de apertura efectiva (E3), los datos clave y el precio de la operación del contexto (con «También en…», como en el lector), la entrada y los puntos verificados;
+     - **apertura:** la foto de apertura efectiva (E3), los datos clave y la operación y el precio que da la proyección pública para la operación del catálogo, exactamente como en el lector (en un catálogo de venta y alquiler, una vivienda dual muestra las dos: «Venta … · Alquiler …»; la proyección no tiene un «También en…» aparte), la entrada y los puntos verificados;
      - **recorrido:** **todas** las secciones publicables, en orden y con su foto, sin el límite de dobles páginas del lector en pantalla (K4). Del lector se conserva una sola regla de reparto: la entrada de más de 45 palabras pasa del principio de la apertura al principio del recorrido;
      - **detalle:** la descripción **completa** vigente y las características;
      - **más fotos:** hasta 6 fotos en uso que no sean ya la apertura ni del recorrido, en el orden de la galería (P2).
@@ -170,7 +170,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 | # | Criterio |
 | --- | --- |
 | PDF1 | El PDF lleva el título, la introducción, la edición, el logo oficial (portada y cierre, en su proporción), la portada efectiva y el contacto del catálogo, idénticos a los del enlace en el mismo momento. |
-| PDF2 | Las viviendas y su orden, los precios por operación («Reservada», «sin dato», «También en…») y los textos vigentes son exactamente los de `toPublicCatalog` sobre la misma lectura coherente. Lo comprueba una prueba que compara el texto extraído del PDF con la proyección. |
+| PDF2 | Las viviendas y su orden, los precios por operación («Reservada», «sin dato», y las dos operaciones de una dual en un catálogo de venta y alquiler) y los textos vigentes son exactamente los de `toPublicCatalog` sobre la misma lectura coherente. Lo comprueba una prueba que compara el texto extraído del PDF con la proyección. |
 | PDF3 | Fotos (E3): ninguna foto excluida aparece; la apertura y la portada son las efectivas, con sus respaldos; una foto ilegible deja su marco «Foto no disponible» y nunca otra. |
 | PDF4 | Privacidad: ni en el texto, ni en los enlaces, ni en los metadatos del PDF aparecen ids, claves, slugs, URL de almacenamiento o del proxy, referencias BC, criterios, grupos, anuncios de origen, notas ni avisos internos. Se comprueba con el texto extraído y los objetos del PDF. |
 | PDF5 | Nada se corta: la descripción completa más larga sintética sale entera (se compara palabra por palabra), con las continuaciones marcadas; ningún título queda solo al pie. |

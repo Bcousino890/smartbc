@@ -167,7 +167,7 @@ Cada tarea es pequeña, se verifica y se guarda en su commit. El orden respeta l
   - Pruebas en `scripts/test-catalogs-public.mts`, que ya corre la CI.
 - **Verificación:**
   - **P2:** apertura, recorrido y hasta 6, sin repetir; con exclusiones; sin fotos; y cuando la apertura es también foto del recorrido;
-  - **contenido:** entrada larga, ficha breve, descripción completa, y precio «sin dato» o «También en…».
+  - **contenido:** entrada larga, ficha breve, descripción completa, y precio «sin dato» o el de una vivienda dual (las dos operaciones, como en el lector).
 - **Commit:** «PDF T2: reglas puras de la exportación».
 
 ### T3. Resolución de fotos compartida con el proxy
