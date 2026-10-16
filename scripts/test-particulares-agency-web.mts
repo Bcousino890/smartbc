@@ -277,6 +277,12 @@ check("restaurada a mano: el job no vuelve a reemplazar", one({ photos_source: "
 check("agencia colaboradora (feed): no se toca sola", one({ collab: true }).reason === "colaboradora");
 check("varias propiedades: cada una su plan", planWebPhotoReplacements([base, { ...base, property_id: "p2", slug: "s2", web: null }]).map((x) => x.action).join() === "replace,skip");
 
+console.log("— Resultados estables: no se reintentan");
+const unsup = toCacheRow(normalizeAgencyUrl("https://www.solvia.es/es/propiedades/comprar/Piso-X-1")!, { kind: "unsupported", httpStatus: 200, reason: "sin datos" }, 0, now);
+check("web hecha con JavaScript: unsupported sin reintento", unsup.status === "unsupported" && unsup.next_retry_at === null && unsup.attempts === 0);
+check("…y no se vuelve a planificar", planAgencyWebFetches([{ agency_url: "https://www.solvia.es/es/propiedades/comprar/Piso-X-1" }], new Map([[normalizeAgencyUrl("https://www.solvia.es/es/propiedades/comprar/Piso-X-1")!.key, { status: "unsupported", trigger_sig: webSigOf([{ agency_url: "https://www.solvia.es/es/propiedades/comprar/Piso-X-1" }]), next_retry_at: null, attempts: 0 }]]), now).fetch.length === 0);
+check("la fila lo explica", buildAgencyWebSources([{ id: "z", agency_url: "https://www.solvia.es/es/propiedades/comprar/Piso-X-1" }], new Map([[unsup.url_key, { ...unsup, photos: [], data: {} } as never]]))[0].note?.includes("JavaScript") === true);
+
 console.log("— Candidatos del cruce con el CRM (rendimiento)");
 const prop = { id: "pp", agency_name: "X", operation: "rent" as const, status: "available", archived_at: null, price: 5000, bedrooms: 3, bathrooms: 3, square_meters: 140, address: "Claudio Coello", latitude: null, longitude: null, created_at: null, external_id: "idealista-101801526" };
 const cr = (id: string, over: Record<string, unknown>) => mk(id, "idealista", { advertiser_type: "particular", ...over });
