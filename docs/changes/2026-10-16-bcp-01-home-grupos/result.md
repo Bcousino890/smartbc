@@ -20,9 +20,18 @@
 
 | Commit | Tarea |
 | --- | --- |
-{COMMITS}
+| `1de0bb0` | BCP-01 E3: merge de #321 (b1f2b49) y QA de Fabricio en producción superada |
+| `eb3e2ee` | HOME · grupos de catálogos: especificación en borrador (sin implementar) |
+| `cf9250b` | HOME · grupos: decisiones D1–D7, especificación consolidada, plan y maqueta en borrador |
+| `de9da65` | HOME grupos T0: aprobación (D8–D13, C1–C4) en la especificación y el plan |
+| `82fe344` | HOME grupos T1: 0203 (el número de entonces; ver T7) (grupos, asignaciones, crear y asignar atómico), rollback y pruebas SQL |
+| `3978f3b` | HOME grupos T2: regla pura de la estantería (vistas, recuentos, URL y recuerdo, escrituras) y pruebas |
+| `7c9b484` | HOME grupos T3: lectura de grupos, acciones de grupos sin aviso a los lectores y crear en un grupo (atómico) |
+| `96ea118` | HOME grupos T4–T6: fixtures, selector de grupos, «Organizar», «Grupos» (HOME y gestor) y crear en un grupo |
+| `340dab3` | HOME grupos T7: migración renumerada a 0207 tras rebasar sobre main, regresiones y capturas |
+| (este commit) | HOME grupos T8: resultado |
 
-El commit `783a71b` solo registra el merge de #321 y la QA de E3 en el expediente de BCP-01.
+El commit `1de0bb0` solo registra el merge de #321 y la QA de E3 en el expediente de BCP-01.
 
 ## Qué hace
 
@@ -100,8 +109,8 @@ El commit `783a71b` solo registra el merge de #321 y la QA de E3 en el expedient
 - **Después de cada operación,** la huella de comprobación sigue idéntica. Cubre `to_jsonb` de todos los catálogos, `catalog_items`, enlaces, ajustes, textos, ajustes de fotos, el md5 de cada instantánea, `catalog_public_fingerprint` y la huella de `get_public_catalog`.
   - **Control:** editar un título o añadir una propiedad SÍ la cambia.
 - **Concurrencia con dos sesiones independientes:**
-  - borrar un grupo mientras otra sesión le asigna un catálogo: la segunda esperó **1,46 s** al bloqueo del dueño, dio `forbidden` y no quedó ninguna asignación huérfana;
-  - el límite de 100 con dos creaciones simultáneas: la segunda esperó **1,52 s** y dio `too_many_groups`, así que se queda en 100;
+  - borrar un grupo mientras otra sesión le asigna un catálogo: la segunda esperó **1,50 s** (1,46 s en la primera pasada) al bloqueo del dueño, dio `forbidden` y no quedó ninguna asignación huérfana;
+  - el límite de 100 con dos creaciones simultáneas: la segunda esperó **1,48 s** (1,52 s en la primera) y dio `too_many_groups`, así que se queda en 100;
   - **contraprueba sin el bloqueo,** solo en la base temporal: las dos crean y quedan **101**. El bloqueo es necesario.
 - **Reversión** (`rollback-0207.sql`): sin tablas ni funciones de grupos, y la huella de los catálogos igual que antes; después se vuelve a aplicar dos veces.
 - **«2o»:** la selección (2k) y la paridad TS ↔ SQL siguen en verde con `0207`.
@@ -133,11 +142,25 @@ El commit `783a71b` solo registra el merge de #321 y la QA de E3 en el expedient
 - **desde el gestor:** la URL, el panel abierto, lo escrito sin guardar, la marca «sin guardar», el foco y la protección al salir, todo igual;
 - `?sinGrupos=1`: la HOME de antes.
 
-**Matriz de E2 y regresiones:** {MATRIX}
+**Matriz de E2 y regresiones:** tanda completa, en secuencia (servidor de fixtures aislado):
+- **Matriz de E2:**
+  - `t4` 32/0;
+  - `dqa9` 59/0, `saves` 31/0 y `ai` 15/0 en los tres tamaños;
+  - `homes` 56–57/0 y `content` 33–34/0 en cinco tamaños;
+  - `design-share` 34/0 en cuatro tamaños;
+  - `bars` 46/0.
+- **Regresiones:** `lector` 52/0, `indice` 187/0, `prA` 54/0, `prB` 40/0, `enlace` 10/0 y `c1` 31/0.
+- **Pruebas recientes:** `vista` 23/0 (1440 y 362) y `e3` 41/0 (1440, 362 y 320).
+- **`grupos`:** 79/0 a 1440 y 75/0 a 362. A 320 falló una vez «renombrar» (73/2): solo esperaba 350 ms al mensaje. La comprobación siguiente de esa misma pasada ya veía el nombre nuevo guardado. Repetida tres veces, 75/0; ahora espera al mensaje y da 75/0.
+- **Cortadas por un pico de carga del equipo** (carga ~13): `c2` y `sel` no llegaron a cargar alguna página (90 s y 30 s), y las tres mediciones se cortaron también. No hubo fallos de aserción. **Repetidas aisladas:**
+  - `c2` 186/0;
+  - `medicion`, `c1-medicion` y `c2-medicion` PASA (20/20 ensayos, 0 fallos; máximos 0,24, 0,33 y 0,20 s);
+  - `sel` 39/0 a 1440 y 362.
+- **Tras el último rebase sobre `afa6b94`:** se repitieron `grupos` (79/75/75), `prA` 54/0, `prB` 40/0, `lector` 52/0, `homes` 56/0, `content` 33/0 y `e3` 41/0, y la suite SQL entera (930 ok, 0 `ERROR`; esperas de 1,50 y 1,48 s y contraprueba con 101).
 
 **Expectativa cambiada a propósito:** `prB.mjs` busca ahora el filtro por su nombre nuevo, `select[aria-label='Zona de los criterios']` (D11). Su resultado («2 de 4») no cambia.
 
-**Compilación aislada:** {BUILD}
+**Compilación aislada:** `next build` en la copia aislada, con `iso.sh verify` antes (sin `.env*`, variables en lista blanca y `@next/env` sin archivos cargados): compila y genera 156/156 páginas, también sobre `afa6b94`.
 
 **Rendimiento:** la HOME y la página del gestor hacen una lectura más por dueño (sus grupos y asignaciones), sin tocar las consultas de catálogos. No se ha medido aparte: es una lectura pequeña, indexada por `owner_id`, frente a las instantáneas que la HOME ya lee para las portadas.
 
@@ -203,4 +226,5 @@ No se pidió revisión adicional de Codex.
 
 ## PR, CI y merge
 
-{PR}
+- Rama `fabri/bcp-01-home-grupos` → `main`. El enlace del PR y el estado de la CI están en el PR.
+- **El agente no fusiona.** Fusionar puede desplegar y aplicar `0207` (ver «Despliegue y recuperación»); lo decide Fabricio.
