@@ -213,13 +213,13 @@ export function ClientFichaView({
       .map((g) => g.label);
   }, [cc.prefs]);
 
-  // La cifra de la pestaña cuenta lo que sigue vivo (no descartado), igual que
-  // «En selección» del Resumen: antes sumaba también lo descartado y no cuadraba.
+  // La cifra de la pestaña es el TOTAL de anuncios añadidos (los mismos que
+  // «Anuncios de portales» del Resumen). La selección no se suma: son dos
+  // listas distintas, la selección sale en el desglose del título.
   const liveSelections = selections.filter((s) => s.status !== "discarded").length;
-  const liveLinks = links.filter((l) => l.status !== "discarded").length;
   const counts: Partial<Record<CommandTab, number | null>> = {
     overview: cc.nextActions.length,
-    properties: liveSelections + liveLinks,
+    properties: links.length,
     viewings: itineraries.length + visits.length,
     application: cc.applications.length,
     activity: null,
@@ -248,7 +248,7 @@ export function ClientFichaView({
         alerts={{ properties: Boolean(portalLinks) && cc.portalSummary.fresh > 0 }}
         titles={{
           overview: `${cc.nextActions.length} ${cc.nextActions.length === 1 ? "cosa" : "cosas"} por hacer`,
-          properties: `${liveSelections} en selección + ${liveLinks} anuncios añadidos de portales (sin contar descartados)`,
+          properties: `${links.length} anuncios añadidos de portales · ${liveSelections} en selección (se cuentan aparte)`,
         }}
         onChange={(x) => goTab(x)}
       />
