@@ -227,4 +227,5 @@ No se pidió revisión adicional de Codex.
 ## PR, CI y merge
 
 - Rama `fabri/bcp-01-home-grupos` → `main`. El enlace del PR y el estado de la CI están en el PR.
+- PR: [#322](https://github.com/Bcousino890/smartbc/pull/322). CI en verde en `b86334a`, con TypeScript, las pruebas de catálogos, `next build` y migraciones.
 - **El agente no fusiona.** Fusionar puede desplegar y aplicar `0207` (ver «Despliegue y recuperación»); lo decide Fabricio.
