@@ -28,7 +28,7 @@ import { exportCatalogPdf } from "../../lib/catalogs/export/generate.ts";
 import { CODE_COLS, CODE_PANEL, CODE_ROWS, photoCode } from "../../lib/catalogs/export/fixture-photo.ts";
 import { FORBIDDEN_IN_PDF, photosOfExport, planItemExport } from "../../lib/catalogs/export/plan.ts";
 import { exportReaders, type ExportScope } from "../../lib/catalogs/export/source.ts";
-import { FIXTURE_TOKENS, fixtureExportPhoto, fixtureMutate } from "../../lib/catalogs/fixture-store.ts";
+import { FIXTURE_TOKENS, fixtureExportPhoto, fixtureGetMetas, fixtureMutate } from "../../lib/catalogs/fixture-store.ts";
 import { toPublicCatalog, type InternalSnapshot } from "../../lib/catalogs/to-public.ts";
 import type { PublicCatalog } from "../../lib/catalogs/public-contract.ts";
 
@@ -141,9 +141,11 @@ async function checkCase(c: Case): Promise<{ bytes: number; ms: number; pages: n
   if (!cap) throw new Error(`${c.tag}: sin acceso`);
   const snapshot = cap.snapshot as InternalSnapshot;
   const catalog = toPublicCatalog(snapshot, cap.operation);
+  const metaBefore = JSON.stringify([...(await fixtureGetMetas([c.token]))]);
   const t0 = performance.now();
   const r = await exportCatalogPdf(c.scope, new AbortController().signal);
   const ms = Math.round(performance.now() - t0);
+  ok("generar no cambia la versión del catálogo (PDF8)", JSON.stringify([...(await fixtureGetMetas([c.token]))]) === metaBefore);
   if (!r.ok) {
     ok(`${c.tag}: se genera`, false, r.error);
     return { bytes: 0, ms, pages: 0, catalog, text: "" };
@@ -311,6 +313,23 @@ await fixtureMutate({ op: "operation", token: FIXTURE_TOKENS.main, operation: "r
   summary["main-alquiler"] = { bytes: r.bytes, ms: r.ms, pages: r.pages };
 }
 await fixtureMutate({ op: "reset" });
+
+// PDF7 · todos los caracteres españoles de la lista, por el documento real:
+// título (Fraunces) y texto de la vivienda (Karla, con º/ª en Fraunces).
+section("· glifos españoles (PDF7)");
+{
+  const G = "¿Ático único? ¡Sí! Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso";
+  await fixtureMutate({ op: "title", token: FIXTURE_TOKENS.one, title: G } as never);
+  await fixtureMutate({ op: "text", token: FIXTURE_TOKENS.one, index: 0, body: `Entrada. ${G}. Fin del texto.`, lead: null } as never);
+  const r = await checkCase({ ...link("one"), tag: "glifos" });
+  const norm = (t: string) => t.replace(/\s+/g, " ");
+  const n = norm(r.text);
+  ok("título del catálogo con ¿ ¡ ü « » — € ² ª º: se extrae tal cual", n.includes(G), n.slice(0, 160));
+  // La proyección parte el texto en frases (entrada + recorrido), como el lector.
+  ok("texto de la vivienda con los mismos caracteres: se extrae tal cual", n.includes("Entrada. ¿Ático único?") && n.includes("¡Sí! Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso. Fin del texto."), n.slice(n.indexOf("Entrada"), n.indexOf("Entrada") + 200));
+  ok("«Nº» no pasa a «NO» en los rótulos en mayúsculas", !/N\s?O\s?0\s?1/.test(r.text) && /N\s?º\s?0\s?1/.test(r.text));
+  await fixtureMutate({ op: "reset" });
+}
 
 // Vacío.
 {
