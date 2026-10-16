@@ -318,7 +318,9 @@ export function buildAgencyWebSources(members: MemberLite[], cache: Map<string, 
         ? `No se pudo leer${c.error ? ` (${c.error})` : ""}${(c.attempts ?? 0) >= MAX_WEB_ATTEMPTS ? " · reintentos agotados" : ""}`
         : c?.status === "gone"
           ? "La ficha ya no existe en la web"
-          : null;
+          : c?.status === "unsupported"
+            ? "Esta web no muestra los datos de la ficha sin JavaScript: no se puede leer"
+            : null;
     const named = ms.map((m) => (m.advertiser_type === "professional" ? m.owner_name?.trim() : "")).find(Boolean) || null;
     out.push({
       key,
@@ -367,6 +369,8 @@ export type WebFetchResult =
   | { kind: "ok"; finalUrl: string; httpStatus: number; parsed: AgencyWebParsed; cms: AgencyWebCms | "generico" }
   | { kind: "gone"; finalUrl: string | null; httpStatus: number | null; reason: string }
   | { kind: "blocked"; reason: string }
+  /** La página responde bien pero no trae datos de ficha en el HTML (se pinta con JavaScript): no se reintenta. */
+  | { kind: "unsupported"; httpStatus: number | null; reason: string }
   | { kind: "error"; httpStatus: number | null; reason: string };
 
 export type WebRowLite = {
@@ -460,6 +464,12 @@ export function toCacheRow(n: NormalizedAgencyUrl, res: WebFetchResult, prevAtte
   if (res.kind === "gone") {
     return {
       ...base, cms: detectCms(n.url), final_url: res.finalUrl, canonical_url: null, ref: refFromUrl(n.url), status: "gone" as const,
+      http_status: res.httpStatus, data: {}, photos: [], attempts: 0, error: res.reason, next_retry_at: null as string | null,
+    };
+  }
+  if (res.kind === "unsupported") {
+    return {
+      ...base, cms: detectCms(n.url), final_url: null, canonical_url: null, ref: refFromUrl(n.url), status: "unsupported" as const,
       http_status: res.httpStatus, data: {}, photos: [], attempts: 0, error: res.reason, next_retry_at: null as string | null,
     };
   }

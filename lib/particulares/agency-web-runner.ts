@@ -50,10 +50,10 @@ export async function loadAgencyWebCache(
   return out;
 }
 
-type RobotsCache = Map<string, Promise<string | null | "error">>;
+type RobotsCache = Map<string, Promise<string | null | "error" | "dns">>;
 
 /** robots.txt del sitio (1 petición por dominio y pasada). null = no hay / no limita; "error" = no se pudo saber. */
-function loadRobots(origin: string, cache: RobotsCache): Promise<string | null | "error"> {
+function loadRobots(origin: string, cache: RobotsCache): Promise<string | null | "error" | "dns"> {
   let p = cache.get(origin);
   if (!p) {
     p = (async () => {
@@ -68,8 +68,8 @@ function loadRobots(origin: string, cache: RobotsCache): Promise<string | null |
         if (!res.ok) return null; // 4xx: sin robots = sin restricciones
         const t = await res.text();
         return /<html/i.test(t.slice(0, 500)) ? null : t.slice(0, 500_000);
-      } catch {
-        return "error" as const;
+      } catch (e) {
+        return (e as { cause?: { code?: string } })?.cause?.code === "ENOTFOUND" ? ("dns" as const) : ("error" as const);
       }
     })();
     cache.set(origin, p);
@@ -84,6 +84,7 @@ function loadRobots(origin: string, cache: RobotsCache): Promise<string | null |
 export async function fetchAgencyWeb(n: NormalizedAgencyUrl, robots: RobotsCache = new Map()): Promise<WebFetchResult> {
   try {
     const rb = await loadRobots(new URL(n.url).origin, robots);
+    if (rb === "dns") return { kind: "gone", finalUrl: null, httpStatus: null, reason: "el dominio ya no existe" };
     if (rb === "error") return { kind: "error", httpStatus: null, reason: "no se pudo consultar robots.txt" };
     if (!robotsAllows(rb, `${n.path}${n.url.includes("?") ? n.url.slice(n.url.indexOf("?")) : ""}`)) {
       return { kind: "blocked", reason: "robots.txt de la web prohíbe esta ruta" };
@@ -107,7 +108,7 @@ export async function fetchAgencyWeb(n: NormalizedAgencyUrl, robots: RobotsCache
     // Si la redirección lleva a otro dominio, la ruta de destino también debe estar permitida.
     if (final && final.domain !== n.domain) {
       const rb2 = await loadRobots(new URL(final.url).origin, robots);
-      if (rb2 !== "error" && !robotsAllows(rb2, `${final.path}`)) return { kind: "blocked", reason: "robots.txt de la web de destino prohíbe esta ruta" };
+      if (rb2 !== "error" && rb2 !== "dns" && !robotsAllows(rb2, `${final.path}`)) return { kind: "blocked", reason: "robots.txt de la web de destino prohíbe esta ruta" };
     }
     const reader = res.body?.getReader();
     let html = "";
@@ -126,9 +127,17 @@ export async function fetchAgencyWeb(n: NormalizedAgencyUrl, robots: RobotsCache
       }
     } else html = await res.text();
     const got = parseAgencyWebHtml(html, final?.url ?? n.url);
-    if (!got) return { kind: "error", httpStatus: res.status, reason: "no parece una ficha de inmueble" };
+    // Página diminuta que redirige por JavaScript a /404 (ficha retirada en webs tipo «ficha/index.php?codigo=»).
+    if (!got && html.length < 2000 && /window\.location/i.test(html) && /404|no-?encontrad|not-?found/i.test(html)) {
+      return { kind: "gone", finalUrl: final?.url ?? null, httpStatus: res.status, reason: "la web redirige a su página 404" };
+    }
+    // 200 sin datos de ficha en el HTML (web hecha con JavaScript): es estable, no se reintenta.
+    if (!got) return { kind: "unsupported", httpStatus: res.status, reason: "sin datos de ficha en el HTML (se carga con JavaScript)" };
     return { kind: "ok", finalUrl: final?.url ?? n.url, httpStatus: res.status, parsed: got.parsed, cms: got.cms };
   } catch (e) {
+    // El dominio ya no existe (DNS): la ficha no volverá; no se reintenta.
+    const code = (e as { cause?: { code?: string } })?.cause?.code;
+    if (code === "ENOTFOUND") return { kind: "gone", finalUrl: null, httpStatus: null, reason: "el dominio ya no existe" };
     return { kind: "error", httpStatus: null, reason: e instanceof Error ? e.message.slice(0, 160) : "fetch_failed" };
   }
 }
@@ -146,10 +155,10 @@ export async function refreshAgencyWebs(
   rows: WebRowLite[],
   cache: Map<string, CachedWeb>,
   opts: { limit?: number; dryRun?: boolean; budgetMs?: number } = {},
-): Promise<{ planned: number; fetched: number; ok: number; failed: number; blocked: number }> {
+): Promise<{ planned: number; fetched: number; ok: number; failed: number; blocked: number; unreadable: number }> {
   const started = Date.now();
   const plan = planAgencyWebFetches(rows, cache, started, opts.limit ?? MAX_WEB_FETCHES_PER_RUN);
-  const out = { planned: plan.fetch.length, fetched: 0, ok: 0, failed: 0, blocked: 0 };
+  const out = { planned: plan.fetch.length, fetched: 0, ok: 0, failed: 0, blocked: 0, unreadable: 0 };
   if (opts.dryRun) return out;
   try {
     // Filas leídas antes de existir la huella: se les apunta sin leer nada.
@@ -162,6 +171,8 @@ export async function refreshAgencyWebs(
       out.fetched++;
       if (res.kind === "ok") out.ok++;
       else if (res.kind === "blocked") out.blocked++;
+      // Retirada (404/410/dominio muerto) o web que no da datos sin JavaScript: resultado estable, no un fallo nuestro.
+      else if (res.kind === "gone" || res.kind === "unsupported") out.unreadable++;
       else out.failed++;
       const row = toCacheRow(item.n, res, item.attempts, Date.now(), item.sig);
       const { error } = await db.from(TABLE).upsert(row, { onConflict: "url_key" });

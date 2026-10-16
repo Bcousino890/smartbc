@@ -56,7 +56,7 @@ export type LinkingRunSummary = {
   /** Lectura de webs propias de agencias (0203): planificadas / leídas / buenas / fallidas. */
   /** Reemplazo automático de fotos con marca por las limpias de la web de la agencia (0205/0206). */
   webPhotos?: AutoPhotosSummary | null;
-  webs?: { planned: number; fetched: number; ok: number; failed: number; blocked?: number };
+  webs?: { planned: number; fetched: number; ok: number; failed: number; blocked?: number; unreadable?: number };
   /** Milisegundos por fase, pases de agencias saltados y errores aislados (no rompen el enlazado base). */
   timings?: Record<string, number>;
   skipped?: Record<string, string>;
@@ -309,9 +309,9 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     if (AGENCY_PASSES) {
       await safe("pro", async () => {
         if (left() < 25_000) return void (skipped.pro = "sin tiempo");
-        // Solo las candidatas (0207): ~9.500 de las ~70.000. Sin la función, el pase se salta.
+        // Solo las candidatas (0208): ~9.500 de las ~70.000. Sin la función, el pase se salta.
         const rpc = await db.rpc("get_particulares_agency_candidates");
-        if (rpc.error) return void (skipped.pro = `migración 0207 sin aplicar (${rpc.error.message})`);
+        if (rpc.error) return void (skipped.pro = `migración 0208 sin aplicar (${rpc.error.message})`);
         proRows = ((rpc.data ?? []) as ViewRow[]).map((r) => ({
           ...viewRowToLinkRow(r),
           duplicate_of: (r as unknown as CurrentRow).duplicate_of,
