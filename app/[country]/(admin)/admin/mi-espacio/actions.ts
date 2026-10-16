@@ -16,7 +16,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { withHomeAccess, type ActionResult } from "@/lib/catalogs/access";
 import { validateCatalogContact } from "@/lib/catalogs/contact";
-import { catalogErrorMessage } from "@/lib/catalogs/errors";
+import { catalogErrorMessage, CREATE_IN_GROUP_FAILED } from "@/lib/catalogs/errors";
 import { isHomeOwner } from "@/lib/catalogs/owner";
 import { findPropertyId } from "@/lib/catalogs/queries";
 import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
@@ -64,6 +64,10 @@ export async function createCatalogAction(input: {
   /** Contacto público del catálogo (0194). El formulario lo precarga con el
    *  nombre del dueño y el teléfono de la agencia; se guarda lo que llegue. */
   contact: { name: string; phone: string; role: string };
+  /** HOME · grupos (D10, C1): ponerlo también en este grupo. Crear y asignar
+   *  van en UNA transacción (catalog_create_in_group): si la asignación falla,
+   *  no se crea el catálogo. Sin grupo, exactamente como antes. */
+  groupId?: string | null;
 }): Promise<ActionResult<{ id: string }>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     const title = normalizeTitle(input?.title);
@@ -73,14 +77,20 @@ export async function createCatalogAction(input: {
     const contact = validateCatalogContact(input?.contact ?? {});
     if (!contact.ok) return fail(contact.error);
 
-    const { data, error } = await db().rpc("catalog_create_v2", {
+    const groupId = input?.groupId ?? null;
+    if (groupId !== null && !isUuid(groupId)) return { ok: false as const, error: CREATE_IN_GROUP_FAILED };
+    const args = {
       p_actor: profile.id,
       p_title: title.value,
       p_intro: intro.value,
       p_name: contact.contact.name,
       p_phone: contact.contact.phone,
       p_role: contact.contact.role,
-    });
+    };
+    const { data, error } = groupId
+      ? await db().rpc("catalog_create_in_group", { ...args, p_group: groupId })
+      : await db().rpc("catalog_create_v2", args);
+    if (groupId && (error?.message ?? "").trim() === "forbidden") return { ok: false as const, error: CREATE_IN_GROUP_FAILED };
     if (error || !data) return fail(error);
     revalidatePath(HOME_PATH);
     return { ok: true as const, id: String(data) };

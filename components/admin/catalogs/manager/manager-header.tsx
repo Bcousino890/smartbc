@@ -33,6 +33,7 @@ export function ManagerHeader({
   onPreviewWithoutLink,
   onShare,
   unsaved = [],
+  onOpenGroups,
 }: {
   basePath: string;
   title: string;
@@ -45,12 +46,16 @@ export function ManagerHeader({
   onPreviewWithoutLink: (reason: NoLinkReason) => void;
   onShare: () => void;
   unsaved?: UnsavedEntry[];
+  /** HOME · grupos (C4): abre «Grupos» encima del gestor, sin navegar. Recibe
+   *  el botón «⋯» para devolverle el foco al cerrar. */
+  onOpenGroups?: (trigger: HTMLElement | null) => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [list, setList] = useState(false);
   const [stuck, setStuck] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const active = !!share && !share.expired && !archived;
 
@@ -118,6 +123,7 @@ export function ManagerHeader({
             </button>
             <div ref={menuRef} className="relative">
               <button
+                ref={menuButton}
                 type="button"
                 aria-label="Más acciones"
                 aria-haspopup="menu"
@@ -142,6 +148,20 @@ export function ManagerHeader({
                   >
                     {archived ? "Reactivar" : "Archivar"}
                   </button>
+                  {onOpenGroups ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu(false);
+                        onOpenGroups(menuButton.current);
+                      }}
+                      className="block w-full rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-cream-50"
+                      data-testid="menu-groups"
+                    >
+                      Grupos…
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>

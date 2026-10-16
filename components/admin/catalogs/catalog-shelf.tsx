@@ -4,11 +4,17 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import { criteriaSummary } from "@/lib/catalogs/criteria";
+import { cardTags, selectionCounts, selectionMatcher, type GroupSelection, type GroupsState } from "@/lib/catalogs/groups";
 import type { CatalogSummary } from "@/lib/catalogs/types";
+import { GroupSelector } from "./groups/group-selector";
 
 // Estantería de la HOME con filtros (BCP-01 ampliación X8): anuncio de
 // origen, zona, operación, modo y estado, y búsqueda por título o código. Todo
 // en el navegador sobre la lista del dueño (son pocos catálogos). Interno.
+// HOME · grupos: el grupo elegido es un filtro MÁS, que se aplica antes que los
+// de siempre (que no cambian); los recuentos del selector siguen el filtro de
+// estado. «Zona de los criterios» (D11) sale, como siempre, de los criterios
+// guardados del catálogo, sea manual o automático.
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -18,7 +24,14 @@ function formatDate(iso: string): string {
 const sel =
   "min-w-0 rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-gold";
 
-export function CatalogShelf({ catalogs, basePath }: { catalogs: CatalogSummary[]; basePath: string }) {
+export interface ShelfGroups {
+  state: GroupsState;
+  selection: GroupSelection;
+  onSelect: (sel: GroupSelection) => void;
+  onAssign: (catalog: CatalogSummary, opener: HTMLElement | null) => void;
+}
+
+export function CatalogShelf({ catalogs, basePath, groups = null }: { catalogs: CatalogSummary[]; basePath: string; groups?: ShelfGroups | null }) {
   const [q, setQ] = useState("");
   const [zone, setZone] = useState("");
   const [op, setOp] = useState("");
@@ -39,7 +52,11 @@ export function CatalogShelf({ catalogs, basePath }: { catalogs: CatalogSummary[
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
   }, [catalogs]);
 
+  const inGroup = useMemo(() => (groups ? selectionMatcher(groups.state, groups.selection) : () => true), [groups]);
+  const counts = useMemo(() => (groups ? selectionCounts(groups.state, catalogs, status) : null), [groups, catalogs, status]);
+
   const shown = catalogs.filter((c) => {
+    if (!inGroup(c.id)) return false;
     if (status && c.status !== status) return false;
     if (mode && c.mode !== mode) return false;
     if (op && c.criteria.operation !== op) return false;
@@ -55,7 +72,8 @@ export function CatalogShelf({ catalogs, basePath }: { catalogs: CatalogSummary[
 
   return (
     <>
-      <div className="mt-5 flex flex-wrap items-center gap-2" role="search" aria-label="Filtrar catálogos" data-testid="shelf-filters">
+      {groups && counts ? <GroupSelector state={groups.state} selection={groups.selection} counts={counts} onSelect={groups.onSelect} /> : null}
+      <div className={`${groups ? "mt-3" : "mt-5"} flex flex-wrap items-center gap-2`} role="search" aria-label="Filtrar catálogos" data-testid="shelf-filters">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -71,8 +89,8 @@ export function CatalogShelf({ catalogs, basePath }: { catalogs: CatalogSummary[
             </option>
           ))}
         </select>
-        <select aria-label="Zona" value={zone} onChange={(e) => setZone(e.target.value)} className={sel}>
-          <option value="">Todas las zonas</option>
+        <select aria-label="Zona de los criterios" value={zone} onChange={(e) => setZone(e.target.value)} className={sel}>
+          <option value="">Todas las zonas de los criterios</option>
           {zones.map((z) => (
             <option key={z} value={z}>
               {z}
@@ -100,7 +118,11 @@ export function CatalogShelf({ catalogs, basePath }: { catalogs: CatalogSummary[
         </span>
       </div>
       {shown.length === 0 ? (
-        <p className="mt-6 text-sm text-ink/55">Ningún catálogo coincide con estos filtros.</p>
+        <p className="mt-6 text-sm text-ink/55" data-testid="shelf-empty">
+          {groups && groups.selection.kind === "group" && !catalogs.some((c) => inGroup(c.id))
+            ? "Este grupo no tiene catálogos todavía. Asígnalos desde cada tarjeta con «Grupos»."
+            : "Ningún catálogo coincide con estos filtros."}
+        </p>
       ) : (
         <ul className="mt-6 grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-testid="shelf">
           {shown.map((c) => (
@@ -135,6 +157,24 @@ export function CatalogShelf({ catalogs, basePath }: { catalogs: CatalogSummary[
                 <p className="text-xs text-ink/45">Actualizado el {formatDate(c.updatedAt)}</p>
                 <span className="mt-1 inline-block text-xs text-gold underline-offset-2 group-hover:underline">Gestionar</span>
               </Link>
+              {groups ? (
+                <div className="mt-0.5 space-y-0.5">
+                  {cardTags(groups.state, c.id).length ? (
+                    <p className="text-xs text-[#6b5a3e]" data-testid="card-groups">
+                      {cardTags(groups.state, c.id).join(" · ")}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={(e) => groups.onAssign(c, e.currentTarget)}
+                    className="text-xs text-gold underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                    aria-label={`Grupos de «${c.title}»`}
+                    data-testid="card-groups-button"
+                  >
+                    Grupos
+                  </button>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

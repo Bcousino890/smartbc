@@ -1708,6 +1708,20 @@ Plan aprobado: [`qa-c2/plan-vista-previa.md`](qa-c2/plan-vista-previa.md) (D-QA1
   - Se relanzó solo el trabajo fallido y pasó.
 - **El agente no fusiona.** Fusionar despliega y aplica `0202` (ver «Despliegue, compatibilidad y recuperación»); lo decide Fabricio.
 
+**Merge y QA en producción:**
+- **PR #321 fusionado por Fabricio:** commit `b1f2b49` en `main`, el 16 de octubre de 2026 a las 09:40 UTC. La CI de `main` en ese commit, en verde.
+- **El código de E3 está vivo:** comprobado en solo lectura desde fuera. `/p/<slug inexistente>/0.webp?f=XYZ` responde `400 bad_photo` sin caché, como el código de E3; el anterior daba 404.
+- **`0202` aplicada:** no se ve desde fuera; se deduce de que, si las migraciones fallan, el despliegue no cambia de versión.
+- **QA de Fabricio en un catálogo real, superada** (16 de octubre de 2026):
+  - excluir y volver a usar fotos, elegir la apertura, las confirmaciones de la portada y el comportamiento de la galería funcionan;
+  - la ficha y las fotos del CRM no cambian;
+  - los controles de fotos y el lector funcionan también en un **móvil real**.
+- **Esta QA no cierra nada más:**
+  - G-ALQ sigue pendiente de la evidencia de la empresa;
+  - el caso original de Recoletos sigue sin confirmar;
+  - sigue pendiente la medición D13 en vivo;
+  - la prueba en el móvil real cubre los controles de fotos de E3 y el lector, pero no cierra otras pruebas en dispositivos reales, como las cuatro secciones del gestor de E2.
+
 ## Revisión
 
 Revisión adicional de Codex: no solicitada.

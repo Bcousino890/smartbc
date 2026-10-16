@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { HomeView } from "@/components/admin/catalogs/home-view";
+import { FixtureHome } from "./fixture-home";
 import { FixtureReport } from "@/components/catalogs/dev/fixture-report";
 import { isCatalogFixtureMode } from "@/lib/catalogs/fixture-mode";
 
@@ -11,10 +12,12 @@ export const metadata = { robots: { index: false, follow: false } };
  * ni base de datos. Responde 404 salvo con NODE_ENV=development y
  * CATALOG_FIXTURES=1 a la vez (en producción, siempre 404).
  */
-export default async function FixtureHomePage({ searchParams }: { searchParams: Promise<{ vacio?: string }> }) {
+export default async function FixtureHomePage({ searchParams }: { searchParams: Promise<{ vacio?: string; grupo?: string; sinGrupos?: string }> }) {
   if (!isCatalogFixtureMode()) notFound();
   const { fixtureCatalogs } = await import("@/lib/catalogs/fixtures");
-  const { vacio } = await searchParams;
+  const { fixtureHomeState } = await import("@/lib/catalogs/fixture-groups");
+  const { vacio, grupo, sinGrupos } = await searchParams;
+  const home = fixtureHomeState();
   return (
     <div className="crm-root min-h-screen bg-cream-50 pb-10">
       <p className="bg-amber-100 px-4 py-1 text-xs text-amber-900">
@@ -27,12 +30,12 @@ export default async function FixtureHomePage({ searchParams }: { searchParams: 
             Tu espacio para trabajar con el CRM e ir mejorándolo módulo a módulo. Primer módulo: catálogos.
           </p>
         </header>
-        <HomeView
-          catalogs={vacio ? [] : fixtureCatalogs}
-          preparedBy="Fabricio Andree"
-          basePath="/dev-fixtures/mi-espacio"
-          mode="demo"
-        />
+        {/* ?sinGrupos=1: la HOME exactamente como antes de los grupos (regresión). */}
+        {sinGrupos === "1" || vacio ? (
+          <HomeView catalogs={vacio ? [] : fixtureCatalogs} preparedBy="Fabricio Andree" basePath="/dev-fixtures/mi-espacio" mode="demo" />
+        ) : (
+          <FixtureHome catalogs={home.catalogs} groups={home.groups} grupo={typeof grupo === "string" ? grupo : null} />
+        )}
       </div>
       <FixtureReport />
     </div>

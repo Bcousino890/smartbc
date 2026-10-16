@@ -36,6 +36,9 @@ import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
 import { useFormDraft } from "./manager/use-form-draft";
 import { useLeaveGuard } from "./manager/use-leave-guard";
 import { ManagerHeader, type NoLinkReason, type UnsavedEntry } from "./manager/manager-header";
+import { CatalogGroupsDialog } from "./groups/catalog-groups-dialog";
+import type { GroupActions } from "./groups/types";
+import type { GroupsState } from "@/lib/catalogs/groups";
 import { SectionTabs } from "./manager/section-tabs";
 import { HomesSection } from "./manager/homes-section";
 import { ContentSection } from "./manager/content-section";
@@ -93,6 +96,7 @@ export function CatalogManager({
   measureMode = false,
   texts = [],
   storyHref = (slug: string) => `/es/admin/propiedades/${encodeURIComponent(slug)}/story`,
+  groups = null,
 }: {
   catalog: CatalogDetail;
   actions: CatalogManagerActions;
@@ -108,8 +112,14 @@ export function CatalogManager({
   texts?: CatalogTextView[];
   /** C2: enlace a la historia de una ficha (revisión aparte). */
   storyHref?: (slug: string) => string;
+  /** HOME · grupos (C4): «Grupos…» en el menú ⋯. Es un diálogo con su propio
+   *  estado: no cambia la URL, no cierra el panel abierto ni toca lo escrito
+   *  sin guardar. Organizar no cambia este catálogo. */
+  groups?: { initial: GroupsState; actions: GroupActions } | null;
 }) {
   const router = useRouter();
+  const [groupsState, setGroupsState] = useState<GroupsState | null>(groups?.initial ?? null);
+  const [groupsOpen, setGroupsOpen] = useState<HTMLElement | null | false>(false);
   // E3: sube cada vez que llega un catálogo nuevo (tras guardar y refrescar),
   // para que las listas de fotos se vuelvan a leer.
   const catalogRev = useRef({ cat: catalog, n: 0 });
@@ -418,7 +428,20 @@ export function CatalogManager({
           go("compartir", "sp-title");
         }}
         unsaved={unsaved}
+        onOpenGroups={groups && groupsState?.available ? (trigger) => setGroupsOpen(trigger) : undefined}
       />
+      {groups && groupsState && groupsOpen !== false ? (
+        <CatalogGroupsDialog
+          catalogId={catalog.id}
+          catalogTitle={catalog.title}
+          state={groupsState}
+          actions={groups.actions}
+          onState={setGroupsState}
+          onClose={() => setGroupsOpen(false)}
+          returnFocusTo={() => groupsOpen}
+          refreshOnOpen
+        />
+      ) : null}
       <SectionTabs section={section} onSelect={(s) => go(s)} counts={{ viviendas: items.length }} marks={marks} />
       {returned && unsaved.length ? (
         <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="returned-notice">

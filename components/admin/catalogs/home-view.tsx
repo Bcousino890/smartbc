@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { BookOpen, ClipboardList, Home, Users } from "lucide-react";
+import type { ActionResult } from "@/lib/catalogs/access";
+import { EMPTY_GROUPS, type GroupsState } from "@/lib/catalogs/groups";
 import type { CatalogSummary } from "@/lib/catalogs/types";
-import { NewCatalogForm } from "./new-catalog-form";
-import { CatalogShelf } from "./catalog-shelf";
+import { HomeCatalogs } from "./home-catalogs";
+import type { GroupActions } from "./groups/types";
+import type { CreateCatalogInput } from "./new-catalog-form";
 
 // HOME de Fabricio (BCP-01 T3). Interfaz del admin en Lato (clases crm-*); el
 // estilo Boutique solo aparece en las portadas en miniatura de la estantería.
@@ -18,6 +21,12 @@ export function HomeView({
   preparedBy,
   basePath = "/es/admin/mi-espacio",
   mode = "live",
+  groups = { ...EMPTY_GROUPS, available: false },
+  groupActions = null,
+  createCatalog,
+  initialGroupParam = null,
+  ownerKey = "",
+  country = "es",
 }: {
   catalogs: CatalogSummary[];
   /** Nombre con el que se PRECARGA el contacto de un catálogo nuevo. */
@@ -25,8 +34,16 @@ export function HomeView({
   basePath?: string;
   /** "demo": datos de prueba en local; no guarda nada. */
   mode?: "live" | "demo";
+  /** HOME · grupos: estado inicial, acciones y ?grupo de la URL. Sin ellos, la
+   *  estantería de siempre. */
+  groups?: GroupsState;
+  groupActions?: GroupActions | null;
+  createCatalog?: (i: CreateCatalogInput) => Promise<ActionResult<{ id: string }>>;
+  initialGroupParam?: string | null;
+  /** Dueño y país: la clave de lo recordado en este navegador (C3). */
+  ownerKey?: string;
+  country?: string;
 }) {
-  const active = catalogs.filter((c) => c.status === "active").length;
   return (
     <div className="mt-8 space-y-10">
       <section aria-labelledby="hm-accesos">
@@ -69,29 +86,18 @@ export function HomeView({
         </div>
       </section>
 
-      <section aria-labelledby="hm-catalogos">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="hm-catalogos" className="crm-section-title text-ink">
-              Catálogos
-            </h2>
-            <p className="mt-1 text-sm text-ink/55">
-              {catalogs.length === 0
-                ? "Todavía no hay catálogos."
-                : `${active} activo${active === 1 ? "" : "s"} · ${catalogs.length} en total`}
-            </p>
-          </div>
-          <NewCatalogForm basePath={basePath} mode={mode} defaultContactName={preparedBy} />
-        </div>
-
-        {catalogs.length === 0 ? (
-          <div className="mt-5 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-10 text-center text-sm text-ink/55">
-            Crea tu primer catálogo y añade propiedades existentes por su referencia BC.
-          </div>
-        ) : (
-          <CatalogShelf catalogs={catalogs} basePath={basePath} />
-        )}
-      </section>
+      <HomeCatalogs
+        catalogs={catalogs}
+        basePath={basePath}
+        mode={mode}
+        preparedBy={preparedBy}
+        initialGroups={groups}
+        groupActions={groupActions}
+        createCatalog={createCatalog}
+        initialGroupParam={initialGroupParam}
+        ownerKey={ownerKey}
+        country={country}
+      />
     </div>
   );
 }
