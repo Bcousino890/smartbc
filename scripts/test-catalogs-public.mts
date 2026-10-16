@@ -60,6 +60,7 @@ import {
 import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_MAX_WORDS, MAX_JOURNEY_SPREADS, TINY_WORDS } from "../lib/catalogs/journey-layout.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
 import type { PublicCatalog, PublicCatalogState, PublicItem } from "../lib/catalogs/public-contract.ts";
+import { captureFixed, captureHash, verifyFixed } from "../lib/catalogs/export/capture.ts";
 import { contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
 
 let failures = 0;
@@ -1249,6 +1250,55 @@ function pdfPlanTests() {
   check("metadatos sin nada interno", JSON.stringify(meta) === JSON.stringify({ title: "Salamanca", author: "Benjamín Cousiño Propiedades", subject: "Selección de viviendas", creator: "Benjamín Cousiño Propiedades", producer: "Benjamín Cousiño Propiedades", language: "es-ES" }));
 }
 
+// ── PDF · captura fija (K1) ─────────────────────────────────────────────────
+async function pdfCaptureTests() {
+  section("PDF · captura fija: la huella describe exactamente lo capturado (K1)");
+  type S = { title: string; items: { key: string; price: number; photos: { u: string }[] }[] };
+  const mk = (price: number, u = "a"): S => ({ title: "Cat", items: [{ key: "k1", price, photos: [{ u }] }] });
+  let version = 1;
+  let current: S | null = mk(100);
+  let access = true;
+  let reads = 0;
+  const deps = {
+    checkAccess: async () => access,
+    readMeta: async () => ({ version, operation: "sale" }),
+    readSnapshot: async () => {
+      reads++;
+      return current ? JSON.parse(JSON.stringify(current)) : null;
+    },
+  };
+  const c1 = await captureFixed(deps);
+  check("H1 = hash de la propia S1 y su operación", !!c1 && c1.hash === captureHash(mk(100), "sale") && c1.operation === "sale");
+  check("el orden de las claves no cambia la huella", captureHash({ b: 1, a: [{ y: 2, x: 1 }] }, "sale") === captureHash({ a: [{ x: 1, y: 2 }], b: 1 }, "sale"));
+  check("la operación forma parte de la huella", captureHash(mk(100), "sale") !== captureHash(mk(100), "rent"));
+  // Cambio en una ficha compartida (precio) SIN que suba catalogs.version.
+  current = mk(200);
+  check("cambio de ficha compartida sin subir la versión → «changed»", (await verifyFixed(deps, c1!.hash)) === "changed");
+  // Cambio de versión de una foto (otra URL) sin subir la versión.
+  current = mk(100, "b");
+  check("foto realojada (otra `u`) sin subir la versión → «changed»", (await verifyFixed(deps, c1!.hash)) === "changed");
+  current = mk(100);
+  check("sin cambios → «ok»", (await verifyFixed(deps, c1!.hash)) === "ok");
+  access = false;
+  check("acceso retirado (ya no es dueño) → «gone», sin leer", (await verifyFixed(deps, c1!.hash)) === "gone" && (await captureFixed(deps)) === null);
+  access = true;
+  current = null;
+  check("enlace caducado, revocado o catálogo no disponible → «gone»", (await verifyFixed(deps, c1!.hash)) === "gone");
+  current = mk(100);
+  // La versión cambia entre las dos lecturas de la lectura coherente: reintenta.
+  let flip = 0;
+  const unstable = { ...deps, readMeta: async () => ({ version: flip++ === 0 ? 1 : 2, operation: "sale" }) };
+  const c2 = await captureFixed(unstable);
+  check("versión distinta entre lecturas → se reintenta y se captura una versión estable", !!c2 && c2.hash === captureHash(mk(100), "sale"));
+  // S1 capturada no cambia aunque el origen se modifique después.
+  const shared: S = mk(300);
+  const byRef = { ...deps, readSnapshot: async () => shared };
+  const c3 = await captureFixed(byRef);
+  shared.items[0].price = 999;
+  check("S1 es una copia propia: no cambia si el origen cambia después", !!c3 && c3.snapshot.items[0].price === 300 && c3.hash === captureHash(mk(300), "sale"));
+  check("lecturas hechas", reads > 0);
+}
+
 async function main() {
   section("T6 · contrato público y privacidad");
   {
@@ -1659,6 +1709,7 @@ async function main() {
   }
 
   pdfPlanTests();
+  await pdfCaptureTests();
   await liveTests();
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);

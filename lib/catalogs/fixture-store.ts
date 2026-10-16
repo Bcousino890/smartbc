@@ -38,6 +38,10 @@ export const FIXTURE_TOKENS = {
   // inclusión de otra operación.
   rent: "fixtureRentToken000000000011",
   sale: "fixtureSaleToken000000000012",
+  // PDF del catálogo: historia de 12 capítulos, descripción de ~1.500
+  // palabras, vivienda sin fotos ni precio, dual con muchas fotos,
+  // exclusiones y apertura de E3, y una foto que falla al leerla.
+  pdf: "fixturePdfToken0000000000013",
 } as const;
 
 // Títulos como los de las fichas reales: varios ocupan dos líneas en el índice.
@@ -340,6 +344,47 @@ async function seed(): Promise<Map<string, Share>> {
           item({ key: "fxOpS950007", slug: "fx-op-s950", title: "Piso en venta en Lista", subzone: "Lista", price: 950000, bedrooms: 2, bathrooms: 2, square_meters: 98, photos: photos(250, 2, "h") }),
         ]),
   ];
+  // PDF del catálogo (K4, K5, P2): claves de foto explícitas para poder
+  // excluir y elegir apertura (E3) desde la propia semilla.
+  const pk = (slug: string, i: number) => createHash("md5").update(`pdf-photo:${slug}:${i}`).digest("hex").slice(0, 16);
+  const pdfPhotos = (slug: string, n: number, classes: (string | null)[] = []) =>
+    Array.from({ length: n }, (_, i) => ({ u: `pdf-${slug}-${i}`, f: pk(slug, i), w: i % 4 === 3 ? 1000 : 1600, h: i % 4 === 3 ? 1500 : 1067, c: i === 0, ...(classes[i] ? { k: classes[i] } : {}) }));
+  const storyChapters = ["overview", "living", "kitchen", "private", "outdoor", "finishes", "building", "barrio", "living", "kitchen", "private", "outdoor"];
+  const storyClasses = [null, "living_room", "kitchen", "bedroom", "terrace_outdoor", "bathroom", "facade", "street", "living_room", "kitchen", "bedroom", "terrace_outdoor", null, null, null];
+  const pdfStoryDesc = "Ático con terraza de 60 m² y vistas al parque. Salón de doble altura con chimenea. Cocina office reformada. Tres dormitorios, el principal con terraza propia.";
+  const pdfStoryFeatures = ["Terraza", "Ascensor", "Aire acondicionado"];
+  const pdfStory = await withClean(
+    item({ key: "fxPdfHist0001", slug: "pdf-historia", title: "Ático con historia de doce capítulos", subzone: "Retiro", price: 1890000, bedrooms: 3, bathrooms: 2, square_meters: 168, floor_override: "2", photos: pdfPhotos("pdf-historia", 15, storyClasses) }),
+    pdfStoryDesc,
+    pdfStoryFeatures,
+  );
+  pdfStory.story = {
+    h: storySourceHash({ description: pdfStoryDesc, bedrooms: 3, bathrooms: 2, squareMeters: 168, features: pdfStoryFeatures }),
+    p: "Un ático para vivir mirando al parque, con una terraza que funciona como una habitación más.",
+    b: storyChapters.map((c, i) => ({ c, t: `Capítulo ${i + 1} de doce. ${DESC} Cierre del capítulo ${i + 1}.` })),
+  };
+  // E3: dos fotos excluidas (la 5 y la 9) y la 4 como apertura elegida.
+  pdfStory.pp = { x: [pk("pdf-historia", 5), pk("pdf-historia", 9)], o: pk("pdf-historia", 4) };
+  const pdfItems: InternalItem[] = [
+    pdfStory,
+    await withClean(
+      item({ key: "fxPdfDesc0002", slug: "pdf-descripcion", title: "Piso con una descripción muy larga", subzone: "Chamberí", price: 980000, bedrooms: 3, bathrooms: 2, square_meters: 120, photos: pdfPhotos("pdf-descripcion", 3) }),
+      longText(9000),
+      ["Ascensor", "Portero físico", "Calefacción central", "Trastero"],
+    ),
+    item({ key: "fxPdfVacia003", slug: "pdf-sin-fotos", title: "Dúplex sin fotos ni precio", subzone: null, zone: null, operation: "rent", operations: ["rent"], price: 0, rent_price: null, status: "reserved", bedrooms: null, bathrooms: 2, square_meters: null, photos: [] }),
+    await withClean(
+      item({ key: "fxPdfDual0004", slug: "pdf-dual", title: "Piso dual con muchas fotos", subzone: "Almagro", operations: ["sale", "rent"], price: 2100000, rent_price: 6800, bedrooms: 4, bathrooms: 3, square_meters: 186, photos: pdfPhotos("pdf-dual", 14) }),
+      DESC,
+      ["Ascensor", "Galería acristalada"],
+    ),
+    await withClean(
+      item({ key: "fxPdfFalla005", slug: "pdf-falla", title: "Estudio con una foto que falla", subzone: "Lavapiés", price: 320000, bedrooms: 1, bathrooms: 1, square_meters: 42, photos: pdfPhotos("pdf-falla", 4) }),
+      "Estudio luminoso con una foto que no se puede leer al generar el PDF.",
+      ["Exterior"],
+    ),
+  ];
+  const pdfSnap = { ...snap("Selección para el PDF", "Cinco viviendas sintéticas para comprobar el PDF: historia larga, descripción larga, material que falta, fotos de E3 y una foto que falla.", pdfItems), contact: { name: "Laura Méndez", phone: "+34641457123", role: "asesora" } };
   // E3: clave opaca y estable de cada foto sintética (como catalog_photo_key).
   const keyed = (m: Map<string, Share>) => {
     for (const sh of m.values()) {
@@ -362,6 +407,7 @@ async function seed(): Promise<Map<string, Share>> {
     [FIXTURE_TOKENS.twenty, { snapshot: snap("Barrio de Salamanca", "Exclusivos pisos en la zona más exclusiva de todo Madrid.", series(20, "fxVeinte")), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.journey, { snapshot: snap("El recorrido de cada vivienda", "Tres viviendas: una con texto propio, otra con historia aprobada y otra solo con datos.", journeyItems), expiresAt: far, revoked: false, archived: false }],
     [FIXTURE_TOKENS.max, { snapshot: snap("Salamanca · selección máxima", "Veinticuatro viviendas, el máximo de un catálogo automático.", series(24, "fxMax")), expiresAt: far, revoked: false, archived: false }],
+    [FIXTURE_TOKENS.pdf, { snapshot: pdfSnap, expiresAt: far, revoked: false, archived: false, operation: "sale", version: 1 }],
   ]));
 }
 
@@ -400,6 +446,25 @@ export async function fixtureGetMetas(tokens: string[]): Promise<Map<string, Cat
     if (s) out.set(t, { version: s.version ?? 1, operation: s.operation ?? "any" });
   }
   return out;
+}
+
+/** PDF (dueño, solo desarrollo): qué enlace sintético corresponde a cada
+ *  catálogo de la gestión de prueba. */
+const OWNER_FIXTURES: Record<string, keyof typeof FIXTURE_TOKENS> = {
+  "f0000000-0000-0000-0000-000000000001": "main",
+  "f0000000-0000-0000-0000-0000000000a1": "pdf",
+  "f0000000-0000-0000-0000-0000000000a2": "journey24",
+};
+
+export function fixtureOwnerToken(catalogId: string): string | null {
+  const k = OWNER_FIXTURES[catalogId];
+  return k ? FIXTURE_TOKENS[k] : null;
+}
+
+/** La instantánea del catálogo para su dueño: aunque el enlace esté
+ *  revocado, caducado o el catálogo archivado (P4). */
+export async function fixtureOwnerSnapshot(token: string): Promise<InternalSnapshot | null> {
+  return (await store()).get(token)?.snapshot ?? null;
 }
 
 /** Huella pública actual de un enlace (null si no vale). */
@@ -447,14 +512,26 @@ export type FixtureOp =
   | { op: "photo-relocate"; token: string; key: string; index: number }
   | { op: "photo-delete"; token: string; key: string; index: number }
   // E3: otra fila con la MISMA URL (duplicado) y su propia clave, al final.
-  | { op: "photo-dup"; token: string; key: string; index: number; f: string };
+  | { op: "photo-dup"; token: string; key: string; index: number; f: string }
+  // PDF: marcar o desmarcar una foto (por su clave) para que falle al leerla.
+  | { op: "photo-fail"; token: string; key: string; f: string; fail: boolean };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
 export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: string | null }> {
   if (op.op === "reset") {
     await resetFixtureStore();
+    (globalThis as GF)[FAIL_KEY] = undefined;
     return { fingerprint: null };
+  }
+  if (op.op === "photo-fail") {
+    const st0 = await store();
+    const it = st0.get(op.token)?.snapshot.items.find((x) => x.key === op.key);
+    if (it) {
+      if (op.fail) failing().add(`${it.slug}:${op.f}`);
+      else failing().delete(`${it.slug}:${op.f}`);
+    }
+    return { fingerprint: await fixtureFingerprint(op.token) };
   }
   const st = await store();
   const s = st.get(op.token);
@@ -544,6 +621,31 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       break;
   }
   return { fingerprint: valid(s) ? publicFingerprintOf(s) : null };
+}
+
+// PDF del catálogo: fotos que «fallan» al leerlas (slug:clave).
+const FAIL_KEY = "__bcpCatalogFixturePhotoFail";
+type GF = typeof globalThis & { [FAIL_KEY]?: Set<string> };
+function failing(): Set<string> {
+  const g = globalThis as GF;
+  if (!g[FAIL_KEY]) g[FAIL_KEY] = new Set(["pdf-falla:" + createHash("md5").update("pdf-photo:pdf-falla:2").digest("hex").slice(0, 16)]);
+  return g[FAIL_KEY]!;
+}
+
+/** PDF del catálogo (K5): la foto de esa clave como SVG con su CÓDIGO visual
+ *  (lib/catalogs/export/fixture-photo.ts), con su `u` para comprobar la
+ *  versión. null si no existe. */
+export async function fixtureExportPhoto(slug: string, key: string): Promise<{ u: string; svg: string; fail: boolean } | null> {
+  const { codedPhotoSvg } = await import("./export/fixture-photo");
+  for (const share of (await store()).values()) {
+    const it = share.snapshot.items.find((x) => x.slug === slug);
+    if (!it) continue;
+    const i = it.photos.findIndex((ph) => ph.f === key);
+    if (i < 0) continue;
+    const ph = it.photos[i];
+    return { u: ph.u, svg: codedPhotoSvg(ph.u, ph.w ?? 1600, ph.h ?? 1067, `${slug} · ${i + 1}`), fail: failing().has(`${slug}:${key}`) };
+  }
+  return null;
 }
 
 /** Foto sintética para la ruta de prueba /dev-fixtures/foto/[slug]/[idx],
