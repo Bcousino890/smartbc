@@ -787,13 +787,13 @@ export function ParticularModal({
 
   // Fuente de fotos: por defecto la de la ficha abierta; la última elegida se
   // recuerda mientras el modal siga abierto en ESTA ficha (no pasa a otras).
-  const { members: groupMembers } = useGroupLinks(row.id);
+  const { members: groupMembers, agencyWebs } = useGroupLinks(row.id);
   const [pickedSource, setPickedSource] = useState<{ rowId: string; sourceId: string } | null>(null);
   const photoSources = useMemo(() => {
-    const list = buildPhotoSources(groupMembers, currentRow.id);
+    const list = buildPhotoSources(groupMembers, currentRow.id, agencyWebs);
     // La galería completa de la ficha abierta viene del detalle (puede traer más que el grupo).
     return list.map((s) => (s.id === currentRow.id && ownPhotos.length > s.photos.length ? { ...s, photos: ownPhotos } : s));
-  }, [groupMembers, currentRow.id, ownPhotos]);
+  }, [groupMembers, agencyWebs, currentRow.id, ownPhotos]);
   const pickerOn = photoSources.length > 1;
   const activeSource =
     (pickerOn && pickedSource?.rowId === row.id ? photoSources.find((s) => s.id === pickedSource.sourceId) : undefined) ??

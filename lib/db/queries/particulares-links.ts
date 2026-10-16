@@ -7,6 +7,9 @@ import type {
   LinkInfo,
   ParticularLinksPayload,
 } from "@/lib/particulares/links-types";
+import { buildAgencyWebSources } from "@/lib/particulares/agency-web";
+import { loadAgencyWebCache } from "@/lib/particulares/agency-web-runner";
+import { isCollaboratingAgency } from "@/lib/particulares/source-kind";
 
 /**
  * Datos de la ficha unificada de un particular (migración 0176): todos los
@@ -177,7 +180,16 @@ export async function getParticularLinks(id: string): Promise<ParticularLinksPay
   // Propiedades de agencias del CRM que son el mismo piso (migración 0199; si no existe, vacío).
   const agency_matches = await getAgencyMatches(db, memberIds);
 
-  return { root_id: rootId, members, suggestions, same_contact, contacts, changes, agency_matches };
+  // Webs propias de las agencias anunciantes (enlace adicional del portal) + lo ya leído (0203; sin tabla, solo la URL).
+  let agency_webs: ParticularLinksPayload["agency_webs"] = [];
+  try {
+    const cache = await loadAgencyWebCache(db, members.map((m) => m.agency_url));
+    agency_webs = buildAgencyWebSources(members, cache ?? new Map());
+  } catch {
+    agency_webs = [];
+  }
+
+  return { root_id: rootId, members, suggestions, same_contact, contacts, changes, agency_matches, agency_webs };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,10 +205,13 @@ async function getAgencyMatches(db: any, memberIds: string[]): Promise<AgencyMat
   const props = await db
     .from("properties")
     .select(
-      "id, slug, title, operation, status, price, address, square_meters, bedrooms, bathrooms, external_id, property_reference, bc_reference, agencies(name)",
+      "id, slug, title, operation, status, price, address, square_meters, bedrooms, bathrooms, external_id, property_reference, bc_reference, agency_id, agencies(name, slug)",
     )
     .in("id", [...new Set(matches.map((m) => m.property_id as string))]);
   if (props.error) return [];
+  // Colaboradora = con feed de sindicación (`agency_feeds`); «Portales externos» no lo es.
+  const feedRes = await db.from("agency_feeds").select("agency_id");
+  const feeds: Set<string> | null = feedRes.error ? null : new Set((feedRes.data ?? []).map((r: { agency_id: string }) => r.agency_id));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const byId = new Map<string, any>((props.data ?? []).map((p: any) => [p.id, p]));
   return matches
@@ -217,6 +232,7 @@ async function getAgencyMatches(db: any, memberIds: string[]): Promise<AgencyMat
             slug: p.slug ?? null,
             title: p.title ?? null,
             agency_name: ag?.name ?? null,
+            agency_collab: isCollaboratingAgency({ hasFeed: feeds && p.agency_id ? feeds.has(p.agency_id) : null, slug: ag?.slug }),
             reference: p.property_reference ?? p.bc_reference ?? p.external_id ?? null,
             operation: p.operation ?? null,
             price: p.price == null ? null : Number(p.price),

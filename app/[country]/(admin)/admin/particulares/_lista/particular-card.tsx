@@ -129,6 +129,8 @@ const KIND_ICON_TONE: Record<SourceKind, string> = {
   particular: "text-emerald-700",
   agencia_portal: "text-sky-700",
   agencia_web: "text-gold-dark",
+  crm_importada: "text-ink/60",
+  agencia_web_propia: "text-teal-700",
 };
 
 function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone }: CardProps) {

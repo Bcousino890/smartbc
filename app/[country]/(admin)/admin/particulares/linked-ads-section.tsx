@@ -12,7 +12,7 @@ import type {
   ParticularLinksPayload,
 } from "@/lib/particulares/links-types";
 import { setParticularLinkStatus } from "./link-actions";
-import { kindOfAdvertiser } from "@/lib/particulares/source-kind";
+import { kindOfAdvertiser, kindOfCrmProperty } from "@/lib/particulares/source-kind";
 import { SourceKindBadge } from "./_ficha/source-kind-badge";
 
 /**
@@ -236,7 +236,8 @@ export function LinkedAdsSection({
   if (!data) return null;
   const { members, suggestions, same_contact, contacts } = data;
   const agencyMatches = data.agency_matches ?? [];
-  if (members.length < 2 && suggestions.length === 0 && same_contact.length === 0 && agencyMatches.length === 0) return null;
+  const agencyWebs = data.agency_webs ?? [];
+  if (members.length < 2 && suggestions.length === 0 && same_contact.length === 0 && agencyMatches.length === 0 && agencyWebs.length === 0) return null;
 
   const ops = [...new Set(members.map((m) => m.operation))] as Array<"rent" | "sale" | null>;
   const otherPhotos = members.filter((m) => m.id !== rowId && m.photos.length > 0);
@@ -306,10 +307,36 @@ export function LinkedAdsSection({
         </div>
       )}
 
+      {agencyWebs.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink/45">
+            <Link2 size={13} /> Web propia de la agencia
+          </p>
+          <ul className="flex flex-col gap-2">
+            {agencyWebs.map((w) => (
+              <li key={w.key} className="rounded-lg border border-ink/10 bg-white p-2.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <SourceKindBadge kind="agencia_web_propia" full agency={w.agency_name} />
+                  {w.ref && <span className="font-mono text-xs text-ink/50">{w.ref}</span>}
+                  <span className="text-xs text-ink/55">{w.domain}</span>
+                  <span className="rounded-md border border-ink/15 px-1.5 py-0.5 text-xs font-semibold text-ink/70">
+                    {w.verdict.state === "verificada" ? "Verificada" : w.verdict.state === "no_coincide" ? "No coincide" : "Sin leer"}
+                  </span>
+                  {w.photos.length > 0 && <span className="text-xs text-ink/55">{w.photos.length} fotos sin marca</span>}
+                </div>
+                <a href={w.canonical_url ?? w.url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-ink/70 underline-offset-2 hover:underline">
+                  Abrir ficha en la web <ExternalLink size={11} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {agencyMatches.length > 0 && (
         <div className="mb-3">
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink/45">
-            <Building2 size={13} /> Web de agencias colaboradoras (propiedades del CRM)
+            <Building2 size={13} /> Propiedades del CRM (agencias colaboradoras y propiedades importadas de portales)
           </p>
           <ul className="flex flex-col gap-2">
             {agencyMatches.map((m) => {
@@ -319,7 +346,7 @@ export function LinkedAdsSection({
               return (
                 <li key={m.id} className="rounded-lg border border-ink/10 bg-white p-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <SourceKindBadge kind="agencia_web" full agency={p.agency_name} />
+                    <SourceKindBadge kind={kindOfCrmProperty(p.agency_collab)} full agency={p.agency_name} />
                     {p.reference && <span className="font-mono text-xs text-ink/50">{p.reference}</span>}
                     <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(p.operation)}</span>
                     <span className="text-sm font-semibold text-ink">{priceText({ price: p.price, operation: p.operation })}</span>

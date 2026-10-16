@@ -11,13 +11,20 @@
 //                   (UrbantecHome, Housingo, TerraHomes, Level…): sus propiedades
 //                   viven en el CRM (`properties` / `agency_feeds`)
 //                   → «Web de Housingo»
+//   crm_importada   propiedad del CRM de la agencia «Portales externos» (u otra SIN feed
+//                   de sindicación): es el cajón donde el CRM importa propiedades de
+//                   portales, NO la web de ninguna agencia
+//                   → «CRM · propiedad importada de portal»
+//   agencia_web_propia  la ficha en la web propia de la agencia anunciante (el «Enlace
+//                   adicional» del anuncio del portal: Mobilia, Inmoweb…)
+//                   → «Web de Domus Aurea Capital»
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SourceKind = "particular" | "agencia_portal" | "agencia_web";
+export type SourceKind = "particular" | "agencia_portal" | "agencia_web" | "crm_importada" | "agencia_web_propia";
 
-export const SOURCE_KINDS: SourceKind[] = ["particular", "agencia_portal", "agencia_web"];
+export const SOURCE_KINDS: SourceKind[] = ["particular", "agencia_portal", "agencia_web", "agencia_web_propia", "crm_importada"];
 
-export const KIND_META: Record<SourceKind, { short: string; description: string; tone: string; icon: "user" | "building" | "globe" }> = {
+export const KIND_META: Record<SourceKind, { short: string; description: string; tone: string; icon: "user" | "building" | "globe" | "folder" | "link" }> = {
   particular: {
     short: "Particular",
     description: "Anuncio de un propietario en un portal",
@@ -36,7 +43,37 @@ export const KIND_META: Record<SourceKind, { short: string; description: string;
     tone: "border-gold/50 bg-gold/10 text-gold-dark",
     icon: "globe",
   },
+  crm_importada: {
+    short: "CRM · importada",
+    description: "Propiedad del CRM importada desde un portal (no es la web de ninguna agencia)",
+    tone: "border-ink/20 bg-ink/5 text-ink/80",
+    icon: "folder",
+  },
+  agencia_web_propia: {
+    short: "Web propia",
+    description: "Ficha en la web propia de la agencia anunciante (enlace adicional del portal)",
+    tone: "border-teal-300 bg-teal-50 text-teal-800",
+    icon: "link",
+  },
 };
+
+/** Agencias del CRM que son un cajón de importación y no una agencia colaboradora real (último recurso). */
+export const IMPORT_BUCKET_SLUGS = ["portales-externos"];
+
+/**
+ * ¿Es la propiedad del CRM de una agencia colaboradora de sindicación? Lo decide `agency_feeds`
+ * (una agencia con feed = colaboradora: UrbantecHome, Housingo, TerraHomes, Level…). «Portales
+ * externos» no tiene feed. Sin dato de feeds (tabla ilegible) se cae al slug del cajón.
+ */
+export function isCollaboratingAgency(a: { hasFeed?: boolean | null; slug?: string | null }): boolean {
+  if (a.hasFeed != null) return a.hasFeed;
+  return !IMPORT_BUCKET_SLUGS.includes((a.slug ?? "").trim().toLowerCase());
+}
+
+/** Tipo de fuente de una propiedad del CRM. */
+export function kindOfCrmProperty(collab: boolean | null | undefined): SourceKind {
+  return collab === false ? "crm_importada" : "agencia_web";
+}
 
 export const PORTAL_NAMES: Record<string, string> = {
   idealista: "Idealista",
@@ -66,6 +103,8 @@ export function kindOfAdvertiser(advertiserType: string | null | undefined): Sou
 export function sourceLabel(src: { kind?: SourceKind | null; portal?: string | null; agency?: string | null }): string {
   const kind = src.kind ?? "particular";
   const agency = (src.agency ?? "").trim();
+  if (kind === "crm_importada") return "CRM · propiedad importada de portal";
+  if (kind === "agencia_web_propia") return agency ? `Web de ${agency}` : "Web de la agencia";
   if (kind === "agencia_web") return agency ? `Web de ${agency}` : "Web de agencia";
   if (kind === "agencia_portal") return `${portalLabel(src.portal)} · ${agency ? `Agencia ${agency}` : "Agencia"}`;
   return `${portalLabel(src.portal)} · Particular`;

@@ -1,12 +1,12 @@
 "use client";
 
-import { Building2, Globe, User } from "lucide-react";
+import { Building2, FolderOpen, Globe, Link2, User } from "lucide-react";
 import { KIND_META, sourceLabel, type SourceKind } from "@/lib/particulares/source-kind";
 import { cn } from "@/lib/utils";
 
-const ICONS = { user: User, building: Building2, globe: Globe } as const;
+const ICONS = { user: User, building: Building2, globe: Globe, folder: FolderOpen, link: Link2 } as const;
 
-/** Icono del tipo de fuente (particular · agencia en portal · web de agencia). */
+/** Icono del tipo de fuente (particular · agencia en portal · web de agencia colaboradora · CRM importada · web propia). */
 export function SourceKindIcon({ kind, size = 12, className }: { kind: SourceKind; size?: number; className?: string }) {
   const Icon = ICONS[KIND_META[kind].icon];
   return <Icon size={size} strokeWidth={1.9} aria-hidden className={className} />;

@@ -37,7 +37,8 @@ import {
   photoOverlap,
   sameAgency,
 } from "./similarity";
-import { kindOfAdvertiser } from "./source-kind";
+import { kindOfAdvertiser, kindOfCrmProperty } from "./source-kind";
+import { webKeysOf } from "./agency-web";
 
 /** Portal ficticio con el que las propiedades del CRM entran en el enlazador y en `link_summary`. */
 export const AGENCY_PORTAL = "agencia";
@@ -46,6 +47,12 @@ export const AGENCY_PORTAL = "agencia";
 export type AgencyPropertyInput = {
   id: string;
   agency_name: string | null;
+  /**
+   * ¿Agencia colaboradora de sindicación (tiene feed en `agency_feeds`)? false = cajón de
+   * importación («Portales externos»): la fuente es «CRM · propiedad importada de portal», no
+   * una web de agencia. Sin dato = colaboradora (comportamiento anterior).
+   */
+  agency_collab?: boolean | null;
   operation: "rent" | "sale" | null;
   /** `available` | `reserved` | `sold` | `archived` */
   status: string | null;
@@ -112,7 +119,7 @@ export function propertyToLinkRow(p: AgencyPropertyInput): LinkRow {
     assigned_to: null,
     n_photos: p.cover_photo_url ? 1 : 0,
     created_at: p.created_at,
-    kind: "agencia_web",
+    kind: kindOfCrmProperty(p.agency_collab),
     agency_name: p.agency_name,
     agency_key: agencyCore(p.agency_name),
     description: p.description ?? null,
@@ -142,8 +149,10 @@ const blockKeys = (
   refs: string[],
   photos: string[],
   agency?: { core: string | null; m2: number | null; beds: number | null },
+  webKeys: string[] = [],
 ): string[] => [
   ...refs.map((r) => `ref:${r}`),
+  ...webKeys,
   ...photos.slice(0, 12).map((k) => `ph:${k}`),
   // Misma agencia, mismos m² y habitaciones: candidatos aunque falte la dirección en un lado.
   ...(agency?.core && agency.m2 && agency.beds != null ? [`ag:${agency.core}|${agency.m2}|${agency.beds}`] : []),
@@ -157,6 +166,8 @@ export type ViewRow = Omit<LinkRow, "kind" | "refs" | "photo_keys" | "block_keys
   external_id?: string | null;
   portal_id?: string | null;
   agency_reference?: string | null;
+  /** «Enlace adicional» del anuncio (`scraper_extra.agency_url`): la ficha en la web de la agencia. */
+  agency_url?: string | null;
   /** URLs (string u objetos {url}) de las primeras fotos. */
   photos_head?: unknown;
 };
@@ -168,13 +179,15 @@ export function viewRowToLinkRow(v: ViewRow): LinkRow {
     : [];
   const photo_keys = [...new Set(urls.map(photoKey).filter((k): k is string => !!k))];
   const refs = refsOf([v.reference, v.agency_reference, v.portal_id, v.external_id]);
-  const row: LinkRow = { ...v, kind, photo_keys, refs, block_keys: [] };
+  // Ficha en la web de la agencia: misma URL, o mismo dominio + misma referencia.
+  const web_keys = webKeysOf(v.agency_url, [v.agency_reference, v.reference]);
+  const row: LinkRow = { ...v, kind, photo_keys, refs, web_keys, block_keys: [] };
   if (kind === "agencia_portal") {
     row.agency_name = v.owner_name;
     row.agency_key = agencyCore(v.owner_name);
-    row.block_keys = blockKeys(refs, photo_keys, { core: row.agency_key, m2: v.square_meters, beds: v.bedrooms });
+    row.block_keys = blockKeys(refs, photo_keys, { core: row.agency_key, m2: v.square_meters, beds: v.bedrooms }, web_keys);
   } else {
-    row.block_keys = blockKeys(refs, photo_keys);
+    row.block_keys = blockKeys(refs, photo_keys, undefined, web_keys);
   }
   return row;
 }
@@ -211,7 +224,10 @@ export function makeAgencyRefine(rows: LinkRow[]): NonNullable<LinkOptions["refi
     const shared = (a.refs ?? []).filter((r) => (b.refs ?? []).includes(r));
     const globalId = shared.some((r) => /^\d{6,}$/.test(r));
     const agencySame = sameAgency(a.agency_name, b.agency_name);
-    const refEq = shared.length > 0 && (globalId || agencySame);
+    const sharedWeb = (a.web_keys ?? []).filter((k) => (b.web_keys ?? []).includes(k));
+    // La misma ficha de la web de la agencia (o su dominio + referencia) vale como la referencia propia.
+    const webEq = sharedWeb.length > 0;
+    const refEq = (shared.length > 0 && (globalId || agencySame)) || webEq;
     const ph = photoOverlap(a.photo_keys, b.photo_keys);
     const addr = f.S || f.near60;
     const streetOk = !(f.streetBoth && !f.nameSame);
@@ -219,7 +235,9 @@ export function makeAgencyRefine(rows: LinkRow[]): NonNullable<LinkOptions["refi
 
     const evidence: Record<string, unknown> = {};
     const reasons: string[] = [];
-    if (refEq) (evidence.ref_equal = true), reasons.push(globalId ? "mismo id de portal" : "misma referencia de la agencia");
+    if (webEq) (evidence.web_equal = true), reasons.push("misma ficha en la web de la agencia");
+    if (refEq && !webEq) (evidence.ref_equal = true), reasons.push(globalId ? "mismo id de portal" : "misma referencia de la agencia");
+    if (refEq && webEq && shared.length > 0) evidence.ref_equal = true;
     if (sim != null) (evidence.desc_sim = Math.round(sim * 100) / 100), sim >= 0.3 && reasons.push(`descripción ${Math.round(sim * 100)} % parecida`);
     if (ph.shared > 0) (evidence.photos_shared = ph.shared), ph.strong && reasons.push(`${ph.shared} fotos iguales`);
     if (agencySame) (evidence.same_agency = true), reasons.push("misma agencia");
@@ -230,7 +248,9 @@ export function makeAgencyRefine(rows: LinkRow[]): NonNullable<LinkOptions["refi
     if (strongText && streetOk) {
       const sure = refEq || (ph.strong && (addr || f.M || !!base)) || (descStrong && (addr || (f.M && (f.B || !f.bKnown))));
       const level = sure && (f.sameOp || refEq) ? "cierto" : "probable";
-      const rule = refEq
+      const rule = webEq && !(shared.length > 0 && (globalId || agencySame))
+        ? "X4 misma ficha en la web de la agencia"
+        : refEq
         ? "X1 misma referencia"
         : ph.strong
           ? "X3 mismas fotos"
@@ -343,7 +363,7 @@ export function applyAgencyToState(
     const props = [...propIds].map((id) => propById.get(id) as AgencyPropertyInput).slice(0, 3);
     const agencyOffers: LinkOffer[] = props.map((p) => {
       const lr = propertyToLinkRow(p);
-      return { op: lr.operation, portal: AGENCY_PORTAL, price: lr.price, active: lr.is_active, kind: "agencia_web", ...(p.agency_name ? { agency: p.agency_name } : {}) };
+      return { op: lr.operation, portal: AGENCY_PORTAL, price: lr.price, active: lr.is_active, kind: lr.kind, ...(p.agency_name ? { agency: p.agency_name } : {}) };
     });
     const names = [...new Set(props.map((p) => (p.agency_name ?? "").trim()).filter(Boolean))];
     state.set(root, {

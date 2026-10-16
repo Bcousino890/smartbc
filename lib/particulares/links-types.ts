@@ -1,13 +1,15 @@
 // Tipos compartidos (servidor y cliente) del enlace de anuncios de particulares
 // — migración 0176. Sin imports de servidor: los usa el listado y el modal.
 
+import type { SourceKind } from "./source-kind";
+
 export type LinkOffer = {
   op: "rent" | "sale" | null;
   portal: string;
   price: number | null;
   active: boolean;
   /** Tipo de fuente (source-kind.ts). Sin él: «particular» (anuncios anteriores a 0200). */
-  kind?: "particular" | "agencia_portal" | "agencia_web";
+  kind?: SourceKind;
   /** Nombre de la agencia (agencia_portal / agencia_web). */
   agency?: string;
 };
@@ -96,6 +98,8 @@ export type ParticularLinksPayload = {
   changes?: LinkedChange[];
   /** Propiedades de agencias del CRM que coinciden con este inmueble (migración 0199). */
   agency_matches?: AgencyMatchInfo[];
+  /** Webs propias de las agencias anunciantes (enlace adicional del portal), con lo leído si ya está en caché (0203). */
+  agency_webs?: AgencyWebSource[];
 };
 
 /** Propiedad de una agencia del CRM que es (o podría ser) el mismo inmueble que el anuncio. */
@@ -111,6 +115,8 @@ export type AgencyMatchInfo = {
     slug: string | null;
     title: string | null;
     agency_name: string | null;
+    /** true = agencia colaboradora de sindicación (feed); false = propiedad importada de portal («Portales externos»). */
+    agency_collab?: boolean;
     reference: string | null;
     operation: "rent" | "sale" | null;
     price: number | null;
@@ -121,3 +127,42 @@ export type AgencyMatchInfo = {
     bathrooms: number | null;
   };
 };
+
+/** Resultado de comprobar que la ficha de la web de la agencia es la de este anuncio. */
+export type WebVerdict = {
+  /** `verificada`: misma referencia y sin contradicciones · `no_coincide` · `sin_leer` (solo hay URL). */
+  state: "verificada" | "no_coincide" | "sin_leer";
+  reasons: string[];
+};
+
+export type AgencyWebCms = "mobilia" | "inmoweb" | null;
+
+/** Fuente «web propia de la agencia» (agencia_web_propia): la ficha del piso en la web de la agencia anunciante. */
+export type AgencyWebSource = {
+  /** Clave estable (URL normalizada). */
+  key: string;
+  url: string;
+  /** URL canónica (la bonita) si se pudo resolver; si no, null y solo hay `url`. */
+  canonical_url: string | null;
+  domain: string;
+  cms: AgencyWebCms;
+  ref: string | null;
+  /** Nombre de la agencia anunciante (el de los anuncios que la enlazan). */
+  agency_name: string | null;
+  /** Anuncios del grupo que enlazan esta web. */
+  member_ids: string[];
+  verdict: WebVerdict;
+  /** ¿Se ha leído la ficha? */
+  read: boolean;
+  /** Estado de la ficha: activa / no disponible / sin leer. */
+  live: boolean | null;
+  price: number | null;
+  square_meters: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  address: string | null;
+  fetched_at: string | null;
+  /** Fotos originales sin marca de agua. */
+  photos: Array<{ url: string }>;
+};
+

@@ -26,6 +26,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { LinkSummaryLite } from "./links-types";
+import type { SourceKind } from "./source-kind";
 
 export type LinkRow = {
   id: string;
@@ -51,7 +52,11 @@ export type LinkRow = {
   // ── Opcionales: los rellena el cruce con agencias (agency-matching.ts). El enlazado de
   // particulares puro no los necesita y su comportamiento NO cambia sin `refine`.
   /** Tipo de fuente (taxonomía de source-kind.ts): particular · agencia_portal · agencia_web. */
-  kind?: "particular" | "agencia_portal" | "agencia_web";
+  kind?: SourceKind;
+  /** Claves de la ficha en la web de la agencia (`wu:` URL, `wk:` dominio|ref), agency-web.ts. */
+  web_keys?: string[];
+  /** `scraper_extra.agency_url` (enlace adicional del anuncio). */
+  agency_url?: string | null;
   /** Nombre de la agencia que publica (agencias). */
   agency_name?: string | null;
   /** Nombre normalizado de la agencia (`particulares.agency_key`). */

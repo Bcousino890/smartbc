@@ -1,4 +1,4 @@
-import type { LinkedAd } from "@/lib/particulares/links-types";
+import type { AgencyWebSource, LinkedAd } from "@/lib/particulares/links-types";
 import { portalName } from "./format";
 
 /** Una fuente (anuncio enlazado del mismo inmueble) con fotos propias. */
@@ -17,7 +17,7 @@ export type PhotoSource = {
  * Fuentes con fotos del mismo inmueble, la de la ficha abierta primero. Si dos
  * anuncios comparten portal y anunciante (venta + alquiler) se distinguen por la operación.
  */
-export function buildPhotoSources(members: LinkedAd[] | null, currentId: string): PhotoSource[] {
+export function buildPhotoSources(members: LinkedAd[] | null, currentId: string, webs: AgencyWebSource[] = []): PhotoSource[] {
   if (!members) return [];
   const withPhotos = members.filter((m) => m.photos.length > 0);
   const base = withPhotos.map((m) => ({
@@ -34,6 +34,19 @@ export function buildPhotoSources(members: LinkedAd[] | null, currentId: string)
     sourceUrl: m.source_url,
     photos: m.photos,
   }));
+  // Web propia de la agencia: fotos ORIGINALES sin marca de agua (solo las de una ficha verificada).
+  for (const w of webs) {
+    if (w.photos.length === 0 || w.verdict.state === "no_coincide") continue;
+    const who = w.agency_name?.trim() || w.domain;
+    out.push({
+      id: `web:${w.key}`,
+      portal: "web",
+      label: `Web de ${who}: fotos sin marca de agua`,
+      portalLabel: `Web de ${who}`,
+      sourceUrl: w.canonical_url ?? w.url,
+      photos: w.photos,
+    });
+  }
   return out.sort((a, b) => Number(b.id === currentId) - Number(a.id === currentId));
 }
 

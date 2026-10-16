@@ -16,6 +16,9 @@ import {
   type AgencyDecision,
   type AgencyPropertyInput,
 } from "./agency-matching";
+import { mergeWebKeys, normalizeAgencyUrl } from "./agency-web";
+import { loadAgencyWebCache, refreshAgencyWebs } from "./agency-web-runner";
+import { isCollaboratingAgency } from "./source-kind";
 
 /**
  * Job de enlazado de anuncios de particulares (migración 0176).
@@ -48,6 +51,8 @@ export type LinkingRunSummary = {
   linksWritten: number;
   linksPruned: number;
   agencyMatches?: number;
+  /** Lectura de webs propias de agencias (0203): planificadas / leídas / buenas / fallidas. */
+  webs?: { planned: number; fetched: number; ok: number; failed: number };
   error?: string;
 };
 
@@ -113,9 +118,24 @@ async function loadDecisions(db: Db): Promise<LinkDecision[]> {
 // enlazado de particulares (devuelve null).
 
 const PROPERTY_COLUMNS =
-  "id, description, external_id, property_reference, bc_reference, cover_photo_url, operation, status, archived_at, price, bedrooms, bathrooms, square_meters, address, latitude, longitude, location_precision, created_at, agencies(name)";
+  "id, description, external_id, property_reference, bc_reference, cover_photo_url, operation, status, archived_at, price, bedrooms, bathrooms, square_meters, address, latitude, longitude, location_precision, created_at, agency_id, agencies(name, slug)";
+
+/**
+ * Agencias con feed de sindicación (`agency_feeds`) = colaboradoras reales. Las propiedades de
+ * «Portales externos» (sin feed) son importaciones de portales, no una web de agencia.
+ * null si la tabla no se puede leer (se cae al slug del cajón de importación).
+ */
+async function loadFeedAgencyIds(db: Db): Promise<Set<string> | null> {
+  const { data, error } = await db.from("agency_feeds").select("agency_id");
+  if (error) {
+    console.warn("[particulares-linking] agency_feeds:", error.message);
+    return null;
+  }
+  return new Set((data ?? []).map((r: { agency_id: string }) => r.agency_id));
+}
 
 async function loadAgencyProperties(db: Db): Promise<AgencyPropertyInput[] | null> {
+  const feeds = await loadFeedAgencyIds(db);
   const out: AgencyPropertyInput[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await db
@@ -132,7 +152,12 @@ async function loadAgencyProperties(db: Db): Promise<AgencyPropertyInput[] | nul
     }
     for (const r of data ?? []) {
       const ag = Array.isArray(r.agencies) ? r.agencies[0] : r.agencies;
-      out.push({ ...r, description: typeof r.description === "string" ? r.description.slice(0, 700) : null, agency_name: ag?.name ?? null });
+      out.push({
+        ...r,
+        description: typeof r.description === "string" ? r.description.slice(0, 700) : null,
+        agency_name: ag?.name ?? null,
+        agency_collab: isCollaboratingAgency({ hasFeed: feeds && r.agency_id ? feeds.has(r.agency_id) : null, slug: ag?.slug }),
+      });
     }
     if (!data || data.length < PAGE) break;
   }
@@ -189,12 +214,29 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
   const runStart = new Date(started - 5000).toISOString();
   const db = createAdminClient() as Db;
   try {
-    const [rows, decisions] = await Promise.all([loadRows(db), loadDecisions(db)]);
+    const [rows, decisions, proRows] = await Promise.all([
+      loadRows(db),
+      loadDecisions(db),
+      // Agencias anunciantes en portales (vista 0200); si no existe se salta.
+      loadRows(db, "particulares_agency_rows", true),
+    ]);
+    // Web propia de la agencia (0203): lo ya leído aporta referencia y URL canónica como señal de matching.
+    const webCache = await loadAgencyWebCache(db, [...rows, ...proRows].map((r) => r.agency_url));
+    if (webCache) {
+      for (const r of [...rows, ...proRows]) {
+        const n = normalizeAgencyUrl(r.agency_url);
+        if (!n?.isListing) continue;
+        const keys = mergeWebKeys(r, webCache.get(n.key));
+        if (keys.length !== (r.web_keys?.length ?? 0)) {
+          r.web_keys = keys;
+          r.block_keys = [...new Set([...(r.block_keys ?? []), ...keys])];
+        }
+      }
+    }
     const result = computeLinks(rows, decisions);
 
     // Agencias anunciantes en portales (tipo «agencia_portal»): misma agencia en varios portales
     // o republicada → se agrupan con descripción, referencia, fotos y geometría (agency-matching.ts).
-    const proRows = await loadRows(db, "particulares_agency_rows", true);
     if (proRows.length > 0) {
       const pro = computeAgencyPortalLinks(proRows, decisions);
       result.links.push(...pro.links);
@@ -264,6 +306,10 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
       }
     }
 
+    // Lectura ligera de webs de agencias pendientes (≤ 30 por pasada, en serie): al final y sin
+    // bloquear nada de lo anterior; lo leído ayuda al enlazado de la PRÓXIMA pasada.
+    const webs = webCache ? await refreshAgencyWebs(db, allRows, webCache, { dryRun }) : undefined;
+
     return {
       ok: true,
       dryRun,
@@ -273,6 +319,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
       linksWritten,
       linksPruned,
       agencyMatches: agencyMatches.length,
+      webs,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : "linking_failed";
