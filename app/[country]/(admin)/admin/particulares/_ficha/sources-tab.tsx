@@ -1,7 +1,7 @@
 "use client";
 
 import { addressLine } from "@/lib/particulares/address-title";
-import { ExternalLink, Loader2, MessageCircle } from "lucide-react";
+import { ExternalLink, Loader2, MessageCircle, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { AgencyMatchInfo, AgencyWebSource, LinkedAd } from "@/lib/particulares/links-types";
 import { kindOfAdvertiser, kindOfCrmProperty, sourceLabel, type SourceKind } from "@/lib/particulares/source-kind";
@@ -63,7 +63,7 @@ const OP_LABEL: Record<Op, string> = { sale: "Venta", rent: "Alquiler" };
  * hab., baños, m², parcela, particular) con scroll interno.
  */
 export function SourcesTab({ rowId, currentOp, onCount }: { rowId: string; currentOp?: Op | null; onCount?: (n: number) => void }) {
-  const { members, events, loading, agencyMatches, agencyWebs } = useGroupLinks(rowId);
+  const { members, events, loading, agencyMatches, agencyWebs, reload } = useGroupLinks(rowId);
   const [op, setOp] = useState<Op | null>(null);
 
   useEffect(() => {
@@ -154,7 +154,7 @@ export function SourcesTab({ rowId, currentOp, onCount }: { rowId: string; curre
                 <SourceRow key={m.id} m={m} />
               ))}
               {ownWebs.map((w) => (
-                <OwnWebRow key={w.key} w={w} />
+                <OwnWebRow key={w.key} w={w} onReread={reload} />
               ))}
               {webRows.map((w) => (
                 <WebSourceRow key={w.id} w={w} />
@@ -344,7 +344,27 @@ const VERDICT_UI = {
 } as const;
 
 /** Fuente «web propia de la agencia»: la ficha del piso en la web de la agencia anunciante (enlace adicional del portal). */
-function OwnWebRow({ w }: { w: AgencyWebSource }) {
+function OwnWebRow({ w, onReread }: { w: AgencyWebSource; onReread: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const reread = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/admin/particulares/agency-web/reread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ particular_id: w.member_ids[0], key: w.key }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) setErr(j.error ?? "No se pudo releer");
+      else onReread();
+    } catch {
+      setErr("Sin conexión");
+    } finally {
+      setBusy(false);
+    }
+  };
   const v = VERDICT_UI[w.verdict.state];
   const label = sourceLabel({ kind: "agencia_web_propia", agency: w.agency_name });
   const href = w.canonical_url ?? w.url;
@@ -386,9 +406,20 @@ function OwnWebRow({ w }: { w: AgencyWebSource }) {
             stateOk ? "border-emerald-300 bg-emerald-50 text-emerald-900" : w.live === false ? "border-red-200 bg-red-50 text-red-800" : "border-ink/20 bg-ink/5 text-ink/70",
           )}
         >
-          {stateOk ? "Activo" : w.live === false ? "No disponible" : "Sin leer"}
+          {stateOk ? "Activo" : w.live === false ? "No disponible" : w.blocked ? "Sin leer · bloqueada por la web" : "Sin leer"}
         </span>
+        {w.note && <p className="mt-0.5 max-w-[190px] text-xs text-ink/65">{w.note}</p>}
         {w.fetched_at && <p className="mt-0.5 text-xs text-ink/65">Leída {relativeTime(w.fetched_at)}</p>}
+        <button
+          type="button"
+          onClick={reread}
+          disabled={busy}
+          title="Vuelve a leer la ficha de la web de la agencia ahora (no se sigue de forma automática)"
+          className="mt-1 inline-flex items-center gap-1 rounded-md border border-ink/15 px-2 py-0.5 text-xs font-medium text-ink/80 hover:border-gold/60 disabled:opacity-50"
+        >
+          {busy ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} aria-hidden />} Releer web
+        </button>
+        {err && <p className="mt-0.5 max-w-[190px] text-xs text-red-700">{err}</p>}
       </td>
       <td className="max-w-[220px] truncate px-3 py-2.5 text-ink/80" title={w.address ?? ""}>{w.address ?? "—"}</td>
       <td className="px-3 py-2.5 tabular-nums">{w.bedrooms ?? "—"}</td>

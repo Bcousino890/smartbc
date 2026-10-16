@@ -135,7 +135,7 @@ export type WebVerdict = {
   reasons: string[];
 };
 
-export type AgencyWebCms = "mobilia" | "inmoweb" | null;
+export type AgencyWebCms = "mobilia" | "inmoweb" | "generico" | null;
 
 /** Fuente «web propia de la agencia» (agencia_web_propia): la ficha del piso en la web de la agencia anunciante. */
 export type AgencyWebSource = {
@@ -154,6 +154,10 @@ export type AgencyWebSource = {
   verdict: WebVerdict;
   /** ¿Se ha leído la ficha? */
   read: boolean;
+  /** robots.txt de la web prohíbe la ruta: no se lee. */
+  blocked: boolean;
+  /** Aviso bajo el estado (bloqueada, error de lectura, ficha retirada). */
+  note: string | null;
   /** Estado de la ficha: activa / no disponible / sin leer. */
   live: boolean | null;
   price: number | null;

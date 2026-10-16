@@ -244,11 +244,16 @@ export function verifyWebAgainstAd(web: { url: string; parsed?: AgencyWebParsed 
   if (p.price && ad.price && p.price === ad.price) reasons.push("mismo precio");
   if (p.square_meters && ad.square_meters && !conflicts.includes("m² distintos")) reasons.push("m² coinciden");
   if (conflicts.length) return { state: "no_coincide", reasons: conflicts };
-  if (webRef && adRefs.length && !refEq) return { state: "no_coincide", reasons: ["referencia distinta"] };
   if (refEq) return { state: "verificada", reasons };
-  // Sin referencia en el anuncio: vale si coinciden precio, m² y habitaciones.
-  const same = p.price && ad.price && p.price === ad.price && p.square_meters && ad.square_meters && p.bedrooms != null && ad.bedrooms != null;
-  return same ? { state: "verificada", reasons } : { state: "sin_leer", reasons };
+  // Sin coincidir la referencia vale (precio + m² + habitaciones) a la vez.
+  const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= Math.max(1, Math.max(a, b) * tol);
+  const same =
+    !!p.price && !!ad.price && near(p.price, ad.price, 0.01) &&
+    !!p.square_meters && !!ad.square_meters && near(p.square_meters, ad.square_meters, 0.03) &&
+    p.bedrooms != null && ad.bedrooms != null && p.bedrooms === ad.bedrooms;
+  if (same) return { state: "verificada", reasons: ["mismo precio, m² y habitaciones"] };
+  if (webRef && adRefs.length) return { state: "no_coincide", reasons: ["referencia distinta"] };
+  return { state: "sin_leer", reasons };
 }
 
 // ── Claves para el enlazador ────────────────────────────────────────────────
@@ -276,7 +281,9 @@ export function webKeysOf(agencyUrl: string | null | undefined, refs: Array<stri
 
 export type AgencyWebCache = {
   url_key: string;
-  status: "ok" | "gone" | "error" | "unsupported";
+  status: "ok" | "gone" | "error" | "unsupported" | "blocked";
+  error?: string | null;
+  attempts?: number | null;
   final_url: string | null;
   canonical_url: string | null;
   cms: string | null;
@@ -303,19 +310,29 @@ export function buildAgencyWebSources(members: MemberLite[], cache: Map<string, 
     const c = cache.get(key) ?? null;
     const parsed = c?.status === "ok" ? ({ ...(c.data ?? {}), photos: c.photos ?? [], ref: c.ref ?? c.data?.ref ?? null, canonical_url: c.canonical_url } as AgencyWebParsed) : null;
     const first = ms[0];
-    const verdict = verifyWebAgainstAd({ url: c?.final_url ?? n.url, parsed }, first);
+    const blocked = c?.status === "blocked";
+    const verdict: WebVerdict = blocked ? { state: "sin_leer", reasons: ["bloqueada por la web (robots.txt)"] } : verifyWebAgainstAd({ url: c?.final_url ?? n.url, parsed }, first);
+    const note = blocked
+      ? "Sin leer · bloqueada por la web"
+      : c?.status === "error"
+        ? `No se pudo leer${c.error ? ` (${c.error})` : ""}${(c.attempts ?? 0) >= MAX_WEB_ATTEMPTS ? " · reintentos agotados" : ""}`
+        : c?.status === "gone"
+          ? "La ficha ya no existe en la web"
+          : null;
     const named = ms.map((m) => (m.advertiser_type === "professional" ? m.owner_name?.trim() : "")).find(Boolean) || null;
     out.push({
       key,
       url: n.url,
       canonical_url: c?.canonical_url ?? (c?.final_url && c.final_url !== n.url ? c.final_url : null),
       domain: n.domain,
-      cms: detectCms(n.url) ?? ((c?.cms as AgencyWebCms) || null),
+      cms: (c?.cms as AgencyWebCms) || detectCms(n.url),
       ref: parsed?.ref ?? refFromUrl(c?.canonical_url ?? n.url) ?? first.agency_reference ?? first.reference ?? null,
       agency_name: named,
       member_ids: ms.map((m) => m.id),
       verdict,
       read: !!parsed,
+      blocked,
+      note,
       live: c?.status === "gone" ? false : parsed ? (parsed.available ?? true) : null,
       price: parsed?.price ?? null,
       square_meters: parsed?.square_meters ?? null,
@@ -330,83 +347,124 @@ export function buildAgencyWebSources(members: MemberLite[], cache: Map<string, 
 }
 
 // ── Qué leer y cómo guardarlo (puro) ────────────────────────────────────────
+//
+// Política de refresco: la web de la agencia se lee UNA vez cuando se detecta su enlace. NO se
+// sigue de forma continua. Solo se vuelve a leer si cambia el anuncio del portal que sí rastreamos
+// (precio, estado, referencia o el propio agency_url) o a petición manual («Releer web»).
 
 /** Tope de URLs por pasada del job: no se martillea webs ajenas. */
 export const MAX_WEB_FETCHES_PER_RUN = 30;
+/** Tras tantos fallos seguidos se deja de reintentar sola (solo «Releer web» o un cambio del anuncio). */
+export const MAX_WEB_ATTEMPTS = 6;
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 export type WebFetchResult =
-  | { kind: "ok"; finalUrl: string; httpStatus: number; parsed: AgencyWebParsed }
+  | { kind: "ok"; finalUrl: string; httpStatus: number; parsed: AgencyWebParsed; cms: AgencyWebCms | "generico" }
   | { kind: "gone"; finalUrl: string | null; httpStatus: number | null; reason: string }
+  | { kind: "blocked"; reason: string }
   | { kind: "error"; httpStatus: number | null; reason: string };
 
+export type WebRowLite = {
+  agency_url?: string | null;
+  price?: number | null;
+  is_active?: boolean | null;
+  reference?: string | null;
+  agency_reference?: string | null;
+};
+
+/** Huella de lo que rastreamos del anuncio del portal: si cambia, la web se vuelve a leer. */
+export function webSigOf(rows: WebRowLite[]): string {
+  return rows
+    .map((r) => `${r.price ?? ""}|${r.is_active === false ? 0 : 1}|${normRef(r.agency_reference) ?? ""}|${normRef(r.reference) ?? ""}`)
+    .sort()
+    .join(";");
+}
+
+export type WebCacheLite = {
+  status: string;
+  trigger_sig?: string | null;
+  next_retry_at: string | null;
+  attempts?: number | null;
+};
+
+export type WebFetchPlan = {
+  fetch: Array<{ n: NormalizedAgencyUrl; sig: string; attempts: number }>;
+  /** Filas leídas antes de existir la huella: se les apunta sin leer nada. */
+  backfill: Array<{ key: string; sig: string }>;
+};
+
 /**
- * URLs de las filas que toca leer: solo fichas de un CMS que sabemos leer (Mobilia), sin lectura
- * reciente, las nunca leídas primero, y como mucho `limit`. Los fallos esperan su turno
- * (`next_retry_at`). Una URL compartida por varios anuncios se lee una vez.
+ * Qué leer en esta pasada (máx. `limit`): las URLs nunca leídas; las que cambiaron en el anuncio del
+ * portal; y los fallos cuyo reintento ya toca (con espera creciente y un máximo de intentos).
+ * Una URL compartida por varios anuncios se lee una vez. Cualquier web con ruta de ficha vale
+ * (Mobilia, Inmoweb o lector genérico); el robots.txt se mira al leer.
  */
-export function planAgencyWebFetches(
-  rows: Array<{ agency_url?: string | null }>,
-  cache: Map<string, { next_retry_at: string | null }>,
-  now: number,
-  limit = MAX_WEB_FETCHES_PER_RUN,
-): NormalizedAgencyUrl[] {
-  const seen = new Map<string, NormalizedAgencyUrl>();
+export function planAgencyWebFetches(rows: WebRowLite[], cache: Map<string, WebCacheLite>, now: number, limit = MAX_WEB_FETCHES_PER_RUN): WebFetchPlan {
+  const byKey = new Map<string, { n: NormalizedAgencyUrl; rows: WebRowLite[] }>();
   for (const r of rows) {
     const n = normalizeAgencyUrl(r.agency_url);
-    if (!n || !n.isListing || detectCms(n.url) !== "mobilia") continue;
-    if (!seen.has(n.key)) seen.set(n.key, n);
+    if (!n || !n.isListing) continue;
+    const e = byKey.get(n.key) ?? { n, rows: [] };
+    e.rows.push(r);
+    byKey.set(n.key, e);
   }
-  const fresh: NormalizedAgencyUrl[] = [];
-  const stale: Array<{ n: NormalizedAgencyUrl; due: number }> = [];
-  for (const [key, n] of seen) {
+  const fresh: WebFetchPlan["fetch"] = [];
+  const changed: WebFetchPlan["fetch"] = [];
+  const retry: Array<WebFetchPlan["fetch"][number] & { due: number }> = [];
+  const backfill: WebFetchPlan["backfill"] = [];
+  for (const [key, { n, rows: rs }] of byKey) {
+    const sig = webSigOf(rs);
     const c = cache.get(key);
-    if (!c) fresh.push(n);
-    else {
-      const due = c.next_retry_at ? Date.parse(c.next_retry_at) : 0;
-      if (!Number.isFinite(due) || due <= now) stale.push({ n, due: Number.isFinite(due) ? due : 0 });
+    const attempts = c?.attempts ?? 0;
+    if (!c) {
+      fresh.push({ n, sig, attempts: 0 });
+    } else if (c.trigger_sig != null && c.trigger_sig !== sig) {
+      changed.push({ n, sig, attempts: 0 });
+    } else if (c.status === "error") {
+      const due = c.next_retry_at ? Date.parse(c.next_retry_at) : NaN;
+      if (attempts < MAX_WEB_ATTEMPTS && Number.isFinite(due) && due <= now) retry.push({ n, sig, attempts, due });
+    } else if (c.trigger_sig == null) {
+      backfill.push({ key, sig });
     }
   }
-  stale.sort((a, b) => a.due - b.due);
-  return [...fresh, ...stale.map((s) => s.n)].slice(0, limit);
+  retry.sort((a, b) => a.due - b.due);
+  return { fetch: [...fresh, ...changed, ...retry.map(({ n, sig, attempts }) => ({ n, sig, attempts }))].slice(0, limit), backfill };
 }
 
 /** Espera antes de reintentar un fallo: 1 h, 2 h, 4 h … hasta 7 días. */
 export function retryDelayMs(attempts: number): number {
-  return Math.min(7 * DAY, HOUR * 2 ** Math.max(0, attempts));
+  return Math.min(7 * DAY, HOUR * 2 ** Math.max(0, attempts - 1));
 }
 
-/** Resultado de una lectura → fila de `particulares_agency_webs`. */
-export function toCacheRow(n: NormalizedAgencyUrl, res: WebFetchResult, prevAttempts: number, now: number) {
-  const base = { url_key: n.key, url: n.url, domain: n.domain, cms: detectCms(n.url), fetched_at: new Date(now).toISOString() };
+/** Resultado de una lectura → fila de `particulares_agency_webs`. No hay refresco automático por el paso del tiempo. */
+export function toCacheRow(n: NormalizedAgencyUrl, res: WebFetchResult, prevAttempts: number, now: number, sig: string | null = null) {
+  const base = { url_key: n.key, url: n.url, domain: n.domain, fetched_at: new Date(now).toISOString(), trigger_sig: sig };
   if (res.kind === "ok") {
-    const p = res.parsed;
-    const { photos, ref, canonical_url, ...data } = p;
+    const { photos, ref, canonical_url, ...data } = res.parsed;
     return {
-      ...base,
-      final_url: res.finalUrl,
-      canonical_url: canonical_url ?? res.finalUrl,
-      ref,
-      status: "ok" as const,
-      http_status: res.httpStatus,
-      data,
-      photos,
-      attempts: 0,
-      error: null,
-      next_retry_at: new Date(now + 14 * DAY).toISOString(),
+      ...base, cms: res.cms, final_url: res.finalUrl, canonical_url: canonical_url ?? res.finalUrl, ref, status: "ok" as const,
+      http_status: res.httpStatus, data, photos, attempts: 0, error: null, next_retry_at: null as string | null,
     };
   }
   if (res.kind === "gone") {
     return {
-      ...base, final_url: res.finalUrl, canonical_url: null, ref: refFromUrl(n.url), status: "gone" as const, http_status: res.httpStatus,
-      data: {}, photos: [], attempts: prevAttempts + 1, error: res.reason, next_retry_at: new Date(now + 7 * DAY).toISOString(),
+      ...base, cms: detectCms(n.url), final_url: res.finalUrl, canonical_url: null, ref: refFromUrl(n.url), status: "gone" as const,
+      http_status: res.httpStatus, data: {}, photos: [], attempts: 0, error: res.reason, next_retry_at: null as string | null,
     };
   }
+  if (res.kind === "blocked") {
+    return {
+      ...base, cms: detectCms(n.url), final_url: null, canonical_url: null, ref: refFromUrl(n.url), status: "blocked" as const,
+      http_status: null, data: {}, photos: [], attempts: 0, error: res.reason, next_retry_at: null as string | null,
+    };
+  }
+  const attempts = prevAttempts + 1;
   return {
-    ...base, final_url: null, canonical_url: null, ref: refFromUrl(n.url), status: "error" as const, http_status: res.httpStatus,
-    data: {}, photos: [], attempts: prevAttempts + 1, error: res.reason, next_retry_at: new Date(now + retryDelayMs(prevAttempts + 1)).toISOString(),
+    ...base, cms: detectCms(n.url), final_url: null, canonical_url: null, ref: refFromUrl(n.url), status: "error" as const,
+    http_status: res.httpStatus, data: {}, photos: [], attempts, error: res.reason,
+    next_retry_at: attempts >= MAX_WEB_ATTEMPTS ? null : new Date(now + retryDelayMs(attempts)).toISOString(),
   };
 }
 

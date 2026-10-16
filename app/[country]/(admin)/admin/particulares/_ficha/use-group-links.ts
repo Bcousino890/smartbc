@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ParticularLinksPayload } from "@/lib/particulares/links-types";
 import { buildGroupEvents, type SourceEvent } from "./group-history";
 
@@ -8,6 +8,11 @@ import { buildGroupEvents, type SourceEvent } from "./group-history";
 // petición por inmueble, reutilizada unos segundos.
 const TTL = 15_000;
 const cache = new Map<string, { at: number; p: Promise<ParticularLinksPayload | null> }>();
+
+/** Olvida lo cargado de un inmueble (tras «Releer web»). */
+export function invalidateGroupLinks(id: string) {
+  cache.delete(id);
+}
 
 function load(id: string): Promise<ParticularLinksPayload | null> {
   const hit = cache.get(id);
@@ -22,6 +27,11 @@ function load(id: string): Promise<ParticularLinksPayload | null> {
 export function useGroupLinks(rowId: string) {
   const [data, setData] = useState<ParticularLinksPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState(0);
+  const reload = useCallback(() => {
+    invalidateGroupLinks(rowId);
+    setVersion((v) => v + 1);
+  }, [rowId]);
   useEffect(() => {
     let off = false;
     setLoading(true);
@@ -33,10 +43,10 @@ export function useGroupLinks(rowId: string) {
     return () => {
       off = true;
     };
-  }, [rowId]);
+  }, [rowId, version]);
   const members = data?.members ?? null;
   const events: SourceEvent[] = useMemo(() => (data ? buildGroupEvents(data.members, data.changes ?? []) : []), [data]);
   const agencyMatches = data?.agency_matches ?? [];
   const agencyWebs = useMemo(() => data?.agency_webs ?? [], [data]);
-  return { members, events, loading, agencyMatches, agencyWebs };
+  return { members, events, loading, agencyMatches, agencyWebs, reload };
 }

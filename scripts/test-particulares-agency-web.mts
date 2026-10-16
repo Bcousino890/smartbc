@@ -13,12 +13,15 @@ import {
   normalizeAgencyUrl,
   parseMobiliaFicha,
   planAgencyWebFetches,
+  MAX_WEB_ATTEMPTS,
+  webSigOf,
   refFromUrl,
   retryDelayMs,
   toCacheRow,
   verifyWebAgainstAd,
   webKeysOf,
 } from "../lib/particulares/agency-web.ts";
+import { parseAgencyWebHtml, parseGenericFicha, parseInmowebFicha, robotsAllows, toOriginalImageUrl } from "../lib/particulares/agency-web-readers.ts";
 import { computeAgencyPortalLinks, propertyToLinkRow, viewRowToLinkRow } from "../lib/particulares/agency-matching.ts";
 import { isCollaboratingAgency, kindOfCrmProperty, sourceLabel } from "../lib/particulares/source-kind.ts";
 import { buildPhotoSources } from "../app/[country]/(admin)/admin/particulares/_ficha/photo-sources.ts";
@@ -88,7 +91,8 @@ console.log("— Verificación contra el anuncio de Idealista");
 const ad = { agency_url: LEGACY, agency_reference: "3617", reference: "3617", price: 5000, square_meters: 139, bedrooms: 3, bathrooms: 3 };
 const vOk = verifyWebAgainstAd({ url: LEGACY, parsed: p }, ad);
 check("misma ref y sin contradicciones: verificada", vOk.state === "verificada", vOk);
-check("otra referencia: no coincide", verifyWebAgainstAd({ url: LEGACY, parsed: p }, { ...ad, agency_reference: "9999", reference: "9999" }).state === "no_coincide");
+check("otra referencia y otros m² / habitaciones: no coincide", verifyWebAgainstAd({ url: LEGACY, parsed: p }, { ...ad, agency_reference: "9999", reference: "9999", bedrooms: 4 }).state === "no_coincide");
+check("otra referencia pero mismo precio + m² + hab.: verificada", verifyWebAgainstAd({ url: LEGACY, parsed: p }, { ...ad, agency_reference: "9999", reference: "9999" }).state === "verificada");
 check("otros m²: no coincide", verifyWebAgainstAd({ url: LEGACY, parsed: p }, { ...ad, square_meters: 60 }).state === "no_coincide");
 check("sin lectura y URL sin ref: sin leer", verifyWebAgainstAd({ url: LEGACY }, ad).state === "sin_leer");
 check("sin lectura, ref en la URL bonita igual: verificada", verifyWebAgainstAd({ url: PRETTY }, ad).state === "verificada");
@@ -102,9 +106,9 @@ const unread = buildAgencyWebSources(members);
 check("una sola web (la portada no cuenta)", unread.length === 1, unread.length);
 check("sin lectura: dominio, ref de la URL del anuncio, sin leer", unread[0].domain === "propiedades.domusaureacapital.com" && unread[0].ref === "3617" && !unread[0].read && unread[0].canonical_url === null, unread[0]);
 check("agencia del anuncio", unread[0].agency_name === "Domus Aurea Capital");
-const cacheRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "ok", finalUrl: PRETTY, httpStatus: 200, parsed: p }, 0, Date.UTC(2026, 9, 16));
+const cacheRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "ok", finalUrl: PRETTY, httpStatus: 200, parsed: p, cms: "mobilia" }, 0, Date.UTC(2026, 9, 16));
 check("fila de caché: guarda ambas URLs", cacheRow.url === LEGACY && cacheRow.final_url === PRETTY && cacheRow.canonical_url === p.canonical_url);
-check("fila de caché: status ok, 26 fotos, refresco a 14 días", cacheRow.status === "ok" && cacheRow.photos.length === 26 && cacheRow.next_retry_at!.startsWith("2026-10-30"));
+check("fila de caché: status ok y 26 fotos", cacheRow.status === "ok" && cacheRow.photos.length === 26);
 const cache = new Map([[cacheRow.url_key, { ...cacheRow, photos: cacheRow.photos, data: cacheRow.data as never }]]);
 const read = buildAgencyWebSources(members, cache as never);
 check("leída: verificada, 26 fotos, precio 5000, activa", read[0].read && read[0].verdict.state === "verificada" && read[0].photos.length === 26 && read[0].price === 5000 && read[0].live === true, read[0]);
@@ -115,19 +119,42 @@ const srcs = buildPhotoSources([], "x", read);
 check("aparece la web de la agencia como origen", srcs.length === 1 && srcs[0].id.startsWith("web:") && srcs[0].photos.length === 26 && /sin marca/.test(srcs[0].label), srcs[0]);
 check("web que no coincide no ofrece fotos", buildPhotoSources([], "x", [{ ...read[0], verdict: { state: "no_coincide", reasons: [] } }]).length === 0);
 
-console.log("— Planificación de lecturas (tope y reintentos)");
-const rows = Array.from({ length: 50 }, (_, i) => ({ agency_url: `https://propiedades.domusaureacapital.com/Mobilia/VerInmueble/${1000 + i}/Ficha.html` }));
-check("tope de 30 por pasada", planAgencyWebFetches(rows, new Map(), Date.now()).length === 30);
-check("misma URL en dos anuncios: una lectura", planAgencyWebFetches([rows[0], rows[0]], new Map(), Date.now()).length === 1);
-check("webs que no son de un CMS conocido no se leen", planAgencyWebFetches([{ agency_url: "https://www.alquilerseguro.es/viviendas/11986" }, { agency_url: "http://dcinmobiliaria.com/" }], new Map(), Date.now()).length === 0);
-const k0 = normalizeAgencyUrl(rows[0].agency_url)!.key;
+console.log("— Política de lectura: una vez, y solo si cambia el anuncio del portal");
+const mkRows = (n: number, extra: Record<string, unknown> = {}) =>
+  Array.from({ length: n }, (_, i) => ({ agency_url: `https://propiedades.domusaureacapital.com/Mobilia/VerInmueble/${1000 + i}/Ficha.html`, price: 5000, is_active: true, reference: "R" + i, agency_reference: "R" + i, ...extra }));
+const rows = mkRows(50);
 const now = Date.UTC(2026, 9, 16);
-check("lectura reciente no se repite", planAgencyWebFetches([rows[0]], new Map([[k0, { next_retry_at: new Date(now + 1e6).toISOString() }]]), now).length === 0);
-check("lectura vencida sí", planAgencyWebFetches([rows[0]], new Map([[k0, { next_retry_at: new Date(now - 1e3).toISOString() }]]), now).length === 1);
-check("las nunca leídas van antes que las vencidas", planAgencyWebFetches(rows.slice(0, 2), new Map([[k0, { next_retry_at: new Date(now - 1e3).toISOString() }]]), now)[0].key !== k0);
-check("espera creciente y con techo", retryDelayMs(1) === 2 * 3_600_000 && retryDelayMs(30) === 7 * 86_400_000);
-const errRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "error", httpStatus: 403, reason: "HTTP 403" }, 0, now);
-check("un fallo guarda el error y reintenta más tarde", errRow.status === "error" && errRow.attempts === 1 && Date.parse(errRow.next_retry_at) > now);
+const fresh = planAgencyWebFetches(rows, new Map(), now);
+check("tope de 30 por pasada", fresh.fetch.length === 30);
+check("misma URL en dos anuncios: una lectura", planAgencyWebFetches([rows[0], rows[0]], new Map(), now).fetch.length === 1);
+check("lee cualquier web con ruta de ficha (CMS conocido o no)", planAgencyWebFetches([{ agency_url: "https://www.alquilerseguro.es/viviendas/11986" }, { agency_url: "https://ft1.inmoweb.page/details-es1.html" }], new Map(), now).fetch.length === 2);
+check("la portada no se lee", planAgencyWebFetches([{ agency_url: "http://dcinmobiliaria.com/" }], new Map(), now).fetch.length === 0);
+const k0 = normalizeAgencyUrl(rows[0].agency_url)!.key;
+const sig0 = webSigOf([rows[0]]);
+const okRow = { status: "ok", trigger_sig: sig0, next_retry_at: null, attempts: 0 };
+check("ya leída y sin cambios: NO se vuelve a leer (ni con el tiempo)", planAgencyWebFetches([rows[0]], new Map([[k0, okRow]]), now + 400 * 86_400_000).fetch.length === 0);
+check("cambia el precio del anuncio: se vuelve a leer", planAgencyWebFetches([{ ...rows[0], price: 4800 }], new Map([[k0, okRow]]), now).fetch.length === 1);
+check("cambia el estado (baja): se vuelve a leer", planAgencyWebFetches([{ ...rows[0], is_active: false }], new Map([[k0, okRow]]), now).fetch.length === 1);
+check("cambia la referencia: se vuelve a leer", planAgencyWebFetches([{ ...rows[0], agency_reference: "OTRA" }], new Map([[k0, okRow]]), now).fetch.length === 1);
+check("cambia el agency_url: es otra clave, se lee", planAgencyWebFetches([{ ...rows[0], agency_url: rows[1].agency_url }], new Map([[k0, okRow]]), now).fetch.length === 1);
+const legacy = planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, trigger_sig: null }]]), now);
+check("fila anterior a la huella: se apunta la huella sin leer", legacy.fetch.length === 0 && legacy.backfill.length === 1 && legacy.backfill[0].sig === sig0, legacy);
+check("ficha bloqueada o retirada tampoco se relee sola", planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, status: "blocked" }]]), now).fetch.length === 0 && planAgencyWebFetches([rows[0]], new Map([[k0, { ...okRow, status: "gone" }]]), now).fetch.length === 0);
+const errC = (attempts: number, due: number) => ({ status: "error", trigger_sig: sig0, next_retry_at: new Date(due).toISOString(), attempts });
+check("fallo con espera pendiente: no se reintenta aún", planAgencyWebFetches([rows[0]], new Map([[k0, errC(1, now + 1e6)]]), now).fetch.length === 0);
+check("fallo con la espera cumplida: se reintenta", planAgencyWebFetches([rows[0]], new Map([[k0, errC(1, now - 1e3)]]), now).fetch.length === 1);
+check("fallo con el máximo de intentos: se deja de reintentar", planAgencyWebFetches([rows[0]], new Map([[k0, errC(MAX_WEB_ATTEMPTS, now - 1e3)]]), now).fetch.length === 0);
+check("…salvo que cambie el anuncio", planAgencyWebFetches([{ ...rows[0], price: 1 }], new Map([[k0, errC(MAX_WEB_ATTEMPTS, now - 1e3)]]), now).fetch.length === 1);
+check("las nunca leídas van antes que los reintentos", planAgencyWebFetches(rows.slice(0, 2), new Map([[k0, errC(1, now - 1e3)]]), now).fetch[0].n.key !== k0);
+check("espera creciente y con techo", retryDelayMs(1) === 3_600_000 && retryDelayMs(2) === 2 * 3_600_000 && retryDelayMs(30) === 7 * 86_400_000);
+const errRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "error", httpStatus: 403, reason: "HTTP 403" }, 0, now, "s");
+check("un fallo guarda el error, la huella y reintenta más tarde", errRow.status === "error" && errRow.attempts === 1 && errRow.trigger_sig === "s" && Date.parse(errRow.next_retry_at!) > now);
+check("en el último intento ya no hay próximo reintento", toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "error", httpStatus: 500, reason: "x" }, MAX_WEB_ATTEMPTS - 1, now).next_retry_at === null);
+check("una lectura buena no programa refresco", cacheRow.next_retry_at === null);
+const blockedRow = toCacheRow(normalizeAgencyUrl(LEGACY)!, { kind: "blocked", reason: "robots" }, 0, now);
+check("bloqueada por robots: estado blocked sin reintento", blockedRow.status === "blocked" && blockedRow.next_retry_at === null);
+const blockedSrc = buildAgencyWebSources(members, new Map([[blockedRow.url_key, { ...blockedRow, photos: [], data: {} } as never]]));
+check("fila bloqueada: «Sin leer · bloqueada por la web», sin verificar", blockedSrc[0].blocked && blockedSrc[0].note === "Sin leer · bloqueada por la web" && blockedSrc[0].verdict.state === "sin_leer", blockedSrc[0]);
 
 console.log("— Señal de matching: misma web + misma referencia = cierto");
 const KEYS_LEGACY = webKeysOf(LEGACY, ["3617"]);
@@ -159,6 +186,61 @@ check("la evidencia lo explica", JSON.stringify(link?.evidence).includes("web de
 const otro = mk("00000000-0000-0000-0000-00000000000c", "idealista", { agency_url: "https://propiedades.domusaureacapital.com/es/madrid/salamanca/pisos/ref-4571_9", agency_reference: "4571", square_meters: 90, bedrooms: 2 });
 const res2 = computeAgencyPortalLinks([idealista, otro]);
 check("otro piso de la misma web no se enlaza", !res2.links.some((l) => l.relation === "mismo_inmueble" && l.level !== "informativo"), res2.links);
+
+console.log("— Lector de Inmoweb (ficha real)");
+const INMOWEB = readFileSync(new URL("./fixtures/inmoweb-ficha-14338.html", import.meta.url), "utf8");
+const INMOWEB_URL = "https://ft10672.inmoweb.page/details-es1694136.html?lan=es";
+const im = parseAgencyWebHtml(INMOWEB, INMOWEB_URL);
+check("se detecta Inmoweb por el HTML", im?.cms === "inmoweb", im?.cms);
+check("referencia 14338", im?.parsed.ref === "14338", im?.parsed.ref);
+check("precio 227.000, 86 m², 3 hab., 1 baño", im?.parsed.price === 227000 && im?.parsed.square_meters === 86 && im?.parsed.bedrooms === 3 && im?.parsed.bathrooms === 1, im?.parsed);
+check("venta y zona", im?.parsed.operation === "sale" && im?.parsed.address === "Collado Villalba", [im?.parsed.operation, im?.parsed.address]);
+check("descripción sin HTML", !!im?.parsed.description && im.parsed.description.startsWith("INMUEBLE SIN POSESION") && !im.parsed.description.includes("<"));
+check("4 fotos grandes (sin carpeta thumb)", im?.parsed.photos.length === 4 && im.parsed.photos.every((u) => !u.includes("/thumb/") && u.startsWith("https://storage.googleapis.com/")), im?.parsed.photos);
+check("web fuera de servicio de Inmoweb: no es una ficha", parseAgencyWebHtml(readFileSync(new URL("./fixtures/inmoweb-fuera-de-servicio.html", import.meta.url), "utf8"), "https://ft10431.inmoweb.page/details-es1.html") === null);
+check("verificada por referencia con el anuncio de Idealista", verifyWebAgainstAd({ url: INMOWEB_URL, parsed: im!.parsed }, { agency_reference: "14338", price: 227000, square_meters: 86, bedrooms: 3 }).state === "verificada");
+
+console.log("— Lector genérico (ficha real de otra web)");
+const GEN = readFileSync(new URL("./fixtures/generica-promora-mv6245.html", import.meta.url), "utf8");
+const GEN_URL = "https://www.promora.com/es/propiedad/MV6245";
+const ge = parseAgencyWebHtml(GEN, GEN_URL);
+check("sin CMS conocido: lector genérico", ge?.cms === "generico", ge?.cms);
+check("referencia MV6245 (último tramo de la URL)", ge?.parsed.ref === "MV6245", ge?.parsed.ref);
+check("JSON-LD: 63 m², 2 hab., 2 baños", ge?.parsed.square_meters === 63 && ge?.parsed.bedrooms === 2 && ge?.parsed.bathrooms === 2, ge?.parsed);
+check("precio 575.000 (de la página; el JSON-LD no lo trae)", ge?.parsed.price === 575000, ge?.parsed.price);
+check("venta por el título de la página", ge?.parsed.operation === "sale", ge?.parsed.operation);
+check("descripción sin HTML", !!ge?.parsed.description && !ge.parsed.description.includes("<") && ge.parsed.description.includes("PROMORA"));
+check("galería: sin logos ni iconos y sin duplicar la misma foto (propertyphoto/results)", ge!.parsed.photos.length >= 3 && ge!.parsed.photos.every((u) => /\.jpg/.test(u) && !/logo|icon|facebook|metricool/i.test(u)), ge?.parsed.photos);
+check("una misma foto una sola vez", new Set(ge!.parsed.photos.map((u) => u.split("/").pop()?.split("?")[0])).size === ge!.parsed.photos.length);
+check("verificada por referencia", verifyWebAgainstAd({ url: GEN_URL, parsed: ge!.parsed }, { agency_reference: "MV6245I", reference: "MV6245" }).state === "verificada");
+check("verificada solo por precio + m² + hab. (sin referencia)", verifyWebAgainstAd({ url: GEN_URL, parsed: { ...ge!.parsed, ref: null } }, { price: 575000, square_meters: 63, bedrooms: 2 }).state === "verificada");
+check("solo precio + m² (falta hab.): no verifica", verifyWebAgainstAd({ url: "https://x.es/a/b", parsed: { ...ge!.parsed, ref: null } }, { price: 575000, square_meters: 63 }).state === "sin_leer");
+check("mismo precio y m² pero otra referencia y otras hab.: no coincide", verifyWebAgainstAd({ url: GEN_URL, parsed: ge!.parsed }, { agency_reference: "ZZ1", price: 575000, square_meters: 63, bedrooms: 5 }).state === "no_coincide");
+check("página sin datos de inmueble: null", parseGenericFicha("<html><body>" + "<p>Bienvenido a nuestra inmobiliaria</p>".repeat(30) + "</body></html>", "https://x.es/nosotros") === null);
+const ldHtml = `<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"RealEstateListing","name":"Piso en venta","description":"<p>Bonito</p>","sku":"AB-123","offers":{"@type":"Offer","price":"310.000","priceCurrency":"EUR"},"floorSize":{"@type":"QuantitativeValue","value":90},"numberOfBedrooms":3,"numberOfBathroomsTotal":2,"image":["/f/a-300x200.jpg","/f/b.jpg"]}]}</script></head><body><h1>Piso en venta</h1>${"<p>texto relleno de la ficha</p>".repeat(30)}</body></html>`;
+const ld = parseGenericFicha(ldHtml, "https://agencia.es/inmueble/ab-123");
+check("JSON-LD con @graph, sku y offers", ld?.ref === "AB-123" && ld?.square_meters === 90 && ld?.bedrooms === 3 && ld?.bathrooms === 2, ld);
+check("miniatura WordPress -300x200 → original", ld?.photos[0] === "https://agencia.es/f/a.jpg", ld?.photos);
+
+console.log("— Miniatura → original");
+check("Mobilia: -original", toOriginalImageUrl("https://media.mobiliagestion.es/Portals/x/Images/1/2.jpg") === "https://media.mobiliagestion.es/Portals/x/Images/1/2-original.jpg");
+check("Mobilia: -thumb no se convierte en -thumb-original", toOriginalImageUrl("https://media.mobiliagestion.es/Portals/x/Images/1/2-thumb.jpg") === "https://media.mobiliagestion.es/Portals/x/Images/1/2-original.jpg");
+check("Inmoweb: carpeta thumb", toOriginalImageUrl("https://s.es/clients/1/property/9/image/thumb/585_335/a.png") === "https://s.es/clients/1/property/9/image/a.png");
+check("parámetros de tamaño fuera", toOriginalImageUrl("https://x.es/a.jpg?w=300&h=200") === "https://x.es/a.jpg");
+check("otros parámetros se conservan tal cual", toOriginalImageUrl("https://x.es/a.jpg?20261015") === "https://x.es/a.jpg?20261015");
+check("no inventa rutas", toOriginalImageUrl("https://x.es/results/a.jpg") === "https://x.es/results/a.jpg");
+
+console.log("— robots.txt");
+const ROBOTS = "User-agent: *\nDisallow: /privado/\nDisallow: /*.pdf$\nAllow: /privado/publico\n\nUser-agent: badbot\nDisallow: /\n";
+check("ruta libre", robotsAllows(ROBOTS, "/es/madrid/pisos/ref-1"));
+check("ruta prohibida", !robotsAllows(ROBOTS, "/privado/ficha-1"));
+check("Allow más específico gana", robotsAllows(ROBOTS, "/privado/publico/1"));
+check("comodín y $", !robotsAllows(ROBOTS, "/docs/a.pdf") && robotsAllows(ROBOTS, "/docs/a.pdf.html"));
+check("otro agente no nos afecta", robotsAllows(ROBOTS, "/x", "smartbc"));
+check("grupo propio manda sobre *", !robotsAllows("User-agent: smartbc\nDisallow: /\nUser-agent: *\nAllow: /", "/x", "smartbc-bot"));
+check("Disallow vacío = todo permitido", robotsAllows("User-agent: *\nDisallow:\n", "/x"));
+check("sin robots: permitido", robotsAllows(null, "/x") && robotsAllows("", "/x"));
+check("Disallow: / bloquea todo", !robotsAllows("User-agent: *\nDisallow: /", "/es/pisos/1"));
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${ok} ok, ${fail} fallos`);
 process.exit(fail === 0 ? 0 : 1);
