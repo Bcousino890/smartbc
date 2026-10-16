@@ -1703,6 +1703,9 @@ Plan aprobado: [`qa-c2/plan-vista-previa.md`](qa-c2/plan-vista-previa.md) (D-QA1
 ## PR, CI y merge
 
 - Rama `fabri/bcp-01-e3` → `main`. El enlace del PR y el estado de la CI están en el PR.
+- PR: [#321](https://github.com/Bcousino890/smartbc/pull/321). CI en verde en `d70e697`, con TypeScript, las pruebas de catálogos, `next build` y migraciones.
+  - El primer intento falló en `next/font`: Google Fonts no respondió dentro de la CI («Cannot read properties of null»), un fallo transitorio ajeno al código.
+  - Se relanzó solo el trabajo fallido y pasó.
 - **El agente no fusiona.** Fusionar despliega y aplica `0202` (ver «Despliegue, compatibilidad y recuperación»); lo decide Fabricio.
 
 ## Revisión
