@@ -174,7 +174,7 @@ Requisitos que ya había dado (16 de octubre de 2026):
 
 ## Alcance
 
-- Migración nueva, con el número libre comprobado al implementar; hoy sería `0203`:
+- Migración nueva, con el número libre comprobado al implementar y al publicar: **`0207_catalog_groups.sql`**. Al publicar, `0203`–`0206` ya estaban usadas en `main`:
   - dos tablas;
   - la función atómica de crear y asignar (C1);
   - las funciones de escritura con guarda de dueño;

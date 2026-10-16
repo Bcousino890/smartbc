@@ -1,4 +1,4 @@
--- SOLO PRUEBAS LOCALES (HOME · grupos, 0203). Resultados escritos a mano.
+-- SOLO PRUEBAS LOCALES (HOME · grupos, 0207). Resultados escritos a mano.
 -- Cubre: permisos, guardas de dueño, árbol (dos niveles, sin ciclos, sin
 -- mezclar dueños, también con escrituras directas), nombres (1–60, únicos entre
 -- hermanos sin mayúsculas ni tildes), límite de 100, orden, mover (D9), borrar

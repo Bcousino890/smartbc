@@ -1,9 +1,9 @@
 "use server";
 
 // ============================================================================
-// HOME · grupos de catálogos (0203). Cada acción:
+// HOME · grupos de catálogos (0207). Cada acción:
 //   1. pasa por la guarda del dueño (withHomeAccess);
-//   2. llama a una función SQL de 0203 con p_actor = id del dueño, que vuelve a
+//   2. llama a una función SQL de 0207 con p_actor = id del dueño, que vuelve a
 //      comprobar que el grupo y el catálogo son suyos;
 //   3. devuelve el estado nuevo de los grupos (la HOME y el gestor se
 //      actualizan sin recargar la página).

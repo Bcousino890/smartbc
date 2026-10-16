@@ -5,7 +5,7 @@
 //
 // Los grupos solo ORGANIZAN la HOME: nada de aquí toca los criterios, el
 // título, el modo ni las propiedades de un catálogo (R2). Las reglas de
-// escritura (applyGroupOp) repiten las de SQL (0203) para las fixtures:
+// escritura (applyGroupOp) repiten las de SQL (0207) para las fixtures:
 //   · dos niveles (grupo → subgrupo), sin ciclos;
 //   · nombres de 1 a 60 caracteres, únicos entre hermanos sin distinguir
 //     mayúsculas ni tildes (el mismo pliegue que catalog_fold);
@@ -62,7 +62,7 @@ export function foldGroupName(s: string): string {
 
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
-/** Igual que catalog_group_name() de 0203: espacios sobrantes fuera y de 1 a
+/** Igual que catalog_group_name() de 0207: espacios sobrantes fuera y de 1 a
  *  60 caracteres sin caracteres de control. */
 export function normalizeGroupName(raw: unknown): { ok: true; value: string } | { ok: false; error: "invalid_name" } {
   const v = (typeof raw === "string" ? raw : "").replace(/\s+/g, " ").trim();
@@ -303,7 +303,7 @@ function renumber(groups: CatalogGroup[], parentId: string | null): CatalogGroup
   return groups.map((g) => (pos.has(g.id) ? { ...g, position: pos.get(g.id)! } : g));
 }
 
-/** Aplica una operación con las reglas de 0203. `ownCatalogs` = ids de los
+/** Aplica una operación con las reglas de 0207. `ownCatalogs` = ids de los
  *  catálogos del dueño (asignar uno ajeno o inexistente es 'forbidden'). */
 export function applyGroupOp(
   state: GroupsState,

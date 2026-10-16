@@ -1,4 +1,4 @@
--- SOLO PRUEBAS LOCALES (HOME · grupos, 0203). Antes de 0203 (con 0192–0202):
+-- SOLO PRUEBAS LOCALES (HOME · grupos, 0207). Antes de 0207 (con 0192–0202):
 -- catálogos del dueño (uno con enlace compartido, uno archivado) y un SEGUNDO
 -- dueño de la HOME con su propio catálogo (solo aquí, para probar lo ajeno).
 -- Datos 100 % sintéticos.

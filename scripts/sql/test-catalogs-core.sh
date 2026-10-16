@@ -103,9 +103,9 @@ $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 "$PAR"
 rm -f "$PAR"
 
-echo "== 2n. 0203 (HOME · grupos): catálogos previos + aplicada dos veces, concurrencia, contraprueba y reversión"
-M9=supabase/migrations/0203_catalog_groups.sql
-RB9=docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0203.sql
+echo "== 2n. 0207 (HOME · grupos): catálogos previos + aplicada dos veces, concurrencia, contraprueba y reversión"
+M9=supabase/migrations/0207_catalog_groups.sql
+RB9=docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0207.sql
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $S/test-catalog-groups-pre.sql $M9 $M9 $S/test-catalog-groups.sql
 # Borrar un grupo mientras otra sesión le asigna un catálogo.
@@ -134,11 +134,11 @@ wait $LIM_A
 $R sqlv nolock=1 -- $S/test-catalog-groups-lim-check.sql
 $R sql $M9
 # Reversión y reaplicación.
-$R sql $S/test-catalog-groups-state.sql $RB9 $S/test-rollback-0203.sql $M9 $M9
+$R sql $S/test-catalog-groups-state.sql $RB9 $S/test-rollback-0207.sql $M9 $M9
 $R sql $S/test-util.sql
-echo "   0203 se vuelve a aplicar tras su reversión"
+echo "   0207 se vuelve a aplicar tras su reversión"
 
-echo "== 2o. 0203 sobre la selección (2k) y la paridad TS ↔ SQL"
+echo "== 2o. 0207 sobre la selección (2k) y la paridad TS ↔ SQL"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $S/test-catalog-operations.sql
 PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")

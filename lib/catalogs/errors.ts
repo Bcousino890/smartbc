@@ -40,7 +40,7 @@ const MESSAGES: Record<string, string> = {
   cover_not_in_catalog: "La portada tiene que ser una vivienda que esté ahora en el catálogo.",
   invalid_cover_photo: "Esa foto no es de la vivienda elegida.",
   // E3 · fotos por catálogo (0202).
-  // HOME · grupos (0203)
+  // HOME · grupos (0207)
   invalid_name: "El nombre del grupo tiene que tener entre 1 y 60 caracteres.",
   duplicate_name: "Ya hay un grupo con ese nombre en ese nivel (sin contar mayúsculas ni tildes).",
   too_deep: "Solo hay dos niveles: un subgrupo no puede tener subgrupos, y un grupo con subgrupos no puede ir dentro de otro.",

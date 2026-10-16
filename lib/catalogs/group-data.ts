@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import type { GroupsState } from "./groups";
 
 // ============================================================================
-// HOME · grupos: lectura de los grupos y asignaciones del dueño (0203). Solo
+// HOME · grupos: lectura de los grupos y asignaciones del dueño (0207). Solo
 // lee, y siempre filtrado por owner_id. Si la lectura falla (por ejemplo,
 // código nuevo con la migración sin aplicar: 42P01/PGRST205) devuelve
 // available: false y la HOME se pinta como antes, sin grupos; lo avisa una vez

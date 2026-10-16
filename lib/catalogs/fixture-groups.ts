@@ -1,7 +1,7 @@
 // ============================================================================
 // SOLO DESARROLLO LOCAL (HOME · grupos). Almacén SINTÉTICO en memoria de los
 // grupos de la HOME de fixtures y de los catálogos que se crean ahí. Aplica
-// las MISMAS reglas que 0203 (applyGroupOp de groups.ts). Nunca avisa al
+// las MISMAS reglas que 0207 (applyGroupOp de groups.ts). Nunca avisa al
 // vigilante de los lectores ni toca el almacén de los enlaces (fixture-store):
 // organizar no cambia ningún catálogo. Solo se importa desde páginas y rutas
 // protegidas por isCatalogFixtureMode().

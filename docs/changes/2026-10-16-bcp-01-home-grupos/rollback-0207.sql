@@ -1,5 +1,5 @@
 -- ============================================================================
--- Reversión de 0203 (HOME · grupos de catálogos).
+-- Reversión de 0207 (HOME · grupos de catálogos).
 --
 -- ⚠️ SE PIERDE TODA LA ORGANIZACIÓN: los grupos, los subgrupos y las
 -- asignaciones de catálogos. Antes de ejecutarla, si se quiere conservar,

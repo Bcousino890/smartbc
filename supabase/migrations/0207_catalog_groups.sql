@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0203 · HOME de Fabricio: grupos editables de catálogos.
+-- 0207 · HOME de Fabricio: grupos editables de catálogos.
 --
 -- Expediente: docs/changes/2026-10-16-bcp-01-home-grupos/
 --
@@ -39,7 +39,7 @@
 -- catalog_groups_sibling_name).
 --
 -- Todo va en una transacción y es idempotente (se puede aplicar dos veces).
--- Reversión: docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0203.sql
+-- Reversión: docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0207.sql
 -- (borra solo estos objetos: se pierde la organización; los catálogos no se
 -- tocan). La ejecuta una persona, nunca un agente contra datos reales.
 -- ============================================================================

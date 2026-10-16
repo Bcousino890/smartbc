@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * HOME de Fabricio (BCP-01). Solo entra el perfil que está en home_owners
  * (comprobado aquí, en el servidor): cualquier otro recibe 404 y sin sesión
  * se va a /login. Ocultar la entrada del menú no protege nada; esto sí.
- * HOME · grupos: los grupos del dueño (0203) y ?grupo= de la URL.
+ * HOME · grupos: los grupos del dueño (0207) y ?grupo= de la URL.
  */
 export default async function MiEspacioPage({
   params,

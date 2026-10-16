@@ -13,6 +13,7 @@ Especificación: [`spec.md`](spec.md), aprobada el 16 de octubre de 2026 con D1�
 - **Numeración:**
   - la última migración en `main` es `0202_catalog_photo_prefs.sql`, así que **la siguiente libre hoy es `0203`**;
   - ningún PR abierto añadía `0202` en la comprobación de E3; **`0203` se comprobará en T0** sobre los PR abiertos.
+- **Renumerada a `0207` al publicar (16 de octubre de 2026):** antes de publicar, `main` (`afa6b94`) ya traía `0203_particulares_agency_webs.sql` a `0206_properties_photos_source.sql`. Como dice la regla de abajo, la migración pasó a `0207`, y con ella el rollback, las pruebas y la documentación.
 - **Si `main` avanza** antes de implementar o de publicar:
   - `git fetch`, rebase de la rama sobre el `origin/main` nuevo y vuelta a comprobar la numeración;
   - si `0203` ya está usada, se renumera al siguiente número libre, también en el rollback, las pruebas y la documentación;
@@ -36,7 +37,7 @@ Los mismos que en E3, sin dependencias nuevas:
 
 ## Diseño técnico (propuesta)
 
-### Datos (`0203_catalog_groups.sql`, `BEGIN`/`COMMIT`, idempotente)
+### Datos (`0207_catalog_groups.sql`, `BEGIN`/`COMMIT`, idempotente)
 
 ```
 catalog_groups
@@ -184,9 +185,9 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
 - **Acción:**
   - anotar la aprobación;
   - `git fetch` y rebase si `main` avanzó;
-  - comprobar en `main` y en los PR abiertos que `0203` está libre;
+  - comprobar en `main` y en los PR abiertos que `0207` está libre;
   - preparar el entorno (pasos 1–5).
-- **Verificación:** `git ls-tree origin/main supabase/migrations/` y `gh pr diff --name-only` de los PR abiertos sin `0203`; `npm ci` sin cambios en el lockfile.
+- **Verificación:** `git ls-tree origin/main supabase/migrations/` y `gh pr diff --name-only` de los PR abiertos sin `0207`; `npm ci` sin cambios en el lockfile.
 - **Cubre:** —
 - **Commit:** «HOME grupos T0: aprobación y base».
 
@@ -194,7 +195,7 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
 
 - **Entradas:** T0.
 - **Acción:**
-  - `supabase/migrations/0203_catalog_groups.sql` y `docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0203.sql`;
+  - `supabase/migrations/0207_catalog_groups.sql` y `docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0207.sql`;
   - `scripts/sql/test-catalog-groups-pre.sql` y `test-catalog-groups.sql`, con un escenario nuevo en `test-catalogs-core.sh`.
 - **Verificación** en el Postgres temporal: todo `test-catalogs-core.sh` en verde, más estos casos:
   - **permisos:** sin `EXECUTE` para `anon` y `authenticated`; las funciones son INVOKER; un actor que no está en `home_owners` da `forbidden`; grupos y catálogos de otro dueño también; y `set_member` con un catálogo ajeno, igual;
@@ -206,10 +207,10 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
     - A borra «Salamanca» con un `pg_sleep` dentro de la transacción mientras B asigna un catálogo a «Recoletos». B espera al bloqueo del dueño y luego da `forbidden`, y no queda ninguna asignación huérfana;
     - dos `create` simultáneos con el mismo nombre: uno da `duplicate_name`;
     - contraprueba sin el bloqueo, solo en la base temporal;
-  - **reversión:** `rollback-0203.sql`, comprobar que los catálogos siguen intactos y volver a aplicar la migración (idempotente).
+  - **reversión:** `rollback-0207.sql`, comprobar que los catálogos siguen intactos y volver a aplicar la migración (idempotente).
 - **También:** `catalog_create_in_group` (C1: fallo de asignación → 0 catálogos; reintento → 1) y `catalog_group_move` (D9: conserva asignaciones; `too_deep` e `invalid_move`).
 - **Cubre:** AC1, AC2, AC4, AC5, AC8, AC11, AC13.
-- **Commit:** «HOME grupos T1: 0203, rollback y pruebas SQL».
+- **Commit:** «HOME grupos T1: 0207, rollback y pruebas SQL».
 
 ### T2. Lógica pura y pruebas TS
 
@@ -312,9 +313,9 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
 
 ## Recuperación
 
-- **Fusionar puede desplegar y aplicar `0203`.**
+- **Fusionar puede desplegar y aplicar `0207`.**
 - **Revertir el código** (`git revert` del merge): la HOME vuelve a la de hoy y las tablas se quedan sin usar.
-- **Revertir el esquema** (`rollback-0203.sql`, a mano): se pierde la organización; antes se copia con `\copy`. No toca los catálogos.
+- **Revertir el esquema** (`rollback-0207.sql`, a mano): se pierde la organización; antes se copia con `\copy`. No toca los catálogos.
 - **Código nuevo sin el esquema:** la HOME como hoy (`available: false`).
 
 ## Propuesta visual
