@@ -516,7 +516,10 @@ export type FixtureOp =
   // PDF: marcar o desmarcar una foto (por su clave) para que falle al leerla.
   | { op: "photo-fail"; token: string; key: string; f: string; fail: boolean }
   // PDF: espera sintética por foto (ms) para cambiar o revocar a mitad.
-  | { op: "photo-delay"; ms: number };
+  | { op: "photo-delay"; ms: number }
+  // PDF (medición, T10): servir cada foto como un JPEG grande de `px` de lado
+  // mayor (0 = el SVG pequeño de siempre).
+  | { op: "photo-size"; px: number };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -525,6 +528,11 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
     await resetFixtureStore();
     (globalThis as GF)[FAIL_KEY] = undefined;
     (globalThis as GD)[DELAY_KEY] = 0;
+    (globalThis as GD)[SIZE_KEY] = 0;
+    return { fingerprint: null };
+  }
+  if (op.op === "photo-size") {
+    (globalThis as GD)[SIZE_KEY] = Math.max(0, Math.min(6000, Number(op.px) || 0));
     return { fingerprint: null };
   }
   if (op.op === "photo-delay") {
@@ -640,7 +648,12 @@ function failing(): Set<string> {
 }
 
 const DELAY_KEY = "__bcpCatalogFixturePhotoDelay";
-type GD = typeof globalThis & { [DELAY_KEY]?: number };
+const SIZE_KEY = "__bcpCatalogFixturePhotoSize";
+type GD = typeof globalThis & { [DELAY_KEY]?: number; [SIZE_KEY]?: number };
+/** Lado mayor de las fotos grandes de medición (0 = no). */
+export function fixtureExportBigPx(): number {
+  return (globalThis as GD)[SIZE_KEY] ?? 0;
+}
 /** Espera sintética por foto del PDF (0 = ninguna). */
 export function fixtureExportDelay(): number {
   return (globalThis as GD)[DELAY_KEY] ?? 0;

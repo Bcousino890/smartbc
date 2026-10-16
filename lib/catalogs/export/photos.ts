@@ -44,7 +44,7 @@ async function toJpeg(input: Buffer | string, width: number, signal: AbortSignal
 export async function loadExportPhoto(need: PhotoNeed, signal: AbortSignal): Promise<LoadedPhoto> {
   try {
     if (isCatalogFixtureMode()) {
-      const { fixtureExportDelay, fixtureExportPhoto } = await import("../fixture-store");
+      const { fixtureExportBigPx, fixtureExportDelay, fixtureExportPhoto } = await import("../fixture-store");
       const wait = fixtureExportDelay();
       if (wait) {
         await new Promise<void>((resolve) => {
@@ -56,6 +56,11 @@ export async function loadExportPhoto(need: PhotoNeed, signal: AbortSignal): Pro
       const fx = await fixtureExportPhoto(need.slug, need.key);
       if (!fx || fx.u !== need.u) return { ok: false, reason: "changed" };
       if (fx.fail) return { ok: false, reason: "failed" };
+      const big = fixtureExportBigPx();
+      if (big) {
+        const { fixtureBigJpeg } = await import("./fixture-photo-big");
+        return await toJpeg(await fixtureBigJpeg(fx.u, fx.svg, big), need.width, signal);
+      }
       return await toJpeg(fx.svg, need.width, signal);
     }
     const photo = await findPropertyPhoto(need.slug, 0, need.key);

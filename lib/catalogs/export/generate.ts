@@ -15,15 +15,19 @@ import { exportReaders, scopeKey, type ExportScope } from "./source";
 // 2026-10-16-bcp-01-pdf). Une la captura fija (K1), las fotos por clave, el
 // documento y el núcleo acotado (K2, K3). Un solo núcleo por proceso (PM2 de
 // un proceso, como el resto de límites en memoria del CRM).
-// Los límites son los fijados tras medir en T10 (ver result.md).
+// Límites fijados tras medir (T10, docs/changes/2026-10-16-bcp-01-pdf/
+// medicion.md): el PDF más grande (24 viviendas, ~100 fotos de 3.600 px) tarda
+// ~5 s en local y su maquetación bloquea el proceso dos veces ~0,9 s; por eso
+// uno a la vez. La petición espera como mucho 55 s: por debajo de los 60 s
+// por defecto del proxy (nginx), para responder un 503 propio y no un 504.
 // ============================================================================
 
 export const EXPORT_LIMITS: RunnerLimits = {
   maxConcurrent: 1,
   maxQueue: 3,
   queueWaitMs: 30_000,
-  requestTimeoutMs: 120_000,
-  jobBudgetMs: 90_000,
+  requestTimeoutMs: 55_000,
+  jobBudgetMs: 50_000,
 };
 
 /** Ancho de cada foto incrustada (px), según su uso. */
