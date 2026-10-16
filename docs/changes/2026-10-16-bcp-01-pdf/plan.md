@@ -3,7 +3,7 @@
 **Especificación:** [`spec.md`](spec.md), aprobada para planificar el 16 de octubre de 2026, con P1–P9.
 
 - **Rama:** `fabri/bcp-01-pdf`, en el worktree `wt/bcp-01-pdf`, solo local.
-- **Estado:** **borrador para revisión.** No autoriza implementar, instalar, descargar recursos, arrancar servicios, hacer push ni abrir un PR.
+- **Estado:** **aprobado** el 16 de octubre de 2026 (T0–T12), con P10 y las correcciones K1–K5 de abajo. Se ejecuta en orden y se para antes del merge. La aprobación visual sobre PDF reales sigue pendiente (P9).
 
 ## Base
 
@@ -27,6 +27,33 @@
    - **un script en Python sin dependencias** (`zlib`): objetos del PDF (fuentes incrustadas, URI, metadatos, texto de los flujos).
 
 **No se autoriza** acceso a producción, credenciales, escrituras reales, IA real ni revisión adicional de Codex.
+
+## Cambios por la aprobación (K1–K5 y P10)
+
+- **K1 · La huella sale de la propia instantánea:**
+  - H1 = un resumen canónico (sha-256 de un JSON con las claves ordenadas) de la instantánea S1 tal como se recibió **y** de su operación (la de la lectura coherente que la rodea). No se pide ninguna huella aparte;
+  - la comprobación final vuelve a capturar S2 con la misma lectura coherente y calcula H2 de la misma forma;
+  - cada foto se comprueba contra la `u` de S1 (md5 de su URL), entera y no solo su prefijo.
+- **K2 · Compartir dentro del ámbito:**
+  - la clave de una generación compartida es `ámbito + H1`. El ámbito es `dueño:<perfil>:<catálogo>` o `enlace:<token>`, y nunca se comparte entre ámbitos;
+  - **cada petición** que espera hace su **propia comprobación final** (acceso y H2 = H1) antes de recibir los bytes; si falla la suya, recibe 404 o 409 y las demás siguen;
+  - una cancelación quita a esa petición de la espera; el trabajo compartido solo se aborta si ya no queda nadie esperando.
+- **K3 · El turno es del trabajo, no de la petición:**
+  - el turno de generación se libera en el `finally` del **trabajo**, no cuando vence el tiempo de una petición;
+  - el trabajo tiene puntos de cancelación reales: las descargas de fotos con `AbortSignal` y comprobaciones entre fases, antes de componer y antes de renderizar;
+  - el renderizado de react-pdf **no se puede interrumpir**, así que, una vez empezado, retiene el turno hasta terminar. Su duración se acota limitando el contenido y se mide en T10;
+  - la cola de espera está acotada; al llenarse, 503 con `Retry-After`;
+  - **pruebas** con un renderizador falso lento: si la petición vence, el turno sigue ocupado hasta que el trabajo termina, la siguiente espera y no se solapan dos renderizados.
+- **K4 · Todo el contenido:**
+  - el PDF **no usa `itemLayout`**, porque su recorrido en pantalla se corta en 3 dobles páginas;
+  - del lector se conserva solo la regla de la entrada (más de 45 palabras pasa al principio del recorrido);
+  - van **todas** las secciones en orden, con su foto, más la descripción completa y las características;
+  - **pruebas:** una historia de 12 capítulos y una descripción de 1.500 palabras, comparadas palabra por palabra.
+- **K5 · Imágenes identificadas:**
+  - las fotos de las fixtures del PDF llevan un **código visual** (una rejilla de 4 × 4 casillas blancas y negras, 16 bits, con un marco de referencia) que identifica cada foto;
+  - la verificación **extrae las imágenes JPEG incrustadas** del PDF (los flujos `DCTDecode`), las decodifica con `sharp` y lee su código;
+  - así se demuestra, imagen por imagen y vivienda por vivienda, cuáles hay, que ninguna excluida aparece y que no se repite ninguna.
+- **P10 · Botones:** lector, en el índice y en el cierre; gestor, en Compartir y en el menú «⋯».
 
 ## Diseño técnico
 
@@ -98,7 +125,7 @@
 ### Interfaz
 
 - **Gestor:** «Descargar PDF» en Compartir y en el menú «⋯».
-- **Lector:** «Descargar en PDF» en la página de cierre y en el índice (decisión pendiente nueva: dónde va). Solo aparece con el enlace válido y con conexión.
+- **Lector:** «Descargar en PDF» en la página de cierre y en el índice (P10). Solo aparece con el enlace válido y con conexión.
 - **Al descargar:** `fetch` con «Preparando el PDF…», el archivo se guarda en el navegador y los errores se explican: 404 «Este enlace ya no está disponible», 409 cambio en curso, 429 y 503 «inténtalo en un momento».
 - **Pruebas de interfaz:** a 1440, 362 y 320 sin desbordes, con teclado y foco.
 
@@ -287,11 +314,11 @@ Cada tarea es pequeña, se verifica y se guarda en su commit. El orden respeta l
 
 ## Decisiones pendientes que afectan al plan
 
-- **Dónde va el botón del cliente en el lector.** Propuesta: la página de cierre y el índice.
 - **Condicionales,** solo si las destapa T1 o T10:
   - un cambio en el arco o en el índice;
   - límites más estrictos que P2.
 
 ## Aprobación
 
-Pendiente. Este plan no autoriza la ejecución.
+- **16 de octubre de 2026:** Fabricio aprueba la ejecución de T0–T12 con P10 y K1–K5 (ver la especificación). Se para antes del merge.
+- **Pendiente:** la aprobación visual sobre los PDF reales (P9).

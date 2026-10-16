@@ -4,7 +4,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 
 - **Tamaño:** grande o sensible: generación en el servidor de producción con fotos reales, **dos rutas nuevas (una pública, por el enlace)** y fuentes incluidas en el repositorio. Sin migración prevista.
 - **Responsable:** Fabricio.
-- **Estado:** **aprobada para planificar** el 16 de octubre de 2026 (especificación y dirección visual Boutique, con P1–P9). No autoriza implementar, instalar, descargar recursos, arrancar servicios ni abrir un PR: eso lo autoriza la aprobación de [`plan.md`](plan.md).
+- **Estado:** **aprobada** (16 de octubre de 2026): la especificación y la dirección visual Boutique con P1–P10, y la ejecución de T0–T12 con las correcciones K1–K5. **La aprobación visual final sigue pendiente**: se da sobre los PDF reales (P9).
 - **Base explorada:** `origin/main` = `94b513f` (merge de #322), 16 de octubre de 2026. Solo lectura.
 - **Maqueta:** [`maquetas/pdf.html`](maquetas/pdf.html), con las capturas `maqueta-*.png`.
 
@@ -61,6 +61,17 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 - **P7. El índice** lleva números de página correctos y enlaces internos.
 - **P8. Si algo resulta difícil, no se cambia el diseño en silencio.** El arco de la portada y los números del índice no se sustituyen ni se quitan sin presentar antes el cambio a Fabricio para que lo apruebe.
 - **P9. La aceptación visual final** se hace sobre **PDF reales generados**. Aprobar la maqueta HTML no es la QA final del PDF.
+- **P10. Dónde van los botones:**
+  - lector público: en el **índice** y en la **página de cierre**;
+  - gestor del dueño: en la sección **Compartir** y en el menú **«⋯»**.
+
+## Correcciones a la ejecución (16 de octubre de 2026, Fabricio)
+
+- **K1. La huella describe exactamente lo capturado.** H1 sale de la propia instantánea S1 y de su operación, no de una lectura posterior e independiente. Cubre también los cambios en las fichas y fotos compartidas que no suben `catalogs.version`, incluidos los que pasen entre que se captura la instantánea y se calcula la huella.
+- **K2. Generación compartida solo dentro del mismo ámbito** de autorización y del mismo contenido. **Cada petición en espera pasa por su cuenta la comprobación final de acceso** antes de recibir los bytes. Una revocación, una caducidad, un cambio de dueño o una cancelación no filtran resultados ni estropean las demás peticiones autorizadas.
+- **K3. El tiempo máximo no libera el turno mientras el trabajo siga consumiendo recursos.** Un `Promise.race` no cancela el renderizado. Hay que cancelar de verdad o retener el turno hasta que el trabajo termine, con la cola acotada y limpiando bien.
+- **K4. Todo el contenido publicable,** también las historias más largas que el límite del recorrido en pantalla. No se pierden secciones por reutilizar la paginación de la pantalla. Se prueban una historia larga de varios capítulos y descripciones largas.
+- **K5. Verificar las imágenes realmente incrustadas** (sintéticas), no solo los pies de foto ni cuántas hay, para demostrar las exclusiones de E3 y que cada foto es la que toca.
 
 ## Alcance (primera entrega: exportar)
 
@@ -74,7 +85,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
    - **Índice:** las viviendas en su orden efectivo, con su número, título, zona, precio de la operación, «Reservada» y **número de página correcto**. Cada línea es un **enlace interno** a su vivienda (P7).
    - **Cada vivienda:**
      - **apertura:** la foto de apertura efectiva (E3), los datos clave y el precio de la operación del contexto (con «También en…», como en el lector), la entrada y los puntos verificados;
-     - **recorrido:** las secciones publicables, en orden, con su foto. Qué va en la apertura y qué va en el recorrido se decide con las mismas reglas de contenido del lector (`itemLayout`): por ejemplo, una entrada larga pasa al recorrido;
+     - **recorrido:** **todas** las secciones publicables, en orden y con su foto, sin el límite de dobles páginas del lector en pantalla (K4). Del lector se conserva una sola regla de reparto: la entrada de más de 45 palabras pasa del principio de la apertura al principio del recorrido;
      - **detalle:** la descripción **completa** vigente y las características;
      - **más fotos:** hasta 6 fotos en uso que no sean ya la apertura ni del recorrido, en el orden de la galería (P2).
    - **Cierre:** el logo, «Hablemos», la tarjeta con el rol, el nombre y el teléfono del contacto del catálogo, y la nota de copia fija. **Sin la dirección del enlace ni un QR** (P3).
@@ -93,8 +104,9 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 ## Copia fija frente a enlace vivo
 
 - **Un PDF = una versión (P9 de BCP-01).** `catalogs.version` **no basta**: no sube cuando cambian las fichas o las fotos compartidas de las propiedades (precio, textos, fotos). Por eso se usan dos comprobaciones:
-  1. **Lectura coherente** (`readCoherent`): versión → instantánea → versión, para la operación del contexto.
-  2. **Huella de la instantánea**, que sí cubre los datos de las propiedades y la versión de cada foto: se anota al leer y se vuelve a pedir **después de descargar las fotos y antes de responder**. Si cambió, se repite todo una vez; si sigue cambiando, no se genera y sale «El catálogo está cambiando; vuelve a intentarlo».
+  1. **Lectura coherente** (`readCoherent`): versión → instantánea → versión, para que la operación del contexto corresponda a la instantánea capturada **S1**.
+  2. **La huella H1 se calcula de la propia S1 y su operación** (un resumen canónico del contenido capturado), nunca con otra lectura posterior (K1). Así no hay ningún hueco entre capturar y calcular la huella.
+  3. **Antes de responder** se vuelve a capturar (S2, con la misma lectura coherente) y su huella H2 se compara con H1. Como la instantánea lleva los datos de las propiedades y la versión de cada foto, esto detecta también los cambios en fichas y fotos compartidas que no suben `catalogs.version`. Si cambió, se repite todo una vez; si sigue cambiando, no se genera y sale «El catálogo está cambiando; vuelve a intentarlo».
   - **Cada foto** se resuelve por su clave y se comprueba que su versión (`v`, derivada de su URL) es la de la instantánea. Si no coincide, la instantánea ya no vale y se repite.
   - **Límite conocido** (corrección 5 de E3): un archivo sustituido **en la misma URL** no cambia la versión y no se detecta. Queda documentado y no se amplía aquí.
   - Así el PDF nunca mezcla dos versiones.
@@ -102,7 +114,8 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 - **Generar el PDF no cambia nada:** ni el catálogo, ni su versión, ni su huella, ni el enlace, ni avisa a los lectores.
 - **No se guarda ningún PDF en el servidor ni se reutiliza entre personas o enlaces:**
   - las respuestas van con `Cache-Control: private, no-store`, `Content-Disposition: attachment`, `X-Robots-Tag: noindex` y `Referrer-Policy: no-referrer`;
-  - dos peticiones iguales a la vez (el mismo enlace o el mismo dueño y catálogo, con la misma huella) comparten una sola generación en curso, y nada más.
+  - dos peticiones iguales a la vez (el mismo ámbito, es decir, el mismo enlace o el mismo dueño y catálogo, con la misma huella) comparten una sola generación en curso, y nada más;
+  - **cada una pasa por su cuenta la comprobación final** de acceso y de huella antes de recibir los bytes (K2). Que una se cancele no aborta el trabajo de las demás.
 - **La autorización se vuelve a comprobar antes de responder.** Si el enlace caducó o se revocó, o el catálogo dejó de estar disponible mientras se generaba (o el dueño dejó de serlo), no se entrega el PDF.
 
 ## Composición (dirección aprobada; la QA final es sobre PDF reales, P9)
@@ -167,7 +180,8 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 | PDF9 | Material que falta: sin fotos, sin descripción y sin precio, se ve como en el lector, sin inventar. |
 | PDF10 | **Dueño:** solo el dueño de la HOME, también con el catálogo archivado o sin enlace; un catálogo ajeno o inexistente da 404. **Cliente:** solo con un enlace válido de un catálogo disponible; caducado, revocado, inexistente o archivado dan 404 sin decir cuál. Si la autorización cambia mientras se genera, no se entrega el PDF. |
 | PDF13 | Ninguna respuesta se guarda en cachés compartidas ni se reutiliza entre personas o enlaces (`private, no-store`). Las peticiones repetidas, las concurrentes y las que fallan quedan acotadas (cola, límite por enlace, tiempo máximo) sin dejar nada en el servidor. |
-| PDF14 | Fotos por vivienda: la apertura, las del recorrido y hasta 6 más, sin repetir, y sin ninguna excluida (P2). |
+| PDF14 | Fotos por vivienda: la apertura, las del recorrido y hasta 6 más, sin repetir, y sin ninguna excluida (P2). Se demuestra **identificando cada imagen incrustada** en el PDF (fotos sintéticas con un código visual propio), no por los pies ni por cuántas hay (K5). |
+| PDF16 | Todo el contenido publicable: una historia de muchos capítulos (más que el recorrido en pantalla) y una descripción larga salen enteras en el PDF (K4). |
 | PDF15 | El PDF no contiene la dirección del enlace vivo ni un QR (P3). |
 | PDF11 | Casos corto (1 vivienda) y largo (24 viviendas, textos largos y muchas fotos): se generan dentro de los límites de tiempo, memoria y tamaño que se fijen **después de medirlos** (se presentan a Fabricio antes de publicar). |
 | PDF12 | El aspecto (dirección C · Boutique) lo aprueba Fabricio sobre **PDF reales generados** con datos sintéticos y, después del despliegue, con un catálogo real suyo. La maqueta HTML no cuenta como QA final (P9). |
@@ -180,7 +194,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 
 ## Decisiones pendientes
 
-- **Nueva (de diseño): dónde va el botón del cliente en el lector.** Propuesta: «Descargar en PDF» en la página de cierre (junto al contacto) y en el índice, con el estilo del lector. Se enseña en la QA de los PDF reales.
+- Dónde van los botones: **decidido** (P10).
 - **Condicionales:** solo se plantearán si lo exige la medición o la comprobación técnica (P8):
   - un límite de tamaño o de fotos más estricto que P2 para catálogos muy grandes;
   - un cambio en el arco de la portada o en el índice.
@@ -197,4 +211,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 ## Aprobación
 
 - **16 de octubre de 2026:** Fabricio aprueba la especificación y la dirección visual Boutique para planificar, con P1–P9.
-- **Pendiente:** la aprobación de [`plan.md`](plan.md), que es la que autoriza ejecutar.
+- **16 de octubre de 2026:** Fabricio aprueba la ejecución de T0–T12 con P10 (sitio de los botones) y las correcciones K1–K5.
+  - **Autoriza:** comprobar `main` y rebasar; `npm ci` con el lockfile existente y sin paquetes nuevos; descargar los archivos de fuentes estáticas aprobados, con su licencia y su procedencia; entorno aislado sin `.env*` ni credenciales heredadas; Postgres temporal sintético si hace falta; el Chromium ya disponible; pruebas sintéticas, inspección de PDF reales, mediciones, commits, push, PR y CI.
+  - **No autoriza:** producción, credenciales, escrituras reales, IA real, migraciones, dependencias nuevas ni revisión adicional de Codex.
+- **Pendiente:** la **aprobación visual** de Fabricio sobre los PDF reales (P9), antes del merge.
