@@ -1,9 +1,9 @@
 # HOME · grupos editables de catálogos: plan
 
-Especificación: [`spec.md`](spec.md). Las decisiones D1–D7 están aprobadas (16 de octubre de 2026); la especificación en conjunto **todavía no**.
+Especificación: [`spec.md`](spec.md), aprobada el 16 de octubre de 2026 con D1–D13 y las correcciones C1–C4.
 
 - **Rama:** `fabri/bcp-01-home-grupos` (worktree `wt/bcp-01-home-grupos`, solo local).
-- **Estado:** **borrador para revisión**. **No autoriza implementar**, instalar, migrar, arrancar servicios, hacer push ni abrir un PR.
+- **Estado:** **aprobado** el 16 de octubre de 2026 (T0–T8), con las correcciones de abajo. Se ejecuta en orden y se para antes del merge.
 - **Maqueta:** [`maquetas/home-grupos.html`](maquetas/home-grupos.html), con las capturas `maqueta-1…4.png` (ver §Propuesta visual).
 
 ## Base
@@ -67,6 +67,32 @@ catalog_group_members
 
      Y uno en `catalog_group_members` comprueba que `catalogs.owner_id` es igual a `catalog_groups.owner_id`. Así nada que escriba con `service_role` sin pasar por las funciones puede romper el árbol.
 
+### Cambios por la aprobación (D8–D13 y C1–C4)
+
+- **C1, crear y asignar de forma atómica:** `catalog_create_in_group(actor, title, intro, name, phone, role, group)` llama a `catalog_create_v2(…)` y después a `catalog_group_set_member(actor, group, id, true)` **en la misma transacción**.
+  - Si la asignación falla, se deshace todo y no queda catálogo.
+  - `createCatalogAction` recibe un `groupId` opcional: sin él, todo sigue exactamente como hoy (`catalog_create_v2`); con él, usa la función nueva.
+  - **El formulario** bloquea un segundo envío con una referencia (`useRef`), además del estado de envío, y sigue bloqueado tras el éxito hasta navegar. Conserva lo escrito si falla.
+  - **Pruebas:** SQL (fallo → 0 catálogos nuevos; reintento sin casilla → 1) y navegador (doble clic y doble Intro → 1 catálogo; grupo borrado entre medias → mensaje, 0 catálogos, y el reintento sin la casilla crea 1).
+- **C2 y C3, URL y recuerdo:**
+  - la selección va siempre explícita en la URL (`todas`, `sin` o el id), con `window.history.replaceState`: sin recargar el servidor (que leería las instantáneas de todos los catálogos) y conservando los demás parámetros;
+  - lo recordado, en `localStorage` con la clave `bcp-home-grupo:v1:<perfil>:<país>`, siempre dentro de `try/catch`;
+  - el orden de prioridad es: la URL, luego lo recordado y luego «Todas»;
+  - un grupo inexistente cae a «Todas», con la URL y lo recordado corregidos.
+- **C4, desde el gestor:**
+  - el diálogo «Grupos» se abre desde el menú «⋯» de `manager-header.tsx` como **diálogo superpuesto**, con su propio estado;
+  - no cambia la URL (`use-manager-url`), no cierra el panel de la vivienda, no toca `drafts-store` ni `use-leave-guard`, y al cerrar devuelve el foco al «⋯»;
+  - **prueba:** se escribe un texto sin guardar, se abre «Grupos», se asigna, se cierra, y el texto, la URL y la protección al salir siguen igual.
+- **D9:** `catalog_group_move` entra en T1 y T6.
+- **D11:** el filtro pasa a ser «Zona de los criterios» y se cambian a propósito las expectativas de `prB.mjs` que lean ese texto.
+- **D12 y D13:** nombres de 1 a 60 caracteres, únicos entre hermanos con `catalog_fold`, y 100 grupos como mucho.
+- **Notificaciones (AC4):**
+  - las acciones de grupos van en un archivo de servidor propio (`group-actions.ts`) que **no importa** el vigilante (`sync-hub-instance`) ni `saved()`. Una prueba TS lo comprueba leyendo sus importaciones;
+  - las fixtures de grupos usan su propia ruta (`/dev-fixtures/api/grupos`), que tampoco avisa;
+  - en el navegador se cuentan los eventos que recibe un lector abierto, y deben ser 0.
+- **«Organizar» como diálogo:** `SidePanel` es la mitad de un diseño lista + panel, no un diálogo. «Organizar» y «Grupos» son diálogos superpuestos (`role="dialog"`, `aria-modal`, Esc, foco de vuelta) con las mismas clases del CRM. En el móvil ocupan toda la pantalla.
+- **Estado del cliente:** cada acción de grupos devuelve el estado nuevo de los grupos, así que la HOME se actualiza sin recargar. Las fixtures hacen lo mismo.
+
 ### Funciones (todas `SECURITY INVOKER`, `search_path = public`, `EXECUTE` solo para `service_role`)
 
 | Función | Qué hace | Errores |
@@ -74,7 +100,8 @@ catalog_group_members
 | `catalog_group_create(actor, parent, name)` | Crea al final de su nivel (`max(position)+1`). | `forbidden`, `invalid_name`, `duplicate_name`, `too_deep`, `too_many_groups` |
 | `catalog_group_rename(actor, group, name)` | Solo cambia `name` y `updated_at` **del grupo**. | `forbidden`, `invalid_name`, `duplicate_name` |
 | `catalog_group_reorder(actor, parent, ids[])` | Reescribe las posiciones de **todos** los hermanos con la lista completa, como `reorder_client_portal_links`. | `forbidden`, `invalid_order` (la lista no es exactamente el conjunto de hermanos) |
-| `catalog_group_move(actor, group, new_parent)` | **Solo si se aprueba la pendiente 2:** mueve un subgrupo a otro grupo, al final; sus asignaciones se mantienen. | `forbidden`, `too_deep`, `duplicate_name` |
+| `catalog_group_move(actor, group, new_parent)` | Mueve un subgrupo a otro grupo, al final (D9); sus asignaciones se mantienen. | `forbidden`, `too_deep`, `duplicate_name`, `invalid_move` |
+| `catalog_create_in_group(actor, title, intro, name, phone, role, group)` | Crea el catálogo y lo asigna en una sola transacción (C1). | los de `catalog_create_v2` y `forbidden` |
 | `catalog_group_delete(actor, group)` | Borra el grupo y sus subgrupos (y sus asignaciones, en cascada) **en una transacción**. Devuelve `{groups, assignments, unorganized}`. | `forbidden` |
 | `catalog_group_preview_delete(actor, group)` | Solo lee: los mismos recuentos, para la confirmación. | `forbidden` |
 | `catalog_group_set_member(actor, group, catalog, member bool)` | Pone o quita **una** asignación. Es idempotente: repetir no falla. | `forbidden` |
@@ -102,7 +129,7 @@ catalog_group_members
   - Si las tablas no existen (error `42P01` o `PGRST205`), devuelve `{available: false}`, avisa una vez en el registro y la HOME se pinta como hoy.
   - Una sola lectura de cada tabla, filtrada por `owner_id`.
 - **`app/[country]/(admin)/admin/mi-espacio/actions.ts`:**
-  - acciones `createGroupAction`, `renameGroupAction`, `reorderGroupsAction`, `moveGroupAction` (si se aprueba), `previewDeleteGroupAction`, `deleteGroupAction` y `setCatalogGroupAction`;
+  - acciones `createGroupAction`, `renameGroupAction`, `reorderGroupsAction`, `moveGroupAction`, `previewDeleteGroupAction`, `deleteGroupAction` y `setCatalogGroupAction`;
   - cada una comprueba `isHomeOwner`, valida los ids (`isUuid`) y el nombre, llama al RPC y traduce los errores con `lib/catalogs/errors.ts`;
   - **no** llaman a `saved()` ni a `notifyCatalogChanged()`, y no revalidan la ruta del catálogo; solo `revalidatePath(HOME_PATH)`. Es la garantía de no avisar a los lectores (AC4).
 - **Página de la HOME:** carga `listOwnerGroups` junto a `listOwnerCatalogs` y lee `?grupo` de `searchParams`.
@@ -119,7 +146,7 @@ catalog_group_members
 - **URL y último grupo:**
   - al elegir, `router.replace(?grupo=<id>)` sin recargar ni desplazar;
   - «Todas» quita el parámetro y «Sin organizar» usa `?grupo=sin`;
-  - **el último grupo** se guarda según la pendiente 1. Con a) es `localStorage` (`bcp-home-grupo`, con `try/catch`; si no hay almacenamiento, sin recuerdo);
+  - **el último grupo** va en `localStorage` (`bcp-home-grupo:v1:<perfil>:<país>`, con `try/catch`; si no hay almacenamiento, no se recuerda nada);
   - al entrar sin `?grupo` se usa el recordado. Si no existe en `groups`, «Todas», se borra el recordado y no sale ningún error.
 - **`groups-panel.tsx` («Organizar»):**
   - reutiliza `SidePanel`/`SidePanelFooter` del gestor (`components/admin/catalogs/manager/side-panel.tsx`, genérico) y en el móvil ocupa toda la pantalla;
@@ -132,7 +159,7 @@ catalog_group_members
   - **la casilla vuelve atrás si falla, y no se pueden pulsar dos a la vez** (la casilla queda en «guardando»);
   - la frase sobre los criterios;
   - se usa desde la tarjeta y desde el menú «⋯» de `manager-header.tsx`.
-- **Pendientes 3 y 4:** la opción en `new-catalog-form.tsx` y el texto «Zona de los criterios» solo si se aprueban.
+- **D10 y D11:** la casilla desmarcada en `new-catalog-form.tsx` y el texto «Zona de los criterios».
 
 ### Archivado y filtros
 
@@ -180,7 +207,8 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
     - dos `create` simultáneos con el mismo nombre: uno da `duplicate_name`;
     - contraprueba sin el bloqueo, solo en la base temporal;
   - **reversión:** `rollback-0203.sql`, comprobar que los catálogos siguen intactos y volver a aplicar la migración (idempotente).
-- **Cubre:** AC1, AC2, AC4, AC5, AC8.
+- **También:** `catalog_create_in_group` (C1: fallo de asignación → 0 catálogos; reintento → 1) y `catalog_group_move` (D9: conserva asignaciones; `too_deep` e `invalid_move`).
+- **Cubre:** AC1, AC2, AC4, AC5, AC8, AC11, AC13.
 - **Commit:** «HOME grupos T1: 0203, rollback y pruebas SQL».
 
 ### T2. Lógica pura y pruebas TS
@@ -220,7 +248,7 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
 ### T5. Selector, URL y etiquetas en la estantería
 
 - **Entradas:** T3 y T4.
-- **Acción:** el selector de escritorio y móvil, `?grupo`, el último grupo (según la pendiente 1), la caída a «Todas», las etiquetas y el enlace «Grupos».
+- **Acción:** el selector de escritorio y móvil, `?grupo`, el último grupo (D8, C2, C3), la caída a «Todas», las etiquetas y el enlace «Grupos».
 - **Verificación:** prueba de navegador nueva `grupos.mjs` (en el scratchpad, como las anteriores) a 1440, 362 y 320:
   - vistas y recuentos;
   - combinación con los filtros;
@@ -236,9 +264,10 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
 
 - **Entradas:** T5.
 - **Acción:**
-  - el panel: crear, renombrar, ▲▼, mover (si se aprueba), borrar con confirmación y los mensajes;
+  - el panel: crear, renombrar, ▲▼, mover (D9), borrar con confirmación y los mensajes;
   - el diálogo en la tarjeta y en el menú «⋯» del gestor;
-  - la opción en «Nuevo catálogo» y el texto del filtro de zona, solo si se aprueban las pendientes 3 y 4.
+  - la casilla en «Nuevo catálogo» (D10, C1) y el texto del filtro de zona (D11);
+  - «Grupos» desde el gestor sin tocar la URL ni lo escrito sin guardar (C4).
 - **Verificación:** `grupos.mjs` amplía con:
   - AC1 (crear el ejemplo de Salamanca, renombrar y ordenar, y recargar);
   - AC2 (asignar a un grupo y a su subgrupo);
@@ -246,14 +275,14 @@ Cada tarea es pequeña, con su verificación y su commit. El orden respeta las d
   - errores (nombre repetido o vacío);
   - táctil (▲▼ sin arrastre) y la casilla que vuelve atrás si falla;
   - **AC4 en el navegador:** un lector abierto en otra pestaña con el vigilante de cambios no recibe ningún evento ni aviso y su `data-huella` no cambia mientras se organiza. Las fixtures registran las veces que se avisa, y debe ser 0.
-- **Cubre:** AC1, AC2, AC4, AC5, AC8, AC9.
+- **Cubre:** AC1, AC2, AC4, AC5, AC8, AC9, AC11, AC12, AC13.
 - **Commit:** «HOME grupos T6: organizar y asignar».
 
 ### T7. Regresiones, capturas y compilación
 
 - **Entradas:** T6.
 - **Acción:**
-  - la matriz completa de E2 y las regresiones, en secuencia y sin nada en paralelo; `prB.mjs` y `homes` sin cambios de expectativas, salvo el texto de la zona si se aprueba la pendiente 4;
+  - la matriz completa de E2 y las regresiones, en secuencia y sin nada en paralelo; `prB.mjs` y `homes` sin cambios de expectativas, salvo el texto de la zona (D11);
   - capturas en `capturas/`;
   - `next build` aislado.
 - **Verificación:** todo en verde y los fallos de tiempos repetidos y explicados; la compilación sin `.env*` cargados.
@@ -304,19 +333,12 @@ Se ha comprobado que ningún marco desborda en horizontal.
 - **Suposición:** `catalog_require_owner(actor, catalogo)` no modifica el catálogo; solo lo bloquea. Comprobado en `0192`. Si una versión posterior lo cambiara, T1 lo detectaría con el invariante AC4.
 - **Suposición:** la cabecera del gestor puede recibir los grupos sin una consulta pesada; es una lectura pequeña por dueño.
 - **Riesgo:** el bloqueo por dueño serializa también las asignaciones desde pestañas distintas. Es aceptable con un solo usuario y operaciones cortas.
-- **Riesgo:** que `localStorage` no esté disponible (navegación privada), con la pendiente 1 a). Sin recuerdo, abre «Todas»; no es un error.
+- **Riesgo:** que `localStorage` no esté disponible (navegación privada). Sin recuerdo, abre «Todas»; no es un error.
 - **Riesgo:** fallos de tiempos en la matriz, como en E3. Se repiten aislados y se explican.
 - **No comprobado:** el número real de catálogos de Fabricio. El diseño aguanta con 100 grupos y es independiente del número de catálogos.
 
-## Decisiones pendientes que afectan al plan
-
-Son las de la especificación; el plan se ajusta a lo que se decida:
-
-1. **El último grupo en el navegador (propuesta) o en la cuenta.** Con la cuenta, T1 añade una columna o tabla de preferencias y T3 su lectura y escritura.
-2. **«Mover a…» un subgrupo.** Si es que no, sale `catalog_group_move` de T1 y T6.
-3. **Asignar al crear un catálogo.** Si es que no, sale de T6.
-4. **Texto «Zona de los criterios».** Si es que no, sale de T6 y las expectativas de `prB` no cambian.
-
 ## Aprobación
 
-Pendiente. Este plan no autoriza la ejecución.
+- **16 de octubre de 2026:** Fabricio aprueba la especificación, la maqueta y este plan T0–T8, con D8–D13 y C1–C4.
+- Autoriza la preparación y la entrega descritas en «Pasos de entorno», y ejecutar en orden sin pedir permiso entre tareas.
+- **Parar antes del merge.**

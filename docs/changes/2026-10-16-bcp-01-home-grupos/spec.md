@@ -4,7 +4,7 @@ Fabricio organiza la estantería de catálogos de su HOME en grupos y subgrupos 
 
 - **Tamaño:** grande o sensible. Lleva una migración con tablas nuevas y funciones de escritura con guarda de dueño.
 - **Responsable:** Fabricio.
-- **Estado:** **en revisión**. Las decisiones de producto D1–D7 están aprobadas (16 de octubre de 2026). La especificación en conjunto **no está aprobada** y no autoriza implementar.
+- **Estado:** **aprobada** el 16 de octubre de 2026, junto con la maqueta y el plan T0–T8 (ver «Aprobación»).
 - **Base explorada:** `origin/main` = `b1f2b49` (16 de octubre de 2026, tras el merge de E3, #321).
 - **Plan en borrador:** [`plan.md`](plan.md). **Maqueta:** [`maquetas/home-grupos.html`](maquetas/home-grupos.html).
 - **Antecedente:** [`futuro-home-grupos.md`](../2026-10-13-bcp-01-home-catalogo/qa-c2/futuro-home-grupos.md) (15 de octubre de 2026).
@@ -64,6 +64,22 @@ Aprobadas por Fabricio el 16 de octubre de 2026 (resumen fiel):
 - **D6. Borrar:** borrar un grupo borra sus subgrupos tras una confirmación explícita, pero nunca borra catálogos. Se conservan las asignaciones a otros grupos.
 - **D7. «Todas» y «Sin organizar»:** «Todas» es la estantería de hoy, con sus demás filtros. «Sin organizar» son los catálogos a los que no les queda ninguna asignación.
 
+Aprobadas por Fabricio el 16 de octubre de 2026, con la especificación (resumen fiel):
+
+- **D8. El último grupo** se recuerda por separado en cada navegador o dispositivo.
+- **D9. Mover un subgrupo** a otro grupo está permitido. Conserva sus asignaciones y el límite de dos niveles.
+- **D10. Crear desde un grupo:** al crear un catálogo con un grupo elegido se ofrece una casilla opcional, **desmarcada**, para ponerlo en ese grupo. Nunca se asigna solo.
+- **D11. El filtro geográfico actual** pasa a llamarse «Zona de los criterios», sin cambiar su comportamiento.
+- **D12. Nombres** de 1 a 60 caracteres, únicos entre hermanos sin distinguir mayúsculas ni tildes.
+- **D13. Como mucho 100 grupos** en total, subgrupos incluidos.
+
+Correcciones exigidas antes de implementar (16 de octubre de 2026):
+
+- **C1. Crear y asignar.** Si falla la asignación opcional al crear, no puede quedar un catálogo duplicado ni un resultado ambiguo. Se acepta una solución atómica. Hay que cubrir los reintentos y los envíos repetidos (ver el punto 5).
+- **C2. La URL manda** sobre lo recordado. Elegir «Todas» no puede restaurar al momento un grupo recordado. Un grupo borrado o inaccesible cae a «Todas» sin riesgo.
+- **C3. Lo recordado va por dueño y país,** y si el almacenamiento del navegador no está disponible no falla nada.
+- **C4. Desde el gestor,** abrir los controles de grupos conserva los demás parámetros de navegación y las protecciones de lo escrito sin guardar.
+
 Requisitos que ya había dado (16 de octubre de 2026):
 
 - **R1.** Los nombres de los grupos son libres y editables, sin una jerarquía geográfica fija en el código.
@@ -74,8 +90,6 @@ Requisitos que ya había dado (16 de octubre de 2026):
 - **R6.** La primera versión es solo de organización. No rediseña los filtros de catálogos ni cambia otras partes del CRM.
 
 ## Comportamiento
-
-**«Propuesta»** marca lo que no está decidido; lo pendiente de verdad está en «Decisiones pendientes».
 
 ### 1 · Modelo
 
@@ -97,29 +111,37 @@ Requisitos que ya había dado (16 de octubre de 2026):
 - **Orden:** el de hoy en todas las vistas, con los activos primero y después la última actualización (D4).
 - **Combinación con los filtros actuales:** el grupo es un filtro más, que se combina con la búsqueda, el anuncio, la zona, la operación, el modo y el estado. Ninguno de los filtros actuales cambia de comportamiento.
 - **Archivar un catálogo** no cambia sus grupos. Con el estado «Activos» no se ve en ningún grupo; con «Archivados» o «Todos», sí.
-- **Recuentos:** cada grupo y subgrupo enseña cuántos catálogos tiene **con el filtro de estado actual**. Los demás filtros solo cambian el «N de M» de la estantería (propuesta).
+- **Recuentos:** cada grupo y subgrupo enseña cuántos catálogos tiene **con el filtro de estado actual**. Los demás filtros solo cambian el «N de M» de la estantería.
 - **Vacíos:**
   - un grupo sin catálogos: «Este grupo no tiene catálogos todavía. Asígnalos desde cada tarjeta con “Grupos”.»;
   - un grupo con catálogos que no pasan los filtros: el texto de hoy, «Ningún catálogo coincide con estos filtros».
 
-### 3 · Recordar el grupo (D5)
+### 3 · Recordar el grupo (D5, D8, C2, C3)
 
-- **En la dirección:** el grupo elegido va en la URL de la HOME (`?grupo=<id>`), para que «Atrás» y los enlaces funcionen.
-- **Al volver a la HOME sin `?grupo`** (desde el menú del CRM o desde el gestor) se abre el último grupo elegido.
-- **Si ese grupo ya no existe** (se borró, o la URL trae uno ajeno o inventado), se abre **«Todas»** sin error y se olvida el recordado.
-- **Dónde se guarda el último grupo:** decisión pendiente 1.
-- **Los demás filtros** de la estantería siguen como hoy, en el estado del componente: no se recuerdan ni van en la URL. Recordarlos sería un cambio en los filtros, fuera de alcance (R6).
+- **Qué se guarda:** la selección es siempre explícita en la URL de la HOME: `?grupo=todas`, `?grupo=sin` o `?grupo=<id>`.
+  - Al elegir, la URL cambia sin recargar la página y **sin tocar otros parámetros**.
+  - «Atrás» del navegador y los enlaces llevan a esa selección.
+- **Qué manda:**
+  1. **Con `?grupo` en la URL, manda la URL**, también si dice `todas`, aunque haya otro grupo recordado.
+  2. **Sin `?grupo`** (al llegar desde el menú del CRM o desde «← Mi espacio» en el gestor), se usa lo recordado en **este** navegador. Si no hay nada recordado, «Todas».
+  3. **Si el grupo de la URL o el recordado no existe** (se borró, es ajeno o está mal formado), se abre «Todas», se corrige la URL y lo recordado pasa a «Todas». No sale ningún error.
+- **Elegir «Todas»** guarda «Todas» como lo recordado en el mismo momento, así que nunca vuelve un grupo anterior.
+- **Dónde se guarda (D8, C3):** en el almacenamiento local de cada navegador, con una clave por **dueño y país** (`bcp-home-grupo:v1:<perfil>:<país>`).
+  - Otro usuario del mismo navegador, o la HOME de otro país, no hereda lo recordado.
+  - Si el almacenamiento no está disponible (navegación privada, bloqueado o lleno), simplemente no se recuerda nada y la HOME abre en «Todas».
+- **Primera carga:** al llegar sin `?grupo`, el servidor no conoce lo recordado, así que la estantería puede enseñar «Todas» un instante hasta que el navegador lo aplica.
+- **Los demás filtros** de la estantería siguen como hoy, en el estado del componente: no se recuerdan ni van en la URL (R6).
 
 ### 4 · Gestionar los grupos («Organizar»)
 
 - Un botón **«Organizar»** junto a «Nuevo catálogo» abre un panel lateral; en el móvil ocupa toda la pantalla. Permite:
-  - **crear** un grupo o un subgrupo, con un nombre de 1 a 60 caracteres sin espacios sobrantes, que no se repita entre hermanos sin distinguir mayúsculas ni tildes (propuesta);
+  - **crear** un grupo o un subgrupo, con un nombre de 1 a 60 caracteres sin espacios sobrantes, que no se repita entre hermanos sin distinguir mayúsculas ni tildes (D12);
   - **renombrar**, que solo cambia el nombre: las asignaciones se mantienen y ningún catálogo cambia;
   - **ordenar** con ▲▼ dentro de su nivel (D4). Las flechas funcionan con el teclado y en táctil, donde el arrastre nativo no existe. El orden se guarda al pulsar y es el mismo en el panel y en el selector;
-  - **mover un subgrupo** a otro grupo: decisión pendiente 2;
+  - **mover un subgrupo** a otro grupo con «Mover a…» (D9): va al final del grupo de destino y conserva sus asignaciones. Un grupo que tiene subgrupos no puede pasar a ser subgrupo;
   - **borrar** (D6, ver el punto 6);
   - **ver** cuántos catálogos tiene asignados cada grupo y subgrupo, sin filtros.
-- **Límite:** 100 grupos y subgrupos en total por dueño (propuesta).
+- **Límite:** 100 grupos y subgrupos en total por dueño (D13).
 - **Guardado:** cada cambio se guarda al pulsar y avisa con el mismo patrón de mensajes del gestor. Si falla, dice por qué y no deja nada a medias.
 
 ### 5 · Asignar catálogos
@@ -128,9 +150,13 @@ Requisitos que ya había dado (16 de octubre de 2026):
   - Se pueden marcar a la vez un grupo y uno de sus subgrupos (D1).
   - Cada casilla se guarda al pulsar.
   - El diálogo dice: **«Los grupos solo ordenan tu HOME: no cambian qué propiedades entran en el catálogo.»**
-- **El mismo diálogo** en el menú «⋯» de la cabecera del gestor, junto a Archivar o Reactivar.
+- **El mismo diálogo** en el menú «⋯» de la cabecera del gestor, junto a Archivar o Reactivar (C4). Se abre encima del gestor **sin cambiar la URL** ni sus parámetros (sección, vivienda), sin cerrar el panel abierto y sin tocar lo escrito sin guardar. Cerrarlo devuelve el foco al menú.
 - **Etiquetas en la tarjeta:** debajo del título, en texto pequeño: «Salamanca › Recoletos · Castellana».
-- **Catálogo nuevo:** decisión pendiente 3.
+- **Catálogo nuevo (D10, C1):** el formulario «Nuevo catálogo» ofrece la casilla **desmarcada** «Ponerlo también en “<grupo>”» solo si hay un grupo o subgrupo elegido en la estantería. Con «Todas» o «Sin organizar» no aparece.
+  - **Es atómico:** si la casilla está marcada, crear el catálogo y asignarlo es **una sola operación** en la base de datos. Si la asignación falla (por ejemplo, porque el grupo se acaba de borrar en otra pestaña), **no se crea el catálogo**. El formulario conserva lo escrito y dice: «No se ha creado el catálogo: el grupo “<grupo>” ya no existe. Desmarca la casilla o elige otro grupo.».
+  - **Así un reintento nunca duplica:** o se creó todo y se va al gestor del catálogo nuevo, o no se creó nada.
+  - **Envíos repetidos:** mientras se crea, el botón queda desactivado y el formulario ignora un segundo envío (doble clic o Intro repetido). Tras crear con éxito sigue bloqueado hasta salir de la página, así que **un envío produce como mucho un catálogo**.
+  - **Si se pierde la respuesta** (corte de red), el formulario no sabe si se creó. Lo dice («Comprueba la estantería antes de volver a intentarlo») y no reintenta solo. Ese caso ya existe hoy y no cambia.
 - **Nada automático** (D2, R2): nada asigna un catálogo por sus criterios, su título, su modo ni su zona.
 
 ### 6 · Borrar (D6)
@@ -141,15 +167,16 @@ Requisitos que ya había dado (16 de octubre de 2026):
 - **Nunca se borra ni se modifica un catálogo.**
 - **Sin papelera ni «deshacer»** en esta primera versión.
 
-### 7 · Filtro «Zona» actual
+### 7 · Filtro «Zona» actual (D11)
 
-- Su comportamiento no cambia (R6).
-- **Su etiqueta visible:** decisión pendiente 4.
+- Su nombre visible pasa a ser **«Zona de los criterios»** («Todas las zonas de los criterios» como opción inicial).
+- Su comportamiento no cambia: sigue saliendo de las zonas de los criterios guardados (R6).
 
 ## Alcance
 
 - Migración nueva, con el número libre comprobado al implementar; hoy sería `0203`:
   - dos tablas;
+  - la función atómica de crear y asignar (C1);
   - las funciones de escritura con guarda de dueño;
   - RLS, permisos y el script de reversión.
 - Lectura de los grupos y las asignaciones en el servidor de la HOME.
@@ -190,7 +217,7 @@ Requisitos que ya había dado (16 de octubre de 2026):
 - **Tablas nuevas,** sin cambios en las existentes:
   - **`catalog_groups`:** `id`, `owner_id` → `profiles`, `parent_id` → `catalog_groups` (nulo en un grupo), `name`, `position` y fechas;
   - **`catalog_group_members`:** `group_id` y `catalog_id`, con `ON DELETE CASCADE` en las dos, y clave `(group_id, catalog_id)`.
-- **Funciones:** crear, renombrar, ordenar, mover (si se aprueba) y borrar grupos; poner y quitar un catálogo de un grupo.
+- **Funciones:** crear, renombrar, ordenar, mover y borrar grupos; poner y quitar un catálogo de un grupo; y crear un catálogo ya asignado, en una sola transacción (C1), que reutiliza `catalog_create_v2` sin copiar su lógica.
   - Ninguna escribe en `catalogs` ni sube `version`.
   - `catalog_require_owner(actor, catalogo)` bloquea la fila del catálogo `FOR UPDATE` solo para comprobar el dueño, sin modificarla.
 - **Lectura:** una consulta más en la HOME y en la cabecera del gestor. Su coste es despreciable frente a las instantáneas que la HOME ya lee para las portadas.
@@ -213,15 +240,18 @@ Requisitos que ya había dado (16 de octubre de 2026):
 | AC3 | «Todas» enseña exactamente lo que la estantería de hoy con los mismos filtros. «Sin organizar» enseña solo los catálogos sin asignaciones. Los recuentos cuadran con lo que se ve. |
 | AC4 | Asignar, quitar, crear, renombrar, ordenar o borrar grupos no cambia `catalogs` (título, criterios, modo, estado, `version`, `updated_at`), `catalog_items`, la instantánea ni la huella de ningún catálogo, y un lector abierto no recibe aviso. Se comprueba con pruebas SQL y en el navegador. |
 | AC5 | Borrar un grupo con subgrupos pide confirmación explícita y borra el árbol de una vez. Ningún catálogo se borra, las asignaciones a otros grupos siguen y los que se quedan sin ninguna pasan a «Sin organizar». |
-| AC6 | El grupo elegido va en la URL y se recuerda al volver a la HOME. Si el recordado ya no existe, se abre «Todas» sin error. |
+| AC6 | El grupo elegido va en la URL, que manda sobre lo recordado; elegir «Todas» no restaura otro grupo. Se recuerda por navegador, dueño y país al volver a la HOME. Un grupo borrado o ajeno cae a «Todas» sin error, y sin almacenamiento no falla nada. |
 | AC7 | El grupo se combina con todos los filtros actuales sin cambiarlos. Un catálogo archivado conserva sus grupos y sigue el filtro de estado. |
 | AC8 | Solo el dueño ve y edita sus grupos. Grupos y catálogos ajenos dan `forbidden`. No se pueden crear tres niveles, ni ciclos, ni asignaciones entre dueños distintos. Nada de esto sale en el lector, en `/api/seleccion/*` ni en los enlaces. |
 | AC9 | A 1440, 362 y 320, con 30 grupos o más, no hay desplazamiento horizontal de la página. El selector y el panel se usan con el teclado y en táctil. |
-| AC10 | Sin grupos, la HOME es como hoy: la regresión `prB.mjs` pasa y la navegación del CRM y las secciones del gestor no cambian. |
+| AC10 | Sin grupos, la HOME es como hoy: la regresión `prB.mjs` pasa (solo cambia el texto «Zona de los criterios») y la navegación del CRM y las secciones del gestor no cambian. |
+| AC11 | Crear con la casilla marcada asigna el catálogo en la misma operación. Si la asignación falla, no se crea ningún catálogo y lo escrito se conserva. Un doble envío crea un catálogo como mucho. La casilla aparece desmarcada. |
+| AC12 | Desde el gestor, abrir y usar «Grupos» no cambia la URL ni sus parámetros, no cierra el panel abierto y no pierde lo escrito sin guardar; la protección al salir sigue igual. |
+| AC13 | Mover un subgrupo a otro grupo conserva sus asignaciones; no se puede mover un grupo con subgrupos debajo de otro. |
 
 ## Riesgos
 
-- **Confundir grupos y criterios:** que alguien crea que poner un catálogo en «Recoletos» cambia sus viviendas. Lo mitigan la frase del diálogo, la pendiente 4 y AC4.
+- **Confundir grupos y criterios:** que alguien crea que poner un catálogo en «Recoletos» cambia sus viviendas. Lo mitigan la frase del diálogo, «Zona de los criterios» (D11) y AC4.
 - **Dos ideas de «zona»:** el filtro sale de los criterios y los grupos son propios. Valorar si el filtro «Zona» sigue haciendo falta queda para después.
 - **Borrar un árbol con muchos catálogos dentro:** se pierde organización sin «deshacer». Lo mitigan la confirmación explícita con los recuentos y que los catálogos no se tocan.
 - **El móvil con muchos grupos.** Lo vigila AC9; el plan propone cómo resolverlo.
@@ -230,28 +260,11 @@ Requisitos que ya había dado (16 de octubre de 2026):
 
 ## Decisiones pendientes
 
-Afectan al producto o a los datos, así que no se eligen por defecto. Cada una lleva su propuesta.
-
-1. **Dónde se recuerda el último grupo (D5).**
-   - **a) En el navegador** (propuesta): sin datos nuevos. Cada dispositivo recuerda el suyo, así que el móvil y el ordenador pueden abrir grupos distintos.
-   - **b) En la cuenta:** una columna o tabla más, y el mismo grupo en todos los dispositivos.
-2. **Mover un subgrupo a otro grupo.**
-   - **a) Sí,** con «Mover a…» en el panel (propuesta): la ordenación por niveles se queda como está y sus asignaciones se mantienen.
-   - **b) No en la primera versión:** para cambiarlo de grupo se crea uno nuevo y se reasigna a mano.
-3. **Al crear un catálogo con un grupo elegido.**
-   - **a)** El formulario «Nuevo catálogo» ofrece ponerlo en ese grupo, con la casilla marcada y editable (propuesta).
-   - **b)** Se crea sin grupo, como hoy, y se asigna después.
-4. **La etiqueta del filtro «Zona» actual.**
-   - **a)** Cambiarla a «Zona de los criterios» (propuesta), para no confundirla con los grupos. Es solo texto; no cambia el comportamiento.
-   - **b)** Dejarla como está.
-
-Quedan como propuesta, salvo que Fabricio diga otra cosa:
-- nombres de 1 a 60 caracteres, únicos entre hermanos;
-- un máximo de 100 grupos;
-- los recuentos siguen el filtro de estado;
-- las etiquetas aparecen en las tarjetas.
+Ninguna. D8–D13 cierran las cuatro de la revisión anterior y fijan los límites.
 
 ## Aprobación
 
 - **16 de octubre de 2026:** Fabricio aprueba las decisiones de producto D1–D7.
-- **Pendiente:** la aprobación de esta especificación y de las decisiones pendientes 1–4. Esta especificación no permite implementar.
+- **16 de octubre de 2026:** Fabricio aprueba esta especificación, la maqueta y el plan T0–T8, con las decisiones D8–D13 y las correcciones C1–C4, y autoriza ejecutar las tareas en orden, **parando antes del merge**.
+  - **Autoriza:** `npm ci` con el lockfile existente y sin dependencias nuevas; Postgres temporal y sintético, con la migración, la concurrencia y la reversión solo ahí; un entorno aislado sin `.env*` ni credenciales heredadas; el Chromium ya disponible; las verificaciones SQL, TypeScript, de navegador, de regresión y de compilación; commits, push, PR y CI.
+  - **No autoriza:** acceso a producción, escrituras en registros reales, IA real ni revisión adicional de Codex. El PDF sigue fuera.
