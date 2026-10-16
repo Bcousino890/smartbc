@@ -9,6 +9,25 @@
  *   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
  *     scripts/test-catalogs-manager.mts
  */
+import {
+  ALL,
+  applyGroupOp,
+  assignedCounts,
+  cardTags,
+  foldGroupName,
+  memoryKey,
+  moveTargets,
+  normalizeGroupName,
+  previewDelete,
+  readMemory,
+  resolveSelection,
+  selectionCounts,
+  selectionMatcher,
+  treeOrder,
+  withGroupParam,
+  writeMemory,
+  type GroupsState,
+} from "../lib/catalogs/groups.ts";
 import { materialLabels, materialOf, type CatalogMaterial } from "../lib/catalogs/material.ts";
 import { fixtureCatalogDetail, fixtureManualPricing } from "../lib/catalogs/fixtures.ts";
 import { managerPriceFields } from "../lib/catalogs/operation-price.ts";
@@ -400,6 +419,107 @@ function testPreview() {
   check("error de la última: se enseña y no queda resultado", out.accepted && out.error === "No se pudo" && previewView(out.slot, 5).kind === "none");
 }
 
+// ── HOME · grupos (2026-10-16-bcp-01-home-grupos) ───────────────────────────
+function testGroups() {
+  section("HOME · grupos: nombres (D12), el mismo criterio que SQL");
+  check("pliegue: mayúsculas y tildes fuera", foldGroupName("  SALAMANCÁ ") === "salamanca" && foldGroupName("Chamberí") === "chamberi");
+  check("nombre normalizado: espacios sobrantes fuera", same(normalizeGroupName("  Clientes    internacionales "), { ok: true, value: "Clientes internacionales" }));
+  check("vacío o solo espacios: inválido", !normalizeGroupName("   ").ok && !normalizeGroupName(null).ok);
+  check("61 caracteres: inválido; 60: válido", !normalizeGroupName("a".repeat(61)).ok && normalizeGroupName("b".repeat(60)).ok);
+  check("60 caracteres con tildes cuentan como 60", normalizeGroupName("á".repeat(60)).ok && !normalizeGroupName("á".repeat(61)).ok);
+  check("caracteres de control: inválido", !normalizeGroupName("con\u0007control").ok);
+
+  const G = (id: string, parentId: string | null, name: string, position: number) => ({ id, parentId, name, position });
+  const base: GroupsState = {
+    available: true,
+    groups: [
+      G("sal", null, "Salamanca", 0), G("rec", "sal", "Recoletos", 0), G("cas", "sal", "Castellana", 1), G("lis", "sal", "Lista", 2), G("goy", "sal", "Goya", 3),
+      G("cha", null, "Chamberí", 1), G("ret", null, "Retiro", 2),
+    ],
+    members: [
+      { groupId: "rec", catalogId: "k1" }, { groupId: "cas", catalogId: "k1" }, { groupId: "sal", catalogId: "k1" },
+      { groupId: "sal", catalogId: "k2" }, { groupId: "goy", catalogId: "k4" }, { groupId: "cha", catalogId: "k4" },
+      { groupId: "ret", catalogId: "k3" },
+    ],
+  };
+  const cats = [
+    { id: "k1", status: "active" }, { id: "k2", status: "active" }, { id: "k3", status: "archived" },
+    { id: "k4", status: "active" }, { id: "k5", status: "active" }, { id: "k6", status: "archived" },
+  ];
+  const own = new Set(cats.map((c) => c.id));
+  const visible = (sel: Parameters<typeof selectionMatcher>[1]) => cats.map((c) => c.id).filter(selectionMatcher(base, sel));
+
+  section("HOME · grupos: vistas (D1, D7)");
+  check("«Todas»: todos los catálogos, como hoy", same(visible(ALL), ["k1", "k2", "k3", "k4", "k5", "k6"]));
+  check("«Sin organizar»: solo los que no tienen ninguna asignación", same(visible({ kind: "none" }), ["k5", "k6"]));
+  check("«Todo Salamanca»: grupo + subgrupos, cada catálogo una vez", same(visible({ kind: "group", id: "sal" }), ["k1", "k2", "k4"]));
+  check("subgrupo «Recoletos»: solo lo suyo", same(visible({ kind: "group", id: "rec" }), ["k1"]));
+  check("«Lista» vacía", same(visible({ kind: "group", id: "lis" }), []));
+  check("archivado: conserva su grupo (Retiro)", same(visible({ kind: "group", id: "ret" }), ["k3"]));
+  check("árbol en orden: cada grupo seguido de sus subgrupos", same(treeOrder(base.groups).map((x) => `${x.depth}${x.group.id}`), ["0sal", "1rec", "1cas", "1lis", "1goy", "0cha", "0ret"]));
+
+  section("HOME · grupos: recuentos con el filtro de estado");
+  const act = selectionCounts(base, cats, "active");
+  check("Activos: Todas 4 · Sin organizar 1 · Salamanca 3 · Recoletos 1 · Retiro 0", act.all === 4 && act.none === 1 && act.byGroup.get("sal") === 3 && act.byGroup.get("rec") === 1 && act.byGroup.get("ret") === 0);
+  const every = selectionCounts(base, cats, "");
+  check("Todos: Todas 6 · Sin organizar 2 · Retiro 1", every.all === 6 && every.none === 2 && every.byGroup.get("ret") === 1);
+  const asg = assignedCounts(base);
+  check("panel Organizar: Salamanca 3 (sin repetir K1), Chamberí 1, Goya 1", asg.get("sal") === 3 && asg.get("cha") === 1 && asg.get("goy") === 1);
+  check("etiquetas de K1: «Salamanca › Recoletos, Castellana»", same(cardTags(base, "k1"), ["Salamanca › Recoletos, Castellana"]));
+  check("etiquetas de K4: «Salamanca › Goya» y «Chamberí»", same(cardTags(base, "k4"), ["Salamanca › Goya", "Chamberí"]));
+  check("etiquetas de K2: «Salamanca»; de K5: ninguna", same(cardTags(base, "k2"), ["Salamanca"]) && same(cardTags(base, "k5"), []));
+
+  section("HOME · grupos: URL y lo recordado (C2, C3)");
+  const idState: GroupsState = { ...base, groups: base.groups.map((g) => ({ ...g, id: g.id === "sal" ? "5a1a0000-0000-4000-8000-000000000001" : g.id })) };
+  check("la URL manda sobre lo recordado", same(resolveSelection("5a1a0000-0000-4000-8000-000000000001", "sin", idState), { selection: { kind: "group", id: "5a1a0000-0000-4000-8000-000000000001" }, source: "url", fix: false }));
+  check("«?grupo=todas» con un grupo recordado: abre Todas, no el recordado", same(resolveSelection("todas", "5a1a0000-0000-4000-8000-000000000001", idState).selection, { kind: "all" }));
+  check("sin ?grupo: se usa lo recordado", same(resolveSelection(null, "5a1a0000-0000-4000-8000-000000000001", idState), { selection: { kind: "group", id: "5a1a0000-0000-4000-8000-000000000001" }, source: "memory", fix: false }));
+  check("sin ?grupo ni recuerdo: Todas", same(resolveSelection(null, null, idState), { selection: { kind: "all" }, source: "default", fix: false }));
+  check("grupo de la URL borrado o ajeno: Todas y corregir", same(resolveSelection("5a1a0000-0000-4000-8000-0000000000ff", null, idState), { selection: { kind: "all" }, source: "url", fix: true }));
+  check("recordado borrado: Todas y corregir", same(resolveSelection(null, "5a1a0000-0000-4000-8000-0000000000ff", idState), { selection: { kind: "all" }, source: "memory", fix: true }));
+  check("URL mal formada: Todas y corregir", same(resolveSelection("<script>", null, idState), { selection: { kind: "all" }, source: "url", fix: true }));
+  check("«?grupo=sin»: Sin organizar", same(resolveSelection("sin", null, idState).selection, { kind: "none" }));
+  check("clave por dueño y país", memoryKey("p1", "es") === "bcp-home-grupo:v1:p1:es" && memoryKey("p1", "es") !== memoryKey("p2", "es") && memoryKey("p1", "es") !== memoryKey("p1", "cl"));
+  const throwing = () => { throw new Error("SecurityError"); };
+  check("sin almacenamiento: leer da null y guardar no falla", readMemory(throwing, "k") === null && writeMemory(throwing, "k", "v") === false && readMemory(() => null, "k") === null);
+  const mem = new Map<string, string>();
+  const fake = () => ({ getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) });
+  check("con almacenamiento: guarda y lee", writeMemory(fake, "k", "todas") && readMemory(fake, "k") === "todas");
+  check("cambiar ?grupo conserva los demás parámetros", withGroupParam("/es/admin/mi-espacio?vista=1&grupo=sin#c", { kind: "group", id: "abc" }) === "/es/admin/mi-espacio?vista=1&grupo=abc#c");
+
+  section("HOME · grupos: escrituras con las reglas de SQL (fixtures)");
+  const r = (op: Parameters<typeof applyGroupOp>[1], st = base) => applyGroupOp(st, op, own);
+  const err = (x: ReturnType<typeof applyGroupOp>) => (x.ok ? "ok" : x.error);
+  check("crear: nombre repetido sin mayúsculas ni tildes → duplicate_name", err(r({ op: "create", parentId: null, name: "SALAMANCÁ", id: "x" })) === "duplicate_name");
+  check("crear: el mismo nombre en otro nivel se permite", err(r({ op: "create", parentId: "cha", name: "Recoletos", id: "x" })) === "ok");
+  check("crear: tercer nivel → too_deep", err(r({ op: "create", parentId: "rec", name: "Hoja", id: "x" })) === "too_deep");
+  check("crear: padre inexistente → forbidden", err(r({ op: "create", parentId: "zzz", name: "Hoja", id: "x" })) === "forbidden");
+  const full: GroupsState = { ...base, groups: Array.from({ length: 100 }, (_, i) => G(`g${i}`, null, `G ${i}`, i)) };
+  check("crear el 101 → too_many_groups", err(r({ op: "create", parentId: null, name: "Otro", id: "x" }, full)) === "too_many_groups");
+  const c1 = r({ op: "create", parentId: "sal", name: "Fuente del Berro", id: "fdb" });
+  check("crear: al final de su nivel", c1.ok && c1.state.groups.find((g) => g.id === "fdb")!.position === 4);
+  check("renombrar: a un hermano → duplicate_name; a sí mismo en mayúsculas → ok", err(r({ op: "rename", id: "ret", name: "chamberi" })) === "duplicate_name" && err(r({ op: "rename", id: "ret", name: "RETIRO" })) === "ok");
+  check("ordenar: lista incompleta → invalid_order", err(r({ op: "reorder", parentId: null, ids: ["ret", "sal"] })) === "invalid_order");
+  const o1 = r({ op: "reorder", parentId: null, ids: ["ret", "sal", "cha"] });
+  check("ordenar: el nuevo orden", o1.ok && same(treeOrder(o1.state.groups).filter((x) => x.depth === 0).map((x) => x.group.id), ["ret", "sal", "cha"]));
+  const m1 = r({ op: "move", id: "goy", parentId: "cha" });
+  check("mover Goya a Chamberí: conserva su asignación y Salamanca se renumera", m1.ok && m1.state.groups.find((g) => g.id === "goy")!.parentId === "cha"
+    && m1.state.members.some((m) => m.groupId === "goy" && m.catalogId === "k4")
+    && same(m1.state.groups.filter((g) => g.parentId === "sal").sort((a, b) => a.position - b.position).map((g) => `${g.position}${g.id}`), ["0rec", "1cas", "2lis"]));
+  check("mover un grupo de primer nivel → invalid_move; a un subgrupo → too_deep", err(r({ op: "move", id: "ret", parentId: "sal" })) === "invalid_move" && err(r({ op: "move", id: "rec", parentId: "goy" })) === "too_deep");
+  check("«Mover a…» de Recoletos: Chamberí y Retiro (no su propio grupo)", same(moveTargets(base.groups, "rec").map((g) => g.id), ["cha", "ret"]));
+  check("vista previa de borrar Salamanca: 5 grupos, 6 asignaciones, 3 catálogos, 2 sin organizar", same(previewDelete(base, "sal"), { groups: 5, subgroups: ["Recoletos", "Castellana", "Lista", "Goya"], assignments: 5, catalogs: 3, unorganized: 2 }));
+  const d1 = r({ op: "delete", id: "sal" });
+  check("borrar Salamanca: árbol fuera, catálogos intactos, K4 sigue en Chamberí, K1/K2 sin organizar",
+    d1.ok && !d1.state.groups.some((g) => ["sal", "rec", "cas", "lis", "goy"].includes(g.id))
+    && same(d1.state.members.filter((m) => m.catalogId === "k4"), [{ groupId: "cha", catalogId: "k4" }])
+    && same(cats.map((c) => c.id).filter(selectionMatcher(d1.state, { kind: "none" })), ["k1", "k2", "k5", "k6"]));
+  check("borrar: los grupos que quedan se renumeran", d1.ok && same(d1.state.groups.sort((a, b) => a.position - b.position).map((g) => `${g.position}${g.id}`), ["0cha", "1ret"]));
+  check("asignar dos veces no duplica; un catálogo ajeno → forbidden", (() => { const a = r({ op: "member", groupId: "sal", catalogId: "k1", member: true }); return a.ok && a.state.members.length === base.members.length; })()
+    && err(r({ op: "member", groupId: "sal", catalogId: "ajeno", member: true })) === "forbidden");
+  check("asignar a un grupo borrado → forbidden (no se crea nada)", d1.ok && err(applyGroupOp(d1.state, { op: "member", groupId: "rec", catalogId: "k1", member: true }, own)) === "forbidden");
+}
+
 testPreview();
 testManagerPrices();
 testMaterial();
@@ -410,6 +530,7 @@ testPendingSave();
 testConflict();
 testText();
 testFilters();
+testGroups();
 
 console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
 if (failures > 0) process.exit(1);
