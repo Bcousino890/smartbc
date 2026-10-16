@@ -45,3 +45,7 @@ export const stateLimiter = createRateLimiter(600);
 export const eventsLimiter = createRateLimiter(60);
 /** Página del lector. */
 export const pageLimiter = createRateLimiter(120);
+/** PDF del catálogo (expediente 2026-10-16-bcp-01-pdf): cada uno ocupa el
+ *  único turno de generación unos segundos, así que pocas por minuto. */
+export const pdfLinkLimiter = createRateLimiter(6);
+export const pdfOwnerLimiter = createRateLimiter(12);

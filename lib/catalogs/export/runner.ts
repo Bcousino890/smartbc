@@ -20,17 +20,22 @@
 //     H1. Cada una hace después SU PROPIA comprobación final de acceso y de
 //     huella antes de recibir los bytes; si falla la suya, recibe 404/409 y
 //     las demás siguen.
-//   · REINTENTO: si el contenido cambió (una foto con otra versión, o la
-//     comprobación final), se repite UNA vez desde la captura; si vuelve a
-//     cambiar, «changed» (409).
+//   · REINTENTO: si el contenido cambió (una foto con otra versión, la
+//     lectura que no se estabiliza o la comprobación final), se repite UNA
+//     vez desde la captura; si vuelve a cambiar, «changed» (409). Un fallo de
+//     la base de datos al capturar o comprobar es «unavailable» (503).
 // ============================================================================
 
 export type FinalCheck = "ok" | "changed" | "gone";
 
 export interface RunnerDeps<Scope, Cap> {
-  /** Captura fija del ámbito (null = sin acceso). Lanza si no se estabiliza. */
+  /** Captura fija del ámbito (null = sin acceso). Lanza si no se estabiliza
+   *  o si falla la base de datos. */
   capture: (scope: Scope) => Promise<(Cap & { hash: string }) | null>;
-  /** Comprobación final de UNA petición, con su ámbito y la huella H1. */
+  /** ¿El error de la captura es «el contenido se movía»? (si no, 503). */
+  isUnstable: (err: unknown) => boolean;
+  /** Comprobación final de UNA petición, con su ámbito y la huella H1. Lanza
+   *  si falla la base de datos. */
   verify: (scope: Scope, hash: string) => Promise<FinalCheck>;
   /** Construye el PDF. «changed» si una foto ya no es la de la captura. */
   build: (cap: Cap & { hash: string }, signal: AbortSignal) => Promise<{ pdf: Buffer } | { changed: true }>;
@@ -51,7 +56,7 @@ export interface RunnerLimits {
 
 export type RunResult =
   | { ok: true; pdf: Buffer }
-  | { ok: false; error: "not_found" | "changed" | "busy" | "timeout" | "cancelled" | "failed" };
+  | { ok: false; error: "not_found" | "changed" | "busy" | "timeout" | "cancelled" | "unavailable" | "failed" };
 
 type JobOutcome = { pdf: Buffer } | { changed: true } | { error: "busy" | "failed" };
 
@@ -170,7 +175,8 @@ export function createExportRunner<Scope, Cap>(deps: RunnerDeps<Scope, Cap>, lim
       let cap: (Cap & { hash: string }) | null;
       try {
         cap = await deps.capture(scope);
-      } catch {
+      } catch (err) {
+        if (!deps.isUnstable(err)) return { ok: false, error: "unavailable" };
         if (attempt === 2) return { ok: false, error: "changed" };
         continue;
       }
@@ -185,7 +191,12 @@ export function createExportRunner<Scope, Cap>(deps: RunnerDeps<Scope, Cap>, lim
       if ("error" in out) return { ok: false, error: out.error };
       if ("changed" in out) continue;
       // Comprobación final de ESTA petición (K1, K2).
-      const check = await deps.verify(scope, cap.hash);
+      let check: FinalCheck;
+      try {
+        check = await deps.verify(scope, cap.hash);
+      } catch {
+        return { ok: false, error: "unavailable" };
+      }
       if (check === "gone") return { ok: false, error: "not_found" };
       if (check === "changed") continue;
       return { ok: true, pdf: out.pdf };

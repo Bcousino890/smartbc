@@ -514,7 +514,9 @@ export type FixtureOp =
   // E3: otra fila con la MISMA URL (duplicado) y su propia clave, al final.
   | { op: "photo-dup"; token: string; key: string; index: number; f: string }
   // PDF: marcar o desmarcar una foto (por su clave) para que falle al leerla.
-  | { op: "photo-fail"; token: string; key: string; f: string; fail: boolean };
+  | { op: "photo-fail"; token: string; key: string; f: string; fail: boolean }
+  // PDF: espera sintética por foto (ms) para cambiar o revocar a mitad.
+  | { op: "photo-delay"; ms: number };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -522,6 +524,11 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
   if (op.op === "reset") {
     await resetFixtureStore();
     (globalThis as GF)[FAIL_KEY] = undefined;
+    (globalThis as GD)[DELAY_KEY] = 0;
+    return { fingerprint: null };
+  }
+  if (op.op === "photo-delay") {
+    (globalThis as GD)[DELAY_KEY] = Math.max(0, Math.min(5000, Number(op.ms) || 0));
     return { fingerprint: null };
   }
   if (op.op === "photo-fail") {
@@ -630,6 +637,13 @@ function failing(): Set<string> {
   const g = globalThis as GF;
   if (!g[FAIL_KEY]) g[FAIL_KEY] = new Set(["pdf-falla:" + createHash("md5").update("pdf-photo:pdf-falla:2").digest("hex").slice(0, 16)]);
   return g[FAIL_KEY]!;
+}
+
+const DELAY_KEY = "__bcpCatalogFixturePhotoDelay";
+type GD = typeof globalThis & { [DELAY_KEY]?: number };
+/** Espera sintética por foto del PDF (0 = ninguna). */
+export function fixtureExportDelay(): number {
+  return (globalThis as GD)[DELAY_KEY] ?? 0;
 }
 
 /** PDF del catálogo (K5): la foto de esa clave como SVG con su CÓDIGO visual

@@ -44,7 +44,15 @@ async function toJpeg(input: Buffer | string, width: number, signal: AbortSignal
 export async function loadExportPhoto(need: PhotoNeed, signal: AbortSignal): Promise<LoadedPhoto> {
   try {
     if (isCatalogFixtureMode()) {
-      const { fixtureExportPhoto } = await import("../fixture-store");
+      const { fixtureExportDelay, fixtureExportPhoto } = await import("../fixture-store");
+      const wait = fixtureExportDelay();
+      if (wait) {
+        await new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, wait);
+          signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
+        });
+        if (signal.aborted) return { ok: false, reason: "failed" };
+      }
       const fx = await fixtureExportPhoto(need.slug, need.key);
       if (!fx || fx.u !== need.u) return { ok: false, reason: "changed" };
       if (fx.fail) return { ok: false, reason: "failed" };

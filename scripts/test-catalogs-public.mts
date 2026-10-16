@@ -60,7 +60,7 @@ import {
 import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_MAX_WORDS, MAX_JOURNEY_SPREADS, TINY_WORDS } from "../lib/catalogs/journey-layout.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
 import type { PublicCatalog, PublicCatalogState, PublicItem } from "../lib/catalogs/public-contract.ts";
-import { captureFixed, captureHash, verifyFixed } from "../lib/catalogs/export/capture.ts";
+import { captureFixed, captureHash, isUnstableRead, verifyFixed } from "../lib/catalogs/export/capture.ts";
 import { createExportRunner } from "../lib/catalogs/export/runner.ts";
 import { descriptionInSections, contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
 
@@ -1307,6 +1307,18 @@ async function pdfCaptureTests() {
   shared.items[0].price = 999;
   check("S1 es una copia propia: no cambia si el origen cambia después", !!c3 && c3.snapshot.items[0].price === 300 && c3.hash === captureHash(mk(300), "sale"));
   check("lecturas hechas", reads > 0);
+  // Nunca estable → «changed»; la base de datos falla → se propaga (503).
+  let n = 0;
+  const neverStable = { ...deps, readMeta: async () => ({ version: n++, operation: "sale" }) };
+  check("lectura que no se estabiliza en la comprobación final → «changed»", (await verifyFixed(neverStable, c1!.hash)) === "changed");
+  const down = { ...deps, readSnapshot: async () => { throw new Error("db caída"); } };
+  let threw = false;
+  try {
+    await verifyFixed(down, c1!.hash);
+  } catch (e) {
+    threw = !isUnstableRead(e);
+  }
+  check("la base de datos falla en la comprobación final → error (no «changed»)", threw);
 }
 
 // ── PDF · generación acotada (K2, K3) ───────────────────────────────────────
@@ -1314,13 +1326,21 @@ async function pdfRunnerTests() {
   section("PDF · generación acotada: compartir, comprobación por petición, turno y cola (K2, K3)");
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   type Scope = { key: string; hash: string };
-  const mk = (opts: { buildMs?: number; renderMs?: number; verify?: (s: Scope) => "ok" | "changed" | "gone"; changedFirst?: boolean; limits?: Partial<Parameters<typeof createExportRunner>[1]> } = {}) => {
+  const mk = (opts: { buildMs?: number; renderMs?: number; verify?: (s: Scope) => "ok" | "changed" | "gone"; verifyThrows?: boolean; captureError?: Error; changedFirst?: boolean; limits?: Partial<Parameters<typeof createExportRunner>[1]> } = {}) => {
     const log = { builds: 0, verifies: 0, active: 0, maxActive: 0, aborted: 0, finished: 0 };
     let changedOnce = !!opts.changedFirst;
     const runner = createExportRunner<Scope, { scope: Scope }>(
       {
-        capture: async (sc) => ({ scope: sc, hash: sc.hash }),
-        verify: async (sc) => { log.verifies++; return opts.verify ? opts.verify(sc) : "ok"; },
+        capture: async (sc) => {
+          if (opts.captureError) throw opts.captureError;
+          return { scope: sc, hash: sc.hash };
+        },
+        isUnstable: isUnstableRead,
+        verify: async (sc) => {
+          log.verifies++;
+          if (opts.verifyThrows) throw new Error("db caída");
+          return opts.verify ? opts.verify(sc) : "ok";
+        },
         build: async (_cap, signal) => {
           log.builds++;
           log.active++;
@@ -1432,11 +1452,26 @@ async function pdfRunnerTests() {
   }
   {
     const runner = createExportRunner<Scope, object>(
-      { capture: async () => null, verify: async () => "ok", build: async () => ({ pdf: Buffer.from("x") }), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>) },
+      { capture: async () => null, isUnstable: isUnstableRead, verify: async () => "ok", build: async () => ({ pdf: Buffer.from("x") }), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>) },
       { maxConcurrent: 1, maxQueue: 1, queueWaitMs: 100, requestTimeoutMs: 100, jobBudgetMs: 100 },
     );
     const r = await runner.run({ key: "x", hash: "" }, "x", sig().signal);
     check("sin acceso en la captura → «not_found» (404), sin generar", !r.ok && r.error === "not_found");
+  }
+  {
+    const { runner, log } = mk({ captureError: new Error("db caída") });
+    const r = await runner.run({ key: "enlace:h", hash: "H" }, "enlace:h", sig().signal);
+    check("la base de datos falla al capturar → «unavailable» (503), sin generar ni reintentar", !r.ok && r.error === "unavailable" && log.builds === 0);
+  }
+  {
+    const { runner, log } = mk({ captureError: new CoherentReadError("catalog_read_unstable", "x") });
+    const r = await runner.run({ key: "enlace:i", hash: "H" }, "enlace:i", sig().signal);
+    check("la lectura nunca se estabiliza → «changed» (409) tras un reintento", !r.ok && r.error === "changed" && log.builds === 0);
+  }
+  {
+    const { runner } = mk({ verifyThrows: true });
+    const r = await runner.run({ key: "enlace:j", hash: "H" }, "enlace:j", sig().signal);
+    check("la base de datos falla en la comprobación final → «unavailable», sin bytes", !r.ok && r.error === "unavailable");
   }
 }
 

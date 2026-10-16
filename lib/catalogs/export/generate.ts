@@ -4,7 +4,7 @@ import { renderCatalogPdf } from "@/lib/pdf/catalog/render";
 import { photoId, type PdfPhoto } from "@/lib/pdf/catalog/document";
 import { toPublicCatalog, type InternalSnapshot } from "../to-public";
 import type { CatalogOperation } from "../operation-price";
-import { captureFixed, verifyFixed, type Captured } from "./capture";
+import { captureFixed, isUnstableRead, verifyFixed, type Captured } from "./capture";
 import { pdfFileName, photosOfExport, planItemExport } from "./plan";
 import { loadExportPhoto, type PhotoNeed } from "./photos";
 import { createExportRunner, type RunResult, type RunnerLimits } from "./runner";
@@ -114,6 +114,7 @@ function makeRunner() {
         const c = await captureFixed(exportReaders(scope));
         return c ? { ...c, capturedAt: new Date() } : null;
       },
+      isUnstable: isUnstableRead,
       verify: (scope, hash) => verifyFixed(exportReaders(scope), hash),
       build: async (cap, signal) => {
         const out = await buildCatalogPdf(cap, signal);

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readCoherent, type CatalogMeta } from "../coherent-read";
+import { CoherentReadError, readCoherent, type CatalogMeta } from "../coherent-read";
 import type { CatalogOperation } from "../operation-price";
 
 // ============================================================================
@@ -62,13 +62,21 @@ export async function captureFixed<S>(deps: CaptureDeps<S>): Promise<Captured<S>
 
 export type FinalCheck = "ok" | "changed" | "gone";
 
-/** Comprobación final, por cada petición que va a recibir los bytes (K2). */
+/** ¿El contenido se movía mientras se leía? (cualquier otro fallo es de la
+ *  base de datos: 503, no 409). */
+export function isUnstableRead(err: unknown): boolean {
+  return err instanceof CoherentReadError && err.code === "catalog_read_unstable";
+}
+
+/** Comprobación final, por cada petición que va a recibir los bytes (K2).
+ *  Lanza si la base de datos falla. */
 export async function verifyFixed<S>(deps: CaptureDeps<S>, hash: string): Promise<FinalCheck> {
   let again: Captured<S> | null;
   try {
     again = await captureFixed(deps);
-  } catch {
-    return "changed";
+  } catch (err) {
+    if (isUnstableRead(err)) return "changed";
+    throw err;
   }
   if (!again) return "gone";
   return again.hash === hash ? "ok" : "changed";
