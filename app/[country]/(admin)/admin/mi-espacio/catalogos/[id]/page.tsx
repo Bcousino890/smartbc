@@ -3,6 +3,7 @@ import { CatalogManager } from "@/components/admin/catalogs/catalog-manager";
 import { requireHomeOwnerPage } from "@/lib/catalogs/owner";
 import { getCatalogShare } from "@/lib/catalogs/public-data";
 import { getCatalogDetail, listOwnerCatalogs } from "@/lib/catalogs/queries";
+import { listOwnerGroups } from "@/lib/catalogs/group-data";
 import { listCatalogTexts } from "@/lib/catalogs/texts";
 import { isUuid } from "@/lib/catalogs/validate";
 import {
@@ -39,6 +40,16 @@ import {
   setCatalogStatusAction,
   updateCatalogMetaAction,
 } from "../../actions";
+import {
+  createGroupAction,
+  deleteGroupAction,
+  listGroupsAction,
+  moveGroupAction,
+  previewDeleteGroupAction,
+  renameGroupAction,
+  reorderGroupsAction,
+  setCatalogGroupAction,
+} from "../../group-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +72,7 @@ export default async function CatalogPage({
   const numberLabel = (await listOwnerCatalogs(profile.id)).find((c) => c.id === id)?.numberLabel ?? null;
   const share = await getCatalogShare(profile.id, id);
   const texts = await listCatalogTexts(profile.id, id);
+  const groups = await listOwnerGroups(profile.id);
   return (
     <div className="mx-auto max-w-[1600px] px-4 lg:px-8">
       <header className="pt-7 md:pt-9">
@@ -74,6 +86,19 @@ export default async function CatalogPage({
         share={share}
         measureMode={medir === "1"}
         texts={texts}
+        groups={{
+          initial: groups,
+          actions: {
+            list: listGroupsAction,
+            create: createGroupAction,
+            rename: renameGroupAction,
+            reorder: reorderGroupsAction,
+            move: moveGroupAction,
+            previewDelete: previewDeleteGroupAction,
+            remove: deleteGroupAction,
+            setMember: setCatalogGroupAction,
+          },
+        }}
         shareActions={{ create: createShareAction, renew: renewShareAction, revoke: revokeShareAction }}
         actions={{
           updateMeta: updateCatalogMetaAction,

@@ -1,10 +1,13 @@
 "use client";
 
+import type { GroupsState } from "@/lib/catalogs/groups";
+import { fixtureGroupActions } from "../../fixture-group-actions";
+
 import { CatalogManager, type CatalogManagerActions } from "@/components/admin/catalogs/catalog-manager";
 import type { ShareActions } from "@/components/admin/catalogs/share-panel";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { normalizeCriteria, type CatalogCriteria, type CatalogOperation } from "@/lib/catalogs/criteria";
 import { fixtureManualPricing } from "@/lib/catalogs/fixtures";
@@ -89,13 +92,17 @@ export function FixtureCatalogManager({
   liveToken = null,
   measureMode = false,
   pool = fixtureProperties,
+  groups = null,
 }: {
   catalog: CatalogDetail;
+  /** HOME · grupos: estado inicial del almacén sintético de grupos. */
+  groups?: GroupsState | null;
   liveToken?: string | null;
   measureMode?: boolean;
   /** E2 · universo de viviendas (el grande con ?grande=1). */
   pool?: FixtureProperty[];
 }) {
+  const groupActions = useMemo(() => fixtureGroupActions(), []);
   const byId = new Map(pool.map((p) => [p.id, p]));
   const createdAt = new Map(pool.map((p) => [p.id, p.created_at]));
   const [cat, setCat] = useState<CatalogDetail>(catalog);
@@ -502,6 +509,7 @@ export function FixtureCatalogManager({
       measureMode={measureMode}
       texts={fxTexts.views()}
       storyHref={() => "#historia-de-prueba"}
+      groups={groups ? { initial: groups, actions: groupActions } : null}
     />
   );
 }
