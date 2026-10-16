@@ -21,6 +21,7 @@ export default async function FixtureCatalogPage({ searchParams }: { searchParam
   const { fixtureCatalogDetail } = await import("@/lib/catalogs/fixtures");
   const { fixtureLargeCatalogDetail, fixturePropertiesLarge } = await import("@/lib/catalogs/fixtures-selection");
   const { FIXTURE_TOKENS } = await import("@/lib/catalogs/fixture-store");
+  const { fixtureHomeState } = await import("@/lib/catalogs/fixture-groups");
   const large = grande === "1";
   const catalog = large ? fixtureLargeCatalogDetail() : fixtureCatalogDetail;
   return (
@@ -46,6 +47,7 @@ export default async function FixtureCatalogPage({ searchParams }: { searchParam
               liveToken={vivo === "1" ? FIXTURE_TOKENS.main : null}
               measureMode={medir === "1"}
               pool={large ? fixturePropertiesLarge : undefined}
+              groups={fixtureHomeState().groups}
             />
           </div>
         </main>

@@ -103,6 +103,50 @@ $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 "$PAR"
 rm -f "$PAR"
 
+echo "== 2n. 0207 (HOME · grupos): catálogos previos + aplicada dos veces, concurrencia, contraprueba y reversión"
+M9=supabase/migrations/0207_catalog_groups.sql
+RB9=docs/changes/2026-10-16-bcp-01-home-grupos/rollback-0207.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $S/test-catalog-groups-pre.sql $M9 $M9 $S/test-catalog-groups.sql
+# Borrar un grupo mientras otra sesión le asigna un catálogo.
+$R sql $S/test-catalog-groups-conc-a.sql &
+CONC_A=$!
+sleep 0.5
+$R sql $S/test-catalog-groups-conc-b.sql
+wait $CONC_A
+$R sql $S/test-catalog-groups-conc-check.sql
+# Límite de 100 con dos sesiones simultáneas (con el bloqueo del dueño).
+$R sqlv drop=98 -- $S/test-catalog-groups-lim-setup.sql
+$R sqlv name=ParaleloA -- $S/test-catalog-groups-lim-a.sql &
+LIM_A=$!
+sleep 0.5
+$R sqlv name=ParaleloB expect_fail=1 -- $S/test-catalog-groups-lim-b.sql
+wait $LIM_A
+$R sqlv nolock=0 -- $S/test-catalog-groups-lim-check.sql
+# Contraprueba, solo en la base temporal: sin el bloqueo, el límite se rompe.
+$R sql $S/test-catalog-groups-nolock.sql
+$R sqlv drop=97 -- $S/test-catalog-groups-lim-setup.sql
+$R sqlv name=SinBloqueoA -- $S/test-catalog-groups-lim-a.sql &
+LIM_A=$!
+sleep 0.5
+$R sqlv name=SinBloqueoB expect_fail=0 -- $S/test-catalog-groups-lim-b.sql
+wait $LIM_A
+$R sqlv nolock=1 -- $S/test-catalog-groups-lim-check.sql
+$R sql $M9
+# Reversión y reaplicación.
+$R sql $S/test-catalog-groups-state.sql $RB9 $S/test-rollback-0207.sql $M9 $M9
+$R sql $S/test-util.sql
+echo "   0207 se vuelve a aplicar tras su reversión"
+
+echo "== 2o. 0207 sobre la selección (2k) y la paridad TS ↔ SQL"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $S/test-catalog-operations.sql
+PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")
+node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-catalog-parity.mts > "$PAR" 2>/dev/null
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 "$PAR"
+rm -f "$PAR"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
