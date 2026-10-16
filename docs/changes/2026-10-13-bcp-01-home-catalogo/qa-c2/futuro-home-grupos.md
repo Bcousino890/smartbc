@@ -30,3 +30,5 @@ Poder organizar sus catálogos en la HOME con **grupos y subgrupos personales y 
 ## Siguiente paso
 
 Ninguno por ahora. Se especificará cuando Fabricio lo priorice, con su propio expediente y su aprobación. Va después del diagnóstico de la selección automática y de E3.
+
+**16 de octubre de 2026:** Fabricio la prioriza. La especificación en borrador está en su propio expediente, [`2026-10-16-bcp-01-home-grupos/spec.md`](../../2026-10-16-bcp-01-home-grupos/spec.md). Esta nota queda como antecedente.
