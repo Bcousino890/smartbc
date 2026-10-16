@@ -16,7 +16,7 @@ import { parseAgencyWebHtml, robotsAllows } from "./agency-web-readers";
 type Db = any;
 
 const TABLE = "particulares_agency_webs";
-const CHUNK = 150;
+const CHUNK = 25; // las claves son URLs: con más, la URL de PostgREST pasa del límite («URI too long»)
 const TIMEOUT_MS = 12_000;
 const MAX_BYTES = 2_500_000;
 /** Pausa entre dos peticiones (aunque sean de webs distintas): ritmo de persona, no de robot. */
@@ -145,7 +145,7 @@ export async function refreshAgencyWebs(
   db: Db,
   rows: WebRowLite[],
   cache: Map<string, CachedWeb>,
-  opts: { limit?: number; dryRun?: boolean } = {},
+  opts: { limit?: number; dryRun?: boolean; budgetMs?: number } = {},
 ): Promise<{ planned: number; fetched: number; ok: number; failed: number; blocked: number }> {
   const started = Date.now();
   const plan = planAgencyWebFetches(rows, cache, started, opts.limit ?? MAX_WEB_FETCHES_PER_RUN);
@@ -156,7 +156,7 @@ export async function refreshAgencyWebs(
     for (const b of plan.backfill.slice(0, 300)) await db.from(TABLE).update({ trigger_sig: b.sig }).eq("url_key", b.key);
     const robots: RobotsCache = new Map();
     for (const item of plan.fetch) {
-      if (Date.now() - started > BUDGET_MS) break;
+      if (Date.now() - started > (opts.budgetMs ?? BUDGET_MS)) break;
       if (out.fetched > 0) await sleep(DELAY_MS);
       const res = await fetchAgencyWeb(item.n, robots);
       out.fetched++;

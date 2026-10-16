@@ -55,7 +55,12 @@ export type LinkingRunSummary = {
   /** Lectura de webs propias de agencias (0203): planificadas / leídas / buenas / fallidas. */
   /** Reemplazo automático de fotos con marca por las limpias de la web de la agencia (0205/0206). */
   webPhotos?: AutoPhotosSummary | null;
-  webs?: { planned: number; fetched: number; ok: number; failed: number };
+  webs?: { planned: number; fetched: number; ok: number; failed: number; blocked?: number };
+  /** Milisegundos por fase, pases de agencias saltados y errores aislados (no rompen el enlazado base). */
+  timings?: Record<string, number>;
+  skipped?: Record<string, string>;
+  errors?: Record<string, string>;
+  agencyReady?: boolean;
   error?: string;
 };
 
@@ -65,9 +70,11 @@ type CurrentRow = LinkRow & {
   link_ops: string[] | null;
 };
 
-async function loadRows(db: Db, view = "particulares_link_rows", optional = false): Promise<CurrentRow[]> {
+async function loadRows(db: Db, view = "particulares_link_rows", optional = false, deadline?: number): Promise<CurrentRow[]> {
   const out: CurrentRow[] = [];
   for (let from = 0; ; from += PAGE) {
+    // Presupuesto de tiempo (pases de agencias): si se agota a medias, se abandona sin romper nada.
+    if (deadline && Date.now() > deadline) throw new Error(`${view}: sin tiempo (cargadas ${out.length} filas)`);
     const { data, error } = await db
       .from(view)
       .select("*")
@@ -212,124 +219,217 @@ export function runParticularesLinking(opts: { dryRun?: boolean } = {}): Promise
   return running;
 }
 
+/** Presupuesto duro de una pasada (el enlazado base va primero; los pases de agencias solo si queda tiempo). */
+const BUDGET_MS = Number(process.env.PARTICULARES_LINK_BUDGET_MS) || 60_000;
+/** Interruptor: PARTICULARES_AGENCY_PASSES=0 apaga los pases de agencias (portal, CRM, webs, fotos). */
+const AGENCY_PASSES = process.env.PARTICULARES_AGENCY_PASSES !== "0";
+/** Más filas «professional» que esto y el pase de agencias en portales no cabe en el presupuesto: se salta. */
+const PRO_MAX_ROWS = Number(process.env.PARTICULARES_PRO_MAX_ROWS) || 15_000;
+
+type StateMap = Map<string, RowGroupState>;
+
+/** Filas cuyo estado deseado difiere de lo ya escrito (o, si no se escribió, de lo que había al cargar). */
+function diffRows(rows: CurrentRow[], state: StateMap, written: Map<string, string>): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const cur of rows) {
+    const want = state.get(cur.id);
+    if (!want) continue;
+    const sig = stable({ d: want.duplicate_of, s: want.link_summary, o: want.link_ops });
+    const prev = written.get(cur.id);
+    if (prev === undefined ? sameState(cur, want) : prev === sig) continue;
+    out.push({ id: cur.id, duplicate_of: want.duplicate_of, link_summary: want.link_summary, link_ops: want.link_ops });
+    written.set(cur.id, sig);
+  }
+  return out;
+}
+
+async function writeGroups(db: Db, changes: Array<Record<string, unknown>>): Promise<void> {
+  for (let i = 0; i < changes.length; i += CHUNK) {
+    const { error } = await db.rpc("apply_particulares_groups", { p: changes.slice(i, i + CHUNK) });
+    if (error) throw new Error(`apply_particulares_groups: ${error.message}`);
+  }
+}
+
+async function writeLinks(db: Db, links: unknown[]): Promise<number> {
+  let n = 0;
+  for (let i = 0; i < links.length; i += CHUNK) {
+    const { data, error } = await db.rpc("apply_particulares_links", { p: links.slice(i, i + CHUNK) });
+    if (error) throw new Error(`apply_particulares_links: ${error.message}`);
+    n += Number(data ?? 0);
+  }
+  return n;
+}
+
 async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingRunSummary> {
   const started = Date.now();
   const runStart = new Date(started - 5000).toISOString();
+  const left = () => BUDGET_MS - (Date.now() - started);
   const db = createAdminClient() as Db;
+  const timings: Record<string, number> = {};
+  const skipped: Record<string, string> = {};
+  const errors: Record<string, string> = {};
+  let lap = Date.now();
+  const mark = (k: string) => {
+    timings[k] = Date.now() - lap;
+    lap = Date.now();
+  };
+  /** Un pase de agencias nunca rompe el resto: su error se anota y se sigue. */
+  const safe = async <T,>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
+    try {
+      return await fn();
+    } catch (e) {
+      errors[name] = e instanceof Error ? e.message : String(e);
+      console.warn(`[particulares-linking] pase «${name}» falló:`, errors[name]);
+      return undefined;
+    }
+  };
   try {
-    const [rows, decisions, proRows] = await Promise.all([
-      loadRows(db),
-      loadDecisions(db),
-      // Agencias anunciantes en portales (vista 0200); si no existe se salta.
-      loadRows(db, "particulares_agency_rows", true),
-    ]);
-    // Web propia de la agencia (0203): lo ya leído aporta referencia y URL canónica como señal de matching.
-    const webCache = await loadAgencyWebCache(db, [...rows, ...proRows].map((r) => r.agency_url));
-    if (webCache) {
-      for (const r of [...rows, ...proRows]) {
-        const n = normalizeAgencyUrl(r.agency_url);
-        if (!n?.isListing) continue;
-        const keys = mergeWebKeys(r, webCache.get(n.key));
-        if (keys.length !== (r.web_keys?.length ?? 0)) {
-          r.web_keys = keys;
-          r.block_keys = [...new Set([...(r.block_keys ?? []), ...keys])];
-        }
-      }
-    }
+    // ── 1. ENLAZADO BASE (lo que no puede dejar de ejecutarse): se calcula y se ESCRIBE primero ──
+    const [rows, decisions] = await Promise.all([loadRows(db), loadDecisions(db)]);
+    mark("load_base");
     const result = computeLinks(rows, decisions);
-
-    // Agencias anunciantes en portales (tipo «agencia_portal»): misma agencia en varios portales
-    // o republicada → se agrupan con descripción, referencia, fotos y geometría (agency-matching.ts).
-    if (proRows.length > 0) {
-      const pro = computeAgencyPortalLinks(proRows, decisions);
-      result.links.push(...pro.links);
-      for (const [id, st] of pro.state) result.state.set(id, st);
-      result.groups.push(...pro.groups);
-      result.stats.pro_rows = proRows.length;
-      result.stats.pro_links = pro.links.length;
-      result.stats.pro_groups = pro.groups.length;
-    }
-    const allRows = [...rows, ...proRows];
-
-    // Propiedades de agencias del CRM: mismo piso en otro portal → fuente «Agencia».
-    let agencyMatches: ReturnType<typeof computeAgencyMatches> = [];
-    let agencyReady = false;
-    const [props, agencyDecisions] = await Promise.all([loadAgencyProperties(db), loadAgencyDecisions(db)]);
-    if (props && agencyDecisions) {
-      agencyReady = true;
-      // Solo el anuncio principal de cada grupo: sus copias (otro portal, mismo piso) serían
-      // «gemelos parecidos» y degradarían a «probable» un enlace que es cierto.
-      const primaries = allRows.filter((r) => !result.state.get(r.id)?.duplicate_of);
-      agencyMatches = computeAgencyMatches(primaries, props, agencyDecisions);
-      applyAgencyToState(result, primaries, props, agencyMatches);
-      result.stats.agency_matches = agencyMatches.length;
-      result.stats.agency_matches_cierto = agencyMatches.filter((m) => m.level === "cierto").length;
-    }
-
-    const changes: Array<Record<string, unknown>> = [];
-    for (const cur of allRows) {
-      const want = result.state.get(cur.id);
-      if (want && !sameState(cur, want)) {
-        changes.push({
-          id: cur.id,
-          duplicate_of: want.duplicate_of,
-          link_summary: want.link_summary,
-          link_ops: want.link_ops,
-        });
-      }
-    }
-
+    mark("compute_base");
+    const written = new Map<string, string>();
+    const baseChanges = diffRows(rows, result.state, written);
     let linksWritten = 0;
     let linksPruned = 0;
     if (!dryRun) {
-      // Enlaces primero (así el modal los ve en cuanto cambia la agrupación).
-      for (let i = 0; i < result.links.length; i += CHUNK) {
-        const { data, error } = await db.rpc("apply_particulares_links", {
-          p: result.links.slice(i, i + CHUNK),
-        });
-        if (error) throw new Error(`apply_particulares_links: ${error.message}`);
-        linksWritten += Number(data ?? 0);
-      }
+      linksWritten += await writeLinks(db, result.links);
+      await writeGroups(db, baseChanges);
+    }
+    mark("write_base");
+    let changedRows = baseChanges.length;
+
+    // ── 2. PASES DE AGENCIAS (después, con presupuesto y aislados) ──
+    let allRows: CurrentRow[] = rows;
+    let agencyMatches: ReturnType<typeof computeAgencyMatches> = [];
+    let agencyReady = false;
+    if (!AGENCY_PASSES) skipped.agency_passes = "apagados (PARTICULARES_AGENCY_PASSES=0)";
+
+    // 2a. Agencias anunciantes en portales (vista 0200).
+    let proRows: CurrentRow[] = [];
+    if (AGENCY_PASSES) {
+      await safe("pro", async () => {
+        if (left() < 30_000) return void (skipped.pro = "sin tiempo");
+        const c = await db.from("particulares_agency_rows").select("id", { count: "exact", head: true });
+        const total = Number(c.count ?? 0);
+        if (c.error || total === 0) return void (skipped.pro = c.error ? c.error.message : "sin filas");
+        if (total > PRO_MAX_ROWS) return void (skipped.pro = `${total} filas > ${PRO_MAX_ROWS}`);
+        proRows = await loadRows(db, "particulares_agency_rows", true, started + BUDGET_MS * 0.5);
+        mark("load_pro");
+        const wc = await loadAgencyWebCache(db, proRows.map((r) => r.agency_url));
+        if (wc) {
+          for (const r of proRows) {
+            const n = normalizeAgencyUrl(r.agency_url);
+            if (!n?.isListing) continue;
+            const keys = mergeWebKeys(r, wc.get(n.key));
+            if (keys.length !== (r.web_keys?.length ?? 0)) {
+              r.web_keys = keys;
+              r.block_keys = [...new Set([...(r.block_keys ?? []), ...keys])];
+            }
+          }
+        }
+        const pro = computeAgencyPortalLinks(proRows, decisions);
+        mark("compute_pro");
+        for (const [id, st] of pro.state) result.state.set(id, st);
+        result.stats.pro_rows = proRows.length;
+        result.stats.pro_links = pro.links.length;
+        result.stats.pro_groups = pro.groups.length;
+        if (!dryRun) {
+          linksWritten += await writeLinks(db, pro.links);
+          const ch = diffRows(proRows, result.state, written);
+          await writeGroups(db, ch);
+          changedRows += ch.length;
+        }
+        allRows = [...rows, ...proRows];
+        mark("write_pro");
+      });
+    }
+
+    // 2b. Propiedades de agencias del CRM: mismo piso en otro portal → fuente «Agencia».
+    if (AGENCY_PASSES) {
+      await safe("crm", async () => {
+        if (left() < 20_000) return void (skipped.crm = "sin tiempo");
+        const [props, agencyDecisions] = await Promise.all([loadAgencyProperties(db), loadAgencyDecisions(db)]);
+        if (!props || !agencyDecisions) return void (skipped.crm = "migración 0199 sin aplicar");
+        agencyReady = true;
+        // Solo el anuncio principal de cada grupo: sus copias (otro portal, mismo piso) serían
+        // «gemelos parecidos» y degradarían a «probable» un enlace que es cierto.
+        const primaries = allRows.filter((r) => !result.state.get(r.id)?.duplicate_of);
+        agencyMatches = computeAgencyMatches(primaries, props, agencyDecisions);
+        applyAgencyToState(result, primaries, props, agencyMatches);
+        result.stats.agency_matches = agencyMatches.length;
+        result.stats.agency_matches_cierto = agencyMatches.filter((m) => m.level === "cierto").length;
+        mark("compute_crm");
+        if (!dryRun) {
+          for (let i = 0; i < agencyMatches.length; i += CHUNK) {
+            const { error } = await db.rpc("apply_particulares_agency_matches", { p: agencyMatches.slice(i, i + CHUNK) });
+            if (error) throw new Error(`apply_particulares_agency_matches: ${error.message}`);
+          }
+          const pr = await db.rpc("prune_particulares_agency_matches", { p_before: runStart });
+          if (pr.error) throw new Error(`prune_particulares_agency_matches: ${pr.error.message}`);
+          const ch = diffRows(allRows, result.state, written);
+          await writeGroups(db, ch);
+          changedRows += ch.length;
+        }
+        mark("write_crm");
+      });
+    }
+
+    // ── 3. Limpieza de enlaces no vistos en esta pasada (al final: no borra los de los pases de agencias) ──
+    if (!dryRun) {
       const pruned = await db.rpc("prune_particulares_links", { p_before: runStart });
       if (pruned.error) throw new Error(`prune_particulares_links: ${pruned.error.message}`);
       linksPruned = Number(pruned.data ?? 0);
-
-      if (agencyReady) {
-        for (let i = 0; i < agencyMatches.length; i += CHUNK) {
-          const { error } = await db.rpc("apply_particulares_agency_matches", { p: agencyMatches.slice(i, i + CHUNK) });
-          if (error) throw new Error(`apply_particulares_agency_matches: ${error.message}`);
-        }
-        const pr = await db.rpc("prune_particulares_agency_matches", { p_before: runStart });
-        if (pr.error) throw new Error(`prune_particulares_agency_matches: ${pr.error.message}`);
-      }
-
-      for (let i = 0; i < changes.length; i += CHUNK) {
-        const { error } = await db.rpc("apply_particulares_groups", { p: changes.slice(i, i + CHUNK) });
-        if (error) throw new Error(`apply_particulares_groups: ${error.message}`);
-      }
     }
+    mark("prune");
 
-    // Lectura ligera de webs de agencias pendientes (≤ 30 por pasada, en serie): al final y sin
-    // bloquear nada de lo anterior; lo leído ayuda al enlazado de la PRÓXIMA pasada.
-    const webs = webCache ? await refreshAgencyWebs(db, allRows, webCache, { dryRun }) : undefined;
-    // Fotos limpias: propiedades importadas de portales con su web de agencia leída, verificada y enlazada (≤3 por pasada).
-    const webPhotos = webCache ? await autoReplaceWebPhotos(db, { dryRun }) : undefined;
+    // ── 4. Webs de agencias y fotos limpias (solo si queda tiempo; lo leído ayuda a la PRÓXIMA pasada) ──
+    let webs: LinkingRunSummary["webs"];
+    let webPhotos: AutoPhotosSummary | null | undefined;
+    if (AGENCY_PASSES) {
+      await safe("webs", async () => {
+        if (left() < 25_000) return void (skipped.webs = "sin tiempo");
+        // Solo los anuncios con enlace a una web de agencia (~1.000), no las 70.000 filas.
+        const wr: Array<{ agency_url: string | null; price: number | null; is_active: boolean | null; reference: string | null; agency_reference: string | null }> = [];
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await db
+            .from("particulares")
+            .select("agency_url:scraper_extra->>agency_url, price, is_active, reference, agency_reference:scraper_extra->>agency_reference")
+            .not("scraper_extra->>agency_url", "is", null)
+            .order("id", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) throw new Error(error.message);
+          wr.push(...(data ?? []));
+          if (!data || data.length < PAGE) break;
+        }
+        const cache = await loadAgencyWebCache(db, wr.map((r) => r.agency_url));
+        if (cache) webs = await refreshAgencyWebs(db, wr, cache, { dryRun, budgetMs: Math.min(40_000, left() - 15_000) });
+        mark("webs");
+        if (cache && left() > 15_000) webPhotos = await autoReplaceWebPhotos(db, { dryRun, budgetMs: Math.min(40_000, left() - 5_000) });
+        mark("web_photos");
+      });
+    }
 
     return {
       ok: true,
       dryRun,
       ms: Date.now() - started,
       stats: result.stats,
-      changedRows: changes.length,
+      changedRows,
       linksWritten,
       linksPruned,
       agencyMatches: agencyMatches.length,
       webs,
       webPhotos,
+      timings,
+      skipped,
+      errors,
+      agencyReady,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : "linking_failed";
     console.error("[particulares-linking]", error);
-    return { ok: false, dryRun, ms: Date.now() - started, stats: {}, changedRows: 0, linksWritten: 0, linksPruned: 0, error };
+    return { ok: false, dryRun, ms: Date.now() - started, stats: {}, changedRows: 0, linksWritten: 0, linksPruned: 0, error, timings, skipped, errors };
   }
 }

@@ -269,8 +269,8 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
     if (propIds.length === 0) return out;
 
     const props: PropRow[] = [];
-    for (let i = 0; i < propIds.length; i += 150) {
-      const r = await db.from("properties").select("id, slug, external_id, bc_reference, photos_source, photos_source_sig, photos_source_at, agency_id, agencies(slug)").in("id", propIds.slice(i, i + 150));
+    for (let i = 0; i < propIds.length; i += 50) {
+      const r = await db.from("properties").select("id, slug, external_id, bc_reference, photos_source, photos_source_sig, photos_source_at, agency_id, agencies(slug)").in("id", propIds.slice(i, i + 50));
       if (r.error) return null; // 0206 sin aplicar
       props.push(...((r.data ?? []) as PropRow[]));
     }
@@ -279,8 +279,8 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
 
     const partIds = [...new Set([...byProp.values()].flat())];
     const urlRows: Array<{ agency_url: string | null }> = [];
-    for (let i = 0; i < partIds.length; i += 150) {
-      const r = await db.from("particulares").select("agency_url:scraper_extra->>agency_url").in("id", partIds.slice(i, i + 150));
+    for (let i = 0; i < partIds.length; i += 50) {
+      const r = await db.from("particulares").select("agency_url:scraper_extra->>agency_url").in("id", partIds.slice(i, i + 50));
       urlRows.push(...((r.data ?? []) as Array<{ agency_url: string | null }>));
     }
     const cache = await loadAgencyWebCache(db, urlRows.map((x) => x.agency_url));
