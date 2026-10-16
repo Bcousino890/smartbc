@@ -59,7 +59,8 @@ import {
 } from "../lib/catalogs/reader-state.ts";
 import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_MAX_WORDS, MAX_JOURNEY_SPREADS, TINY_WORDS } from "../lib/catalogs/journey-layout.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
-import type { PublicCatalog, PublicCatalogState } from "../lib/catalogs/public-contract.ts";
+import type { PublicCatalog, PublicCatalogState, PublicItem } from "../lib/catalogs/public-contract.ts";
+import { contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
 
 let failures = 0;
 
@@ -1200,6 +1201,54 @@ async function liveTests() {
   }
 }
 
+// ── PDF del catálogo · reglas puras (expediente 2026-10-16-bcp-01-pdf) ──────
+function pdfPlanTests() {
+  section("PDF · contenido completo y fotos por vivienda (P2, K4)");
+  const ph = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, src: `/p/x/${i}.webp?f=k${i}`, width: 100, height: 80, orientation: "landscape" as const }));
+  const base = (over: Partial<PublicItem>): PublicItem => ({
+    key: "it", title: "Piso", place: null, operation: "Venta", price: "1 €", reserved: false, bedrooms: null, bathrooms: null, squareMeters: null, floor: "",
+    description: null, features: [], lead: null, highlights: [], sections: [], photos: [], coverIndex: 0, mosaic: [], ...over,
+  });
+  // 12 fotos; apertura = 3; secciones con fotos 5, 3 (repite la apertura), 7 y 5 (repetida).
+  const it = base({
+    photos: ph(12), coverIndex: 3,
+    sections: [
+      { heading: "Uno", text: "a", photo: 5 },
+      { heading: "Dos", text: "b", photo: 3 },
+      { heading: null, text: "c", photo: null },
+      { heading: "Cuatro", text: "d", photo: 7 },
+      { heading: "Cinco", text: "e", photo: 5 },
+    ],
+    description: "Descripción", features: ["Ascensor"],
+  });
+  const x = planItemExport(it);
+  check("apertura = la foto de portada efectiva (3)", x.opening === 3);
+  check("secciones: todas, en orden, con su foto solo si no salió antes", JSON.stringify(x.sections.map((s) => s.photo)) === JSON.stringify([5, null, null, 7, null]) && x.sections.length === 5);
+  check("más fotos: hasta 6, en el orden de la galería, sin las ya usadas", JSON.stringify(x.more) === JSON.stringify([0, 1, 2, 4, 6, 8]) && MORE_PHOTOS_MAX === 6);
+  check("ninguna foto repetida en toda la vivienda", new Set(photosOfExport(x)).size === photosOfExport(x).length && JSON.stringify(photosOfExport(x)) === JSON.stringify([3, 5, 7, 0, 1, 2, 4, 6, 8]));
+  check("descripción y características se conservan", x.description === "Descripción" && JSON.stringify(x.features) === JSON.stringify(["Ascensor"]) && !x.brief);
+  const many = base({ sections: Array.from({ length: 12 }, (_, i) => ({ heading: `Capítulo ${i + 1}`, text: `Texto ${i + 1} `.repeat(200), photo: null })) });
+  const xm = planItemExport(many);
+  check("K4: una historia de 12 capítulos sale entera (sin el límite de 3 dobles páginas del lector)", xm.sections.length === 12 && xm.sections[11].heading === "Capítulo 12" && xm.sections.every((s, i) => s.text === many.sections[i].text));
+  const shortLead = "Una entrada breve de diez palabras para la apertura del piso.";
+  const longLead = Array.from({ length: 46 }, (_, i) => `palabra${i}`).join(" ");
+  check("entrada de ≤ 45 palabras: en la apertura", planItemExport(base({ lead: shortLead })).leadInOpening === shortLead && planItemExport(base({ lead: shortLead })).leadInJourney === null);
+  check("entrada de 46 palabras: al principio del recorrido (regla del lector)", planItemExport(base({ lead: longLead })).leadInJourney === longLead && planItemExport(base({ lead: longLead })).leadInOpening === null);
+  check("sin fotos: sin apertura ni más fotos", planItemExport(base({})).opening === null && planItemExport(base({})).more.length === 0);
+  check("sin secciones ni descripción: ficha breve", planItemExport(base({ features: ["Terraza"] })).brief);
+  check("pocas fotos: más fotos = las que queden", JSON.stringify(planItemExport(base({ photos: ph(3), coverIndex: 1 })).more) === JSON.stringify([0, 2]));
+  check("portada fuera de rango (defensa): la primera", planItemExport(base({ photos: ph(2), coverIndex: 9 })).opening === 0);
+
+  section("PDF · nombre, versión y metadatos");
+  const at = new Date("2026-10-16T17:40:00Z");
+  check("versión en hora de Madrid", versionLabel(at) === "16 de octubre de 2026, 19:40", versionLabel(at));
+  check("nombre del archivo, sin caracteres peligrosos", pdfFileName('Áticos / "Retiro" : 2026', at) === "Catálogo · Áticos Retiro 2026 · 16-10-2026.pdf", pdfFileName('Áticos / "Retiro" : 2026', at));
+  const cd = contentDisposition("Catálogo · Áticos · 16-10-2026.pdf");
+  check("Content-Disposition: attachment, UTF-8 y respaldo ASCII", cd.startsWith('attachment; filename="Catalogo - Aticos - 16-10-2026.pdf"; filename*=UTF-8\'\'') && cd.includes("Cat%C3%A1logo"), cd);
+  const meta = pdfMetadata({ title: "Salamanca", intro: null, edition: "", preparedBy: null, phone: null, phoneHref: null, role: "asesor", coverPhoto: null, items: [] });
+  check("metadatos sin nada interno", JSON.stringify(meta) === JSON.stringify({ title: "Salamanca", author: "Benjamín Cousiño Propiedades", subject: "Selección de viviendas", creator: "Benjamín Cousiño Propiedades", producer: "Benjamín Cousiño Propiedades", language: "es-ES" }));
+}
+
 async function main() {
   section("T6 · contrato público y privacidad");
   {
@@ -1609,6 +1658,7 @@ async function main() {
     check("sin fotos: la galería se cierra", st.gallery === null);
   }
 
+  pdfPlanTests();
   await liveTests();
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);
