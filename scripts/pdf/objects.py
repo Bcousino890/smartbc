@@ -47,16 +47,29 @@ for n, body in objs.items():
         except Exception:
             pass
 
+def pdf_string(v):
+    """Cadena literal (...) o hexadecimal <...> de PDF, como texto."""
+    v = v.strip()
+    if v.startswith(b"<") and not v.startswith(b"<<"):
+        raw = bytes.fromhex(v[1:v.index(b">")].decode())
+    elif v.startswith(b"("):
+        raw = re.sub(rb"\\([()\\])", rb"\1", v[1:v.rindex(b")")])
+    else:
+        return v.decode("latin-1")
+    if raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16")
+    return raw.decode("latin-1")
+
 info = {}
 m = re.search(rb"/Info (\d+) 0 R", data)
 if m and int(m.group(1)) in objs:
-    for k, v in re.findall(rb"/(\w+) \(([^)]*)\)", objs[int(m.group(1))]):
-        info[k.decode()] = v.decode("latin-1")
-    for k, v in re.findall(rb"/(\w+) <([0-9A-Fa-f]+)>", objs[int(m.group(1))]):
+    for k, v in re.findall(rb"/(\w+)\s+(\d+ 0 R|\([^)]*\)|<[0-9A-Fa-f]+>)", objs[int(m.group(1))]):
+        if v.endswith(b" 0 R"):
+            v = objs.get(int(v.split()[0]), b"")
         try:
-            info[k.decode()] = bytes.fromhex(v.decode()).decode("utf-16")
+            info[k.decode()] = pdf_string(v)
         except Exception:
-            info[k.decode()] = v.decode()
+            info[k.decode()] = v.decode("latin-1", "ignore").strip()
 
 # Qué imágenes dibuja cada página, en orden (las páginas referencian las
 # imágenes por nombre en /Resources /XObject y las pintan con «/Nombre Do»).
@@ -65,7 +78,10 @@ for n, body in sorted(objs.items()):
     d = dict_of(body)
     if re.search(rb"/Type /Page\b", d):
         res = {}
-        xo = re.search(rb"/XObject\s*<<(.*?)>>", d, re.S)
+        # /Resources puede ir dentro de la página o como referencia indirecta.
+        rr = re.search(rb"/Resources (\d+) 0 R", d)
+        rd = dict_of(objs.get(int(rr.group(1)), b"")) if rr else d
+        xo = re.search(rb"/XObject\s*<<(.*?)>>", rd, re.S)
         if xo:
             for name, ref in re.findall(rb"/(\w+) (\d+) 0 R", xo.group(1)):
                 res[name.decode()] = int(ref)
