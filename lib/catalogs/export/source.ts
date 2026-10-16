@@ -1,7 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCatalogFixtureMode } from "../fixture-mode";
-import { isHomeOwner } from "../owner";
 import { linkExportReaders } from "../public-data";
 import type { InternalSnapshot } from "../to-public";
 import type { CaptureDeps } from "./capture";
@@ -30,6 +29,7 @@ export function exportReaders(scope: ExportScope): CaptureDeps<InternalSnapshot>
   const { ownerId, catalogId } = scope;
   return {
     checkAccess: async () => {
+      const { isHomeOwner } = await import("../owner");
       if (!(await isHomeOwner(ownerId))) return false;
       const { data } = await db().from("catalogs").select("id").eq("id", catalogId).eq("owner_id", ownerId).maybeSingle();
       return !!data;

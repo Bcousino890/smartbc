@@ -61,7 +61,8 @@ import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_M
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
 import type { PublicCatalog, PublicCatalogState, PublicItem } from "../lib/catalogs/public-contract.ts";
 import { captureFixed, captureHash, verifyFixed } from "../lib/catalogs/export/capture.ts";
-import { contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
+import { createExportRunner } from "../lib/catalogs/export/runner.ts";
+import { descriptionInSections, contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
 
 let failures = 0;
 
@@ -1228,6 +1229,15 @@ function pdfPlanTests() {
   check("más fotos: hasta 6, en el orden de la galería, sin las ya usadas", JSON.stringify(x.more) === JSON.stringify([0, 1, 2, 4, 6, 8]) && MORE_PHOTOS_MAX === 6);
   check("ninguna foto repetida en toda la vivienda", new Set(photosOfExport(x)).size === photosOfExport(x).length && JSON.stringify(photosOfExport(x)) === JSON.stringify([3, 5, 7, 0, 1, 2, 4, 6, 8]));
   check("descripción y características se conservan", x.description === "Descripción" && JSON.stringify(x.features) === JSON.stringify(["Ascensor"]) && !x.brief);
+  const desc = "Primera parte del texto. Segunda parte, más larga.\n\nTercera parte final.";
+  const split = base({ description: desc, sections: [{ heading: null, text: "Primera parte del texto. Segunda parte, más larga.", photo: null }, { heading: null, text: "Tercera parte final.", photo: null }] });
+  check("secciones = la descripción entera, en orden: no se repite en el detalle", descriptionInSections(split) && planItemExport(split).description === null && planItemExport(split).sections.length === 2);
+  const partial = base({ description: desc, sections: [{ heading: null, text: "Primera parte del texto.", photo: null }] });
+  check("si a las secciones les falta algo, la descripción va entera", !descriptionInSections(partial) && planItemExport(partial).description === desc);
+  const story = base({ description: "Otra cosa distinta.", sections: [{ heading: "La vivienda", text: "Capítulo", photo: null }] });
+  check("historia + descripción distinta: las dos", planItemExport(story).description === "Otra cosa distinta.");
+  const withLead = base({ description: desc, lead: "Primera parte del texto.", sections: [{ heading: null, text: "Segunda parte, más larga.", photo: null }, { heading: null, text: "Tercera parte final.", photo: null }] });
+  check("entrada (primeras frases) + secciones = la descripción: no se repite", descriptionInSections(withLead) && planItemExport(withLead).description === null);
   const many = base({ sections: Array.from({ length: 12 }, (_, i) => ({ heading: `Capítulo ${i + 1}`, text: `Texto ${i + 1} `.repeat(200), photo: null })) });
   const xm = planItemExport(many);
   check("K4: una historia de 12 capítulos sale entera (sin el límite de 3 dobles páginas del lector)", xm.sections.length === 12 && xm.sections[11].heading === "Capítulo 12" && xm.sections.every((s, i) => s.text === many.sections[i].text));
@@ -1297,6 +1307,137 @@ async function pdfCaptureTests() {
   shared.items[0].price = 999;
   check("S1 es una copia propia: no cambia si el origen cambia después", !!c3 && c3.snapshot.items[0].price === 300 && c3.hash === captureHash(mk(300), "sale"));
   check("lecturas hechas", reads > 0);
+}
+
+// ── PDF · generación acotada (K2, K3) ───────────────────────────────────────
+async function pdfRunnerTests() {
+  section("PDF · generación acotada: compartir, comprobación por petición, turno y cola (K2, K3)");
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  type Scope = { key: string; hash: string };
+  const mk = (opts: { buildMs?: number; renderMs?: number; verify?: (s: Scope) => "ok" | "changed" | "gone"; changedFirst?: boolean; limits?: Partial<Parameters<typeof createExportRunner>[1]> } = {}) => {
+    const log = { builds: 0, verifies: 0, active: 0, maxActive: 0, aborted: 0, finished: 0 };
+    let changedOnce = !!opts.changedFirst;
+    const runner = createExportRunner<Scope, { scope: Scope }>(
+      {
+        capture: async (sc) => ({ scope: sc, hash: sc.hash }),
+        verify: async (sc) => { log.verifies++; return opts.verify ? opts.verify(sc) : "ok"; },
+        build: async (_cap, signal) => {
+          log.builds++;
+          log.active++;
+          log.maxActive = Math.max(log.maxActive, log.active);
+          try {
+            // Fase de fotos: cancelable.
+            for (let t = 0; t < (opts.buildMs ?? 40); t += 10) {
+              if (signal.aborted) { log.aborted++; throw new Error("cancelado"); }
+              await sleep(10);
+            }
+            // Renderizado: NO cancelable.
+            await sleep(opts.renderMs ?? 0);
+            if (changedOnce) { changedOnce = false; return { changed: true as const }; }
+            log.finished++;
+            return { pdf: Buffer.from("PDF") };
+          } finally {
+            log.active--;
+          }
+        },
+        setTimeout: (fn, ms) => setTimeout(fn, ms),
+        clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+      },
+      { maxConcurrent: 1, maxQueue: 4, queueWaitMs: 2000, requestTimeoutMs: 2000, jobBudgetMs: 2000, ...opts.limits },
+    );
+    return { runner, log };
+  };
+  const sig = () => new AbortController();
+
+  {
+    const { runner, log } = mk();
+    const A: Scope = { key: "enlace:t1", hash: "H" };
+    const [r1, r2] = await Promise.all([runner.run(A, A.key, sig().signal), runner.run(A, A.key, sig().signal)]);
+    check("K2: mismo ámbito y misma huella → UN trabajo, dos PDF, dos comprobaciones finales", r1.ok && r2.ok && log.builds === 1 && log.verifies === 2);
+  }
+  {
+    const { runner, log } = mk();
+    const A: Scope = { key: "enlace:t1", hash: "H" }, B: Scope = { key: "enlace:t2", hash: "H" };
+    const [r1, r2] = await Promise.all([runner.run(A, A.key, sig().signal), runner.run(B, B.key, sig().signal)]);
+    check("K2: otro ámbito con el mismo contenido → trabajo propio (nunca se comparte entre enlaces)", r1.ok && r2.ok && log.builds === 2);
+    check("K3: con un turno, nunca dos trabajos a la vez", log.maxActive === 1);
+  }
+  {
+    // Un enlace se revoca mientras se genera: SU petición no recibe nada; la otra, sí.
+    let calls = 0;
+    const { runner } = mk({ verify: () => (++calls === 1 ? "gone" : "ok") });
+    const A: Scope = { key: "dueño:p:c", hash: "H" };
+    const [r1, r2] = await Promise.all([runner.run(A, A.key, sig().signal), runner.run(A, A.key, sig().signal)]);
+    const results = [r1, r2].map((r) => (r.ok ? "ok" : r.error)).sort();
+    check("K2: cada petición pasa su comprobación; la revocada → 404 y la otra recibe su PDF", JSON.stringify(results) === JSON.stringify(["not_found", "ok"]));
+  }
+  {
+    // Tiempo máximo de la petición más corto que el trabajo: la petición se va,
+    // pero el turno sigue ocupado hasta que el trabajo termina (K3).
+    const { runner, log } = mk({ buildMs: 30, renderMs: 250, limits: { requestTimeoutMs: 80 } });
+    const A: Scope = { key: "enlace:a", hash: "H" }, B: Scope = { key: "enlace:b", hash: "H2" };
+    const pa = runner.run(A, A.key, sig().signal);
+    await sleep(15);
+    const pb = runner.run(B, B.key, sig().signal);
+    const ra = await pa;
+    await sleep(5);
+    const busyAfterTimeout = runner.stats().running === 1;
+    const rb = await pb;
+    check("K3: la petición vence («timeout») y el turno sigue ocupado mientras el renderizado continúa", !ra.ok && ra.error === "timeout" && busyAfterTimeout);
+    check("K3: el renderizado ya empezado no se interrumpe; la siguiente espera y no se solapan", log.maxActive === 1 && (rb.ok || (!rb.ok && rb.error === "timeout")));
+    await sleep(400);
+    check("K3: al terminar todo, turno y cola limpios", runner.stats().running === 0 && runner.stats().queued === 0 && runner.stats().jobs === 0);
+  }
+  {
+    // Cancelar la única petición en la fase de fotos cancela el trabajo de verdad.
+    const { runner, log } = mk({ buildMs: 300 });
+    const A: Scope = { key: "enlace:c", hash: "H" };
+    const ctl = sig();
+    const p = runner.run(A, A.key, ctl.signal);
+    await sleep(30);
+    ctl.abort();
+    const r = await p;
+    await sleep(40);
+    check("cancelar la única petición cancela la fase de fotos (señal real) y libera el turno", !r.ok && r.error === "cancelled" && log.aborted === 1 && runner.stats().running === 0);
+  }
+  {
+    // Si se cancela una de dos peticiones, el trabajo sigue para la otra.
+    const { runner, log } = mk({ buildMs: 80 });
+    const A: Scope = { key: "enlace:d", hash: "H" };
+    const c1 = sig();
+    const p1 = runner.run(A, A.key, c1.signal);
+    const p2 = runner.run(A, A.key, sig().signal);
+    await sleep(20);
+    c1.abort();
+    const [r1, r2] = await Promise.all([p1, p2]);
+    check("cancelar una de dos no estropea la otra: la otra recibe su PDF", !r1.ok && r1.error === "cancelled" && r2.ok && log.aborted === 0);
+  }
+  {
+    const { runner } = mk({ buildMs: 150, limits: { maxQueue: 1 } });
+    const s = (k: string): Scope => ({ key: k, hash: k });
+    const rs = await Promise.all(["e:1", "e:2", "e:3"].map((k) => runner.run(s(k), k, sig().signal)));
+    check("cola acotada: con 1 en curso y 1 esperando, la tercera → «busy»", rs.filter((r) => !r.ok && r.error === "busy").length === 1 && rs.filter((r) => r.ok).length === 2);
+  }
+  {
+    const { runner, log } = mk({ changedFirst: true });
+    const A: Scope = { key: "enlace:f", hash: "H" };
+    const r = await runner.run(A, A.key, sig().signal);
+    check("una foto con otra versión → se repite desde la captura una vez y sale bien", r.ok && log.builds === 2);
+  }
+  {
+    const { runner } = mk({ verify: () => "changed" });
+    const A: Scope = { key: "enlace:g", hash: "H" };
+    const r = await runner.run(A, A.key, sig().signal);
+    check("el contenido sigue cambiando en la comprobación final → «changed» (409)", !r.ok && r.error === "changed");
+  }
+  {
+    const runner = createExportRunner<Scope, object>(
+      { capture: async () => null, verify: async () => "ok", build: async () => ({ pdf: Buffer.from("x") }), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>) },
+      { maxConcurrent: 1, maxQueue: 1, queueWaitMs: 100, requestTimeoutMs: 100, jobBudgetMs: 100 },
+    );
+    const r = await runner.run({ key: "x", hash: "" }, "x", sig().signal);
+    check("sin acceso en la captura → «not_found» (404), sin generar", !r.ok && r.error === "not_found");
+  }
 }
 
 async function main() {
@@ -1710,6 +1851,7 @@ async function main() {
 
   pdfPlanTests();
   await pdfCaptureTests();
+  await pdfRunnerTests();
   await liveTests();
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);

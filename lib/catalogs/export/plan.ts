@@ -26,6 +26,10 @@ export interface ItemExport {
   highlights: string[];
   /** Todas las secciones, en orden; `photo` solo si esa foto no salió antes. */
   sections: { heading: string | null; text: string; photo: number | null }[];
+  /** Descripción completa para «La vivienda en detalle»; null si no hay o si
+   *  las secciones ya la contienen entera (sin historia, el lector parte la
+   *  propia descripción en secciones: en el PDF van todas, así que repetirla
+   *  sería duplicarla. Si faltara algo, se incluye entera). */
   description: string | null;
   features: string[];
   /** Hasta 6 fotos más (índices en item.photos), en el orden de la galería. */
@@ -54,11 +58,32 @@ export function planItemExport(item: PublicItem): ItemExport {
     leadInJourney: lead && !inOpening ? lead : null,
     highlights: item.highlights,
     sections,
-    description: item.description,
+    description: item.description && !descriptionInSections(item) ? item.description : null,
     features: item.features,
     more,
     brief: item.sections.length === 0 && !item.description,
   };
+}
+
+const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+
+/** ¿La entrada y las secciones contienen ya TODA la descripción, en orden?
+ *  (Sin entrada propia, la entrada son las primeras frases del texto y las
+ *  secciones el resto.) Solo entonces se omite en el detalle: nunca se pierde
+ *  texto. */
+export function descriptionInSections(item: Pick<PublicItem, "description" | "sections" | "lead">): boolean {
+  if (!item.description || !item.sections.length) return false;
+  const d = norm(item.description);
+  const lead = item.lead ? norm(item.lead) : "";
+  let at = lead && d.startsWith(lead) ? lead.length : 0;
+  for (const s of item.sections) {
+    const t = norm(s.text);
+    const i = d.indexOf(t, at);
+    if (!t || i < 0) return false;
+    if (d.slice(at, i).trim()) return false;
+    at = i + t.length;
+  }
+  return !d.slice(at).trim();
 }
 
 /** Todas las fotos que usa el PDF de una vivienda, en orden y sin repetir. */
