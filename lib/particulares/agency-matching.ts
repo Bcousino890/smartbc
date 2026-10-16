@@ -380,3 +380,31 @@ export function applyAgencyToState(
   }
   return state;
 }
+
+/**
+ * Anuncios que pueden ser el MISMO piso que alguna propiedad del CRM (rendimiento: el cruce se hace solo con
+ * estos, no con las 90.000 filas). Misma operación + m² + habitaciones y precio ±12 %, o referencia / id de
+ * portal / foto de portada en común con la propiedad. Es un filtro por exceso: lo decide después `computeAgencyMatches`.
+ */
+export function crmCandidateRows(rows: LinkRow[], properties: AgencyPropertyInput[]): LinkRow[] {
+  const byKey = new Map<string, number[]>();
+  const refs = new Set<string>();
+  const photos = new Set<string>();
+  for (const p of properties) {
+    const m2 = num(p.square_meters);
+    if (m2 != null && p.bedrooms != null) {
+      const k = `${p.operation}|${m2}|${p.bedrooms}`;
+      byKey.set(k, [...(byKey.get(k) ?? []), num(p.price) ?? 0]);
+    }
+    for (const r of refsOf([p.external_id, p.property_reference, p.bc_reference])) refs.add(r);
+    const pk = photoKey(p.cover_photo_url);
+    if (pk) photos.add(pk);
+  }
+  return rows.filter((r) => {
+    if ((r.refs ?? []).some((x) => refs.has(x)) || (r.photo_keys ?? []).some((k) => photos.has(k))) return true;
+    if (r.square_meters == null || r.bedrooms == null) return false;
+    const prices = byKey.get(`${r.operation}|${r.square_meters}|${r.bedrooms}`);
+    if (!prices) return false;
+    return r.price == null || prices.some((pp) => pp === 0 || Math.abs(pp - r.price!) <= 0.12 * r.price!);
+  });
+}

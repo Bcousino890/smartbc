@@ -22,7 +22,7 @@ import {
   webKeysOf,
 } from "../lib/particulares/agency-web.ts";
 import { parseAgencyWebHtml, parseGenericFicha, parseInmowebFicha, robotsAllows, toOriginalImageUrl } from "../lib/particulares/agency-web-readers.ts";
-import { computeAgencyPortalLinks, propertyToLinkRow, viewRowToLinkRow } from "../lib/particulares/agency-matching.ts";
+import { computeAgencyPortalLinks, crmCandidateRows, propertyToLinkRow, viewRowToLinkRow } from "../lib/particulares/agency-matching.ts";
 import { pairAgencyInmuebles, webLinks } from "../lib/particulares/agency-pairs.ts";
 import { photosSig, planWebPhotoReplacements } from "../lib/particulares/web-photos-plan.ts";
 import { isCollaboratingAgency, kindOfCrmProperty, sourceLabel } from "../lib/particulares/source-kind.ts";
@@ -276,6 +276,24 @@ check("la web cambió de fotos (otra huella): se rehace", one({ photos_source: "
 check("restaurada a mano: el job no vuelve a reemplazar", one({ photos_source: "restored" }).reason === "restaurada_a_mano");
 check("agencia colaboradora (feed): no se toca sola", one({ collab: true }).reason === "colaboradora");
 check("varias propiedades: cada una su plan", planWebPhotoReplacements([base, { ...base, property_id: "p2", slug: "s2", web: null }]).map((x) => x.action).join() === "replace,skip");
+
+console.log("— Candidatos del cruce con el CRM (rendimiento)");
+const prop = { id: "pp", agency_name: "X", operation: "rent" as const, status: "available", archived_at: null, price: 5000, bedrooms: 3, bathrooms: 3, square_meters: 140, address: "Claudio Coello", latitude: null, longitude: null, created_at: null, external_id: "idealista-101801526" };
+const cr = (id: string, over: Record<string, unknown>) => mk(id, "idealista", { advertiser_type: "particular", ...over });
+const cands = crmCandidateRows(
+  [
+    cr("00000000-0000-0000-0000-0000000000a1", {}),
+    cr("00000000-0000-0000-0000-0000000000a2", { square_meters: 60 }),
+    cr("00000000-0000-0000-0000-0000000000a3", { price: 9000 }),
+    cr("00000000-0000-0000-0000-0000000000a4", { operation: "sale" }),
+    cr("00000000-0000-0000-0000-0000000000a5", { square_meters: null, bedrooms: null, external_id: "101801526" }),
+    cr("00000000-0000-0000-0000-0000000000a6", { price: 5400 }),
+  ],
+  [prop],
+).map((r) => r.id.slice(-2));
+check("misma op + m² + hab. + precio ±12 %: candidata", cands.includes("a1") && cands.includes("a6"), cands);
+check("otros m², otro precio u otra operación: fuera", !cands.includes("a2") && !cands.includes("a3") && !cands.includes("a4"), cands);
+check("mismo id de portal que la propiedad: candidata aunque falten m²", cands.includes("a5"), cands);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${ok} ok, ${fail} fallos`);
 process.exit(fail === 0 ? 0 : 1);

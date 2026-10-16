@@ -10,6 +10,7 @@ import {
 import {
   applyAgencyToState,
   computeAgencyMatches,
+  crmCandidateRows,
   computeAgencyPortalLinks,
   viewRowToLinkRow,
   type ViewRow,
@@ -223,9 +224,6 @@ export function runParticularesLinking(opts: { dryRun?: boolean } = {}): Promise
 const BUDGET_MS = Number(process.env.PARTICULARES_LINK_BUDGET_MS) || 60_000;
 /** Interruptor: PARTICULARES_AGENCY_PASSES=0 apaga los pases de agencias (portal, CRM, webs, fotos). */
 const AGENCY_PASSES = process.env.PARTICULARES_AGENCY_PASSES !== "0";
-/** Más filas «professional» que esto y el pase de agencias en portales no cabe en el presupuesto: se salta. */
-const PRO_MAX_ROWS = Number(process.env.PARTICULARES_PRO_MAX_ROWS) || 15_000;
-
 type StateMap = Map<string, RowGroupState>;
 
 /** Filas cuyo estado deseado difiere de lo ya escrito (o, si no se escribió, de lo que había al cargar). */
@@ -310,13 +308,18 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     let proRows: CurrentRow[] = [];
     if (AGENCY_PASSES) {
       await safe("pro", async () => {
-        if (left() < 30_000) return void (skipped.pro = "sin tiempo");
-        const c = await db.from("particulares_agency_rows").select("id", { count: "exact", head: true });
-        const total = Number(c.count ?? 0);
-        if (c.error || total === 0) return void (skipped.pro = c.error ? c.error.message : "sin filas");
-        if (total > PRO_MAX_ROWS) return void (skipped.pro = `${total} filas > ${PRO_MAX_ROWS}`);
-        proRows = await loadRows(db, "particulares_agency_rows", true, started + BUDGET_MS * 0.5);
+        if (left() < 25_000) return void (skipped.pro = "sin tiempo");
+        // Solo las candidatas (0207): ~9.500 de las ~70.000. Sin la función, el pase se salta.
+        const rpc = await db.rpc("get_particulares_agency_candidates");
+        if (rpc.error) return void (skipped.pro = `migración 0207 sin aplicar (${rpc.error.message})`);
+        proRows = ((rpc.data ?? []) as ViewRow[]).map((r) => ({
+          ...viewRowToLinkRow(r),
+          duplicate_of: (r as unknown as CurrentRow).duplicate_of,
+          link_summary: (r as unknown as CurrentRow).link_summary,
+          link_ops: (r as unknown as CurrentRow).link_ops,
+        }));
         mark("load_pro");
+        if (proRows.length === 0) return void (skipped.pro = "sin candidatas");
         const wc = await loadAgencyWebCache(db, proRows.map((r) => r.agency_url));
         if (wc) {
           for (const r of proRows) {
@@ -355,7 +358,8 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
         agencyReady = true;
         // Solo el anuncio principal de cada grupo: sus copias (otro portal, mismo piso) serían
         // «gemelos parecidos» y degradarían a «probable» un enlace que es cierto.
-        const primaries = allRows.filter((r) => !result.state.get(r.id)?.duplicate_of);
+        const primaries = crmCandidateRows(allRows.filter((r) => !result.state.get(r.id)?.duplicate_of), props) as CurrentRow[];
+        result.stats.crm_candidates = primaries.length;
         agencyMatches = computeAgencyMatches(primaries, props, agencyDecisions);
         applyAgencyToState(result, primaries, props, agencyMatches);
         result.stats.agency_matches = agencyMatches.length;
