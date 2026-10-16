@@ -2,9 +2,9 @@
 
 Descargar un catálogo existente como un PDF editorial (dirección Boutique) que refleja exactamente lo que el cliente ve en ese momento en el enlace vivo. **Primera entrega: exportar.** Importar PDF de colaboradores es otra entrega, posterior, que necesita muestras representativas.
 
-- **Tamaño:** grande o sensible (propuesta): generación en el servidor de producción con fotos reales, una ruta nueva con datos de clientes potenciales y quizá dependencias de fuentes. Sin migración prevista.
+- **Tamaño:** grande o sensible: generación en el servidor de producción con fotos reales, **dos rutas nuevas (una pública, por el enlace)** y fuentes incluidas en el repositorio. Sin migración prevista.
 - **Responsable:** Fabricio.
-- **Estado:** **borrador**. No está aprobado; no autoriza plan, implementación, instalaciones ni PR.
+- **Estado:** **aprobada para planificar** el 16 de octubre de 2026 (especificación y dirección visual Boutique, con P1–P9). No autoriza implementar, instalar, descargar recursos, arrancar servicios ni abrir un PR: eso lo autoriza la aprobación de [`plan.md`](plan.md).
 - **Base explorada:** `origin/main` = `94b513f` (merge de #322), 16 de octubre de 2026. Solo lectura.
 - **Maqueta:** [`maquetas/pdf.html`](maquetas/pdf.html), con las capturas `maqueta-*.png`.
 
@@ -27,7 +27,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 
 | Pieza | Qué hace | ¿Se reutiliza? |
 | --- | --- | --- |
-| `@react-pdf/renderer` 4.x (dependencia ya instalada) | Genera PDF en Node con paginación automática (`wrap`, `break`, `minPresenceAhead`, cabeceras y pies `fixed`, números de página con `render`, enlaces internos). Ya lo usan `lib/pdf/property-pdf.tsx` (ficha de propiedad), `documento-pdf.tsx` y `candidate-summary-pdf.tsx`. | **Sí**, como motor (propuesta). |
+| `@react-pdf/renderer` 4.x (dependencia ya instalada) | Genera PDF en Node con paginación automática (`wrap`, `break`, `minPresenceAhead`, cabeceras y pies `fixed`, números de página con `render`, enlaces internos). Ya lo usan `lib/pdf/property-pdf.tsx` (ficha de propiedad), `documento-pdf.tsx` y `candidate-summary-pdf.tsx`. | **Sí**, como motor. |
 | `app/api/admin/properties/[slug]/pdf/route.ts` | Ruta del PDF de propiedad: guarda de staff, fotos convertidas a JPEG con `sharp` (las WebP no las lee bien react-pdf) y `renderToBuffer`. | **Sí**, el patrón (fotos → JPEG, `renderToBuffer`, `Content-Disposition`). |
 | `lib/pdf/load-logo.ts` | El logo como data URI. | **Sí** (D18). |
 | Fuentes del PDF de propiedad | Solo las de serie (Times, Helvetica). | **No**: el catálogo es Fraunces y Karla (D17). |
@@ -45,58 +45,91 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 - Si el VPS tiene Chromium instalado, cuánta memoria libre hay, y cuál es el tiempo máximo de respuesta del proxy (nginx) delante de la app. No hay acceso a producción.
 - Cuántas fotos y qué tamaños tienen los catálogos reales de Fabricio.
 
-## Alcance propuesto (primera entrega: exportar)
+## Decisiones (16 de octubre de 2026, Fabricio)
 
-1. **Un botón «Descargar PDF»** en el gestor del catálogo, en la sección Compartir y en el menú «⋯».
-   - Solo el dueño de la HOME.
-   - Genera y descarga `Catálogo · <título> · <fecha>.pdf`.
-2. **El contenido es exactamente el público del momento**, con `toPublicCatalog` sobre una lectura coherente:
-   - **Portada:** el logo oficial, el título, la edición, la foto de portada elegida o su respaldo (E3-3) en el arco, y «Preparada por <contacto>».
+- **P1. Formato:** A4 vertical, una página por hoja.
+- **P2. Fotos por vivienda:** la foto de apertura efectiva, las fotos del recorrido y **hasta seis más** de la galería, **sin repetir ninguna**. Las exclusiones de E3 se respetan en todas partes.
+- **P3. Sin la dirección del enlace vivo ni un código QR** dentro del PDF.
+- **P4. El dueño** puede descargar también catálogos **archivados** y catálogos **sin enlace activo**.
+- **P5. Los clientes** también pueden descargarlo **desde un enlace público válido** de un catálogo disponible. Ya formaba parte del producto pedido: el alcance aprobado **no** es solo para el dueño.
+- **P6. Se conserva lo del lector:**
+  - la prioridad de textos;
+  - la selección y el orden efectivos;
+  - la operación del contexto y sus precios;
+  - el logo y los respaldos de la portada;
+  - el contacto editable del asesor.
+- **P7. El índice** lleva números de página correctos y enlaces internos.
+- **P8. Si algo resulta difícil, no se cambia el diseño en silencio.** El arco de la portada y los números del índice no se sustituyen ni se quitan sin presentar antes el cambio a Fabricio para que lo apruebe.
+- **P9. La aceptación visual final** se hace sobre **PDF reales generados**. Aprobar la maqueta HTML no es la QA final del PDF.
+
+## Alcance (primera entrega: exportar)
+
+1. **Dos formas de descargar,** con autorizaciones separadas:
+   - **el dueño:** «Descargar PDF» en el gestor (sección Compartir y menú «⋯»). Funciona aunque el catálogo esté archivado o no tenga enlace activo (P4);
+   - **el cliente:** «Descargar en PDF» en el lector del enlace público (`/seleccion/<token>`), solo mientras el enlace sea válido y el catálogo esté disponible (P5). Enlace caducado, revocado o inexistente, o catálogo archivado: 404 sin decir cuál (como el estado público).
+   - El archivo se llama `Catálogo · <título> · <fecha>.pdf`.
+2. **El contenido es exactamente el público del momento:** `toPublicCatalog` sobre una lectura coherente, **la misma proyección del lector**, sin una segunda regla de prioridad de textos (P6):
+   - **Portada:** el logo oficial, el título, la edición, la foto de portada efectiva con sus respaldos (E3-3) **en el arco**, y «Preparada por <contacto>».
    - **Introducción:** la del catálogo, firmada por el contacto del catálogo.
-   - **Índice:** las viviendas en su orden efectivo, con su número, título, zona, precio de la operación, «Reservada» y la página. Cada línea enlaza a su vivienda.
+   - **Índice:** las viviendas en su orden efectivo, con su número, título, zona, precio de la operación, «Reservada» y **número de página correcto**. Cada línea es un **enlace interno** a su vivienda (P7).
    - **Cada vivienda:**
-     - **apertura:** la foto de apertura efectiva (E3), los datos clave y el precio de la operación (con «También en alquiler…» si aplica, como en el lector), la entrada y los puntos verificados;
-     - **recorrido:** las secciones publicables en orden, cada una con su foto si la tiene;
-     - **detalle:** la descripción **completa** vigente (la misma regla que el lector: el texto publicado del catálogo, si no la descripción limpia, si no nada) y las características verificadas;
-     - **galería:** una selección de fotos según la decisión pendiente 2.
-   - **Cierre:** el logo, «Hablemos», la tarjeta con el rol, el nombre y el teléfono del contacto editable del catálogo, y la nota de versión (ver «Copia fija»).
+     - **apertura:** la foto de apertura efectiva (E3), los datos clave y el precio de la operación del contexto (con «También en…», como en el lector), la entrada y los puntos verificados;
+     - **recorrido:** las secciones publicables, en orden, con su foto. Qué va en la apertura y qué va en el recorrido se decide con las mismas reglas de contenido del lector (`itemLayout`): por ejemplo, una entrada larga pasa al recorrido;
+     - **detalle:** la descripción **completa** vigente y las características;
+     - **más fotos:** hasta 6 fotos en uso que no sean ya la apertura ni del recorrido, en el orden de la galería (P2).
+   - **Cierre:** el logo, «Hablemos», la tarjeta con el rol, el nombre y el teléfono del contacto del catálogo, y la nota de copia fija. **Sin la dirección del enlace ni un QR** (P3).
 3. **Material que falta,** como en el lector y sin inventar:
    - vivienda sin fotos: un marco con «Sin fotos»;
-   - sin descripción ni recorrido: la ficha breve con los datos y las características;
+   - sin descripción ni recorrido: la ficha breve;
    - precio desconocido: «Precio · sin dato»;
    - dato desconocido: no se pinta o sale «sin dato», nunca 0;
-   - **foto que no se puede leer en el momento:** su marco con «Foto no disponible»; **nunca otra foto en su lugar**.
+   - **foto que falla al leerla:** su marco con «Foto no disponible», **nunca otra foto**.
 4. **No entra nunca:**
-   - notas internas, criterios, modo, grupos de la HOME, anuncios de origen o sus códigos;
-   - referencias BC, ids, slugs, claves de fotos o URL (de almacenamiento, del proxy o del enlace vivo, ver la pendiente 3);
-   - avisos internos del gestor (por ejemplo «falta precio principal») y datos del dueño que no estén en el contacto del catálogo.
-   - Los metadatos del PDF tampoco: título = título del catálogo, autor = «Benjamín Cousiño Propiedades», sin ids.
+   - notas internas, criterios, modo, grupos de la HOME, anuncios de origen;
+   - referencias BC, ids, slugs, claves o versiones de fotos, ni URL (de almacenamiento, del proxy o del enlace);
+   - avisos internos ni datos del dueño que no estén en el contacto del catálogo.
+   - Tampoco en los metadatos ni en los objetos del PDF.
 
 ## Copia fija frente a enlace vivo
 
-- **Un PDF = una versión:**
-  - el servidor lee `versión → instantánea → versión` (`readCoherent`) y, si cambió entre medias, repite (hasta 3 veces). Si no se estabiliza, no genera y dice «El catálogo está cambiando; vuelve a intentarlo»;
-  - las fotos se descargan **antes** de componer, por su clave, y se comprueba que su versión (`v`) es la de la instantánea. Si una foto cambió de archivo entre medias, se vuelve a leer todo una vez; si sigue cambiando, falla con el mismo mensaje.
+- **Un PDF = una versión (P9 de BCP-01).** `catalogs.version` **no basta**: no sube cuando cambian las fichas o las fotos compartidas de las propiedades (precio, textos, fotos). Por eso se usan dos comprobaciones:
+  1. **Lectura coherente** (`readCoherent`): versión → instantánea → versión, para la operación del contexto.
+  2. **Huella de la instantánea**, que sí cubre los datos de las propiedades y la versión de cada foto: se anota al leer y se vuelve a pedir **después de descargar las fotos y antes de responder**. Si cambió, se repite todo una vez; si sigue cambiando, no se genera y sale «El catálogo está cambiando; vuelve a intentarlo».
+  - **Cada foto** se resuelve por su clave y se comprueba que su versión (`v`, derivada de su URL) es la de la instantánea. Si no coincide, la instantánea ya no vale y se repite.
+  - **Límite conocido** (corrección 5 de E3): un archivo sustituido **en la misma URL** no cambia la versión y no se detecta. Queda documentado y no se amplía aquí.
   - Así el PDF nunca mezcla dos versiones.
 - **La portadilla y el cierre dicen** «Versión del 16 de octubre de 2026, 19:40». En el cierre, en lugar del «se actualiza sola» del lector: «Este documento es una copia fija. La selección en línea puede haber cambiado desde entonces.»
-- **Generar el PDF no cambia nada:** ni el catálogo, ni su versión, ni su huella, ni el enlace, ni avisa a los lectores. No se guarda el PDF en el servidor (propuesta; ver «Riesgos»).
+- **Generar el PDF no cambia nada:** ni el catálogo, ni su versión, ni su huella, ni el enlace, ni avisa a los lectores.
+- **No se guarda ningún PDF en el servidor ni se reutiliza entre personas o enlaces:**
+  - las respuestas van con `Cache-Control: private, no-store`, `Content-Disposition: attachment`, `X-Robots-Tag: noindex` y `Referrer-Policy: no-referrer`;
+  - dos peticiones iguales a la vez (el mismo enlace o el mismo dueño y catálogo, con la misma huella) comparten una sola generación en curso, y nada más.
+- **La autorización se vuelve a comprobar antes de responder.** Si el enlace caducó o se revocó, o el catálogo dejó de estar disponible mientras se generaba (o el dueño dejó de serlo), no se entrega el PDF.
 
-## Composición (propuesta visual; ver la maqueta)
+## Composición (dirección aprobada; la QA final es sobre PDF reales, P9)
 
-- **Formato:** A4 vertical, márgenes de 18 mm, papel cálido `#f4ede1`, tinta `#2b2118`, acento `#9b4a2e`, Fraunces para títulos y pies en cursiva, Karla para el texto (D17). Es una página por hoja, como el lector en el móvil: se lee en pantalla y se imprime bien. A4 horizontal a doble página es la alternativa de la pendiente 1.
-- **Texto:** cuerpo de 10,5 pt con interlineado de 1,5. **Nunca se corta**: un texto largo sigue en la página siguiente, y la continuación lleva una cabecera discreta («nº 03 · Piso señorial… — continuación»). Un título nunca se queda solo al pie (`minPresenceAhead`) y una foto nunca se parte.
+- **Formato y estilo:**
+  - A4 vertical, una página por hoja (P1), con márgenes de 18 mm;
+  - papel cálido `#f4ede1`, tinta `#2b2118` y acento `#9b4a2e`;
+  - Fraunces para los títulos y los pies en cursiva, y Karla para el texto (D17);
+  - las fuentes van **incluidas en el repositorio**, con su licencia; el PDF **no depende de Google Fonts** al generarse.
+- **Texto:**
+  - cuerpo de 10,5 pt con interlineado de 1,5;
+  - **nunca se corta**: un texto largo sigue en la página siguiente, con una cabecera de continuación («nº 03 · Piso señorial… — continuación»);
+  - ningún título se queda solo al pie y ninguna foto se parte.
 - **Folios** al pie («Salamanca y Chamberí · 7»), salvo en la portada.
 - **Índice:**
-  - con número de página. Se calcula en dos pasadas: una primera composición anota en qué página empieza cada vivienda y la segunda los escribe (técnica habitual con react-pdf, a confirmar en el plan);
+  - con números de página **correctos** (P7). Se calculan en dos pasadas, y la segunda se comprueba con la primera;
   - si una lista no cabe en una página, sigue en la siguiente con «Índice (continuación)»;
   - cada línea es un enlace interno a su vivienda.
 - **Vivienda (en orden):**
   1. **Apertura,** en una página: la foto de apertura enmarcada (de la mitad a dos tercios de la página), el número y el título, la zona, el precio y la operación, «Reservada», los datos clave (m², dormitorios, baños, planta), la entrada y hasta 3 puntos.
   2. **Recorrido:** cada sección con su título (si viene de una historia aprobada), su texto y su foto encima o al lado, según la orientación (vertical al lado, horizontal encima). Las secciones fluyen en orden y nunca se repiten.
   3. **«La vivienda en detalle»:** la descripción completa y las características en dos columnas, si caben.
-  4. **Galería:** una rejilla de 2 × 2 o 2 × 3 fotos por página, con su pie («Foto 4 de 12»), según la decisión pendiente 2.
+  4. **Más fotos:** una rejilla de 2 × 2 o 2 × 3 fotos por página, hasta 6 fotos (P2), con su pie («Foto 4 de 12»).
   5. Cada vivienda empieza en página nueva.
-- **Portada:** el logo arriba (44 % del ancho), las etiquetas (selección privada, edición), el arco con la foto, el título en Fraunces cursiva y «Preparada por …». **Riesgo técnico:** recortar la foto en arco con react-pdf (SVG `ClipPath`) se comprueba al empezar el plan. Si no se puede, se usa un marco con la parte superior redondeada, que se ve casi igual.
+- **Portada:** el logo arriba (44 % del ancho), las etiquetas (selección privada, edición), **el arco con la foto**, el título en Fraunces cursiva y «Preparada por …».
+  - El arco del lector es un marco con la parte superior completamente redondeada (`border-radius: 999px 999px 4px 4px`), y se reproduce igual en react-pdf.
+  - Si al comprobarlo no saliera fiel, se presenta el cambio a Fabricio antes de aplicarlo (P8).
 - **Cierre:** el logo (52 %), «Hablemos», la tarjeta del contacto (con el teléfono en texto, también enlazado como `tel:`), la nota de copia fija y el ornamento ✦.
 
 ## Alternativas consideradas
@@ -108,24 +141,18 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
     - **no está demostrado que el VPS tenga Chromium**: instalarlo y ejecutarlo en el mismo servidor de la web pesa cientos de MB de memoria por PDF.
   - **No se propone.**
 - **Un servicio externo de PDF:** de pago y fuera de lo autorizado. **Descartado.**
-- **react-pdf (propuesta):**
+- **react-pdf (elegido):**
   - **ventajas:** ya está en el proyecto y en producción; pagina solo, sin cortar texto; incrusta las fuentes; no necesita navegador.
   - **Coste:** rehacer la maquetación en sus componentes (no reutiliza el CSS del lector) y tener las fuentes como archivos.
 
 ## Dependencias, alojamiento y coste
 
-- **Fuentes:** hacen falta Fraunces (normal, cursiva y negrita) y Karla (normal y negrita) como archivos estáticos (TTF o WOFF). Las dos son gratuitas (SIL OFL 1.1). Opciones:
-  - **a) `@fontsource/fraunces` y `@fontsource/karla`** (paquetes npm gratuitos, ya previstos en el plan original). Antes de instalarlos se comprueban la versión y la licencia;
-  - **b) copiar al repositorio los TTF estáticos** de Google Fonts (unos 300–600 kB), con su licencia OFL.
-  - Propuesta: **b)**, sin paquetes nuevos. Lo decide el plan, no hace falta que lo decida Fabricio.
-- **Sin servicios externos, sin IA y sin coste.** Se genera en el mismo proceso Node del VPS.
-- **Cargas en el servidor:**
-  - una generación lee de 1 a 24 viviendas y sus fotos, las convierte con `sharp` y compone. Se estima entre segundos y algunas decenas de segundos y unos cientos de MB de memoria en el pico, **a medir** en el plan con datos sintéticos de tamaño real;
-  - medidas propuestas: **un PDF a la vez** (cola de uno), fotos de 1.400 px en JPEG a calidad 75 y un límite de fotos por vivienda (pendiente 2);
-  - si el proxy del VPS corta las peticiones largas (no comprobado), se ve en la QA y se ajusta (fotos más pequeñas o generación en dos pasos).
-- **Tamaño del archivo:** el objetivo es menos de 15 MB para un catálogo de 12 viviendas con la galería propuesta. Se mide.
+- **No hace falta ningún servicio de pago nuevo** ni IA. Eso no quiere decir que no cueste recursos: cada PDF consume CPU, memoria y red en el mismo VPS que la web, y eso se mide y se acota (ver el plan).
+- **Lo que se reutiliza:** `@react-pdf/renderer` y `sharp` (ya instalados y en producción), `toPublicCatalog`, `readCoherent`, `pickProxyPhoto`, `loadLogoDataUri` y el limitador por token.
+- **Una descarga explícita, sin dependencia nueva en tiempo de ejecución:** los archivos de Fraunces (normal, cursiva y seminegrita) y Karla (normal y seminegrita) en formato estático, con su licencia SIL OFL 1.1, se copian **al repositorio**. Necesita la autorización del plan.
+- **Herramientas de verificación gratuitas, sin instalar nada:** PDFKit de macOS (con `swift`) para pasar las páginas a imagen, extraer el texto por página y leer los enlaces, y un script sin dependencias para revisar los objetos del PDF (fuentes incrustadas, URI y metadatos).
 
-## Criterios de aceptación (propuesta)
+## Criterios de aceptación
 
 | # | Criterio |
 | --- | --- |
@@ -138,37 +165,36 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 | PDF7 | Las fuentes Fraunces y Karla están incrustadas (`FontFile`) y los caracteres españoles (á, é, í, ó, ú, ñ, ü, ¿, ¡, «, », €, ², º, ª, ·, —) se pintan con su glifo y se extraen bien. «nº» no pasa a «NO» en las mayúsculas de las etiquetas (la maqueta lo destapó). |
 | PDF8 | Una sola versión: un cambio en el catálogo durante la generación da un PDF entero de una versión o un error claro, nunca una mezcla. Generar no cambia el catálogo, su versión ni su huella, y no avisa a los lectores. |
 | PDF9 | Material que falta: sin fotos, sin descripción y sin precio, se ve como en el lector, sin inventar. |
-| PDF10 | Solo el dueño de la HOME puede generarlo; un catálogo ajeno o inexistente da 404. |
-| PDF11 | Casos corto (1 vivienda) y largo (24 viviendas, textos largos y muchas fotos): se generan dentro del tiempo y del tamaño medidos y acordados en el plan. |
-| PDF12 | El aspecto (dirección C · Boutique) lo aprueba Fabricio sobre PDF reales generados con datos sintéticos y, después del despliegue, con un catálogo real suyo. |
+| PDF10 | **Dueño:** solo el dueño de la HOME, también con el catálogo archivado o sin enlace; un catálogo ajeno o inexistente da 404. **Cliente:** solo con un enlace válido de un catálogo disponible; caducado, revocado, inexistente o archivado dan 404 sin decir cuál. Si la autorización cambia mientras se genera, no se entrega el PDF. |
+| PDF13 | Ninguna respuesta se guarda en cachés compartidas ni se reutiliza entre personas o enlaces (`private, no-store`). Las peticiones repetidas, las concurrentes y las que fallan quedan acotadas (cola, límite por enlace, tiempo máximo) sin dejar nada en el servidor. |
+| PDF14 | Fotos por vivienda: la apertura, las del recorrido y hasta 6 más, sin repetir, y sin ninguna excluida (P2). |
+| PDF15 | El PDF no contiene la dirección del enlace vivo ni un QR (P3). |
+| PDF11 | Casos corto (1 vivienda) y largo (24 viviendas, textos largos y muchas fotos): se generan dentro de los límites de tiempo, memoria y tamaño que se fijen **después de medirlos** (se presentan a Fabricio antes de publicar). |
+| PDF12 | El aspecto (dirección C · Boutique) lo aprueba Fabricio sobre **PDF reales generados** con datos sintéticos y, después del despliegue, con un catálogo real suyo. La maqueta HTML no cuenta como QA final (P9). |
 
 ## Fuera de esta entrega
 
 - **Importar PDF de colaboradores** (extraer datos y fotos a fichas revisables): es la entrega siguiente y necesita **muestras representativas** de Fabricio (digitales, escaneados y mixtos; una y varias viviendas).
 - Enviar el PDF por correo o WhatsApp desde el CRM, guardar el historial de PDF generados, marcas de agua o firmas.
-- Un PDF para clientes desde el enlace vivo, salvo que lo decida la pendiente 4.
 - Cambios en el lector, el gestor o la HOME, más allá del botón.
 
-## Decisiones pendientes (de Fabricio)
+## Decisiones pendientes
 
-1. **Formato:** **A4 vertical**, página a página (propuesta), o A4 horizontal a doble página, más parecido al libro del lector en el ordenador.
-2. **Fotos por vivienda:** no se da por hecho que entre toda la galería.
-   - **a)** la apertura, las fotos del recorrido y **hasta 6 más** de la galería en orden (propuesta);
-   - **b)** todas las fotos en uso (E3), que puede dar archivos de 30–60 MB con catálogos grandes;
-   - **c)** solo la apertura y las del recorrido.
-3. **El enlace vivo en el PDF:** ¿se incluye la dirección (y/o un código QR) del enlace en el cierre? Propuesta: **no**. El PDF circula sin control, el enlace puede revocarse o caducar, y el token es un acceso.
-4. **Quién lo descarga:** **solo el dueño desde el gestor** (propuesta), o también los clientes desde el enlace vivo.
-5. **Catálogos archivados o sin enlace activo:** ¿se pueden descargar? Propuesta: **sí**, porque el PDF es una herramienta del dueño y no depende del enlace.
+- **Nueva (de diseño): dónde va el botón del cliente en el lector.** Propuesta: «Descargar en PDF» en la página de cierre (junto al contacto) y en el índice, con el estilo del lector. Se enseña en la QA de los PDF reales.
+- **Condicionales:** solo se plantearán si lo exige la medición o la comprobación técnica (P8):
+  - un límite de tamaño o de fotos más estricto que P2 para catálogos muy grandes;
+  - un cambio en el arco de la portada o en el índice.
 
 ## Riesgos
 
-- **El arco de la portada en react-pdf** (`ClipPath` con una imagen): si no sale bien, se usa el marco de arriba redondeado.
-- **Carga del servidor:** CPU y memoria en el VPS compartido con la web. Se mitiga con un PDF a la vez, fotos reducidas y un límite de fotos, y **se mide** antes de publicar.
+- **El arco de la portada en react-pdf:** se comprueba primero, en T1. Si no sale fiel, se presenta a Fabricio antes de cambiar nada (P8).
+- **Carga del servidor, sobre todo con la descarga pública:** CPU y memoria en el VPS compartido con la web. Se acota con una cola, un límite por enlace, tiempos máximos y fotos reducidas, y **se mide** antes de fijar los límites.
 - **Tiempo máximo del proxy del VPS:** no comprobado; un PDF grande podría cortarse. Se mide en local y se revisa en la QA.
-- **Calibrar el índice en dos pasadas:** si no fuera fiable, el índice va sin número de página pero con enlaces y la numeración «nº 01…».
+- **El índice en dos pasadas:** se comprueba primero, en T1. Si no fuera fiable, se presenta otra solución a Fabricio, sin quitar los números de página por nuestra cuenta (P8).
 - **Fidelidad frente al lector:** el PDF no reutiliza el CSS del lector, así que pueden verse diferencias menores de composición. El contenido sí es el mismo (PDF2), y la estética la aprueba Fabricio (PDF12).
 - **Fotos de origen pesadas o en formatos raros:** se convierten con `sharp` como en el PDF de propiedad; si falla una, sale «Foto no disponible».
 
 ## Aprobación
 
-Pendiente. Con las decisiones 1–5 y la aprobación de esta especificación y de la maqueta, se preparará `plan.md`. Esta especificación no permite implementar.
+- **16 de octubre de 2026:** Fabricio aprueba la especificación y la dirección visual Boutique para planificar, con P1–P9.
+- **Pendiente:** la aprobación de [`plan.md`](plan.md), que es la que autoriza ejecutar.
