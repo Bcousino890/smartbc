@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo PDF · Maqueta</title>
+<!-- MAQUETA ESTÁTICA con datos sintéticos. No es código de la aplicación ni el
+     PDF real: muestra la composición propuesta (A4 vertical, dirección
+     C · Boutique: Fraunces y Karla, papel cálido, tinta marrón, arco, fotos
+     enmarcadas y pies en cursiva). Propuesta para revisión: no está aprobada. -->
+<style>
+@font-face { font-family: Fraunces; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/fraunces.woff2) format("woff2"); }
+@font-face { font-family: Fraunces; font-style: italic; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/fraunces-italic.woff2) format("woff2"); }
+@font-face { font-family: Karla; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/karla.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 700; src: url(../../2026-10-13-bcp-01-home-catalogo/qa-c2/maquetas/fuentes/lato-700.woff2) format("woff2"); }
+:root { --paper: #f4ede1; --mat: #fbf7f0; --ink: #2b2118; --accent: #9b4a2e; --soft: #6b5a48; --line: rgba(155,74,46,.28); }
+* { box-sizing: border-box; }
+body { margin: 0; background: #d9d2c6; font-family: Karla, Arial, sans-serif; color: var(--ink); }
+.doc { padding: 24px; display: grid; gap: 22px; }
+.note { font: 13px/1.45 Karla; color: #3d342b; max-width: 1240px; margin: 0; }
+.label { font: 700 12px Lato, Arial; letter-spacing: .08em; text-transform: uppercase; color: #5b4630; margin: 0 0 4px; }
+.row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+/* A4 a 0,75 px/pt: 446 × 631 px */
+.a4 { position: relative; width: 446px; height: 631px; background: var(--paper); box-shadow: 0 12px 30px -16px rgba(40,25,10,.55); overflow: hidden; padding: 40px 38px 34px; display: flex; flex-direction: column; }
+.tag { position: absolute; top: 6px; right: 6px; font: 700 9px Lato, Arial; letter-spacing: .06em; text-transform: uppercase; background: #1b2a4a; color: #fff; padding: 3px 6px; border-radius: 3px; z-index: 5; }
+.foot { position: absolute; left: 38px; right: 38px; bottom: 14px; display: flex; justify-content: space-between; font: italic 8px Fraunces, serif; color: var(--soft); border-top: 1px solid var(--line); padding-top: 4px; }
+.kicker { font: 500 7.5px Karla; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.h1 { font: italic 400 26px/1.1 Fraunces, serif; margin: 6px 0 0; }
+.h2 { font: italic 400 19px/1.15 Fraunces, serif; margin: 4px 0 0; }
+.body { font: 400 8.6px/1.55 Karla; margin: 6px 0 0; }
+.cap { font: italic 7.5px Fraunces, serif; color: var(--soft); margin-top: 3px; }
+.logo { display: block; margin: 0 auto; font: 700 13px/1 "Times New Roman", serif; letter-spacing: .14em; text-align: center; color: #1b2a4a; }
+.logo small { display: block; font: 400 6px Arial; letter-spacing: .4em; margin-top: 3px; }
+.frame { background: var(--mat); padding: 6px; box-shadow: 0 6px 14px -10px rgba(40,25,10,.6); }
+.ph { width: 100%; height: 100%; }
+.p1 { background: linear-gradient(180deg, #c9bba6, #7b6a55); }
+.p2 { background: linear-gradient(180deg, #a9b6c2, #4d5c6b); }
+.p3 { background: linear-gradient(180deg, #b9c2a8, #5f6b4f); }
+.p4 { background: linear-gradient(180deg, #d1b79b, #8a6340); }
+.p5 { background: linear-gradient(180deg, #c3c0b8, #6a655b); }
+.p6 { background: linear-gradient(180deg, #bfa9a0, #6e5048); }
+.arch { width: 62%; height: 270px; margin: 18px auto 0; border-radius: 999px 999px 4px 4px; overflow: hidden; border: 6px solid var(--mat); box-shadow: 0 10px 22px -14px rgba(40,25,10,.7); }
+.center { text-align: center; }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 8px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 5px 0; }
+.facts div { text-align: center; font: 400 7px Karla; color: var(--soft); }
+.facts b { display: block; font: 600 11px Karla; color: var(--ink); }
+.price { font: italic 13px Fraunces, serif; color: var(--accent); margin-top: 6px; }
+.also { font: 400 7.5px Karla; color: var(--soft); }
+.res { display: inline-block; font: 600 6.5px Karla; letter-spacing: .14em; text-transform: uppercase; color: #fff; background: var(--accent); padding: 2px 5px; margin-left: 6px; vertical-align: middle; }
+.pts { margin: 6px 0 0; padding-left: 12px; font: 8px/1.5 Karla; }
+.ix { list-style: none; margin: 10px 0 0; padding: 0; }
+.ix li { display: grid; grid-template-columns: 22px 1fr auto; column-gap: 6px; padding: 5px 0; border-bottom: 1px dotted var(--line); font: 8.4px Karla; }
+.ix .n { font: italic 9px Fraunces, serif; color: var(--accent); }
+.ix .t { font: 600 8.6px Karla; }
+.ix .m { grid-column: 2; font: 7.4px Karla; color: var(--soft); }
+.ix .pg { font: italic 9px Fraunces, serif; }
+.cont { font: italic 7.5px Fraunces, serif; color: var(--soft); border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 8px; }
+.cols { columns: 2; column-gap: 14px; font: 8.2px/1.55 Karla; }
+.grid6 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.grid6 .frame { height: 150px; }
+.card { margin: 14px auto 0; width: 70%; background: var(--mat); border: 1px solid var(--line); padding: 12px; text-align: center; }
+.missing { display: flex; align-items: center; justify-content: center; font: italic 9px Fraunces, serif; color: var(--soft); background: repeating-linear-gradient(135deg, #efe6d8 0 8px, #e9dfcf 8px 16px); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <p class="note"><b>Propuesta para revisión (no aprobada).</b> A4 vertical, una página por hoja, papel cálido, Fraunces (títulos y pies en cursiva) y Karla (texto). El contenido es el que ve el cliente en el enlace en el mismo momento: portada con sus respaldos, viviendas en su orden, precios por operación, textos vigentes y fotos según E3. Datos y fotos sintéticos.</p>
+
+  <section>
+    <p class="label">1 · Portada · 2 · Introducción e índice · 3 · Apertura de una vivienda</p>
+    <div class="row">
+      <div class="a4"><span class="tag">Propuesta</span>
+        <div class="logo" style="margin-top:6px">BENJAMÍN COUSIÑO<small>PROPIEDADES</small></div>
+        <p class="kicker center" style="margin-top:14px">Selección privada · <span style="text-transform:none">nº</span> 01 · Otoño 2026</p>
+        <div class="arch"><div class="ph p1"></div></div>
+        <h1 class="h1 center" style="margin-top:18px">Salamanca y Chamberí</h1>
+        <p class="body center" style="color:var(--soft)">Preparada por Fabricio Andree</p>
+        <p class="cap center" style="margin-top:auto">Versión del 16 de octubre de 2026, 19:40</p>
+      </div>
+      <div class="a4"><span class="tag">Propuesta</span>
+        <p class="kicker">Una selección pensada para ti</p>
+        <h2 class="h2">Salamanca y Chamberí</h2>
+        <p class="body">Cuatro viviendas elegidas para una búsqueda concreta: luz, techos altos y calles tranquilas a un paseo del Retiro. La introducción completa del catálogo, sin cortar.</p>
+        <p class="body" style="font-style:italic;font-family:Fraunces">Un saludo,<br><b style="font-style:normal;font-family:Karla">Fabricio Andree</b></p>
+        <p class="kicker" style="margin-top:16px">Índice</p>
+        <h2 class="h2" style="font-size:15px">En esta selección</h2>
+        <ol class="ix">
+          <li><span class="n">01</span><span class="t">Ático con terraza sobre los tejados de Jerónimos</span><span class="pg">3</span><span class="m">Jerónimos, Madrid · 1.450.000 €</span></li>
+          <li><span class="n">02</span><span class="t">Piso señorial con galería acristalada en la calle Almagro</span><span class="pg">8</span><span class="m">Almagro, Madrid · 2.100.000 € · También en alquiler: 6.800 €/mes</span></li>
+          <li><span class="n">03</span><span class="t">Dúplex con patio <span class="res">Reservada</span></span><span class="pg">14</span><span class="m">Zona · sin dato · Precio · sin dato</span></li>
+          <li><span class="n">04</span><span class="t">Estudio de diseño</span><span class="pg">16</span><span class="m">Recoletos, Madrid · 2.100 €/mes</span></li>
+        </ol>
+        <div class="foot"><span>Salamanca y Chamberí</span><span>2</span></div>
+      </div>
+      <div class="a4"><span class="tag">Propuesta</span>
+        <div class="frame" style="height:285px"><div class="ph p2"></div></div>
+        <p class="cap">Foto de apertura · 1 de 10</p>
+        <p class="kicker" style="margin-top:8px"><span style="text-transform:none">nº</span> 02 · Venta · Almagro, Madrid</p>
+        <h2 class="h2">Piso señorial con galería acristalada en la calle Almagro</h2>
+        <p class="price">2.100.000 € <span class="also">· También en alquiler: 6.800 €/mes</span></p>
+        <div class="facts"><div><b>186</b>m²</div><div><b>4</b>dormitorios</div><div><b>3</b>baños</div><div><b>2.ª</b>planta</div></div>
+        <p class="body" style="font-family:Fraunces;font-style:italic;font-size:9.4px">Vivienda exterior con mucha luz natural, techos altos y una distribución pensada para el día a día.</p>
+        <ul class="pts"><li>Galería acristalada orientada al sur</li><li>Molduras y suelos originales restaurados</li><li>Portería física</li></ul>
+        <div class="foot"><span>Salamanca y Chamberí</span><span>8</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="label">4 · Recorrido · 5 · Detalle con continuación · 6 · Galería (decisión pendiente 2)</p>
+    <div class="row">
+      <div class="a4"><span class="tag">Propuesta</span>
+        <p class="cont">nº 02 · Piso señorial con galería acristalada</p>
+        <p class="kicker">El recorrido</p>
+        <h2 class="h2" style="font-size:15px">La galería</h2>
+        <div class="frame" style="height:170px;margin-top:8px"><div class="ph p3"></div></div>
+        <p class="cap">La galería al atardecer</p>
+        <p class="body">El salón se abre a un balcón corrido sobre la calle. La galería, orientada al sur, recibe sol toda la tarde y une el salón con el comedor. Cada sección del recorrido va en su orden, con su foto encima (horizontal) o al lado (vertical), y nunca se repite.</p>
+        <div style="display:grid;grid-template-columns:1fr 110px;gap:10px;margin-top:10px">
+          <div><h2 class="h2" style="font-size:13px">La cocina</h2><p class="body">Independiente, conserva la despensa original y da a un patio de manzana silencioso. Un texto largo sigue en la página siguiente con su cabecera de continuación: nada se corta.</p></div>
+          <div><div class="frame" style="height:140px"><div class="ph p4"></div></div><p class="cap">La cocina</p></div>
+        </div>
+        <div class="foot"><span>Salamanca y Chamberí</span><span>9</span></div>
+      </div>
+      <div class="a4"><span class="tag">Propuesta</span>
+        <p class="cont">nº 02 · Piso señorial con galería acristalada — continuación</p>
+        <p class="kicker">La vivienda en detalle</p>
+        <div class="cols" style="margin-top:8px">
+          <p style="margin:0 0 6px">Descripción completa vigente del catálogo (el texto publicado; si no, la descripción limpia; si no, nada). Se compone en dos columnas y fluye a las páginas siguientes sin límite: una descripción de 1.500 palabras ocupa las páginas que necesite y cada continuación lleva esta cabecera.</p>
+          <p style="margin:0 0 6px">Los dormitorios dan a un patio de manzana silencioso. La vivienda se entrega con calefacción central y aire acondicionado por conductos. El edificio, de 1915, tiene ascensor y portería física.</p>
+          <p style="margin:0 0 6px">Ningún título queda solo al pie de página y ningún párrafo se pierde: el PDF se compara palabra por palabra con la proyección pública (PDF5).</p>
+        </div>
+        <p class="kicker" style="margin-top:10px">Características</p>
+        <div class="cols" style="margin-top:4px;font-size:8px"><div>· Exterior</div><div>· Ascensor</div><div>· Portería física</div><div>· Calefacción central</div><div>· Aire acondicionado</div><div>· Trastero</div></div>
+        <div class="foot"><span>Salamanca y Chamberí</span><span>11</span></div>
+      </div>
+      <div class="a4"><span class="tag">Propuesta</span>
+        <p class="cont">nº 02 · Piso señorial con galería acristalada</p>
+        <p class="kicker">Más fotos</p>
+        <div class="grid6">
+          <div><div class="frame"><div class="ph p5"></div></div><p class="cap">Foto 5 de 10</p></div>
+          <div><div class="frame"><div class="ph p6"></div></div><p class="cap">Foto 6 de 10</p></div>
+          <div><div class="frame"><div class="ph p1"></div></div><p class="cap">Foto 7 de 10</p></div>
+          <div><div class="frame missing" style="height:150px">Foto no disponible</div><p class="cap">Foto 8 de 10 · nunca se sustituye por otra</p></div>
+        </div>
+        <p class="cap" style="margin-top:8px">Con la propuesta a): la apertura, las del recorrido y hasta 6 más. Las fotos excluidas en E3 no aparecen nunca.</p>
+        <div class="foot"><span>Salamanca y Chamberí</span><span>12</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="label">7 · Cierre · 8 · Vivienda sin fotos ni descripción (material que falta)</p>
+    <div class="row">
+      <div class="a4"><span class="tag">Propuesta</span>
+        <div class="logo" style="margin-top:30px;font-size:15px">BENJAMÍN COUSIÑO<small>PROPIEDADES</small></div>
+        <p class="kicker center" style="margin-top:26px">Contacto</p>
+        <h2 class="h2 center">Hablemos</h2>
+        <p class="body center">Si alguna de estas viviendas te encaja, organizamos la visita cuando mejor te venga.</p>
+        <div class="card"><p class="kicker">Tu asesor</p><p class="h2" style="font-size:15px">Fabricio Andree</p><p class="body" style="font-size:10px">+34 641 457 123</p></div>
+        <p class="cap center" style="margin-top:20px">Este documento es una copia fija · versión del 16 de octubre de 2026, 19:40.<br>La selección en línea puede haber cambiado desde entonces.</p>
+        <p class="center" style="margin-top:auto;color:var(--accent)">✦</p>
+      </div>
+      <div class="a4"><span class="tag">Propuesta</span>
+        <div class="frame missing" style="height:230px">Sin fotos</div>
+        <p class="kicker" style="margin-top:10px"><span style="text-transform:none">nº</span> 03 · Alquiler · Zona · sin dato</p>
+        <h2 class="h2">Dúplex con patio <span class="res">Reservada</span></h2>
+        <p class="price">Precio · sin dato</p>
+        <div class="facts"><div><b>—</b>m²</div><div><b>—</b>dormitorios</div><div><b>2</b>baños</div><div><b>—</b>planta</div></div>
+        <p class="body" style="color:var(--soft)">Ficha breve: sin descripción ni recorrido, se enseñan los datos y las características verificadas, como en el lector. Lo desconocido se dice («sin dato»); nunca se pone 0 ni se inventa.</p>
+        <div class="foot"><span>Salamanca y Chamberí</span><span>14</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
