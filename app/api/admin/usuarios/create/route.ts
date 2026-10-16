@@ -1,4 +1,5 @@
 import "server-only";
+import { canAssignRole } from "@/lib/auth/user-rank";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
@@ -151,7 +152,7 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
   const isOwnerOrAdmin = ["owner", "admin", "agent_admin"].includes(currentProfile.role);
   const isAdvisorOrAgent = ["advisor", "agent_junior", "agent_senior"].includes(currentProfile.role);
 
-  // Validar permisos: solo owner/admin/agent_admin pueden crear staff
+  // Solo staff con rol de gestión comercial puede crear cuentas (la captadora no).
   if (!isOwnerOrAdmin && !isAdvisorOrAgent) {
     return Response.json(
       { error: "No tienes permisos para crear usuarios" },
@@ -159,9 +160,17 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     );
   }
 
-  if (isAdvisorOrAgent && role !== "client") {
+  // Quién puede crear qué rol (lib/auth/user-rank.ts): solo el Propietario crea
+  // Propietarios y Administradores; el Administrador crea el resto; quien no es
+  // owner/admin solo crea clientes. Antes un agent_admin podía crear un owner
+  // (la lista de roles válidos no miraba quién llamaba).
+  if (!canAssignRole(currentProfile.role, role)) {
     return Response.json(
-      { error: "Los asesores y agentes solo pueden crear clientes" },
+      {
+        error: isAdvisorOrAgent
+          ? "Los asesores y agentes solo pueden crear clientes"
+          : "No tienes permiso para crear usuarios con ese rol",
+      },
       { status: 403 }
     );
   }

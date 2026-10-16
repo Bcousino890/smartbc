@@ -121,8 +121,9 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const [newRole, setNewRole] = useState<"client" | "owner">("client");
   const [creatingUser, setCreatingUser] = useState(false);
 
-  // Generated credentials
-  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  // Cómo queda el acceso del cliente recién creado (el servidor ya no devuelve
+  // ninguna contraseña: el cliente recibe un enlace para fijar la suya).
+  const [accessMode, setAccessMode] = useState<"invite_sent" | "invite_failed" | "no_email" | null>(null);
 
   // Step 2: details
   const [country, setCountry] = useState<"ES" | "CL">("ES");
@@ -229,7 +230,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
         role: newRole,
         avatar_url: null,
       });
-      setGeneratedPassword(json.password);
+      setAccessMode(json.accessMode ?? null);
       setStep("credentials");
     } catch {
       setError("Error de conexión");
@@ -269,7 +270,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
   const stepLabel =
     step === "client" ? "Paso 1 de 2 — Selecciona o crea el acceso"
-    : step === "credentials" ? "Acceso creado — Guarda las credenciales"
+    : step === "credentials" ? "Cuenta creada"
     : step === "details" ? "Paso 2 de 2 — Detalles de la solicitud"
     : "";
 
@@ -306,14 +307,22 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
           {step === "credentials" && selectedClient && (
             <div className="space-y-4">
               <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                <p className="mb-1 text-xs font-semibold text-green-700">✓ Acceso creado correctamente</p>
-                <p className="text-sm text-ink/70">Comparte estas credenciales con el usuario:</p>
+                <p className="mb-1 text-xs font-semibold text-green-700">✓ Cuenta creada correctamente</p>
+                <p className="text-sm text-ink/70">
+                  {accessMode === "invite_sent" &&
+                    "Hemos enviado al cliente un enlace para que fije su contraseña y entre al portal."}
+                  {accessMode === "invite_failed" &&
+                    "La cuenta existe, pero no se pudo enviar el correo con el enlace de acceso. Pide a un administrador que lo reenvíe desde Usuarios."}
+                  {accessMode === "no_email" &&
+                    "Sin correo no hay acceso al portal por ahora: se podrá activar cuando añadas su email a la ficha."}
+                  {accessMode === null && "La cuenta está lista."}
+                </p>
               </div>
               <div className="space-y-2 rounded-xl border border-ink/10 bg-white p-4 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span className="crm-label-sm text-ink/50">Email</span>
                   {selectedClient.email.includes("@interno.smartbc.local") ? (
-                    <span className="text-xs italic text-ink/40">Sin email — acceso solo por contraseña</span>
+                    <span className="text-xs italic text-ink/40">Sin email</span>
                   ) : (
                     <div className="flex items-center gap-1">
                       <span className="font-mono text-ink">{selectedClient.email}</span>
@@ -321,16 +330,8 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     </div>
                   )}
                 </div>
-                <div className="border-t border-ink/5" />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="crm-label-sm text-ink/50">Contraseña</span>
-                  <div className="flex items-center gap-1">
-                    <span className="font-mono text-ink">{generatedPassword}</span>
-                    <CopyButton text={generatedPassword ?? ""} />
-                  </div>
-                </div>
               </div>
-              <p className="text-xs text-ink/40">El usuario puede cambiar su contraseña desde el portal una vez que inicie sesión.</p>
+              <p className="text-xs text-ink/40">Por seguridad ya no se muestran ni se comparten contraseñas.</p>
               <div className="flex justify-end">
                 <button
                   onClick={() => setStep("details")}
@@ -635,7 +636,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     <p className="truncate text-xs text-ink/40">{selectedClient.email}</p>
                   </div>
                   <button
-                    onClick={() => { setStep("client"); setSelectedClient(null); setGeneratedPassword(null); }}
+                    onClick={() => { setStep("client"); setSelectedClient(null); setAccessMode(null); }}
                     className="ml-auto text-xs text-ink/30 hover:text-ink"
                   >
                     cambiar
@@ -732,7 +733,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
               <div className="flex justify-between gap-2 pt-1">
                 <button
-                  onClick={() => setStep(generatedPassword ? "credentials" : "client")}
+                  onClick={() => setStep(accessMode ? "credentials" : "client")}
                   className="rounded-xl border border-ink/15 px-4 py-2 text-sm text-ink/60 transition hover:text-ink"
                 >
                   Atrás
