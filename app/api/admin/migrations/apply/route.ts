@@ -1,6 +1,13 @@
 import "server-only";
 import { execSync } from "child_process";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import {
+  INFRA_CONFIRMATION,
+  auditInfraAction,
+  hasConfirmation,
+  releaseInfraAction,
+  tryLockInfraAction,
+} from "@/lib/auth/infra-action";
 
 /**
  * API para aplicar migraciones desde el panel de admin
@@ -18,6 +25,25 @@ export async function POST(req: Request) {
     );
   }
 
+  // Confirmación explícita: el cuerpo debe traer la frase exacta.
+  if (!(await hasConfirmation(req, INFRA_CONFIRMATION.migrations))) {
+    return Response.json(
+      {
+        ok: false,
+        error: `Falta la confirmación. Envía { "confirm": "${INFRA_CONFIRMATION.migrations}" } para aplicar las migraciones en producción.`,
+        needsConfirmation: true,
+      },
+      { status: 400 },
+    );
+  }
+  if (!tryLockInfraAction("migrations_apply")) {
+    return Response.json(
+      { ok: false, error: "Ya hay una aplicación de migraciones en curso" },
+      { status: 409 },
+    );
+  }
+  await auditInfraAction({ actorId: profile.id, action: "migrations_apply", outcome: "started" });
+
   try {
     console.log("🚀 Iniciando aplicación de migraciones...");
 
@@ -30,6 +56,7 @@ export async function POST(req: Request) {
 
     console.log("✅ Migraciones aplicadas:");
     console.log(output);
+    await auditInfraAction({ actorId: profile.id, action: "migrations_apply", outcome: "ok" });
 
     return Response.json({
       ok: true,
@@ -39,6 +66,12 @@ export async function POST(req: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("❌ Error aplicando migraciones:", errorMessage);
+    await auditInfraAction({
+      actorId: profile.id,
+      action: "migrations_apply",
+      outcome: "error",
+      detail: errorMessage,
+    });
 
     return Response.json(
       {
@@ -47,6 +80,8 @@ export async function POST(req: Request) {
       },
       { status: 500 }
     );
+  } finally {
+    releaseInfraAction("migrations_apply");
   }
 }
 

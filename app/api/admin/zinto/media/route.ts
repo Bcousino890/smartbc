@@ -1,6 +1,7 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { assertPermission } from "@/lib/auth/guard";
+import { createAdminClient } from "@/lib/db/admin";
 import { getZintoV2Config } from "@/lib/services/zinto-v2/config";
 
 /**
@@ -17,9 +18,15 @@ import { getZintoV2Config } from "@/lib/services/zinto-v2/config";
  *
  * `?url=` debe ser exactamente la URL que ya vive en `zinto_messages.media_url`
  * o `zinto_conversations.contact_avatar_url` (guardada tal cual la mandó
- * Zinto) — se valida que el host coincida con la base configurada de v2
- * para no convertir esto en un proxy abierto (SSRF).
+ * Zinto). Se valida, en este orden, para no convertir esto en un proxy abierto
+ * que usa la clave del servidor:
+ *   1. https y el host de la base configurada de v2;
+ *   2. que la ruta sea la de media de v2 (`/api/v2/media…`): antes cualquier
+ *      ruta de ese host se pedía con la clave del servidor;
+ *   3. que la URL EXISTA en nuestra base (mensaje o foto de perfil): el comentario
+ *      de arriba lo decía, pero no se comprobaba.
  */
+const MEDIA_PATH_PREFIX = "/api/v2/media";
 export async function GET(req: NextRequest) {
   try {
     await assertPermission("mensajes", "view");
@@ -47,6 +54,24 @@ export async function GET(req: NextRequest) {
   const allowedHost = new URL(config.baseUrl || "https://crm.zinto.app/api/v2").hostname;
   if (target.protocol !== "https:" || target.hostname !== allowedHost) {
     return NextResponse.json({ error: "URL no permitida" }, { status: 400 });
+  }
+  // Solo la ruta de media (y sin `..` ni credenciales en la URL).
+  const mediaPath =
+    target.pathname === MEDIA_PATH_PREFIX || target.pathname.startsWith(`${MEDIA_PATH_PREFIX}/`);
+  if (!mediaPath || target.username || target.password || rawUrl.includes("..")) {
+    return NextResponse.json({ error: "URL no permitida" }, { status: 400 });
+  }
+
+  // La URL tiene que ser una que ya tengamos guardada (adjunto de un mensaje o
+  // foto de perfil de una conversación).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+  const [msg, avatar] = await Promise.all([
+    db.from("zinto_messages").select("id").eq("media_url", rawUrl).limit(1).maybeSingle(),
+    db.from("zinto_conversations").select("id").eq("contact_avatar_url", rawUrl).limit(1).maybeSingle(),
+  ]);
+  if (!msg?.data && !avatar?.data) {
+    return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
   }
 
   let upstream: Response;

@@ -42,11 +42,22 @@ export function DeployRetryManager() {
   }
 
   async function retryDeploy() {
+    if (
+      !window.confirm(
+        "Se va a reinstalar dependencias, compilar de nuevo y reiniciar la app en producción. Queda registrado quién lo lanza. ¿Continuar?",
+      )
+    ) {
+      return;
+    }
     setRunning(true);
     setStatus("idle");
     setMessage("");
     try {
-      const res = await fetch("/api/admin/deploy/retry", { method: "POST" });
+      const res = await fetch("/api/admin/deploy/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "REINTENTAR DESPLIEGUE" }),
+      });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setStatus("error");

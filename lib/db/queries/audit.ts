@@ -7,7 +7,12 @@ export type PermissionAuditEventType =
   | "role_changed"
   | "country_changed"
   | "permissions_updated"
-  | "user_created";
+  | "user_created"
+  // Acciones de infraestructura lanzadas desde el panel (migraciones, deploy).
+  // No son cambios de permisos, pero comparten esta tabla (event_type es texto
+  // libre) para que quede quién las lanzó y cuándo; el "usuario afectado" es el
+  // propio actor.
+  | "infra_action";
 
 export interface LogPermissionEventInput {
   /** Quién hace el cambio. Puede ser null si no hay actor identificable. */

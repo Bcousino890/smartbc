@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/db/auth-helpers";
+import { checkPermission } from "@/lib/auth/guard";
 import { createClient } from "@/lib/db/server";
 import { runFeedById } from "@/lib/sync/runner";
 import { listScraperKeys } from "@/lib/sync/scrapers";
@@ -21,8 +21,11 @@ export async function createFeed(
   input: CreateFeedInput,
 ): Promise<ActionResult<{ feedId: string }>> {
   const supabase = await createClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return auth;
+  // Matriz de permisos efectiva (sindicacion.create). Antes `requireAdmin` dejaba
+  // pasar a owner/admin/agent_admin por rol literal, pero la matriz solo da a
+  // agent_admin sindicacion.view: podía crear, activar, borrar y lanzar feeds.
+  const gate = await checkPermission("sindicacion", "create");
+  if (!gate.ok) return gate;
 
   if (!input.agencyId) return { ok: false, error: "agency_required" };
   if (!input.scraperKey) return { ok: false, error: "scraper_required" };
@@ -66,8 +69,11 @@ export async function setFeedActive(
   active: boolean,
 ): Promise<ActionResult> {
   const supabase = await createClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return auth;
+  // Matriz de permisos efectiva (sindicacion.edit). Antes `requireAdmin` dejaba
+  // pasar a owner/admin/agent_admin por rol literal, pero la matriz solo da a
+  // agent_admin sindicacion.view: podía crear, activar, borrar y lanzar feeds.
+  const gate = await checkPermission("sindicacion", "edit");
+  if (!gate.ok) return gate;
 
   const feedsTbl = supabase.from("agency_feeds") as unknown as {
     update: (payload: Record<string, unknown>) => {
@@ -85,8 +91,11 @@ export async function setFeedActive(
 
 export async function deleteFeed(feedId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return auth;
+  // Matriz de permisos efectiva (sindicacion.delete). Antes `requireAdmin` dejaba
+  // pasar a owner/admin/agent_admin por rol literal, pero la matriz solo da a
+  // agent_admin sindicacion.view: podía crear, activar, borrar y lanzar feeds.
+  const gate = await checkPermission("sindicacion", "delete");
+  if (!gate.ok) return gate;
 
   const feedsTbl = supabase.from("agency_feeds") as unknown as {
     delete: () => {
@@ -119,8 +128,11 @@ export async function syncFeedNow(
   }>
 > {
   const supabase = await createClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return auth;
+  // Matriz de permisos efectiva (sindicacion.edit). Antes `requireAdmin` dejaba
+  // pasar a owner/admin/agent_admin por rol literal, pero la matriz solo da a
+  // agent_admin sindicacion.view: podía crear, activar, borrar y lanzar feeds.
+  const gate = await checkPermission("sindicacion", "edit");
+  if (!gate.ok) return gate;
 
   // Evitar concurrencia: si la BD dice que el último estado del feed es
   // 'running', otro proceso ya lo está sincronizando.
