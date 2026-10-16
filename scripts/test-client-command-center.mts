@@ -865,6 +865,22 @@ check(
   })(),
 );
 
+{
+  const a = deriveNextActions(
+    {
+      ...empty(),
+      hasPreferences: true,
+      hasAdvisor: true,
+      briefEssentialGaps: ["Zonas", "Presupuesto máximo"],
+      itineraries: [itinerary({ stopsPendingConfirmation: 25 })],
+    },
+    NOW,
+  );
+  check("encargo sin zona/presupuesto va antes que las paradas", a[0]?.kind === "incomplete_brief", JSON.stringify(a.map((x) => x.kind)));
+  const b = deriveNextActions({ ...empty(), hasPreferences: true, hasAdvisor: true, briefEssentialGaps: [] }, NOW);
+  check("encargo con zona y presupuesto: sin acción de encargo", !b.some((x) => x.kind === "incomplete_brief"));
+}
+
 // ============================================================================
 console.log(`\n${failures === 0 ? "✅ TODO OK" : `❌ ${failures} FALLO(S)`}\n`);
 process.exit(failures === 0 ? 0 : 1);

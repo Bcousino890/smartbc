@@ -9,7 +9,12 @@ import type { SuggestedParticular } from "@/lib/db/queries/suggested-particulare
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; suggestions: SuggestedParticular[]; excluded: Array<{ label: string; count: number }> }
+  | {
+      kind: "ready";
+      suggestions: SuggestedParticular[];
+      total: number;
+      excluded: Array<{ label: string; count: number }>;
+    }
   | { kind: "hidden" };
 
 const PORTAL: Record<string, string> = { idealista: "Idealista", fotocasa: "Fotocasa", pisos: "pisos.com", habitaclia: "Habitaclia" };
@@ -88,7 +93,13 @@ export function SuggestedParticularesBlock({
         if (!res.ok || json.reason === "no_preferences" || json.reason === "not_available" || json.reason === "insufficient_brief") {
           return setState({ kind: "hidden" });
         }
-        setState({ kind: "ready", suggestions: json.suggestions ?? [], excluded: json.excluded ?? [] });
+        const suggestions = json.suggestions ?? [];
+        setState({
+          kind: "ready",
+          suggestions,
+          total: typeof json.total === "number" ? json.total : suggestions.length,
+          excluded: json.excluded ?? [],
+        });
       } catch {
         if (!cancelled) setState({ kind: "hidden" });
       }
@@ -107,7 +118,7 @@ export function SuggestedParticularesBlock({
         <h2 className="crm-label-sm text-ink/50">Encontradas en portales</h2>
         {state.kind === "ready" && state.suggestions.length > 0 && (
           <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold-dark">
-            {state.suggestions.length}
+            {state.total}
           </span>
         )}
       </div>
@@ -135,6 +146,12 @@ export function SuggestedParticularesBlock({
         <p className="mt-2 text-xs text-ink/50">
           {total === 1 ? "1 descartado" : `${total} descartados`} por el encargo:{" "}
           {state.excluded.slice(0, 4).map((e) => `${e.label.toLowerCase()} (${e.count})`).join(" · ")}
+        </p>
+      )}
+
+      {state.kind === "ready" && state.total > state.suggestions.length && (
+        <p className="mt-2 text-xs text-ink/55">
+          Encajan {state.total}. Se ven las {state.suggestions.length} que mejor encajan.
         </p>
       )}
 

@@ -41,7 +41,7 @@ function daysUntil(iso: string | null | undefined, now: Date): number | null {
  */
 export type CommandCenterSnapshot = {
   hasPreferences: boolean;
-  /** Lo esencial que le falta al encargo (zonas, presupuesto, dormitorios), por nombre. */
+  /** Lo que le falta al encargo para poder sugerir NADA (zonas, presupuesto máximo), por nombre. */
   briefEssentialGaps?: string[];
   hasAdvisor: boolean;
 
@@ -290,12 +290,15 @@ export function deriveNextActions(
     });
   }
 
-  // Hay encargo pero sin lo esencial: las sugerencias salen a ciegas. Va por
-  // delante del asesor porque sin esto no hay nada que enseñar al cliente.
+  // Hay encargo pero sin zona o sin presupuesto: no se le sugiere nada. Va
+  // arriba del todo (solo por detrás de un cliente que ya contestó y espera):
+  // sin esto no hay propiedades que enseñarle y el resto del trabajo se
+  // hace a ciegas.
   if (s.hasPreferences && (s.briefEssentialGaps?.length ?? 0) > 0) {
-    out.push({
+    const waiting = out.filter((a) => a.kind === "shortlist_submitted").length;
+    out.splice(waiting, 0, {
       kind: "incomplete_brief",
-      urgency: "soon",
+      urgency: "now",
       titleKey: "cc.next.incompleteBrief.title",
       detailKey: "cc.next.incompleteBrief.detail",
       vars: { missing: (s.briefEssentialGaps ?? []).join(", ").toLowerCase() },

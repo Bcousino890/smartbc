@@ -22,6 +22,7 @@ import { AreaPicker } from "./area-picker";
 import { AlertTriangle, Check, Plus, Star, X } from "lucide-react";
 import {
   briefGaps,
+  briefSuggestMissing,
   CONDITION_PREF,
   EMPLOYMENT,
   FEATURES,
@@ -394,8 +395,10 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 /** Lo que falta para que el match no vaya a ciegas, y lo que se suele olvidar. */
 function Completeness({ brief }: { brief: BriefInput }) {
   const gaps = briefGaps(brief);
-  const essential = gaps.filter((g) => g.level === "essential");
-  const recommended = gaps.filter((g) => g.level === "recommended");
+  // Solo zona y presupuesto máximo impiden sugerir; el resto afina.
+  const blocking = new Set(briefSuggestMissing(brief));
+  const essential = gaps.filter((g) => g.level === "essential" && blocking.has(g.label));
+  const recommended = gaps.filter((g) => !(g.level === "essential" && blocking.has(g.label)));
   if (gaps.length === 0) {
     return (
       <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
@@ -414,7 +417,7 @@ function Completeness({ brief }: { brief: BriefInput }) {
         <p className="flex items-start gap-1.5">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
           <span>
-            <strong>Sin esto las sugerencias salen a ciegas:</strong> {essential.map((g) => g.label).join(" · ")}
+            <strong>Sin esto no se le sugiere ninguna propiedad:</strong> {essential.map((g) => g.label).join(" · ")}
           </span>
         </p>
       )}

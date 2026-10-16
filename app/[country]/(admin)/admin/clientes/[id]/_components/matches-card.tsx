@@ -204,20 +204,17 @@ export function MatchesCard({
       }
     >
       {essentialGaps.length > 0 && (
-        <div className="mb-3 flex items-start justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <p className="flex items-start gap-1.5">
-            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-            <span>
-              <strong>Orientativas:</strong> al encargo le falta {essentialGaps.join(", ").toLowerCase()}.
-            </span>
+        <div className="mb-3 flex items-start justify-between gap-3 rounded-md border border-ink/10 bg-cream-50 px-3 py-2 text-xs text-ink/65">
+          <p>
+            Para afinar más, pregúntale: {essentialGaps.join(", ").toLowerCase()}.
           </p>
           {canEdit && (
             <button
               type="button"
               onClick={onEditBrief}
-              className="shrink-0 font-semibold text-amber-900 underline underline-offset-2"
+              className="shrink-0 font-semibold text-ink underline underline-offset-2"
             >
-              Completar
+              Añadir
             </button>
           )}
         </div>
@@ -225,12 +222,12 @@ export function MatchesCard({
 
       <div className="grid grid-cols-2 gap-2">
         <Counter
-          label="Del catálogo"
+          label="Encajan del catálogo"
           side={catalog}
           onClick={() => onGo("cc-suggested")}
         />
         <Counter
-          label="En portales"
+          label="Encajan en portales"
           side={portals}
           onClick={() => onGo("cc-suggested-portales")}
         />

@@ -1,4 +1,4 @@
-import { briefGaps } from "@/lib/clients/brief";
+import { briefSuggestMissing } from "@/lib/clients/brief";
 import { notFound } from "next/navigation";
 import { clientRowToAdminClient } from "@/lib/db/adapters";
 import { getClientById } from "@/lib/db/queries/clients";
@@ -138,9 +138,7 @@ export default async function ClientCommandCenterPage({
 
   const snapshot: CommandCenterSnapshot = {
     hasPreferences: Boolean(prefs),
-    briefEssentialGaps: prefs
-      ? briefGaps(prefs.brief).filter((g) => g.level === "essential").map((g) => g.label)
-      : [],
+    briefEssentialGaps: prefs ? briefSuggestMissing(prefs.brief) : [],
     hasAdvisor: Boolean(advisor),
     selections: selections.map((s) => ({ status: s.status })),
     portalLinks: portalLinks.map((l) => ({

@@ -15,7 +15,7 @@ import { getCountryConfig, isCountry } from "@/lib/country-config";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; suggestions: SuggestedProperty[]; excluded: ExcludedSummary }
+  | { kind: "ready"; suggestions: SuggestedProperty[]; total: number; excluded: ExcludedSummary }
   | { kind: "no_preferences" }
   | { kind: "insufficient"; missing: string[] }
   | { kind: "error"; message: string };
@@ -64,6 +64,7 @@ export function SuggestedPropertiesBlock({
         setState({
           kind: "ready",
           suggestions: json.suggestions ?? [],
+          total: typeof json.total === "number" ? json.total : (json.suggestions ?? []).length,
           excluded: json.excluded ?? [],
         });
       } catch (err) {
@@ -81,7 +82,7 @@ export function SuggestedPropertiesBlock({
     };
   }, [clientId]);
 
-  const count = state.kind === "ready" ? state.suggestions.length : 0;
+  const count = state.kind === "ready" ? state.total : 0;
 
   const handleToggleAlerts = async () => {
     const next = !alertsEnabled;
@@ -167,6 +168,12 @@ export function SuggestedPropertiesBlock({
 
       {state.kind === "ready" && state.excluded.length > 0 && (
         <ExcludedLine excluded={state.excluded} />
+      )}
+
+      {state.kind === "ready" && state.total > state.suggestions.length && (
+        <p className="mt-2 text-xs text-ink/55">
+          Encajan {state.total}. Se ven las {state.suggestions.length} que mejor encajan.
+        </p>
       )}
 
       {state.kind === "ready" && state.suggestions.length > 0 && (

@@ -62,7 +62,7 @@ import { CommandHeader } from "./_components/command-header";
 import { CommandTabs } from "./_components/command-tabs";
 import { EditClientDialog } from "./_components/edit-client-dialog";
 import { EditPreferencesDialog } from "./_components/edit-preferences-dialog";
-import { briefGaps, type BriefProfile } from "@/lib/clients/brief";
+import { briefGaps, briefSuggestMissing, type BriefProfile } from "@/lib/clients/brief";
 import { BRIEF_KINDS, NextActionCard } from "./_components/next-action-card";
 import { MatchesCard } from "./_components/matches-card";
 import { ShortlistStatusCard, ViewingDayCard } from "./_components/overview-cards";
@@ -203,10 +203,15 @@ export function ClientFichaView({
 
   const clientName = `${client.firstName} ${client.lastName}`.trim();
   const portalUrlKeys = useMemo(() => new Set(links.map((l) => l.url_key)), [links]);
-  const essentialGaps = useMemo(
-    () => (cc.prefs ? briefGaps(cc.prefs.brief).filter((g) => g.level === "essential").map((g) => g.label) : []),
-    [cc.prefs],
-  );
+  // Lo que falta pero NO impide sugerir (dormitorios): zona y presupuesto, si
+  // faltan, ya los dice la tarjeta con lo que devuelve el servidor.
+  const essentialGaps = useMemo(() => {
+    if (!cc.prefs) return [];
+    const blocking = new Set(briefSuggestMissing(cc.prefs.brief));
+    return briefGaps(cc.prefs.brief)
+      .filter((g) => g.level === "essential" && !blocking.has(g.label))
+      .map((g) => g.label);
+  }, [cc.prefs]);
 
   const counts: Partial<Record<CommandTab, number | null>> = {
     overview: cc.nextActions.length,

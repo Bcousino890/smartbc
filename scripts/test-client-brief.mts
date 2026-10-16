@@ -423,6 +423,13 @@ console.log("\nZonas con otro nombre y encargos sin criterio");
   check("con zona dibujada y presupuesto sí", briefSuggestMissing(brief({ polygons: [[[0, 0], [1, 0], [1, 1]]], maxPrice: 1 })).length === 0);
 }
 
+console.log("\nAvisos y puntuación");
+{
+  const b = brief({ zones: ["Salamanca"], maxPrice: 3000, students: 3, occupants: 3 });
+  const crowded = evaluateMatch(b, prop({ bedrooms: 2 }));
+  check("con avisos no sale al 100 %", !crowded.excluded && crowded.warnings.length > 0 && crowded.score < 100, crowded);
+}
+
 console.log("\nPrecio sin dato");
 {
   check("precio 0 con presupuesto: fuera, no «dentro del presupuesto»", evaluateMatch(brief({ maxPrice: 2000 }), prop({ price: 0 })).excluded === true);

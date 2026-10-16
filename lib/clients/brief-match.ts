@@ -562,7 +562,11 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
 
   // Sin nada del encargo con lo que comparar, el número no significa nada:
   // se deja en un neutro en vez de un 100 % o un 0 % engañosos.
-  const score = possible <= 3 ? 50 : Math.round((100 * earned) / possible);
+  const base = possible <= 3 ? 50 : Math.round((100 * earned) / possible);
+  // Cada cosa que el agente tiene que confirmar resta: una propiedad con
+  // «2 dormitorios para 3 personas» no puede salir al 100 %.
+  const warningsCount = dedupe(warnings).length;
+  const score = Math.max(0, Math.min(base, 100 - 6 * warningsCount, base - 4 * warningsCount));
 
   return {
     excluded: false,

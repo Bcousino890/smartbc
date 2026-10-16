@@ -19,6 +19,7 @@ import { AlertTriangle, Pencil, Star } from "lucide-react";
 import type { ClientPreferencesFull } from "@/lib/db/queries/client-command-center";
 import {
   briefGaps,
+  briefSuggestMissing,
   CONDITION_PREF,
   EMPLOYMENT,
   FEATURE_LABEL,
@@ -202,8 +203,12 @@ export function ClientBrief({
   }
 
   const gaps = briefGaps(b);
-  const essential = gaps.filter((g) => g.level === "essential");
-  const recommended = gaps.filter((g) => g.level === "recommended");
+  // Sin zona o sin presupuesto no se sugiere NADA; el resto (dormitorios…)
+  // solo afina. Decir "a ciegas" de un dato que no bloquea contradecía las
+  // sugerencias que sí salen al lado.
+  const blockingLabels = new Set(briefSuggestMissing(b));
+  const essential = gaps.filter((g) => g.level === "essential" && blockingLabels.has(g.label));
+  const recommended = gaps.filter((g) => !(g.level === "essential" && blockingLabels.has(g.label)));
 
   return (
     <Panel title={t("cc.brief.title")} action={edit}>
@@ -219,7 +224,7 @@ export function ClientBrief({
             <p className="flex items-start gap-1.5">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               <span>
-                <strong>Sin esto las sugerencias salen a ciegas:</strong>{" "}
+                <strong>Sin esto no se le sugiere ninguna propiedad:</strong>{" "}
                 {essential.map((g) => g.label).join(" · ")}
               </span>
             </p>

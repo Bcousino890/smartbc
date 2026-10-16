@@ -19,7 +19,7 @@ import { Plus } from "lucide-react";
 import { createClientWithBrief } from "@/app/(admin)/admin/clientes/actions";
 import { EncargoForm } from "@/components/admin/clientes/encargo/encargo-form";
 import { Button, Labeled, Modal, TextInput } from "@/components/admin/ui/primitives";
-import { briefGaps, EMPTY_BRIEF, type BriefInput, type BriefProfile } from "@/lib/clients/brief";
+import { briefGaps, briefSuggestMissing, EMPTY_BRIEF, type BriefInput, type BriefProfile } from "@/lib/clients/brief";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 
 type Contact = { firstName: string; lastName: string; email: string; phone: string };
@@ -52,7 +52,9 @@ export function CreateClientDialog() {
     reset();
   };
 
-  const essentialGaps = briefGaps(brief).filter((g) => g.level === "essential");
+  // Solo lo que impide sugerir (zona, presupuesto máximo) pide confirmación.
+  const blocking = new Set(briefSuggestMissing(brief));
+  const essentialGaps = briefGaps(brief).filter((g) => g.level === "essential" && blocking.has(g.label));
 
   const submit = () => {
     setError(null);
