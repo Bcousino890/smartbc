@@ -23,6 +23,13 @@ psql_run() { docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres "$@"; }
 existed=$(psql_run -tAc "select to_regclass('public.schema_migrations') is not null" | tr -d '[:space:]')
 psql_run -q -c "CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz DEFAULT now());" >/dev/null
 
+# La tabla de control no debe poder tocarla nadie con la clave anónima: con los
+# privilegios por defecto de Supabase, PostgREST la expone, y una fila falsa
+# («0210_endurecer_cuentas.sql») haría que el runner diera por aplicada una
+# migración que nunca se ejecutó, o borrar una real (0001_init.sql) haría que el
+# siguiente despliegue la relanzara y fallara. Cada ejecución lo deja cerrado.
+psql_run -q -c "ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY; REVOKE ALL ON TABLE schema_migrations FROM anon, authenticated;" >/dev/null
+
 if [ "$existed" != "t" ]; then
   echo "  Primera ejecución del runner: marcando migraciones existentes como aplicadas (sin re-ejecutarlas)…"
   for f in "$MIG_DIR"/*.sql; do
