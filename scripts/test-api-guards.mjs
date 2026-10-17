@@ -34,6 +34,9 @@ const ALLOWLIST_PATH = join(ROOT, "scripts", "api-guards-allowlist.json");
 const GUARDS = [
   // Matriz de permisos efectivos (rol + excepciones + país)
   ["matriz", /\b(requirePermission|assertPermission|checkPermission|guardPage|requireCaptacionWork)\s*\(/],
+  // Gate por rol efectivo (lib/auth/guard.ts, PR de Portal Inmobiliario) y por
+  // sesión de "home" (catálogos: assertHomeOwner).
+  ["rol", /\b(requireRoles|assertHomeOwner)\s*\(/],
   // Helpers de rol/sesión
   ["rol", /\b(requireAdmin|requireStaff|requireMailbox|requireOwnerOrAdmin)\s*\(/],
   ["sesion", /\b(requireSession|getCurrentProfile|getCaptacionActor)\s*\(/],
@@ -41,7 +44,7 @@ const GUARDS = [
   ["sesion", /\.auth\.getUser\s*\(/],
   // Secretos de cron / token
   ["secreto", /\bCRON_SECRET\b/],
-  ["secreto", /\bverifyCronSecret\s*\(/],
+  ["secreto", /\b(verifyCronSecret|cronAuthorized|cronSecretMatches)\s*\(/],
 ];
 
 function walk(dir) {
