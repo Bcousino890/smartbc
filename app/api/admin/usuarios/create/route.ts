@@ -1,5 +1,6 @@
 import "server-only";
 import { canAssignRole } from "@/lib/auth/user-rank";
+import { resolveRoleCountries } from "@/lib/auth/role-model";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
@@ -89,7 +90,10 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     firstName: string;
     lastName?: string;
     phone?: string;
-    role: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
+    // Modelo visible: Administrador, Asesor (toda la cartera = advisor, solo su
+    // cartera = agent_senior), Captadora (solo Chile) y cliente. El Propietario
+    // y los perfiles heredados (agent_admin, agent_junior) no se crean.
+    role: "admin" | "advisor" | "agent_senior" | "captadora" | "client";
     password?: string;
     assignedAdvisorId?: string;
     // Opcional: país del nuevo perfil ('es' | 'cl'). Si se omite, se
@@ -120,9 +124,9 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     role: roleInput,
     password,
     assignedAdvisorId,
-    country,
+    country: countryInput,
     multiCountry,
-    countries,
+    countries: countriesInput,
   } = body;
 
   const role = roleInput;
@@ -135,10 +139,28 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     );
   }
 
-  const validRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin", "client"];
+  const validRoles = ["admin", "advisor", "agent_senior", "captadora", "client"];
   if (!validRoles.includes(role)) {
-    return Response.json({ error: "Rol inválido" }, { status: 400 });
+    return Response.json(
+      {
+        error:
+          "Rol inválido: solo se crean Administradores, Asesores, Captadoras y clientes.",
+      },
+      { status: 400 }
+    );
   }
+
+  // La captadora trabaja solo en Chile: sin países se le da Chile, y si llega
+  // con España se rechaza (no se recorta en silencio).
+  const roleCountries = resolveRoleCountries(role, {
+    country: countryInput,
+    countries: countriesInput,
+  });
+  if (!roleCountries.ok) {
+    return Response.json({ error: roleCountries.error }, { status: 400 });
+  }
+  const country = roleCountries.country;
+  const countries = roleCountries.countries;
 
   // Obtener perfil actual para validar permisos
   const currentProfile = await getCurrentProfile();
@@ -176,7 +198,7 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
   }
 
   // Contraseña obligatoria para roles de staff (no clients — estos reciben invitación)
-  const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  const staffRoles = ["admin", "advisor", "agent_senior", "captadora"];
   if (staffRoles.includes(role) && !password) {
     return Response.json(
       { error: "La contraseña es obligatoria para crear usuarios de tipo staff" },

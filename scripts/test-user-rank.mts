@@ -22,11 +22,24 @@ function t(name: string, fn: () => void) {
 }
 
 // ── Quién puede asignar qué rol ──────────────────────────────────────────────
-t("owner puede asignar cualquier rol conocido", () => {
-  for (const r of KNOWN_ROLES) assert.equal(canAssignRole("owner", r), true, r);
+// Modelo visible (lib/auth/role-model.ts): Administrador, Asesor (completo o de
+// cartera propia) y Captadora, más clientes. El Propietario no se asigna nunca
+// y los perfiles heredados (agent_admin, agent_junior) tampoco se crean.
+t("owner asigna Administrador, Asesor, Asesor de cartera propia, Captadora y cliente", () => {
+  for (const r of ["admin", "advisor", "agent_senior", "captadora", "client"]) {
+    assert.equal(canAssignRole("owner", r), true, r);
+  }
 });
 
-t("admin y agent_admin NO pueden crear owner, admin ni agent_admin", () => {
+t("nadie asigna owner ni los perfiles heredados, tampoco el owner", () => {
+  for (const actor of ["owner", "admin", "agent_admin"]) {
+    for (const r of ["owner", "agent_admin", "agent_junior"]) {
+      assert.equal(canAssignRole(actor, r), false, `${actor} → ${r}`);
+    }
+  }
+});
+
+t("admin y agent_admin NO pueden crear admin (ni owner)", () => {
   for (const actor of ["admin", "agent_admin"]) {
     for (const r of ["owner", "admin", "agent_admin"]) {
       assert.equal(canAssignRole(actor, r), false, `${actor} → ${r}`);
@@ -34,9 +47,9 @@ t("admin y agent_admin NO pueden crear owner, admin ni agent_admin", () => {
   }
 });
 
-t("admin y agent_admin SÍ pueden crear roles inferiores", () => {
+t("admin y agent_admin SÍ pueden crear Asesores, Captadoras y clientes", () => {
   for (const actor of ["admin", "agent_admin"]) {
-    for (const r of ["advisor", "agent_senior", "agent_junior", "captadora", "client"]) {
+    for (const r of ["advisor", "agent_senior", "captadora", "client"]) {
       assert.equal(canAssignRole(actor, r), true, `${actor} → ${r}`);
     }
   }

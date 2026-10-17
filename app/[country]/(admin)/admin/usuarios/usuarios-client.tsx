@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { requestJson, type RequestJsonFailure } from "@/lib/http/request-json";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PermissionsDrawer } from "@/components/admin/permissions/permissions-drawer";
+import { roleChoices, roleDetail, roleLabel, staffGroup } from "@/lib/auth/role-model";
 
 const ROLE_BADGE: Record<InternalUserRole, string> = {
   owner:        "border-violet-200 bg-violet-50 text-violet-700",
@@ -25,16 +26,17 @@ const ROLE_BADGE: Record<InternalUserRole, string> = {
   captadora:    "border-rose-200 bg-rose-50 text-rose-700",
 };
 
+// Modelo visible (lib/auth/role-model.ts): Administrador · Asesor · Captadora.
 const ROLE_LABEL: Record<InternalUserRole, string> = {
-  owner:        "Propietario",
-  admin:        "Administrador",
-  advisor:      "Asesor",
-  client:       "Cliente",
-  viewer:       "Visualizador",
-  agent_junior: "Agente Junior",
-  agent_senior: "Agente Senior",
-  agent_admin:  "Agente Admin",
-  captadora:    "Captadora",
+  owner:        roleLabel("owner"),
+  admin:        roleLabel("admin"),
+  advisor:      roleLabel("advisor"),
+  client:       roleLabel("client"),
+  viewer:       roleLabel("viewer"),
+  agent_junior: roleLabel("agent_junior"),
+  agent_senior: roleLabel("agent_senior"),
+  agent_admin:  roleLabel("agent_admin"),
+  captadora:    roleLabel("captadora"),
 };
 
 const STATUS_BADGE: Record<InternalUserStatus, string> = {
@@ -43,19 +45,13 @@ const STATUS_BADGE: Record<InternalUserStatus, string> = {
   suspended: "bg-ink/30",
 };
 
-// Roles asignables desde el modal de edición. `owner`/`admin` se ofrecen solo a
-// quien ya es owner/admin (ver canAssignHighRoles). Incluye `captadora` y
-// `viewer`, que antes faltaban en el <select>.
-const ALL_ASSIGNABLE_ROLES: { value: InternalUserRole; label: string }[] = [
-  { value: "owner", label: "Propietario" },
-  { value: "admin", label: "Administrador" },
-  { value: "advisor", label: "Asesor" },
-  { value: "agent_admin", label: "Agente Admin" },
-  { value: "agent_senior", label: "Agente Senior" },
-  { value: "agent_junior", label: "Agente Junior" },
-  { value: "captadora", label: "Captadora" },
-  { value: "viewer", label: "Visualizador" },
-];
+// Perfiles que se pueden poner a un usuario al editarlo: ver `roleChoices` en
+// lib/auth/role-model.ts (Administrador, Asesor de toda la cartera, Asesor de
+// solo su cartera y Captadora; más el perfil actual si es heredado).
+// Por país, solo se ofrecen los dos tipos de Asesor.
+const COUNTRY_ROLE_CHOICES = roleChoices("advisor").filter(
+  (c) => c.value === "advisor" || c.value === "agent_senior",
+);
 
 // ─── País ─────────────────────────────────────────────────────────────────
 
@@ -160,7 +156,7 @@ function CountryPicker({
 
 // ─── Modal crear usuario ──────────────────────────────────────────────────
 
-type ModalType = "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
+type ModalType = "admin" | "advisor" | "captadora" | "client";
 
 /**
  * Mensaje del modal de alta cuando falla la petición. Si no hubo respuesta
@@ -209,6 +205,8 @@ function CreateUserModal({
   // Inicializa con el país del árbol admin desde el que se crea el usuario.
   const [selectedCountries, setSelectedCountries] = useState<string[]>([country]);
   const [defaultCountry, setDefaultCountry] = useState(country);
+  // Asesor: toda la cartera (advisor) o solo la suya (agent_senior).
+  const [advisorScope, setAdvisorScope] = useState<"all" | "own">("all");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -219,23 +217,28 @@ function CreateUserModal({
     setStatus("loading");
     setErrorMsg("");
 
-    // El selector multi-país solo aplica a staff no-admin (asesores/agentes).
-    // Admin accede a ambos países por rol; cliente es de un solo país.
-    const showCountryPicker = modalType !== "client" && modalType !== "admin";
+    // El selector multi-país solo aplica al Asesor. El Administrador accede a
+    // ambos países por rol, la captadora solo trabaja en Chile y el cliente es
+    // de un solo país.
+    const isCaptadora = modalType === "captadora";
+    const showCountryPicker =
+      modalType !== "client" && modalType !== "admin" && !isCaptadora;
+    const role =
+      modalType === "advisor" && advisorScope === "own" ? "agent_senior" : modalType;
     const payload = {
       email,
       firstName,
       lastName,
       phone: phone.trim() || undefined,
-      role: modalType,
+      role,
       assignedAdvisorId:
         modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
       password: modalType !== "client" ? password : undefined,
       // País por defecto/landing: el elegido en el picker (si aplica) o el
       // árbol admin desde el que se creó el usuario.
-      country: showCountryPicker ? defaultCountry : country,
+      country: isCaptadora ? "cl" : showCountryPicker ? defaultCountry : country,
       // El backend deriva multi_country de countries.length > 1.
-      countries: showCountryPicker ? selectedCountries : undefined,
+      countries: isCaptadora ? ["cl"] : showCountryPicker ? selectedCountries : undefined,
     };
 
     const result = await requestJson("/api/admin/usuarios/create", {
@@ -264,9 +267,7 @@ function CreateUserModal({
   const MODAL_TITLES: Record<ModalType, string> = {
     admin: "Crear administrador",
     advisor: "Crear asesor",
-    agent_junior: "Crear agente junior",
-    agent_senior: "Crear agente senior",
-    agent_admin: "Crear agente administrador",
+    captadora: "Crear captadora",
     client: "Crear cliente",
   };
   const modalTitle = MODAL_TITLES[modalType] ?? "Crear usuario";
@@ -383,7 +384,49 @@ function CreateUserModal({
               </>
             )}
 
-            {needsPassword && modalType !== "admin" && (
+            {modalType === "advisor" && (
+              <div>
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
+                  Qué clientes ve
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { value: "all", title: "Toda la cartera", hint: "Ve y gestiona todos los clientes" },
+                      { value: "own", title: "Solo su cartera", hint: "Ve solo los clientes que se le asignan" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setAdvisorScope(opt.value)}
+                      aria-pressed={advisorScope === opt.value}
+                      className={cn(
+                        "rounded-xl border px-3 py-2.5 text-left transition",
+                        advisorScope === opt.value
+                          ? "border-gold/55 bg-gold/10"
+                          : "border-ink/10 bg-white hover:border-ink/20",
+                      )}
+                    >
+                      <span className="block text-sm font-medium text-ink">{opt.title}</span>
+                      <span className="mt-0.5 block text-xs text-ink/50">{opt.hint}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-ink/40">
+                  Después se puede ajustar permiso a permiso desde «Permisos».
+                </p>
+              </div>
+            )}
+
+            {modalType === "captadora" && (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-800">
+                Las captadoras solo trabajan en Chile y solo ven las captaciones que
+                se les asignan.
+              </p>
+            )}
+
+            {needsPassword && modalType !== "admin" && modalType !== "captadora" && (
               <CountryPicker
                 selected={selectedCountries}
                 defaultCountry={defaultCountry}
@@ -474,7 +517,9 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
   // Precargado: el formulario manda el teléfono siempre (vacío = borrar), así
   // que abrirlo en blanco borraba el número al guardar cualquier otra cosa.
   const [phone, setPhone] = useState(user.phone ?? "");
-  const [role, setRole] = useState<InternalUserRole>(user.roleKey);
+  // Perfil de la cuenta: un valor de `roleChoices` (los perfiles asignables o,
+  // si la cuenta ya lo tiene, el Propietario o un perfil heredado).
+  const [role, setRole] = useState<string>(user.roleKey);
   // Si el perfil aún no tiene país asignado, el default de edición es el
   // árbol admin desde el que se abrió (no un país fijo).
   const [country, setCountry] = useState(user.country ?? defaultCountry);
@@ -494,15 +539,14 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
 
   const isClient = user.roleKey === "client";
 
-  // Solo owner/admin pueden asignar los roles de staff más altos (owner/admin).
-  // El rol actual del usuario siempre se muestra para no invalidar el <select>.
-  const canAssignHighRoles = currentUserRole === "owner" || currentUserRole === "admin";
-  const roleOptions = ALL_ASSIGNABLE_ROLES.filter(
-    (r) =>
-      canAssignHighRoles ||
-      (r.value !== "owner" && r.value !== "admin") ||
-      r.value === user.roleKey,
+  // El Administrador solo lo asigna el Propietario (el servidor lo exige igual);
+  // el perfil actual de la cuenta siempre se muestra para no dejar el <select>
+  // en blanco.
+  const roleOptions = roleChoices(user.roleKey).filter(
+    (c) => c.value !== "admin" || currentUserRole === "owner" || user.roleKey === "admin",
   );
+  // La captadora solo trabaja en Chile: el país no se elige.
+  const isCaptadora = role === "captadora";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -514,7 +558,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
       // override elegido, o null = usa el rol base) + null para países que
       // tenía asignados y ya no están seleccionados (limpia la fila vieja).
       let countryRolesPayload: Record<string, string | null> | undefined;
-      if (!isClient && selectedCountries.length > 1) {
+      if (!isClient && !isCaptadora && selectedCountries.length > 1) {
         countryRolesPayload = {};
         for (const c of selectedCountries) {
           countryRolesPayload[c] = countryRoleOverrides[c] || null;
@@ -530,9 +574,9 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
         lastName,
         role,
         // País por defecto/landing.
-        country,
+        country: isCaptadora ? "cl" : country,
         // El backend deriva multi_country de countries.length > 1.
-        countries: isClient ? undefined : selectedCountries,
+        countries: isClient ? undefined : isCaptadora ? ["cl"] : selectedCountries,
         countryRoles: countryRolesPayload,
       };
       // También para staff: el teléfono del agente es lo que ve el cliente en
@@ -679,7 +723,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                 </label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as InternalUserRole)}
+                  onChange={(e) => setRole(e.target.value)}
                   className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
                 >
                   {roleOptions.map((r) => (
@@ -688,10 +732,22 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                     </option>
                   ))}
                 </select>
+                {roleOptions.find((r) => r.value === role)?.detail && (
+                  <p className="mt-1 text-xs text-ink/40">
+                    {roleOptions.find((r) => r.value === role)?.detail}
+                  </p>
+                )}
               </div>
             )}
 
-            {!isClient && (
+            {!isClient && isCaptadora && (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-800">
+                Las captadoras solo trabajan en Chile 🇨🇱. Al guardar, su acceso
+                queda limitado a Chile.
+              </p>
+            )}
+
+            {!isClient && !isCaptadora && (
               <CountryPicker
                 selected={selectedCountries}
                 defaultCountry={country}
@@ -700,7 +756,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
               />
             )}
 
-            {!isClient && selectedCountries.length > 1 && (
+            {!isClient && !isCaptadora && selectedCountries.length > 1 && (
               <div className="space-y-2 rounded-xl border border-ink/10 bg-white/50 p-3">
                 <p className="crm-label-sm text-ink/50">
                   Rol por país (opcional)
@@ -723,10 +779,8 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                       }
                       className="w-full rounded-lg border border-ink/10 bg-white px-2.5 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
                     >
-                      <option value="">(usar rol base: {ROLE_LABEL[role]})</option>
-                      {ALL_ASSIGNABLE_ROLES.filter(
-                        (r) => r.value !== "owner" && r.value !== "admin",
-                      ).map((r) => (
+                      <option value="">(usar el perfil de arriba)</option>
+                      {COUNTRY_ROLE_CHOICES.map((r) => (
                         <option key={r.value} value={r.value}>
                           {r.label}
                         </option>
@@ -830,6 +884,11 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
         >
           {ROLE_LABEL[user.roleKey] ?? user.roleKey}
         </span>
+        {roleDetail(user.roleKey) && (
+          <p className="mt-1 text-[11px] leading-tight text-ink/45">
+            {roleDetail(user.roleKey)}
+          </p>
+        )}
       </td>
       <td className="px-3 py-3">
         <div className="flex flex-wrap items-center gap-1">
@@ -955,32 +1014,22 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
   const router = useRouter();
   const [queryAdmins, setQueryAdmins] = useState("");
   const [queryAdvisors, setQueryAdvisors] = useState("");
-  const [queryAgents, setQueryAgents] = useState("");
+  const [queryCaptadoras, setQueryCaptadoras] = useState("");
   const [queryClients, setQueryClients] = useState("");
   const [createModal, setCreateModal] = useState<ModalType | null>(null);
   const [editUser, setEditUser] = useState<InternalUser | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<InternalUser | null>(null);
 
-  const admins = useMemo(
-    () => users.filter((u) => u.roleKey === "admin" || u.roleKey === "owner"),
-    [users],
-  );
-  const advisors = useMemo(() => users.filter((u) => u.roleKey === "advisor"), [users]);
-  const agents = useMemo(
-    () => users.filter((u) => ["agent_junior", "agent_senior", "agent_admin"].includes(u.roleKey)),
-    [users],
-  );
+  // Tres grupos de staff (lib/auth/role-model.ts): Administradores, Asesores y
+  // Captadoras. Los perfiles heredados caen en el grupo que les corresponde.
+  const admins = useMemo(() => users.filter((u) => staffGroup(u.roleKey) === "admins"), [users]);
+  const advisors = useMemo(() => users.filter((u) => staffGroup(u.roleKey) === "advisors"), [users]);
+  const captadoras = useMemo(() => users.filter((u) => staffGroup(u.roleKey) === "captadoras"), [users]);
   const clients = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
   // Resto de usuarios (viewer y cualquier rol no contemplado en las secciones
   // anteriores): sin esto quedarían ocultos pese a existir en la BD.
   const others = useMemo(
-    () =>
-      users.filter(
-        (u) =>
-          !["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin", "client"].includes(
-            u.roleKey,
-          ),
-      ),
+    () => users.filter((u) => staffGroup(u.roleKey) === null && u.roleKey !== "client"),
     [users],
   );
 
@@ -1004,15 +1053,15 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
     );
   }, [advisors, queryAdvisors]);
 
-  const filteredAgents = useMemo(() => {
-    const q = queryAgents.trim().toLowerCase();
-    if (!q) return agents;
-    return agents.filter(
+  const filteredCaptadoras = useMemo(() => {
+    const q = queryCaptadoras.trim().toLowerCase();
+    if (!q) return captadoras;
+    return captadoras.filter(
       (u) =>
         `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q)
+        u.email.toLowerCase().includes(q),
     );
-  }, [agents, queryAgents]);
+  }, [captadoras, queryCaptadoras]);
 
   const filteredClients = useMemo(() => {
     const q = queryClients.trim().toLowerCase();
@@ -1136,65 +1185,48 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
         </section>
       )}
 
-      {/* Sección 3: Agentes inmobiliarios (solo admin) */}
-      {isAdmin && (
+      {/* Sección 3: Captadoras (solo Chile; solo admin) */}
+      {isAdmin && (country === "cl" || captadoras.length > 0) && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 crm-section-title text-ink">
-            Agentes Inmobiliarios
-          </h2>
+          <h2 className="crm-section-title text-ink">Captadoras</h2>
+          <p className="mb-5 mt-1 text-sm text-ink/55">
+            Trabajan solo en Chile y solo ven las captaciones que se les asignan.
+          </p>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
               <Search size={15} strokeWidth={1.75} className="text-ink/45" />
               <input
                 type="search"
-                value={queryAgents}
-                onChange={(e) => setQueryAgents(e.target.value)}
-                placeholder="Buscar agentes..."
+                value={queryCaptadoras}
+                onChange={(e) => setQueryCaptadoras(e.target.value)}
+                placeholder="Buscar captadoras..."
                 className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
               />
             </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setCreateModal("agent_junior")}
-                className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
-              >
-                <Plus size={14} strokeWidth={1.75} />
-                <span>Junior</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreateModal("agent_senior")}
-                className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
-              >
-                <Plus size={14} strokeWidth={1.75} />
-                <span>Senior</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreateModal("agent_admin")}
-                className="flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100"
-              >
-                <Plus size={14} strokeWidth={1.75} />
-                <span>Admin</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setCreateModal("captadora")}
+              className="flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-800"
+            >
+              <Plus size={14} strokeWidth={1.75} />
+              <span>Crear captadora</span>
+            </button>
           </div>
 
           <UsersTable
-            users={filteredAgents}
+            users={filteredCaptadoras}
             onEdit={setEditUser}
             onPermissions={setPermissionsUser}
             emptyIcon={<Users size={24} />}
-            emptyTitle={queryAgents ? "Sin resultados" : "No hay agentes inmobiliarios"}
-            emptyDescription={queryAgents ? "Prueba con otro término de búsqueda." : "Añade el primer agente con los botones de arriba."}
+            emptyTitle={queryCaptadoras ? "Sin resultados" : "No hay captadoras"}
+            emptyDescription={queryCaptadoras ? "Prueba con otro término de búsqueda." : "Crea la primera captadora con el botón de arriba."}
           />
         </section>
       )}
 
 
-      {/* Sección 3: Clientes */}
+      {/* Sección 4: Clientes */}
       <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
         <h2 className="mb-5 crm-section-title text-ink">Clientes</h2>
 
@@ -1229,7 +1261,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
         />
       </section>
 
-      {/* Sección 4: Otros usuarios (viewer / roles no contemplados arriba) */}
+      {/* Sección 5: Otros usuarios (viewer / roles no contemplados arriba) */}
       {others.length > 0 && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
           <h2 className="mb-5 crm-section-title text-ink">

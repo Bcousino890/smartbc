@@ -20,6 +20,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
 // perfil de la BD queda fuera del listado.
 const STAFF_ROLES = [
   "owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin",
+  "captadora",
 ];
 
 export default async function AdminUsuariosPage({

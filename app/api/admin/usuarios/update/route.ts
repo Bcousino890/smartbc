@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
 import { STAFF_ROLES } from "@/lib/permissions";
+import { resolveRoleCountries } from "@/lib/auth/role-model";
 import {
   canAssignRole,
   canManageUser,
@@ -21,7 +22,10 @@ export async function PATCH(req: Request) {
     email?: string;
     // null = borrar el teléfono (el formulario lo manda vacío a propósito).
     phone?: string | null;
-    role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
+    // Los roles que se asignan son los del modelo visible (ver
+    // lib/auth/role-model.ts); se admite también reenviar el rol actual, que
+    // puede ser el de un Propietario o un perfil heredado.
+    role?: string;
     password?: string;
     country?: "es" | "cl";
     multiCountry?: boolean;
@@ -196,6 +200,23 @@ export async function PATCH(req: Request) {
     );
   }
 
+  // La captadora trabaja solo en Chile. Se comprueba cuando se le da ese rol o
+  // cuando se tocan sus países; guardar otros datos de una captadora que aún
+  // tenga España guardada no se bloquea (se arregla al editar sus países).
+  const nextRole = role ?? prevProfile.role ?? null;
+  const roleBecomesCaptadora = role === "captadora" && prevProfile.role !== "captadora";
+  let captadoraCountries: { country: string; countries: string[] } | null = null;
+  if (nextRole === "captadora" && (roleBecomesCaptadora || countries !== undefined)) {
+    const resolved = resolveRoleCountries("captadora", { country, countries });
+    if (!resolved.ok) {
+      return Response.json({ error: resolved.error }, { status: 400 });
+    }
+    captadoraCountries = {
+      country: resolved.country as string,
+      countries: resolved.countries as string[],
+    };
+  }
+
   // ── Email ────────────────────────────────────────────────────────────────
   // Se cambia primero en GoTrue: si el correo ya lo usa otro usuario falla
   // ahí, y así no dejamos el perfil apuntando a un email con el que nadie
@@ -252,7 +273,12 @@ export async function PATCH(req: Request) {
   // Modelo multi-país (nuevo): si viene `countries`, tiene prioridad sobre
   // country/multiCountry. Se valida ⊆ {'es','cl'} y no vacío.
   let hasCountries = false;
-  if (countries !== undefined) {
+  if (captadoraCountries) {
+    updates.countries = captadoraCountries.countries;
+    updates.country = captadoraCountries.country;
+    updates.multi_country = false;
+    hasCountries = true;
+  } else if (countries !== undefined) {
     const valid =
       Array.isArray(countries) &&
       countries.length > 0 &&

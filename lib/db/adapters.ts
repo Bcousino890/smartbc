@@ -300,7 +300,7 @@ export function profileRowToInternalUser(
     email: row.email,
     phone: row.phone ?? undefined,
     initials: deriveInitials(display),
-    roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin"].includes(row.role ?? "")
+    roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin", "captadora"].includes(row.role ?? "")
       ? row.role
       : "advisor") as InternalUserRole,
     status: "active",

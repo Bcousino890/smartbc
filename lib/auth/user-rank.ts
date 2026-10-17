@@ -2,7 +2,7 @@
  * Rango entre roles para las operaciones sobre CUENTAS de usuario (crear, cambiar
  * rol/país/correo/contraseña, conceder excepciones de permisos).
  *
- * Módulo PURO (sin imports, sin acceso a datos) para poder probarlo con
+ * Módulo PURO (solo importa `role-model`, sin acceso a datos) para poder probarlo con
  * `npm run test:user-rank`. Las rutas de `app/api/admin/usuarios/**` lo usan para
  * decidir; ninguna decide por su cuenta con listas de roles escritas a mano.
  *
@@ -10,6 +10,9 @@
  *   1. Un rol no puede crear ni asignar un rol de rango igual o superior al suyo.
  *      Solo el Propietario crea Administradores; el Administrador crea Asesores,
  *      captadoras y clientes. Quien no es owner/admin solo crea clientes.
+ *      Los únicos roles de staff que se asignan son los del modelo visible
+ *      (`ASSIGNABLE_STAFF_ROLES` de `role-model`): ni el Propietario ni los
+ *      perfiles heredados se crean ya desde la aplicación.
  *   2. Nadie modifica una cuenta de rango igual o superior (solo el Propietario
  *      puede tocar a un Administrador u otro Propietario).
  *   3. Nadie se cambia a sí mismo el rol, los países, las excepciones ni el rol
@@ -19,6 +22,8 @@
  * Mientras existan los roles antiguos, `agent_admin` cuenta como Administrador
  * (así migrará) y `advisor`/`agent_senior` como Asesor.
  */
+
+import { isAssignableStaffRole } from "./role-model";
 
 /** Roles de cuenta que existen hoy en la base (enum `user_role` + `viewer`). */
 export const KNOWN_ROLES = [
@@ -62,8 +67,11 @@ export function isUserAdminRole(role: string | null | undefined): boolean {
 
 /**
  * ¿Puede `actorRole` crear una cuenta con `targetRole` o asignar ese rol?
- *  - owner: cualquiera.
- *  - admin / agent_admin: solo roles de rango inferior al Administrador.
+ * Solo se asignan los perfiles del modelo visible (Administrador, Asesor,
+ * Asesor de cartera propia, Captadora) y el cliente; nunca el Propietario ni
+ * los perfiles heredados.
+ *  - owner: cualquiera de esos.
+ *  - admin / agent_admin: solo los de rango inferior al Administrador.
  *  - el resto: solo clientes.
  */
 export function canAssignRole(
@@ -71,6 +79,7 @@ export function canAssignRole(
   targetRole: string | null | undefined,
 ): boolean {
   if (!isKnownRole(actorRole) || !isKnownRole(targetRole)) return false;
+  if (targetRole !== "client" && !isAssignableStaffRole(targetRole)) return false;
   if (actorRole === "owner") return true;
   if (actorRole === "admin" || actorRole === "agent_admin") {
     return RANK[targetRole] < RANK.admin;
