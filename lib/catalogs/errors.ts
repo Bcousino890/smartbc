@@ -7,6 +7,9 @@ const MESSAGES: Record<string, string> = {
   unauthenticated: "Tu sesión ha caducado. Vuelve a entrar.",
   forbidden: "No tienes acceso a este catálogo.",
   already_in_catalog: "Esa propiedad ya está en este catálogo.",
+  // Buscador y máximo de la selección (0212).
+  catalog_full: "El catálogo ya tiene 24 viviendas, el máximo. Quita una antes de añadir otra.",
+  invalid_filters: "Revisa los filtros: zonas reconocidas, precio con venta o alquiler, mínimos ≤ máximos.",
   property_not_available: "Esa propiedad está vendida o archivada; no se puede añadir.",
   property_not_es: "En esta versión solo se pueden añadir propiedades de España.",
   property_not_found: "No encuentro esa propiedad.",
