@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import { Fragment, useState } from "react";
 import {
   ACTION_DESCRIPTIONS,
   ACTION_LABELS,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { Toggle } from "./toggle";
+import { isIdlePermission, permissionDetail } from "./permission-details";
 import {
   areaCounts,
   isSensitiveAction,
@@ -65,6 +67,37 @@ function ModifiedDot({ was }: { was: boolean }) {
   );
 }
 
+function DetailList({
+  resource,
+  effective,
+}: {
+  resource: PermissionResource;
+  effective: CellMatrix;
+}) {
+  return (
+    <ul className="space-y-1.5">
+      {PERMISSION_ACTIONS.map((a) => {
+        const text = permissionDetail(resource, a);
+        const idle = isIdlePermission(text);
+        const on = effective[resource][a];
+        return (
+          <li key={a} className="flex items-start gap-2.5 text-xs leading-relaxed">
+            <span className="w-[96px] shrink-0 pt-px">
+              <span className={cn("font-semibold", isSensitiveAction(a) ? "text-rose-800" : "text-ink")}>
+                {ACTION_LABELS[a]}
+              </span>
+              <span className={cn("block text-[11px]", on ? "text-emerald-700" : "text-ink/40")}>
+                {on ? "Permitido" : "No permitido"}
+              </span>
+            </span>
+            <span className={cn("min-w-0 flex-1", idle ? "italic text-ink/45" : "text-ink/70")}>{text}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function PermissionMatrix({
   areas,
   effective,
@@ -78,6 +111,14 @@ export function PermissionMatrix({
   onRow,
   onArea,
 }: PermissionMatrixProps) {
+  const [detailOpen, setDetailOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggleDetail = (r: string) =>
+    setDetailOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(r)) next.delete(r);
+      else next.add(r);
+      return next;
+    });
   const visibleAreas = areas
     .map((area) => ({
       area,
@@ -172,19 +213,36 @@ export function PermissionMatrix({
                       {rows.map((resource) => {
                         const allOn = rowAllOn(effective, resource);
                         return (
-                          <tr key={resource} className="transition hover:bg-cream-50/60">
+                          <Fragment key={resource}>
+                          <tr className="transition hover:bg-cream-50/60">
                             <th scope="row" className="px-4 py-2.5 text-left font-normal">
-                              <span className="block text-sm font-semibold text-ink">{RESOURCE_LABELS[resource]}</span>
-                              <span className="block max-w-[230px] truncate text-xs text-ink/50" title={RESOURCE_DESCRIPTIONS[resource]}>
-                                {RESOURCE_DESCRIPTIONS[resource]}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleDetail(resource)}
+                                aria-expanded={detailOpen.has(resource)}
+                                className="group flex items-start gap-1.5 text-left"
+                              >
+                                <ChevronDown
+                                  size={14}
+                                  className={cn(
+                                    "mt-0.5 shrink-0 text-ink/35 transition-transform group-hover:text-ink/70",
+                                    !detailOpen.has(resource) && "-rotate-90",
+                                  )}
+                                />
+                                <span>
+                                  <span className="block text-sm font-semibold text-ink">{RESOURCE_LABELS[resource]}</span>
+                                  <span className="block max-w-[230px] truncate text-xs text-ink/50" title={RESOURCE_DESCRIPTIONS[resource]}>
+                                    {RESOURCE_DESCRIPTIONS[resource]}
+                                  </span>
+                                </span>
+                              </button>
                             </th>
                             {PERMISSION_ACTIONS.map((action) => {
                               const on = effective[resource][action];
                               const def = defaults[resource][action];
                               return (
                                 <td key={action} className="px-1 py-2.5 text-center">
-                                  <span className="relative inline-flex">
+                                  <span className="relative inline-flex" title={permissionDetail(resource, action)}>
                                     <Toggle
                                       size="sm"
                                       checked={on}
@@ -209,6 +267,17 @@ export function PermissionMatrix({
                               </button>
                             </td>
                           </tr>
+                          {detailOpen.has(resource) && (
+                            <tr className="bg-cream-50/60">
+                              <td colSpan={PERMISSION_ACTIONS.length + 2} className="px-4 pb-3 pt-1">
+                                <p className="mb-2 text-xs font-medium text-ink/60">
+                                  Qué permite cada interruptor en {RESOURCE_LABELS[resource]}
+                                </p>
+                                <DetailList resource={resource} effective={effective} />
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         );
                       })}
                     </tbody>
@@ -222,10 +291,21 @@ export function PermissionMatrix({
                     return (
                       <li key={resource} className="px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-ink">{RESOURCE_LABELS[resource]}</p>
-                            <p className="text-xs text-ink/50">{RESOURCE_DESCRIPTIONS[resource]}</p>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleDetail(resource)}
+                            aria-expanded={detailOpen.has(resource)}
+                            className="flex min-w-0 items-start gap-1.5 text-left"
+                          >
+                            <ChevronDown
+                              size={14}
+                              className={cn("mt-1 shrink-0 text-ink/35 transition-transform", !detailOpen.has(resource) && "-rotate-90")}
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold text-ink">{RESOURCE_LABELS[resource]}</span>
+                              <span className="block text-xs text-ink/50">{RESOURCE_DESCRIPTIONS[resource]}</span>
+                            </span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => onRow(resource, !allOn)}
@@ -235,6 +315,11 @@ export function PermissionMatrix({
                             {allOn ? "Quitar todo" : "Todo"}
                           </button>
                         </div>
+                        {detailOpen.has(resource) && (
+                          <div className="mt-2.5 rounded-xl bg-cream-50/70 p-3">
+                            <DetailList resource={resource} effective={effective} />
+                          </div>
+                        )}
                         <div className="mt-2.5 grid grid-cols-2 gap-2">
                           {PERMISSION_ACTIONS.map((action) => {
                             const on = effective[resource][action];
