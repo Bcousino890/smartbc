@@ -1,5 +1,5 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { getKeyring, hmacDigest, verifyHmacWithKeyring } from "@/lib/crypto/keyring";
 import { sendEmail } from "./send-email";
 import { renderEmailLayout, escapeHtml } from "./templates";
 import type { SuggestedProperty } from "@/lib/db/queries/suggested-properties";
@@ -144,18 +144,19 @@ export async function sendNewListingsDigestEmail(params: {
 // HMAC determinista en vez de un token en una tabla: la baja es idempotente y
 // no expira, así que no hace falta guardar ni limpiar nada — a diferencia del
 // token de un solo uso de password_reset_tokens.
-const UNSUBSCRIBE_SECRET =
-  process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
+//
+// La firma usa el llavero de claves (lib/crypto/keyring.ts): se firma con la
+// clave actual y se VERIFICA con la actual y las anteriores, porque los enlaces
+// de baja de correos ya enviados no caducan y no deben romperse al rotar la
+// clave de cifrado.
+const UNSUBSCRIBE_TOKEN_LENGTH = 32;
 
 export function signUnsubscribeToken(clientId: string): string {
-  return createHmac("sha256", UNSUBSCRIBE_SECRET).update(clientId).digest("hex").slice(0, 32);
+  return hmacDigest(getKeyring().current, clientId, "hex", UNSUBSCRIBE_TOKEN_LENGTH);
 }
 
 export function verifyUnsubscribeToken(clientId: string, token: string): boolean {
-  const expected = signUnsubscribeToken(clientId);
-  const a = Buffer.from(expected);
-  const b = Buffer.from(token);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return verifyHmacWithKeyring(getKeyring(), clientId, token, "hex", UNSUBSCRIBE_TOKEN_LENGTH);
 }
 
 export function buildUnsubscribeUrl(clientId: string): string {

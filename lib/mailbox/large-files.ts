@@ -1,5 +1,6 @@
 import "server-only";
-import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { randomUUID } from "crypto";
+import { getKeyring, hmacDigest, verifyHmacWithKeyring } from "@/lib/crypto/keyring";
 import { createAdminClient } from "@/lib/db/admin";
 import { LARGE_FILE_LINK_DAYS, storageSafeName } from "./attachments";
 
@@ -10,17 +11,19 @@ import { LARGE_FILE_LINK_DAYS, storageSafeName } from "./attachments";
  * El enlace es nuestro (/api/public/correo-archivo/{token}) y no una URL
  * firmada de storage: queda bajo el dominio de la agencia, caduca a los
  * LARGE_FILE_LINK_DAYS días y siempre descarga (attachment + nosniff).
- * Firma HMAC con EMAIL_ENCRYPTION_KEY, mismo secreto que la baja de alertas.
+ * Firma HMAC con el llavero de EMAIL_ENCRYPTION_KEY (lib/crypto/keyring.ts), mismo
+ * secreto que la baja de alertas.
  */
 
 export const MAIL_FILES_BUCKET = "mail-attachments";
-const SECRET = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type LinkPayload = { p: string; n: string; e: number };
 
+// Firma con la clave actual del llavero; se verifica con la actual y las
+// anteriores (los enlaces ya enviados siguen valiendo durante 30 días).
 function sign(data: string): string {
-  return createHmac("sha256", SECRET).update(`mail-file:${data}`).digest("base64url");
+  return hmacDigest(getKeyring().current, `mail-file:${data}`, "base64url");
 }
 
 export function signFileToken(storagePath: string, filename: string, expiresAt: number): string {
@@ -33,9 +36,7 @@ export function signFileToken(storagePath: string, filename: string, expiresAt: 
 export function verifyFileToken(token: string): { path: string; filename: string; expiresAt: number } | null {
   const [data, mac] = token.split(".");
   if (!data || !mac) return null;
-  const expected = Buffer.from(sign(data));
-  const given = Buffer.from(mac);
-  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+  if (!verifyHmacWithKeyring(getKeyring(), `mail-file:${data}`, mac, "base64url")) return null;
   try {
     const payload = JSON.parse(Buffer.from(data, "base64url").toString("utf8")) as LinkPayload;
     if (typeof payload.p !== "string" || typeof payload.n !== "string" || typeof payload.e !== "number") return null;
