@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
@@ -186,7 +187,7 @@ async function scrapePisos(fromPage: number, toPage: number) {
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get("Authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(authHeader)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

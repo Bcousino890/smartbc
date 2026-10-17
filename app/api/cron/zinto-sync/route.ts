@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { ZintoIntegrationApiClient } from "@/lib/services/zinto-integration/client";
 import { resolveZintoIntegrationConfig } from "@/lib/services/zinto-integration/server-config";
@@ -28,7 +29,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
 

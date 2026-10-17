@@ -1,15 +1,15 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { getSigningSecret } from "@/lib/auth/signing-secret";
 
 // Token de larga duración para que la extensión de Chrome envíe leads del
 // inbox de Idealista al portal. Mismo esquema HMAC que publish-token.ts pero
 // con sujeto fijo (no va atado a un listing) y TTL de un año. Se revoca
 // rotando IDEALISTA_EXT_SECRET.
-const SECRET = process.env.IDEALISTA_EXT_SECRET || process.env.CRON_SECRET || "dev-secret-change-me";
 const SUBJECT = "ext-leads";
 const DEFAULT_TTL_SECONDS = 365 * 24 * 3600;
 
 function sign(payload: string): string {
-  return createHmac("sha256", SECRET).update(payload).digest("hex");
+  return createHmac("sha256", getSigningSecret()).update(payload).digest("hex");
 }
 
 export function signExtensionToken(ttlSeconds = DEFAULT_TTL_SECONDS): { token: string; expiresAt: string } {

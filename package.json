@@ -34,6 +34,7 @@
     "test:zinto-integration": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zinto-integration-api.mts",
     "test:zinto-v2": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zinto-v2-config.mts",
     "zinto-integration:smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-smoke.mts",
+    "test:cron-secret": "node --experimental-strip-types scripts/test-cron-secret.mts",
     "zinto-integration:write-smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-write-smoke.mts",
     "zinto-crm:backfill": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-crm-backfill.mts",
     "idealista:cobertura": "node --env-file-if-exists=.env.local --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-coverage.mts",

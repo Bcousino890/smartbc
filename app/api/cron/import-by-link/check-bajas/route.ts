@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
@@ -28,7 +29,7 @@ const LIMIT = Number.parseInt(
 );
 
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const supabase = createClient(

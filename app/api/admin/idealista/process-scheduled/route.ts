@@ -1,13 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { cronSecretMatches } from "@/lib/auth/cron-secret";
 import { publishPropertyToIdealista } from "@/lib/services/idealista/publisher";
 
 export const maxDuration = 300;
 
 // Called by a system cron: */5 * * * * curl -H "x-cron-secret: $CRON_SECRET" localhost:3000/api/admin/idealista/process-scheduled
 export async function GET(req: Request) {
-  const secret = req.headers.get("x-cron-secret");
-  if (!secret || secret !== process.env.CRON_SECRET) {
+  if (!cronSecretMatches(req.headers.get("x-cron-secret"))) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

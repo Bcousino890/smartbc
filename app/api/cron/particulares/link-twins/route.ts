@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { runParticularesLinking } from "@/lib/particulares/linking-runner";
 
@@ -17,7 +18,7 @@ export const maxDuration = 120;
  * crontab del VPS (cada 10 min). Ver CLAUDE.md → "Enlace de anuncios…".
  */
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const dryRun = new URL(req.url).searchParams.get("dry") === "1";

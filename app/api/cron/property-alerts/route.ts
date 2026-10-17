@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getSuggestedProperties } from "@/lib/db/queries/suggested-properties";
@@ -26,7 +27,7 @@ type ClientPrefsRow = {
 };
 
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
 

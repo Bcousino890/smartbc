@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { checkFfmpeg } from "@/lib/services/video/ffmpeg";
 import { getVideoSettings } from "@/lib/services/video/settings";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 3600;
 
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
 

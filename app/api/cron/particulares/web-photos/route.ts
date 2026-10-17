@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { autoReplaceWebPhotos } from "@/lib/particulares/web-photos";
@@ -19,7 +20,7 @@ export const maxDuration = 300;
  * Todo o nada por propiedad, copia en property_photos_backup, ficheros viejos intactos, idempotente por huella.
  */
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const url = new URL(req.url);

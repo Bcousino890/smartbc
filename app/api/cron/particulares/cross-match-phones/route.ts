@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { crossMatchPhones } from "@/lib/sync/particulares/cross-match-runner";
@@ -8,7 +9,7 @@ export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get("Authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(authHeader)) {
     return new Response("Unauthorized", { status: 401 });
   }
 
