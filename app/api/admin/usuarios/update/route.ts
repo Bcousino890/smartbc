@@ -3,6 +3,13 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
 import { STAFF_ROLES } from "@/lib/permissions";
+import {
+  canAssignRole,
+  canManageUser,
+  isKnownRole,
+  isUserAdminRole,
+  changedPrivilegeFields,
+} from "@/lib/auth/user-rank";
 
 export async function PATCH(req: Request) {
   let body: {
@@ -62,14 +69,17 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  if (!["owner", "admin", "agent_admin"].includes(currentProfile.role)) {
+  if (!isUserAdminRole(currentProfile.role)) {
     return Response.json({ error: "Solo owner/admin pueden editar usuarios" }, { status: 403 });
   }
 
   const supabase = createAdminClient();
 
-  // Snapshot previo del perfil para auditar SOLO cambios reales de rol/país.
-  // Best-effort: si falla la lectura, seguimos sin auditar esos campos.
+  // Snapshot previo del perfil. Ahora es OBLIGATORIO: necesitamos el rol actual
+  // de la cuenta destino para decidir si el actor puede tocarla (antes la
+  // lectura era "best-effort" y la ruta no miraba a quién se editaba: un
+  // agent_admin podía cambiar el correo y la contraseña de un owner y entrar
+  // como él, o promover a cualquiera a owner).
   let prevProfile: {
     role?: string | null;
     email?: string | null;
@@ -86,6 +96,104 @@ export async function PATCH(req: Request) {
     prevProfile = prev ?? null;
   } catch {
     prevProfile = null;
+  }
+  if (!prevProfile) {
+    return Response.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+
+  // Estado actual de los campos de privilegio (best-effort por columna/tabla:
+  // `custom_role_id` y `profiles_country_roles` pueden no existir en el VPS).
+  const currentCountryRoles: Record<string, string> = {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rows } = await (supabase as any)
+      .from("profiles_country_roles")
+      .select("country, role")
+      .eq("user_id", userId);
+    for (const r of (rows ?? []) as { country: string; role: string }[]) {
+      currentCountryRoles[r.country] = r.role;
+    }
+  } catch {
+    // tabla ausente: sin roles por país guardados
+  }
+  let currentCustomRoleId: string | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: cr } = await (supabase as any)
+      .from("profiles")
+      .select("custom_role_id")
+      .eq("id", userId)
+      .maybeSingle();
+    currentCustomRoleId = (cr?.custom_role_id as string | null | undefined) ?? null;
+  } catch {
+    // columna ausente
+  }
+
+  // Autorización por rango sobre la cuenta destino.
+  const isSelf = currentProfile.id === userId;
+  if (isSelf) {
+    // Cada uno puede corregir sus propios datos, pero no darse más poder.
+    const privileged = changedPrivilegeFields(body as unknown as Record<string, unknown>, {
+      role: prevProfile.role ?? null,
+      country: prevProfile.country ?? null,
+      countries: prevProfile.countries ?? null,
+      countryRoles: currentCountryRoles,
+      customRoleId: currentCustomRoleId,
+    });
+    if (privileged.length > 0) {
+      return Response.json(
+        { error: "No puedes cambiar tu propio rol, países ni permisos" },
+        { status: 403 },
+      );
+    }
+  } else if (
+    !canManageUser(
+      { id: currentProfile.id, role: currentProfile.role },
+      { id: userId, role: prevProfile.role },
+    )
+  ) {
+    return Response.json(
+      { error: "No puedes modificar a un usuario de rango igual o superior al tuyo" },
+      { status: 403 },
+    );
+  }
+
+  // Un rol solo se asigna si el actor puede crear ese rol (solo el Propietario
+  // asigna owner/admin) y si es un rol que existe.
+  if (role !== undefined) {
+    if (!isKnownRole(role)) {
+      return Response.json({ error: "Rol inválido" }, { status: 400 });
+    }
+    // Guardar el mismo rol que ya tiene no es una asignación nueva.
+    if (role !== prevProfile.role && !canAssignRole(currentProfile.role, role)) {
+      return Response.json(
+        { error: "No tienes permiso para asignar ese rol" },
+        { status: 403 },
+      );
+    }
+  }
+  if (countryRoles !== undefined) {
+    for (const [c, r] of Object.entries(countryRoles)) {
+      if (r !== null && r !== currentCountryRoles[c] && !canAssignRole(currentProfile.role, r)) {
+        return Response.json(
+          { error: "No tienes permiso para asignar ese rol por país" },
+          { status: 403 },
+        );
+      }
+    }
+  }
+  // Un rol personalizado trae su propia matriz (puede ser más amplia que la del
+  // actor): solo Propietario y Administrador (no agent_admin) pueden asignarlo.
+  if (
+    customRoleId !== undefined &&
+    (customRoleId || null) !== (currentCustomRoleId || null) &&
+    currentProfile.role !== "owner" &&
+    currentProfile.role !== "admin"
+  ) {
+    return Response.json(
+      { error: "Solo owner/admin pueden asignar roles personalizados" },
+      { status: 403 },
+    );
   }
 
   // ── Email ────────────────────────────────────────────────────────────────

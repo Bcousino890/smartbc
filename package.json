@@ -19,6 +19,7 @@
     "test:particulares-agency": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-particulares-agency-matching.mts && node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-particulares-agency-web.mts",
     "test:particulares-links": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-particulares-linking.mts",
     "test:scraper-costs": "node --experimental-strip-types --no-warnings --import ./scripts/node-ts-loader.mjs scripts/test-scraper-costs.mts",
+    "test:user-rank": "node --experimental-strip-types scripts/test-user-rank.mts",
     "test:particulares-search": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-particulares-search.mts",
     "test:zone-filter": "node --experimental-strip-types scripts/test-zone-filter.mts",
     "test:particulares-es": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-particulares-es-labels.mts",

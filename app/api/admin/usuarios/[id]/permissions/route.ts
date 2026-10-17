@@ -2,7 +2,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
-import { resolveBaseMatrix } from "@/lib/db/queries/permissions";
+import { getEffectivePermissions, resolveBaseMatrix } from "@/lib/db/queries/permissions";
+import { canManageUser, isUserAdminRole } from "@/lib/auth/user-rank";
 import {
   PERMISSION_ACTIONS,
   PERMISSION_RESOURCES,
@@ -152,10 +153,18 @@ export async function POST(
     return Response.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  const callerRole = currentProfile.role as string;
-  if (!["owner", "admin", "agent_admin"].includes(callerRole)) {
+  if (!isUserAdminRole(currentProfile.role)) {
     return Response.json(
       { error: "Solo admins pueden modificar permisos" },
+      { status: 403 },
+    );
+  }
+
+  // Nadie se concede permisos a sí mismo (antes un agent_admin podía darse
+  // usuarios.edit, configuracion.edit, reportes.export…).
+  if (currentProfile.id === userId) {
+    return Response.json(
+      { error: "No puedes modificar tus propios permisos" },
       { status: 403 },
     );
   }
@@ -174,6 +183,32 @@ export async function POST(
     return Response.json({ error: "overrides debe ser un array" }, { status: 400 });
   }
 
+  // Cada excepción debe ser un recurso y una acción que EXISTEN, con un
+  // booleano (antes se insertaba cualquier cadena tal cual en la tabla).
+  const validResources = new Set<string>(RESOURCES);
+  const validActions = new Set<string>(ACTIONS);
+  const seen = new Set<string>();
+  for (const o of body.overrides) {
+    if (
+      !o ||
+      typeof o.resource !== "string" ||
+      typeof o.action !== "string" ||
+      typeof o.allowed !== "boolean" ||
+      !validResources.has(o.resource) ||
+      !validActions.has(o.action)
+    ) {
+      return Response.json(
+        { error: "Excepción inválida: recurso, acción o valor no reconocidos" },
+        { status: 400 },
+      );
+    }
+    const key = `${o.resource}.${o.action}`;
+    if (seen.has(key)) {
+      return Response.json({ error: `Excepción duplicada: ${key}` }, { status: 400 });
+    }
+    seen.add(key);
+  }
+
   // País del subconjunto a guardar.
   //   null (o ausente) = overrides GLOBALES (comportamiento actual)
   //   'es' | 'cl'      = overrides sólo de ese país
@@ -181,6 +216,63 @@ export async function POST(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
+
+  // La cuenta destino debe existir y ser de rango inferior al del actor.
+  const { data: target } = await db
+    .from("profiles")
+    .select("id, role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!target) {
+    return Response.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+  if (
+    !canManageUser(
+      { id: currentProfile.id, role: currentProfile.role },
+      { id: target.id, role: target.role },
+    )
+  ) {
+    return Response.json(
+      { error: "No puedes modificar los permisos de un usuario de rango igual o superior" },
+      { status: 403 },
+    );
+  }
+
+  // Nadie concede más de lo que él mismo tiene. Solo se comprueban las
+  // concesiones NUEVAS: las que ya estaban guardadas (p. ej. dadas por un
+  // Propietario) se pueden conservar al volver a guardar el conjunto.
+  const granting = body.overrides.filter((o) => o.allowed);
+  if (granting.length > 0) {
+    let existingQuery = db
+      .from("user_permission_overrides")
+      .select("resource, action, allowed")
+      .eq("user_id", userId);
+    existingQuery = country
+      ? existingQuery.eq("country", country)
+      : existingQuery.is("country", null);
+    const { data: existing } = await existingQuery;
+    const alreadyGranted = new Set<string>(
+      ((existing ?? []) as { resource: string; action: string; allowed: boolean }[])
+        .filter((e) => e.allowed)
+        .map((e) => `${e.resource}.${e.action}`),
+    );
+    const actorEffective = await getEffectivePermissions(
+      currentProfile.id,
+      currentProfile.role,
+      country ?? undefined,
+    );
+    for (const o of granting) {
+      if (alreadyGranted.has(`${o.resource}.${o.action}`)) continue;
+      const actorHas =
+        (actorEffective as Record<string, Record<string, boolean>>)[o.resource]?.[o.action] ?? false;
+      if (!actorHas) {
+        return Response.json(
+          { error: `No puedes conceder ${o.resource}.${o.action}: tú no lo tienes` },
+          { status: 403 },
+        );
+      }
+    }
+  }
 
   // Borra sólo el subconjunto del país indicado. `.is`/`.eq` en la columna
   // `country` implementa el "IS NOT DISTINCT FROM" del valor recibido:
