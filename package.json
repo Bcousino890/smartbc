@@ -39,6 +39,7 @@
     "zinto-crm:backfill": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-crm-backfill.mts",
     "idealista:cobertura": "node --env-file-if-exists=.env.local --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-coverage.mts",
     "idealista-leads:backfill-match": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-backfill-match.mts",
+    "test:api-session-policy": "node --experimental-strip-types scripts/test-api-session-policy.mts",
     "idealista-leads:revalidate-match": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-revalidate-match.mts",
     "idealista-leads:rematch-listing": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-rematch-listing.mts",
     "test:client-shortlist": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-client-shortlist.mts",

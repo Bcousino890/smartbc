@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/db/middleware";
 import { isStaffRole } from "@/lib/permissions";
+import { apiAdminNeedsSession } from "@/lib/auth/api-session-policy";
 import {
   getClientIP,
   isIPWhitelisted,
@@ -90,7 +91,20 @@ export async function middleware(request: NextRequest) {
   }
 
   // --- Sesión y control de acceso ---
-  const { supabase, response } = await updateSession(request);
+  const { supabase, response, user: sessionUser } = await updateSession(request);
+
+  // --- API de administración: sesión obligatoria en la capa de entrada ---
+  // Segunda barrera, además del guard de cada ruta: una ruta de /api/admin que
+  // olvide autenticarse ya no queda abierta a Internet. Solo se exceptúan las
+  // que aceptan otra credencial (secreto de cron / token de acceso) y la
+  // comprueban ellas mismas; ver lib/auth/api-session-policy.ts. No decide
+  // PERMISOS (eso sigue en cada ruta): solo exige que haya una sesión válida.
+  if (apiAdminNeedsSession(pathname) && !sessionUser) {
+    return NextResponse.json(
+      { error: "No autenticado" },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   if (isPublicRoute(pathname)) {
     return response;
