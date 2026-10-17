@@ -23,7 +23,8 @@ export type Property = {
   videos?: Array<{ url: string; title: string }>;
   description: string;
   features: string[];
-  address: string;
+  /** Ya no se envía desde la web pública (S0): solo los datos de ejemplo lo usan. */
+  address?: string;
   latitude?: number | null;
   longitude?: number | null;
   office: "Madrid" | "Santiago";

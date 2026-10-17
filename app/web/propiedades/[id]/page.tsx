@@ -5,6 +5,7 @@ import { ArrowRight, Heart, MapPin } from "lucide-react";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
+import { applyPublicWebFilter } from "@/lib/web/public-contract";
 import { PropertyCard } from "../../_components/PropertyCard";
 import { PropertyGallery } from "../../_components/PropertyGallery";
 import { PropertyVideos } from "../../_components/PropertyVideos";
@@ -17,19 +18,17 @@ type Props = { params: Promise<{ id: string }> };
 
 async function getPortalProperty(slug: string): Promise<Property | null> {
   const admin = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (admin as any)
-    .from("properties")
-    .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
-    )
-    .eq("slug", slug)
-    .in("status", ["available", "reserved"])
-    .is("archived_at", null)
-    // Mismo contrato que el catálogo: despublicada = 404 en la web pública.
-    // El SmartLink de la propiedad (/compartir, /c) NO pasa por aquí.
-    .eq("published_web", true)
-    .maybeSingle();
+  // Mismo contrato que el catálogo: despublicada = 404 en la web pública.
+  // El SmartLink de la propiedad (/compartir, /c) NO pasa por aquí.
+  const { data } = await applyPublicWebFilter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin as any)
+      .from("properties")
+      .select(
+        "id, slug, bc_reference, property_reference, title, zone, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
+      )
+      .eq("slug", slug),
+  ).maybeSingle();
 
   if (!data) return null;
 
@@ -85,7 +84,6 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       ...((p.features as string[]) ?? []),
       ...((p.features_manual as string[]) ?? []),
     ],
-    address: (p.address as string | null) ?? (p.zone as string),
     latitude: p.latitude != null ? Number(p.latitude) : null,
     longitude: p.longitude != null ? Number(p.longitude) : null,
     office: office as "Madrid" | "Santiago",
@@ -95,14 +93,16 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
 
 async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
   const admin = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (admin as any)
-    .from("properties")
-    .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
-    )
-    .in("status", ["available", "reserved"])
-    .is("archived_at", null)
+  // «Similares» también es descubrimiento público: solo viviendas publicadas
+  // (antes enseñaba cualquier disponible y su enlace daba 404).
+  const { data } = await applyPublicWebFilter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin as any)
+      .from("properties")
+      .select(
+        "id, slug, bc_reference, property_reference, title, zone, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
+      ),
+  )
     .neq("slug", currentSlug)
     .order("created_at", { ascending: false })
     .limit(3);
@@ -160,7 +160,6 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
         ...((p.features as string[]) ?? []),
         ...((p.features_manual as string[]) ?? []),
       ],
-      address: (p.address as string | null) ?? (p.zone as string),
       office: office as "Madrid" | "Santiago",
       phone,
     } satisfies Property;
