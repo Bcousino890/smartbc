@@ -11,6 +11,8 @@
     "test:extension-filters": "node scripts/test-extension-filters.mjs",
     "test:typography": "node scripts/check-crm-typography.mjs",
     "test:keyring": "node --experimental-strip-types scripts/test-keyring.mts",
+    "test:rekey": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-rekey.mts",
+    "rekey:secrets": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/rekey-secrets.mts",
     "test:smartlink": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-smartlink-story.mts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
