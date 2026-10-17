@@ -2,6 +2,13 @@ import "server-only";
 import { spawn } from "child_process";
 import { readFile } from "fs/promises";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import {
+  INFRA_CONFIRMATION,
+  auditInfraAction,
+  hasConfirmation,
+  releaseInfraAction,
+  tryLockInfraAction,
+} from "@/lib/auth/infra-action";
 
 /**
  * "Reintentar despliegue" — para cuando un build se queda atascado y ningún
@@ -28,11 +35,32 @@ async function requireOwnerOrAdmin() {
   return profile;
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const profile = await requireOwnerOrAdmin();
   if (!profile) {
     return Response.json({ error: "Unauthorized - solo Owner/Admin" }, { status: 403 });
   }
+
+  // Confirmación explícita: el cuerpo debe traer la frase exacta.
+  if (!(await hasConfirmation(req, INFRA_CONFIRMATION.deploy))) {
+    return Response.json(
+      {
+        ok: false,
+        error: `Falta la confirmación. Envía { "confirm": "${INFRA_CONFIRMATION.deploy}" } para reintentar el despliegue.`,
+        needsConfirmation: true,
+      },
+      { status: 400 },
+    );
+  }
+  // El script reinicia este mismo proceso, así que el candado en memoria solo
+  // cubre dobles clics seguidos; el propio script ya evita solaparse al compilar.
+  if (!tryLockInfraAction("deploy_retry")) {
+    return Response.json(
+      { ok: false, error: "Ya hay un reintento de despliegue en curso" },
+      { status: 409 },
+    );
+  }
+  await auditInfraAction({ actorId: profile.id, action: "deploy_retry", outcome: "started" });
 
   try {
     const child = spawn("bash", ["scripts/deploy-retry.sh"], {
@@ -48,6 +76,13 @@ export async function POST() {
         "Reintento iniciado en segundo plano: reinstalando dependencias y compilando de nuevo. Puede tardar varios minutos y la app se reiniciará sola si sale bien.",
     });
   } catch (error) {
+    releaseInfraAction("deploy_retry");
+    await auditInfraAction({
+      actorId: profile.id,
+      action: "deploy_retry",
+      outcome: "error",
+      detail: error instanceof Error ? error.message : "Unknown error",
+    });
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

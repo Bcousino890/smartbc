@@ -29,6 +29,7 @@
     "test:video": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-video-plan.mts",
     "test:idealista": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-idealista-payload.mts",
     "test:idealista-ingest": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-idealista-ingest.mts",
+    "test:infra-action": "node --experimental-strip-types scripts/test-infra-action.mts",
     "idealista:smoke": "node --experimental-strip-types scripts/idealista-sandbox-smoke.mts",
     "test:zinto-integration": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zinto-integration-api.mts",
     "test:zinto-v2": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zinto-v2-config.mts",

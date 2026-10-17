@@ -2,7 +2,23 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 
+/**
+ * Datos de DEMOSTRACIÓN (clientes y solicitudes de ejemplo con documentos).
+ * Escribe con service role sin validar entorno: en producción metería datos
+ * falsos entre los reales. Queda desactivado salvo que se active a propósito
+ * con DEMO_SETUP_ENABLED=true (p. ej. en un entorno de pruebas).
+ */
+function demoSetupEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.DEMO_SETUP_ENABLED === "true";
+}
+
 export async function POST(req: Request) {
+  if (!demoSetupEnabled()) {
+    return Response.json(
+      { error: "La creación de datos de demostración está desactivada en producción" },
+      { status: 404 },
+    );
+  }
   const profile = await getCurrentProfile();
   if (!profile || !["admin", "owner"].includes(profile.role)) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });

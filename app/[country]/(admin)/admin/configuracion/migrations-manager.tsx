@@ -28,6 +28,13 @@ export function MigrationsManager() {
   }, []);
 
   const applyMigrations = async () => {
+    if (
+      !window.confirm(
+        "Se van a aplicar TODAS las migraciones SQL en la base de datos de producción. Queda registrado quién lo lanza. ¿Continuar?",
+      )
+    ) {
+      return;
+    }
     setLoading(true);
     setStatus("idle");
     setMessage("");
@@ -36,6 +43,8 @@ export function MigrationsManager() {
     try {
       const res = await fetch("/api/admin/migrations/apply", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "APLICAR MIGRACIONES" }),
       });
 
       const data = await res.json();
