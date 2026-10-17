@@ -8,10 +8,14 @@
 //   Comprobar (exit 1 si queda algo):   ... scripts/rekey-secrets.mts --check
 //   Aplicar:           ... scripts/rekey-secrets.mts --apply --backup-confirmed
 //
-// Requisitos para --apply (el script los exige y se niega si no se cumplen):
-//   - EMAIL_ENCRYPTION_KEY definida (≥ 32 caracteres) y distinta de la de por
-//     defecto: es la clave NUEVA con la que se re-cifra.
-//   - --backup-confirmed: confirmas que has hecho la copia previa del plan (5.2).
+// Requisitos (el script los exige y se niega si no se cumplen):
+//   - EMAIL_ENCRYPTION_KEY definida (≥ 32 caracteres, distinta de la de por
+//     defecto): es la clave NUEVA con la que se re-cifra. Sin ella ni siquiera
+//     simula (desde la fase F no existe clave por defecto).
+//   - Para leer lo que aún esté con la clave anterior, declararla en
+//     EMAIL_ENCRYPTION_KEY_PREVIOUS (la de por defecto del repositorio es
+//     default-insecure-key-change-this).
+//   - --apply además exige --backup-confirmed: confirmas la copia previa (5.2).
 //
 // Idempotente: lo que ya se descifra con la clave nueva no se toca; se puede
 // parar y repetir. Escritura optimista por fila (solo si no cambió entretanto).
@@ -19,7 +23,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_ENCRYPTION_KEY, getKeyring } from "../lib/crypto/keyring.ts";
+import { KeyringConfigError, getKeyring } from "../lib/crypto/keyring.ts";
 import {
   TargetUnavailableError,
   hasPendingWork,
@@ -49,26 +53,26 @@ const apply = args.has("--apply");
 const check = args.has("--check");
 const backupConfirmed = args.has("--backup-confirmed");
 
-const keyring = getKeyring(process.env);
-
 function fail(msg: string): never {
   console.error(`✗ ${msg}`);
   process.exit(1);
 }
 
-if (apply) {
-  if (!process.env.EMAIL_ENCRYPTION_KEY) {
-    fail("Para --apply hace falta EMAIL_ENCRYPTION_KEY (la clave NUEVA). Sin ella no hay nada que migrar.");
-  }
-  if (keyring.current === DEFAULT_ENCRYPTION_KEY) {
-    fail("EMAIL_ENCRYPTION_KEY es igual a la clave por defecto: define una clave nueva.");
-  }
-  if (keyring.current.length < 32) {
-    fail("EMAIL_ENCRYPTION_KEY es demasiado corta (mínimo 32 caracteres). Genera una con: openssl rand -base64 48");
-  }
-  if (!backupConfirmed) {
-    fail("Falta --backup-confirmed: confirma que has hecho la copia previa (plan, apartado 5.2) y vuelve a lanzar.");
-  }
+// Desde la fase F no hay clave por defecto: EMAIL_ENCRYPTION_KEY (la NUEVA) es
+// obligatoria incluso para simular. Los datos que aún estén con la clave
+// anterior se leen declarándola en EMAIL_ENCRYPTION_KEY_PREVIOUS (para los que
+// siguen con la clave por defecto del repositorio:
+// EMAIL_ENCRYPTION_KEY_PREVIOUS=default-insecure-key-change-this).
+let keyring: ReturnType<typeof getKeyring>;
+try {
+  keyring = getKeyring(process.env);
+} catch (err) {
+  if (err instanceof KeyringConfigError) fail(err.message);
+  throw err;
+}
+
+if (apply && !backupConfirmed) {
+  fail("Falta --backup-confirmed: confirma que has hecho la copia previa (plan, apartado 5.2) y vuelve a lanzar.");
 }
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -116,7 +120,7 @@ const io: RekeyIO = {
 function print(report: RekeyReport): void {
   console.log(report.apply ? "\n== RE-CIFRADO (APLICADO) ==" : "\n== SIMULACIÓN (no se ha escrito nada) ==");
   console.log(
-    `clave actual: ${keyring.current === DEFAULT_ENCRYPTION_KEY ? "POR DEFECTO (EMAIL_ENCRYPTION_KEY sin definir)" : "definida"} · claves anteriores aceptadas: ${keyring.previous.length}\n`,
+    `clave actual: definida · claves anteriores aceptadas: ${keyring.previous.length}\n`,
   );
   for (const t of report.targets) {
     const name = `${t.table}.${t.field}`.padEnd(46);

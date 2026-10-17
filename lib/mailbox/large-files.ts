@@ -1,6 +1,11 @@
 import "server-only";
 import { randomUUID } from "crypto";
-import { getKeyring, hmacDigest, verifyHmacWithKeyring } from "@/lib/crypto/keyring";
+import {
+  KeyringConfigError,
+  getKeyring,
+  hmacDigest,
+  verifyHmacWithKeyring,
+} from "@/lib/crypto/keyring";
 import { createAdminClient } from "@/lib/db/admin";
 import { LARGE_FILE_LINK_DAYS, storageSafeName } from "./attachments";
 
@@ -36,7 +41,16 @@ export function signFileToken(storagePath: string, filename: string, expiresAt: 
 export function verifyFileToken(token: string): { path: string; filename: string; expiresAt: number } | null {
   const [data, mac] = token.split(".");
   if (!data || !mac) return null;
-  if (!verifyHmacWithKeyring(getKeyring(), `mail-file:${data}`, mac, "base64url")) return null;
+  try {
+    if (!verifyHmacWithKeyring(getKeyring(), `mail-file:${data}`, mac, "base64url")) return null;
+  } catch (err) {
+    // Sin clave de cifrado configurada no se puede verificar: se deniega y se registra.
+    if (err instanceof KeyringConfigError) {
+      console.error("[correo-archivo] no se puede verificar el enlace:", err.message);
+      return null;
+    }
+    throw err;
+  }
   try {
     const payload = JSON.parse(Buffer.from(data, "base64url").toString("utf8")) as LinkPayload;
     if (typeof payload.p !== "string" || typeof payload.n !== "string" || typeof payload.e !== "number") return null;

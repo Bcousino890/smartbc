@@ -30,7 +30,11 @@ async function t(name: string, fn: () => void | Promise<void>) {
 
 const NEW_KEY = "n".repeat(48);
 const OTHER_KEY = "o".repeat(48);
-const keyring = getKeyring({ EMAIL_ENCRYPTION_KEY: NEW_KEY });
+// Fase F: no hay respaldo implícito; la clave anterior se declara a propósito.
+const keyring = getKeyring({
+  EMAIL_ENCRYPTION_KEY: NEW_KEY,
+  EMAIL_ENCRYPTION_KEY_PREVIOUS: DEFAULT_ENCRYPTION_KEY,
+});
 
 // ── Base de datos falsa ──────────────────────────────────────────────────────
 type Store = Map<string, { enc: string | null; iv: string | null }>;

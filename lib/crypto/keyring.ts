@@ -12,43 +12,79 @@ import {
  * dependen de `EMAIL_ENCRYPTION_KEY`. Módulo PURO (sin acceso a datos):
  * `npm run test:keyring`.
  *
- * Por qué existe: la variable no está definida en producción y todo se cifra con
- * el literal público `DEFAULT_ENCRYPTION_KEY` (ver docs/PLAN_REKEY_EMAIL_ENCRYPTION.md).
- * Para poder sustituirlo SIN dejar ilegible lo ya guardado ni romper los enlaces
- * ya enviados, la clave pasa a ser un llavero:
+ * Por qué existe: la variable no estaba definida en producción y todo se cifraba
+ * con el literal público `DEFAULT_ENCRYPTION_KEY` (ver
+ * docs/PLAN_REKEY_EMAIL_ENCRYPTION.md). El llavero permitió sustituirlo SIN dejar
+ * ilegible lo ya guardado ni romper los enlaces ya enviados:
  *
  *   - se CIFRA y se FIRMA siempre con la clave actual;
  *   - se DESCIFRA y se VERIFICA probando la actual y, si falla, las anteriores.
  *     AES-GCM autentica el mensaje, así que descifrar con una clave equivocada
  *     falla siempre con error (nunca devuelve basura): probar varias es seguro.
  *
- * Clave actual   = EMAIL_ENCRYPTION_KEY, o la de por defecto si no existe.
- * Claves previas = EMAIL_ENCRYPTION_KEY_PREVIOUS (separadas por comas) + la de
- *                  por defecto como respaldo implícito DURANTE LA TRANSICIÓN.
+ * FASE F (esta versión): la clave actual es OBLIGATORIA y no hay respaldo
+ * implícito. Si `EMAIL_ENCRYPTION_KEY` falta, está vacía, es la de por defecto o
+ * es demasiado corta, `getKeyring()` lanza `KeyringConfigError` en vez de caer
+ * al literal público. Las claves anteriores solo son las que se declaren en
+ * `EMAIL_ENCRYPTION_KEY_PREVIOUS` (separadas por comas): para volver atrás o
+ * para releer datos aún sin migrar hay que declararlas a propósito.
  *
- * Mientras la variable siga sin definirse, `current` es la de por defecto y no
- * hay claves previas: el comportamiento es idéntico al anterior.
+ * La comprobación es PEREZOSA (al usar el llavero, no al importar el módulo)
+ * para no romper `next build` en entornos sin variables.
  */
 
-/** Clave por defecto del repositorio. Solo sirve como respaldo de transición. */
+/**
+ * Clave por defecto del repositorio: PÚBLICA. Ya no se usa como respaldo; se
+ * conserva solo para reconocerla y rechazarla como clave actual, y para poder
+ * declararla a propósito en `EMAIL_ENCRYPTION_KEY_PREVIOUS` al migrar o revertir.
+ */
 export const DEFAULT_ENCRYPTION_KEY = "default-insecure-key-change-this";
+
+/** Longitud mínima de la clave actual (genera una con `openssl rand -base64 48`). */
+export const MIN_ENCRYPTION_KEY_LENGTH = 32;
+
+/** La clave actual falta o no es utilizable: no se cifra ni se firma nada. */
+export class KeyringConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "KeyringConfigError";
+  }
+}
 
 export type Keyring = {
   /** Clave con la que se cifra y se firma. */
   current: string;
-  /** Claves con las que aún se acepta descifrar y verificar. */
+  /** Claves con las que aún se acepta descifrar y verificar (declaradas a propósito). */
   previous: string[];
 };
 
 export type EnvLike = Record<string, string | undefined>;
 
 export function getKeyring(env: EnvLike = process.env): Keyring {
-  const current = env.EMAIL_ENCRYPTION_KEY || DEFAULT_ENCRYPTION_KEY;
-  const declared = (env.EMAIL_ENCRYPTION_KEY_PREVIOUS ?? "")
-    .split(",")
-    .map((k) => k.trim())
-    .filter(Boolean);
-  const previous = [...new Set([...declared, DEFAULT_ENCRYPTION_KEY])].filter((k) => k !== current);
+  const current = env.EMAIL_ENCRYPTION_KEY;
+  if (!current) {
+    throw new KeyringConfigError(
+      "Falta EMAIL_ENCRYPTION_KEY: sin ella no se pueden cifrar ni descifrar secretos. Genera una con: openssl rand -base64 48",
+    );
+  }
+  if (current === DEFAULT_ENCRYPTION_KEY) {
+    throw new KeyringConfigError(
+      "EMAIL_ENCRYPTION_KEY es la clave por defecto del repositorio (pública): define una propia.",
+    );
+  }
+  if (current.length < MIN_ENCRYPTION_KEY_LENGTH) {
+    throw new KeyringConfigError(
+      `EMAIL_ENCRYPTION_KEY es demasiado corta (mínimo ${MIN_ENCRYPTION_KEY_LENGTH} caracteres).`,
+    );
+  }
+  const previous = [
+    ...new Set(
+      (env.EMAIL_ENCRYPTION_KEY_PREVIOUS ?? "")
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean),
+    ),
+  ].filter((k) => k !== current);
   return { current, previous };
 }
 

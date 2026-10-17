@@ -1,5 +1,10 @@
 import "server-only";
-import { getKeyring, hmacDigest, verifyHmacWithKeyring } from "@/lib/crypto/keyring";
+import {
+  KeyringConfigError,
+  getKeyring,
+  hmacDigest,
+  verifyHmacWithKeyring,
+} from "@/lib/crypto/keyring";
 import { sendEmail } from "./send-email";
 import { renderEmailLayout, escapeHtml } from "./templates";
 import type { SuggestedProperty } from "@/lib/db/queries/suggested-properties";
@@ -156,7 +161,17 @@ export function signUnsubscribeToken(clientId: string): string {
 }
 
 export function verifyUnsubscribeToken(clientId: string, token: string): boolean {
-  return verifyHmacWithKeyring(getKeyring(), clientId, token, "hex", UNSUBSCRIBE_TOKEN_LENGTH);
+  try {
+    return verifyHmacWithKeyring(getKeyring(), clientId, token, "hex", UNSUBSCRIBE_TOKEN_LENGTH);
+  } catch (err) {
+    // Sin clave de cifrado configurada no se puede verificar nada: se deniega y
+    // se deja el motivo en el log (no se confunde con un enlace manipulado).
+    if (err instanceof KeyringConfigError) {
+      console.error("[unsubscribe] no se puede verificar el enlace:", err.message);
+      return false;
+    }
+    throw err;
+  }
 }
 
 export function buildUnsubscribeUrl(clientId: string): string {
