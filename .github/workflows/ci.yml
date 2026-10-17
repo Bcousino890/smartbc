@@ -58,6 +58,20 @@ jobs:
       - name: "Catálogos (gestor: borradores y diagnósticos, offline)"
         run: npm run test:catalogs-manager
 
+      # Permisos y cuentas del equipo. Son las reglas que impiden que alguien
+      # escale privilegios (rango entre roles, quién crea qué rol, quién fija
+      # una contraseña, quién suspende), el análisis estático que falla si una
+      # ruta de /api/admin se queda sin guard, y la política de la capa de
+      # entrada. Puro, sin BD ni red.
+      - name: "Permisos: roles visibles y jerarquía (offline)"
+        run: npm run test:role-model && npm run test:user-rank
+      - name: "Permisos: toda ruta de /api/admin lleva guard (análisis estático)"
+        run: npm run test:api-guards
+      - name: "Permisos: sesión en la capa de entrada, secreto de cron y acciones de infraestructura (offline)"
+        run: npm run test:api-session-policy && npm run test:cron-secret && npm run test:infra-action
+      - name: "Permisos: términos de búsqueda de clientes acotados (offline)"
+        run: npm run test:search-term
+
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
         env:
