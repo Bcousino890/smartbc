@@ -1,7 +1,14 @@
 import { createAdminClient } from "@/lib/db/admin";
+import { requirePermission } from "@/lib/auth/guard";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
+  // Antes no comprobaba ni sesión: cualquiera podía leer el historial de
+  // estados y motivos de un anuncio con solo conocer su id (lectura con
+  // service role y sin guard; el middleware no protege /api).
+  const gate = await requirePermission("publicacion", "view");
+  if (!gate.ok) return gate.response;
+
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listingId");
 

@@ -1,0 +1,8 @@
+{
+  "_comentario": "Handlers (ruta#MÉTODO) de app/api/admin SIN guard propio. Cada una necesita un motivo. La lista solo debe encoger: si una ruta gana guard, bórrala de aquí (el test falla si queda obsoleta).",
+  "routes": {
+    "app/api/admin/properties/upload/[kind]/route.ts#POST": "Delega en uploadPropertyPhoto/Video/Plan (propiedades/actions.ts), cada una con checkPermission('properties','edit'). Excluida del matcher del middleware por el límite de 10 MB; mover el guard aquí cuando se migre al motor nuevo (Fase 2).",
+    "app/api/admin/idealista/save-config/route.ts#POST": "Stub que devuelve 410; sin lógica ni datos. Eliminar la ruta en una limpieza.",
+    "app/api/admin/visitas/[id]/sync-calendar/route.ts#POST": "Stub que devuelve 410; sin lógica ni datos. Eliminar la ruta en una limpieza."
+  }
+}
