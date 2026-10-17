@@ -142,4 +142,29 @@ Tareas X0–X13. Los números de migración se vuelven a comprobar antes de cada
 - **Fichas del CRM:** antes de proponer que la importación cree fichas de propiedad, hay que determinar sus efectos (publicación, sincronizaciones, matching, listados…). La puerta G3 de la fase 3 sigue en pie.
 - **Muestras:** el soporte real, los límites y los criterios de aceptación se fijan con muestras representativas de Fabricio. No se promete una extracción fiable de cualquier PDF.
 
+### Aclaración y ampliación (17 de octubre de 2026)
+
+Exploración de solo lectura: [`2026-10-17-bcp-01-importar-y-buscar/exploracion.md`](../2026-10-17-bcp-01-importar-y-buscar/exploracion.md).
+
+**Aprobado por Fabricio:**
+- **D-B1:** la selección del catálogo usará un buscador **como el de Propiedades** en lugar de «Modificar criterios», **conservando la selección manual y la automática**.
+  - Los filtros sirven para buscar y elegir a mano, y guardados, deciden la pertenencia automática.
+  - Se respetan las inclusiones y exclusiones manuales.
+  - Se conservan los catálogos existentes, sus criterios guardados, orden, límites y ajustes.
+  - No autoriza implementar.
+
+**Aclaración de alcance (Fabricio):**
+- Importar un PDF = **crear nuestra propia ficha y su enlace de siempre**: PDF → extracción → revisión editable → ficha confirmada → inclusión opcional en un catálogo.
+- Acceso desde Propiedades (staff autorizado, con los permisos que ya existen) y desde el flujo de catálogos de Fabricio.
+- **La HOME sigue siendo privada.**
+
+**Propuesto, pendiente de decisión** (ver §6 y §7 de la exploración):
+- **Entregas:** S0, fugas de la web pública; S1, buscador compartido; S2, criterios ampliados (migración); S3, nueva selección del catálogo; S4, enlace → catálogo; S5, importar PDF.
+- **Decisiones:** O-I1 (qué es «Crear link»), O-B1 a O-B3, O-I3 a O-I5, O-S0, el orden de las entregas y las muestras.
+- **El orden registrado no cambia sin decisión:**
+  1. plan y aprobación del PDF en un hilo (con O1 pendiente);
+  2. su implementación y QA;
+  3. importar PDF.
+- El buscador (S1–S3) todavía **no tiene sitio** en esa secuencia.
+
 **Siguen pendientes, sin cambios:** G-ALQ, el caso original de Recoletos y D13 en vivo.
