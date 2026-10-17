@@ -1,10 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { getSigningSecret } from "@/lib/auth/signing-secret";
 
-const SECRET = process.env.IDEALISTA_EXT_SECRET || process.env.CRON_SECRET || "dev-secret-change-me";
 const DEFAULT_TTL_SECONDS = 30 * 60; // 30 minutos — tiempo de sobra para completar el formulario
 
 function sign(payload: string): string {
-  return createHmac("sha256", SECRET).update(payload).digest("hex");
+  return createHmac("sha256", getSigningSecret()).update(payload).digest("hex");
 }
 
 export function signPublishToken(listingId: string, ttlSeconds = DEFAULT_TTL_SECONDS): string {

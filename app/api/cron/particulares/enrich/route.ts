@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import "server-only";
 import { runParticularesEnrich } from "@/lib/particulares/enrich-runner";
 
@@ -22,7 +23,7 @@ export const maxDuration = 120;
  * Ver CLAUDE.md → "Enriquecer particulares desde la descripción".
  */
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const sp = new URL(req.url).searchParams;

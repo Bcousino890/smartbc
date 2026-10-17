@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 import { processPendingPortalLinks } from "@/lib/portal-links/auto-import";
 
 // Respaldo de las fichas automáticas de "Enlaces de portales".
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
 export async function POST(req: Request) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get("Authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
   // No se espera a que acabe: con 30 anuncios son minutos, y el cron solo
