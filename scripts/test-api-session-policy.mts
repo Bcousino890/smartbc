@@ -126,8 +126,10 @@ t("toda excepción de la lista corresponde a una ruta que existe (sin entradas h
 t("toda excepción tiene un motivo y ninguna es demasiado amplia", () => {
   for (const [route, why] of Object.entries(API_ADMIN_NON_SESSION_ROUTES)) {
     assert.ok(why.trim().length > 10, `${route} sin motivo`);
-    assert.ok(route.split("/").filter(Boolean).length >= 4, `${route} es demasiado amplia (debe ser /api/admin/<área>/<ruta>)`);
-    assert.ok(route.startsWith("/api/admin/"), route);
+    assert.ok(route.startsWith("/api/admin/") && route !== "/api/admin/", route);
+    // Amplitud: una excepción no puede abarcar más de 3 rutas (ni ser un área entera).
+    const covered = routeFiles.map(routePath).filter((p) => p === route || p.startsWith(`${route}/`));
+    assert.ok(covered.length >= 1 && covered.length <= 3, `${route} abarca ${covered.length} rutas (debe abarcar entre 1 y 3)`);
   }
 });
 

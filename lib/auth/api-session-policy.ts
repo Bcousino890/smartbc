@@ -37,6 +37,8 @@ export const API_ADMIN_NON_SESSION_ROUTES: Record<string, string> = {
     "sesión de owner/admin o Authorization: Bearer CRON_SECRET (diagnóstico desde el VPS)",
   "/api/admin/zinto/health":
     "sesión de owner/admin o Authorization: Bearer CRON_SECRET (diagnóstico desde el VPS)",
+  "/api/admin/catalogos":
+    "PDF del catálogo para su dueño: la ruta se autentica con la sesión de la HOME (assertHomeOwner; sin ella responde 404). En desarrollo con CATALOG_FIXTURES=1 y solo desde localhost funciona sin sesión a propósito; el middleware no debe cortarlo.",
   "/api/admin/zinto/conversations":
     "LEGADO (ninguna pantalla lo usa): valida un token de acceso de Supabase en la cabecera Authorization. Retirar con el resto del Zinto legacy.",
 };
