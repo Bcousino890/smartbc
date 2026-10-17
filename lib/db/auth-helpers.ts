@@ -1,5 +1,6 @@
 import "server-only";
 import type { createClient } from "./server";
+import { isSuspended } from "@/lib/auth/user-rank";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -25,12 +26,24 @@ export async function requireSession(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "no_session" };
 
-  const profileResult = await supabase
+  // `suspended_at` (migración 0211) viaja en la misma consulta; si la columna
+  // aún no existe, falla y se repite solo con el rol.
+  let profileResult = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, suspended_at")
     .eq("id", user.id)
     .maybeSingle();
-  const role = ((profileResult.data as { role?: string } | null)?.role ?? "client");
+  if (profileResult.error) {
+    profileResult = (await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle()) as typeof profileResult;
+  }
+  const row = profileResult.data as { role?: string; suspended_at?: string | null } | null;
+  // Una cuenta suspendida no tiene sesión, aunque su token siga sin caducar.
+  if (isSuspended(row)) return { ok: false, error: "no_session" };
+  const role = row?.role ?? "client";
   return { ok: true, userId: user.id, role };
 }
 

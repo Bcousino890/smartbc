@@ -58,6 +58,11 @@ export async function signInAction(
   // autocorrector del móvil añade uno al final y la deja irreconocible. Se
   // prueba primero tal cual se escribió, así que a quien tenga un espacio de
   // verdad en su contraseña no le rompemos nada.
+  // Una cuenta suspendida está baneada en GoTrue ("User is banned"): se dice
+  // como lo que es, en vez de como una contraseña incorrecta. Se recuerda del
+  // primer intento porque el segundo (sin espacios) puede dar otro error.
+  let suspended = /banned/i.test(signInError?.message ?? "");
+
   if (signInError) {
     const trimmedPassword = parsed.data.password.trim();
     if (trimmedPassword && trimmedPassword !== parsed.data.password) {
@@ -65,16 +70,12 @@ export async function signInAction(
         email: parsed.data.email,
         password: trimmedPassword,
       }));
+      suspended = suspended || /banned/i.test(signInError?.message ?? "");
     }
   }
 
   if (signInError) {
-    // Una cuenta suspendida está baneada en GoTrue ("User is banned"): se dice
-    // como lo que es, en vez de como una contraseña incorrecta.
-    if (/banned/i.test(signInError.message ?? "")) {
-      return { error: "auth.error.suspended" };
-    }
-    return { error: "auth.error.invalidCredentials" };
+    return { error: suspended ? "auth.error.suspended" : "auth.error.invalidCredentials" };
   }
 
   const { data: { user } } = await supabase.auth.getUser();

@@ -8,18 +8,27 @@ import { canSuspendUser, isSuspended, isUserAdminRole } from "@/lib/auth/user-ra
 const BAN_FOREVER = "876000h";
 
 /**
- * Suspende o reactiva una cuenta del equipo.
+ * Suspende o reactiva una cuenta.
  *
  *   POST { suspended: true, reason?: string }   → suspende
  *   POST { suspended: false }                    → reactiva
  *
  * Suspender impide entrar y operar sin borrar nada (clientes, captaciones y
- * mensajes siguen en su sitio). Se hace en dos sitios a la vez:
+ * mensajes siguen en su sitio). Se hace en tres sitios:
  *   1. GoTrue: la cuenta queda baneada, no puede iniciar sesión ni renovar el
- *      token. Se hace PRIMERO: si falla, no se ha cambiado nada.
- *   2. `profiles.suspended_at`: el middleware y getCurrentProfile() cortan la
- *      sesión que siga viva hasta que caduque su token.
+ *      token. Va PRIMERO: si falla, no se ha cambiado nada.
+ *   2. `profiles.suspended_at`: el middleware, getCurrentProfile() y los helpers
+ *      de sesión la dejan fuera.
+ *   3. Sus sesiones abiertas se cierran (`revoke_user_sessions`, migración
+ *      0211): GoTrue valida la sesión del JWT en cada petición, así que su
+ *      sesión deja de valer en el acto en vez de aguantar hasta que caduque.
+ *      La API de datos (PostgREST) valida solo la firma del JWT, no la sesión:
+ *      ahí puede seguir leyendo/escribiendo lo que sus políticas le permitan
+ *      hasta que caduque el token (≤ 1 h).
  * Solo quien administra esa cuenta, y nunca la propia (lib/auth/user-rank.ts).
+ *
+ * No se corta por «ya está así»: repetir la petición vuelve a aplicar GoTrue y
+ * la revocación, que es lo que arregla una cuenta que quedó a medias.
  */
 export async function POST(
   req: Request,
@@ -48,6 +57,8 @@ export async function POST(
     return Response.json({ error: "Falta indicar si se suspende o se reactiva (suspended: true | false)" }, { status: 400 });
   }
   const wantSuspend = body.suspended;
+  // El motivo solo queda en la auditoría: `profiles` es legible con la clave
+  // anónima y no se guardan ahí datos de quién suspende ni por qué.
   const reason =
     wantSuspend && typeof body.reason === "string" && body.reason.trim()
       ? body.reason.trim().slice(0, 300)
@@ -62,7 +73,7 @@ export async function POST(
     .maybeSingle();
   if (targetErr && targetErr.code === "42703") {
     return Response.json(
-      { error: "Falta aplicar la migración 0210 (suspensión de cuentas) en la base de datos" },
+      { error: "Falta aplicar la migración 0211 (suspensión de cuentas) en la base de datos" },
       { status: 503 },
     );
   }
@@ -80,10 +91,7 @@ export async function POST(
     );
   }
 
-  // Idempotente: pedir lo que ya está hecho no es un error.
-  if (wantSuspend === isSuspended(target)) {
-    return Response.json({ ok: true, suspended: wantSuspend, unchanged: true });
-  }
+  const profileAlreadyThere = wantSuspend === isSuspended(target);
 
   // 1) GoTrue primero: si no responde, la cuenta queda como estaba.
   const { error: banError } = await db.auth.admin.updateUserById(userId, {
@@ -99,38 +107,64 @@ export async function POST(
     );
   }
 
-  // 2) El perfil.
-  const { error: profileError } = await db
-    .from("profiles")
-    .update(
-      wantSuspend
-        ? { suspended_at: new Date().toISOString(), suspended_by: actor.id, suspended_reason: reason }
-        : { suspended_at: null, suspended_by: null, suspended_reason: null },
-    )
-    .eq("id", userId);
-  if (profileError) {
-    // Deshace lo de GoTrue para no dejar la cuenta a medias.
-    await db.auth.admin
-      .updateUserById(userId, { ban_duration: wantSuspend ? "none" : BAN_FOREVER })
-      .catch(() => undefined);
-    const missingColumn = profileError.code === "42703";
-    return Response.json(
-      {
-        error: missingColumn
-          ? "Falta aplicar la migración 0210 (suspensión de cuentas) en la base de datos"
-          : `No se pudo guardar el cambio (${profileError.message}). No se ha cambiado nada: puedes reintentar.`,
-        code: missingColumn ? "migration_missing" : "profile_failed",
-      },
-      { status: missingColumn ? 503 : 500 },
-    );
+  // 2) El perfil (solo si cambia).
+  if (!profileAlreadyThere) {
+    const { error: profileError } = await db
+      .from("profiles")
+      .update({ suspended_at: wantSuspend ? new Date().toISOString() : null })
+      .eq("id", userId);
+    if (profileError) {
+      // Deshace lo de GoTrue para no dejar la cuenta a medias. supabase-js no
+      // lanza: devuelve el error, y hay que mirarlo.
+      const { error: undoError } = await db.auth.admin.updateUserById(userId, {
+        ban_duration: wantSuspend ? "none" : BAN_FOREVER,
+      });
+      const missingColumn = profileError.code === "42703";
+      if (undoError) {
+        return Response.json(
+          {
+            error: `Quedó a medias: el perfil no se pudo guardar (${profileError.message}) y tampoco se pudo deshacer el cambio en el servicio de acceso (${undoError.message}). Vuelve a pulsar ${wantSuspend ? "«Suspender»" : "«Reactivar»"} para dejarla consistente.`,
+            code: "partial",
+          },
+          { status: 500 },
+        );
+      }
+      return Response.json(
+        {
+          error: missingColumn
+            ? "Falta aplicar la migración 0211 (suspensión de cuentas) en la base de datos"
+            : `No se pudo guardar el cambio (${profileError.message}). No se ha cambiado nada: puedes reintentar.`,
+          code: missingColumn ? "migration_missing" : "profile_failed",
+        },
+        { status: missingColumn ? 503 : 500 },
+      );
+    }
   }
 
-  await logPermissionEvent({
-    actorId: actor.id,
-    targetUserId: userId,
-    eventType: wantSuspend ? "user_suspended" : "user_reactivated",
-    newValue: wantSuspend ? { reason } : null,
-  });
+  // 3) Sesiones abiertas (solo al suspender). Si la función aún no existe, la
+  //    suspensión vale igual (GoTrue baneada + perfil) y se avisa.
+  let sessionsRevoked: boolean | undefined;
+  if (wantSuspend) {
+    const { error: revokeError } = await db.rpc("revoke_user_sessions", { p_user_id: userId });
+    sessionsRevoked = !revokeError;
+    if (revokeError) {
+      console.warn("[usuarios/suspend] No se pudieron cerrar sus sesiones:", revokeError.message);
+    }
+  }
 
-  return Response.json({ ok: true, suspended: wantSuspend });
+  if (!profileAlreadyThere) {
+    await logPermissionEvent({
+      actorId: actor.id,
+      targetUserId: userId,
+      eventType: wantSuspend ? "user_suspended" : "user_reactivated",
+      newValue: wantSuspend ? { reason, sessionsRevoked } : null,
+    });
+  }
+
+  return Response.json({
+    ok: true,
+    suspended: wantSuspend,
+    ...(profileAlreadyThere ? { unchanged: true } : {}),
+    ...(sessionsRevoked !== undefined ? { sessionsRevoked } : {}),
+  });
 }

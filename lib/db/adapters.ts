@@ -303,7 +303,7 @@ export function profileRowToInternalUser(
     roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin", "captadora"].includes(row.role ?? "")
       ? row.role
       : "advisor") as InternalUserRole,
-    // `suspended_at` (migración 0210) no está en los tipos generados: lectura
+    // `suspended_at` (migración 0211) no está en los tipos generados: lectura
     // defensiva, igual que `countries` y `custom_role_id` más abajo.
     status: (row as { suspended_at?: string | null }).suspended_at ? "suspended" : "active",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),

@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
 import { STAFF_ROLES } from "@/lib/permissions";
-import { resolveRoleCountries } from "@/lib/auth/role-model";
+import { countryRolesError, resolveRoleCountries } from "@/lib/auth/role-model";
 import {
   canAssignRole,
   canManageUser,
@@ -170,7 +170,7 @@ export async function PATCH(req: Request) {
     return Response.json(
       {
         error:
-          "Nadie fija la contraseña de otra persona. Usa «Enviar enlace para elegir contraseña» y ella la elige.",
+          "Nadie fija la contraseña de otra persona. Usa «Enviar enlace para elegir contraseña» y la propia persona la elige.",
         code: "password_not_allowed",
       },
       { status: 403 },
@@ -220,8 +220,25 @@ export async function PATCH(req: Request) {
   // tenga España guardada no se bloquea (se arregla al editar sus países).
   const nextRole = role ?? prevProfile.role ?? null;
   const roleBecomesCaptadora = role === "captadora" && prevProfile.role !== "captadora";
+  const touchesCountries =
+    countries !== undefined || country !== undefined || multiCountry !== undefined;
+  if (nextRole === "captadora" && multiCountry === true) {
+    return Response.json(
+      { error: "Las captadoras solo trabajan en Chile: no pueden tener acceso a los dos países." },
+      { status: 400 },
+    );
+  }
+
+  // Una captadora no tiene rol por país, y «captadora» no se asigna por país:
+  // el rol por país gana sobre el de la cuenta, así que una captadora con un
+  // rol por país de Asesor seguiría viendo y editando como Asesor en Chile.
+  const countryRolesProblem = countryRolesError(nextRole, countryRoles, currentCountryRoles);
+  if (countryRolesProblem) {
+    return Response.json({ error: countryRolesProblem }, { status: 400 });
+  }
+
   let captadoraCountries: { country: string; countries: string[] } | null = null;
-  if (nextRole === "captadora" && (roleBecomesCaptadora || countries !== undefined)) {
+  if (nextRole === "captadora" && (roleBecomesCaptadora || touchesCountries)) {
     const resolved = resolveRoleCountries("captadora", { country, countries });
     if (!resolved.ok) {
       return Response.json({ error: resolved.error }, { status: 400 });
@@ -253,6 +270,15 @@ export async function PATCH(req: Request) {
           { status: 400 },
         );
       }
+      // El correo es a donde llegan los enlaces de contraseña: cambiar el de
+      // otra cuenta deja rastro de quién lo hizo y de qué a qué.
+      await logPermissionEvent({
+        actorId: currentProfile.id,
+        targetUserId: userId,
+        eventType: "email_changed",
+        oldValue: { email: prevProfile?.email ?? null },
+        newValue: { email: nextEmail },
+      });
     }
   }
 
@@ -269,6 +295,14 @@ export async function PATCH(req: Request) {
   let hasCustomRoleId = false;
   if (customRoleId !== undefined) {
     updates.custom_role_id = customRoleId || (null as unknown as string);
+    hasCustomRoleId = true;
+  }
+
+  // Al pasar una cuenta a Captadora se limpia lo que la haría seguir siendo otra
+  // cosa: el rol personalizado (gana sobre todo) y los roles por país (se borran
+  // más abajo, tras guardar el perfil).
+  if (roleBecomesCaptadora && currentCustomRoleId && customRoleId === undefined) {
+    updates.custom_role_id = null;
     hasCustomRoleId = true;
   }
 
@@ -344,6 +378,17 @@ export async function PATCH(req: Request) {
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
+    }
+
+    // Pasó a Captadora: fuera todos sus roles por país (best-effort; si la tabla
+    // aún no existe, no hay nada que borrar).
+    if (roleBecomesCaptadora) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from("profiles_country_roles").delete().eq("user_id", userId);
+      } catch {
+        // profiles_country_roles aún no existe
+      }
     }
 
     // ── Rol por país (best-effort, defensivo) ──────────────────────────────

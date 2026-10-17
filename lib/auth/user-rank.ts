@@ -139,11 +139,12 @@ export function canSuspendUser(
   return canManageUser(actor, target);
 }
 
-/** ¿Está la cuenta suspendida? (`profiles.suspended_at` con valor). */
+/** ¿Está la cuenta suspendida? (`profiles.suspended_at` con una fecha válida). */
 export function isSuspended(
   profile: { suspended_at?: string | null } | null | undefined,
 ): boolean {
-  return typeof profile?.suspended_at === "string" && profile.suspended_at.length > 0;
+  const at = profile?.suspended_at;
+  return typeof at === "string" && at.length > 0 && Number.isFinite(Date.parse(at));
 }
 
 /** Campos del propio perfil que cualquiera puede cambiarse a sí mismo (no dan poder). */

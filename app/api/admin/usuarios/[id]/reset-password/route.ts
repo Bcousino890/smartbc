@@ -60,8 +60,13 @@ export async function POST(
       { status: 403 },
     );
   }
-  if (!target.email) {
-    return Response.json({ error: "Esta cuenta no tiene correo al que enviar el enlace" }, { status: 422 });
+  // Los clientes dados de alta sin correo llevan uno interno inventado
+  // (…@interno.smartbc.local): no es un buzón, el enlace no llegaría a nadie.
+  if (!target.email || /@interno\.smartbc\.local$/i.test(target.email)) {
+    return Response.json(
+      { error: "Esta cuenta no tiene un correo real al que enviar el enlace. Ponle uno desde «Editar» y vuelve a probar." },
+      { status: 422 },
+    );
   }
 
   // Freno por cuenta (best-effort: si la consulta falla, no se bloquea el envío).
@@ -106,7 +111,7 @@ export async function POST(
     return Response.json(
       {
         error:
-          "No se pudo enviar el correo (revisa Configuración → Correo). El enlace no se muestra por seguridad: reinténtalo cuando el correo funcione.",
+          "No se pudo enviar el correo (revisa Configuración → Email). El enlace no se muestra por seguridad: reinténtalo cuando el correo funcione.",
         code: "email_failed",
       },
       { status: 502 },

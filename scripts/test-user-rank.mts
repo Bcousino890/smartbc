@@ -210,6 +210,8 @@ t("isSuspended: solo con una fecha de suspensión válida", () => {
   assert.equal(isSuspended(null), false);
   assert.equal(isSuspended(undefined), false);
   assert.equal(isSuspended({ suspended_at: "" }), false);
+  assert.equal(isSuspended({ suspended_at: "no es una fecha" }), false);
+  assert.equal(isSuspended({ suspended_at: 12345 as unknown as string }), false);
 });
 
 console.log(`\n✓ test:user-rank — ${n} pruebas`);

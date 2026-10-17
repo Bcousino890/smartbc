@@ -160,6 +160,28 @@ export async function sendInvitationEmail(
 }
 
 /**
+ * Envía a una cuenta YA creada el enlace para que ELLA elija su contraseña
+ * (token de un solo uso, 7 días por defecto). Nadie —ni quien crea la cuenta—
+ * conoce la contraseña: el enlace llega solo al correo de esa persona y no se
+ * devuelve a quien lo pide. `emailSent` dice si el correo salió.
+ */
+export async function sendAccountSetupLink(params: {
+  userId: string;
+  email: string;
+  firstName: string;
+  expiresInHours?: number;
+}): Promise<{ emailSent: boolean }> {
+  const { userId, email, firstName, expiresInHours = 24 * 7 } = params;
+  const tokenData = await createPasswordResetToken(userId, expiresInHours);
+  if (!tokenData) return { emailSent: false };
+  const appUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const inviteUrl = `${appUrl}/auth/reset-password?token=${tokenData.token}`;
+  const sendResult = await sendInvitationEmail(email, firstName || email, inviteUrl);
+  return { emailSent: sendResult.success };
+}
+
+/**
  * Create a user that's confirmed immediately (account access never depends
  * on any invitation email arriving — same pattern as the staff/no-email
  * client creation routes) and best-effort send a "set your password" link
@@ -207,15 +229,7 @@ export async function createInvitedUser(params: {
 
   const userId = data.user.id as string;
 
-  let emailSent = false;
-  const tokenData = await createPasswordResetToken(userId, expiresInHours);
-  if (tokenData) {
-    const appUrl =
-      process.env.NEXT_PUBLIC_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const inviteUrl = `${appUrl}/auth/reset-password?token=${tokenData.token}`;
-    const sendResult = await sendInvitationEmail(email, firstName || email, inviteUrl);
-    emailSent = sendResult.success;
-  }
+  const { emailSent } = await sendAccountSetupLink({ userId, email, firstName, expiresInHours });
 
   return { ok: true, userId, emailSent, tempPassword };
 }

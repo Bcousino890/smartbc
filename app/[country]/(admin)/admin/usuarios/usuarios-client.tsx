@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { requestJson, type RequestJsonFailure } from "@/lib/http/request-json";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PermissionsDrawer } from "@/components/admin/permissions/permissions-drawer";
-import { roleChoices, roleDetail, roleLabel, staffGroup } from "@/lib/auth/role-model";
+import { isLegacyRole, roleChoices, roleDetail, roleLabel, staffGroup } from "@/lib/auth/role-model";
 import { canManageUser } from "@/lib/auth/user-rank";
 
 const ROLE_BADGE: Record<InternalUserRole, string> = {
@@ -200,8 +200,6 @@ function CreateUserModal({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [assignedAdvisor, setAssignedAdvisor] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   // Multi-país: set de países con acceso + país por defecto (landing).
   // Inicializa con el país del árbol admin desde el que se crea el usuario.
   const [selectedCountries, setSelectedCountries] = useState<string[]>([country]);
@@ -210,6 +208,8 @@ function CreateUserModal({
   const [advisorScope, setAdvisorScope] = useState<"all" | "own">("all");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  // Equipo: ¿salió el correo con el enlace para elegir contraseña?
+  const [linkEmailSent, setLinkEmailSent] = useState<boolean | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,7 +234,6 @@ function CreateUserModal({
       role,
       assignedAdvisorId:
         modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
-      password: modalType !== "client" ? password : undefined,
       // País por defecto/landing: el elegido en el picker (si aplica) o el
       // árbol admin desde el que se creó el usuario.
       country: isCaptadora ? "cl" : showCountryPicker ? defaultCountry : country,
@@ -259,6 +258,14 @@ function CreateUserModal({
     }
 
     setStatus("success");
+    if (modalType !== "client") {
+      const emailSent = (result.data as { emailSent?: boolean }).emailSent !== false;
+      setLinkEmailSent(emailSent);
+      onSuccess?.();
+      // Si el correo no salió, el aviso se queda hasta que se cierre a mano.
+      if (emailSent) setTimeout(onClose, 2600);
+      return;
+    }
     setTimeout(() => {
       onClose();
       onSuccess?.();
@@ -272,7 +279,6 @@ function CreateUserModal({
     client: "Crear cliente",
   };
   const modalTitle = MODAL_TITLES[modalType] ?? "Crear usuario";
-  const needsPassword = modalType !== "client";
 
   return (
     <div
@@ -302,6 +308,30 @@ function CreateUserModal({
               {modalTitle.replace("Crear", "").trim()} creado exitosamente
             </p>
             <p className="text-sm text-ink/55">{email}</p>
+            {linkEmailSent === true && (
+              <p className="text-xs leading-relaxed text-ink/55">
+                Le hemos enviado un enlace para que elija su contraseña. Caduca en 7 días.
+              </p>
+            )}
+            {linkEmailSent === false && (
+              <>
+                <p
+                  role="alert"
+                  className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800"
+                >
+                  La cuenta está creada, pero el correo con el enlace no salió. Cuando el
+                  correo funcione, abre «Editar» en su fila y pulsa «Enviar enlace para
+                  elegir contraseña».
+                </p>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-ink/10 px-4 py-2 text-sm text-ink/65 transition hover:border-ink/20 hover:text-ink"
+                >
+                  Cerrar
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -427,7 +457,7 @@ function CreateUserModal({
               </p>
             )}
 
-            {needsPassword && modalType !== "admin" && modalType !== "captadora" && (
+            {modalType === "advisor" && (
               <CountryPicker
                 selected={selectedCountries}
                 defaultCountry={defaultCountry}
@@ -436,30 +466,11 @@ function CreateUserModal({
               />
             )}
 
-            {needsPassword && (
-              <div>
-                <label className="mb-1.5 block crm-label-sm text-ink/50">
-                  Contraseña <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 pr-10 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink/70"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
+            {modalType !== "client" && (
+              <p className="rounded-xl border border-ink/10 bg-white/60 px-3 py-2 text-xs leading-relaxed text-ink/55">
+                No se pone contraseña: al crear la cuenta se le envía un correo con un
+                enlace para que la elija la propia persona.
+              </p>
             )}
 
             {status === "error" && (
@@ -478,12 +489,7 @@ function CreateUserModal({
               </button>
               <button
                 type="submit"
-                disabled={
-                  !email ||
-                  !firstName ||
-                  (needsPassword && !password) ||
-                  status === "loading"
-                }
+                disabled={!email || !firstName || status === "loading"}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
               >
                 {status === "loading" ? (
@@ -550,7 +556,9 @@ function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, o
     { id: currentUserId, role: currentUserRole },
     { id: user.id, role: user.roleKey },
   );
-  const isSuspendedUser = user.status === "suspended";
+  // Estado local: `editUser` es una copia en el estado, y refrescar la lista no la
+  // actualiza; sin esto el botón seguiría diciendo «Suspender» tras suspender.
+  const [isSuspendedUser, setIsSuspendedUser] = useState(user.status === "suspended");
   const [accessBusy, setAccessBusy] = useState<null | "reset" | "suspend">(null);
   const [accessMsg, setAccessMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [confirmSuspend, setConfirmSuspend] = useState(false);
@@ -580,10 +588,16 @@ function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, o
       setAccessMsg({ kind: "error", text: result.error });
       return;
     }
+    const sessionsRevoked = (result.data as { sessionsRevoked?: boolean }).sessionsRevoked;
     setAccessMsg({
       kind: "ok",
-      text: isSuspendedUser ? "Cuenta reactivada." : "Cuenta suspendida: ya no puede entrar.",
+      text: isSuspendedUser
+        ? "Cuenta reactivada."
+        : sessionsRevoked === false
+          ? "Cuenta suspendida: no podrá volver a entrar. No se pudieron cerrar sus sesiones abiertas, que pueden seguir activas hasta una hora."
+          : "Cuenta suspendida: ya no puede entrar y sus sesiones se han cerrado.",
     });
+    setIsSuspendedUser(!isSuspendedUser);
     onSuccess?.();
   };
 
@@ -837,7 +851,8 @@ function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, o
                       {countryRoleOverrides[c] &&
                         !COUNTRY_ROLE_CHOICES.some((r) => r.value === countryRoleOverrides[c]) && (
                           <option value={countryRoleOverrides[c]}>
-                            {roleLabel(countryRoleOverrides[c])} (heredado)
+                            {roleLabel(countryRoleOverrides[c])}
+                            {isLegacyRole(countryRoleOverrides[c]) ? " (heredado)" : ""}
                           </option>
                         )}
                     </select>
@@ -892,7 +907,7 @@ function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, o
                     Enviar enlace para elegir contraseña
                   </button>
                   <p className="mt-1 text-xs text-ink/40">
-                    Le llega a {user.email} y la elige ella: nadie fija la contraseña de otra persona.
+                    Le llega a {user.email} y la elige la propia persona: nadie fija la contraseña de otra.
                   </p>
                 </div>
 

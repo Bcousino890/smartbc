@@ -45,9 +45,9 @@ const ROLE_LABEL: Record<InternalUserRole, string> = {
   advisor:      "Asesor",
   client:       "Cliente",
   viewer:       "Visualizador",
-  agent_junior: "Agente Junior",
-  agent_senior: "Agente Senior",
-  agent_admin:  "Agente Admin",
+  agent_junior: "Asesor",
+  agent_senior: "Asesor",
+  agent_admin:  "Administrador",
   captadora:    "Captadora",
 };
 

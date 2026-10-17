@@ -126,7 +126,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // `suspended_at` (migración 0210) viaja en la misma consulta; si la columna
+  // `suspended_at` (migración 0211) viaja en la misma consulta; si la columna
   // aún no existe, la consulta falla y se repite solo con el rol — así el
   // despliegue nunca depende del orden en que se apliquen código y migración.
   let { data: profile, error: profileError } = await supabase

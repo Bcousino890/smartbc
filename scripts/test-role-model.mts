@@ -9,6 +9,7 @@ import {
   ASSIGNABLE_STAFF_ROLES,
   CAPTADORA_COUNTRY,
   countriesError,
+  countryRolesError,
   isAssignableStaffRole,
   isLegacyRole,
   resolveRoleCountries,
@@ -155,6 +156,41 @@ t("los demás roles pasan los países tal cual", () => {
   assert.deepEqual(resolveRoleCountries("advisor", { country: "es", countries: ["es", "cl"] }), { ok: true, country: "es", countries: ["es", "cl"] });
   assert.deepEqual(resolveRoleCountries("admin", {}), { ok: true, country: undefined, countries: undefined });
   assert.deepEqual(resolveRoleCountries("agent_senior", { countries: ["cl"] }), { ok: true, country: undefined, countries: ["cl"] });
+});
+
+t("las dos ramas del rechazo de país de la captadora: country es aunque countries diga Chile", () => {
+  const r = resolveRoleCountries("captadora", { country: "es", countries: ["cl"] });
+  assert.equal(r.ok, false);
+  assert.match((r as { error: string }).error, /Chile/);
+});
+
+t("countries que no es una lista se rechaza con un mensaje, no revienta", () => {
+  for (const bad of ["cl", 5, {}, true, null]) {
+    const r = resolveRoleCountries("captadora", { countries: bad as unknown as string[] });
+    assert.equal(r.ok, false, String(bad));
+  }
+  // Otros roles: se devuelven tal cual y ya los valida la ruta.
+  assert.deepEqual(resolveRoleCountries("advisor", { countries: "cl" as unknown as string[] }), { ok: true, country: undefined, countries: "cl" });
+});
+
+// ── Rol por país ─────────────────────────────────────────────────────────────
+t("una captadora no tiene rol por país: cualquier valor se rechaza, quitarlos (null) no", () => {
+  assert.match(countryRolesError("captadora", { cl: "advisor" }, {}) ?? "", /captadora/i);
+  assert.match(countryRolesError("captadora", { es: "agent_senior", cl: null }, {}) ?? "", /captadora/i);
+  assert.equal(countryRolesError("captadora", { es: null, cl: null }, {}), null);
+  assert.equal(countryRolesError("captadora", {}, {}), null);
+});
+
+t("«captadora» no se asigna como rol por país (daría una captadora en España); lo ya guardado se tolera", () => {
+  assert.match(countryRolesError("advisor", { es: "captadora" }, {}) ?? "", /captadora/i);
+  assert.match(countryRolesError("agent_senior", { cl: "captadora" }, {}) ?? "", /captadora/i);
+  assert.equal(countryRolesError("advisor", { cl: "captadora" }, { cl: "captadora" }), null);
+});
+
+t("para el resto de roles y valores, el rol por país no lo bloquea esta regla", () => {
+  assert.equal(countryRolesError("advisor", { es: "advisor", cl: "agent_senior" }, {}), null);
+  assert.equal(countryRolesError("admin", { es: null }, {}), null);
+  assert.equal(countryRolesError("advisor", undefined, {}), null);
 });
 
 console.log(`\n✓ test:role-model — ${n} pruebas`);

@@ -11,9 +11,9 @@ const ROLE_LABEL: Record<string, string> = {
   owner: "Propietario",
   admin: "Administrador",
   advisor: "Asesor",
-  agent_junior: "Agente Junior",
-  agent_senior: "Agente Senior",
-  agent_admin: "Agente Admin",
+  agent_junior: "Asesor",
+  agent_senior: "Asesor",
+  agent_admin: "Administrador",
   captadora: "Captadora",
 };
 

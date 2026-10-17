@@ -57,7 +57,10 @@ export default async function AdminUsuariosPage({
     // Rol real para "client"; cualquier otro valor (viewer, roles raros o
     // futuros) se muestra como "viewer" para no romper el tipado.
     roleKey: (row.role === "client" ? "client" : "viewer") as InternalUserRole,
-    status: "active" as const,
+    // `suspended_at` (migración 0211) no está en los tipos generados.
+    status: ((row as { suspended_at?: string | null }).suspended_at
+      ? "suspended"
+      : "active") as "active" | "suspended",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
   }));
 

@@ -11,6 +11,7 @@ export type PermissionAuditEventType =
   // Acceso de la cuenta: enlace de restablecimiento enviado, suspensión y
   // reactivación (el valor guardado nunca incluye el enlace ni contraseñas).
   | "password_reset_sent"
+  | "email_changed"
   | "user_suspended"
   | "user_reactivated"
   // Acciones de infraestructura lanzadas desde el panel (migraciones, deploy).

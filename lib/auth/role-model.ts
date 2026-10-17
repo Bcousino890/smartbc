@@ -156,6 +156,11 @@ export function resolveRoleCountries(
   if (role !== "captadora") {
     return { ok: true, country: input.country, countries: input.countries };
   }
+  // Una petición manual puede mandar cualquier cosa: `countries` tiene que ser
+  // una lista, y se dice, en vez de dejar que reviente más abajo.
+  if (input.countries !== undefined && !Array.isArray(input.countries)) {
+    return { ok: false, error: "countries debe ser una lista de países." };
+  }
   const asked = input.countries ?? (input.country ? [input.country] : [CAPTADORA_COUNTRY]);
   const error = countriesError(role, asked);
   if (error) return { ok: false, error };
@@ -163,4 +168,30 @@ export function resolveRoleCountries(
     return { ok: false, error: countriesError(role, [input.country]) as string };
   }
   return { ok: true, country: CAPTADORA_COUNTRY, countries: [CAPTADORA_COUNTRY] };
+}
+
+/**
+ * Error si los roles por país no valen para este rol de cuenta, o null si valen.
+ *
+ *  - Una captadora no tiene rol por país (es un rol de la cuenta, y solo Chile):
+ *    cualquier valor se rechaza; quitarlos (null) no.
+ *  - «captadora» no se asigna como rol por país: daría una captadora en España.
+ *    Lo que ya está guardado se tolera (guardar sin tocarlo no es un cambio).
+ */
+export function countryRolesError(
+  accountRole: string | null | undefined,
+  countryRoles: Record<string, string | null> | undefined,
+  current: Record<string, string>,
+): string | null {
+  if (!countryRoles) return null;
+  for (const [country, value] of Object.entries(countryRoles)) {
+    if (value === null || value === undefined) continue;
+    if (accountRole === "captadora") {
+      return "Una captadora no tiene rol por país: su rol es Captadora y solo trabaja en Chile.";
+    }
+    if (value === "captadora" && value !== current[country]) {
+      return "«Captadora» no se asigna por país: es un rol de la cuenta y solo trabaja en Chile.";
+    }
+  }
+  return null;
 }

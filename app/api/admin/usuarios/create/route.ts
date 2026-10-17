@@ -5,7 +5,8 @@ import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
-import { createInvitedUser } from "@/lib/email/password-reset";
+import { createInvitedUser, sendAccountSetupLink } from "@/lib/email/password-reset";
+import { randomBytes } from "node:crypto";
 
 // Tope por llamada a GoTrue/PostgREST. Sin él, un GoTrue o un Kong colgado deja
 // la petición abierta hasta que algo de por medio la corta (undici a los 300 s,
@@ -94,6 +95,8 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     // cartera = agent_senior), Captadora (solo Chile) y cliente. El Propietario
     // y los perfiles heredados (agent_admin, agent_junior) no se crean.
     role: "admin" | "advisor" | "agent_senior" | "captadora" | "client";
+    // Ya no se usa: nadie elige la contraseña de otra persona. A las cuentas de
+    // equipo se les envía un enlace para que ELLAS la elijan (ver más abajo).
     password?: string;
     assignedAdvisorId?: string;
     // Opcional: país del nuevo perfil ('es' | 'cl'). Si se omite, se
@@ -122,7 +125,6 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     lastName = "",
     phone,
     role: roleInput,
-    password,
     assignedAdvisorId,
     country: countryInput,
     multiCountry,
@@ -183,9 +185,8 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
   }
 
   // Quién puede crear qué rol (lib/auth/user-rank.ts): solo el Propietario crea
-  // Propietarios y Administradores; el Administrador crea el resto; quien no es
-  // owner/admin solo crea clientes. Antes un agent_admin podía crear un owner
-  // (la lista de roles válidos no miraba quién llamaba).
+  // Administradores; el Administrador crea Asesores, Captadoras y clientes; quien
+  // no es owner/admin solo crea clientes. El Propietario no se crea desde aquí.
   if (!canAssignRole(currentProfile.role, role)) {
     return Response.json(
       {
@@ -197,14 +198,7 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     );
   }
 
-  // Contraseña obligatoria para roles de staff (no clients — estos reciben invitación)
   const staffRoles = ["admin", "advisor", "agent_senior", "captadora"];
-  if (staffRoles.includes(role) && !password) {
-    return Response.json(
-      { error: "La contraseña es obligatoria para crear usuarios de tipo staff" },
-      { status: 400 }
-    );
-  }
 
   // Modelo multi-país: `countries` ⊆ {'es','cl'} y no vacío. Se valida ANTES de
   // crear la cuenta: validarlo después devolvía el 400 con la cuenta ya creada
@@ -254,10 +248,12 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
       clientTempPassword = inviteResult.emailSent ? undefined : inviteResult.tempPassword;
     }
   } else {
-    // Staff (owner, admin, advisor, agent_*): crear con contraseña confirmada
+    // Staff: cuenta confirmada con una contraseña ALEATORIA que nadie conoce
+    // (ni quien la crea ni se devuelve en la respuesta); la persona elige la
+    // suya con el enlace que se le envía al terminar (sendAccountSetupLink).
     const { data, error } = await supabase.auth.admin.createUser({
       email,
-      password,
+      password: randomBytes(24).toString("base64url"),
       email_confirm: true,
       user_metadata: {
         full_name: `${firstName} ${lastName}`.trim(),
@@ -417,12 +413,27 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
     new Promise<void>((resolve) => setTimeout(resolve, AUDIT_WAIT_MS)),
   ]);
 
+  // Staff: enlace para que la persona elija su contraseña. Se envía al final,
+  // con la cuenta ya completa; si el correo no sale, la cuenta existe y se
+  // puede reenviar desde «Editar» → «Enviar enlace para elegir contraseña».
+  let staffEmailSent: boolean | undefined;
+  if (role !== "client") {
+    const setup = await sendAccountSetupLink({
+      userId,
+      email,
+      firstName,
+      expiresInHours: 24 * 7,
+    });
+    staffEmailSent = setup.emailSent;
+  }
+
   return Response.json({
     ok: true,
     userId,
     role,
     email,
     ...(clientEmailSent !== undefined ? { emailSent: clientEmailSent } : {}),
+    ...(staffEmailSent !== undefined ? { emailSent: staffEmailSent } : {}),
     ...(clientTempPassword ? { tempPassword: clientTempPassword } : {}),
   });
 }

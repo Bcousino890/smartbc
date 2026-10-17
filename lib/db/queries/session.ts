@@ -25,7 +25,7 @@ export async function getCurrentProfile(): Promise<ProfileRow | null> {
   if (error) throw error;
   // Una cuenta suspendida no existe para la aplicación: su sesión puede seguir
   // viva hasta que caduque el token, pero ninguna ruta ni gate la reconoce
-  // (migración 0210; sin la columna, `suspended_at` no viene y no pasa nada).
+  // (migración 0211; sin la columna, `suspended_at` no viene y no pasa nada).
   if (isSuspended(data as { suspended_at?: string | null } | null)) return null;
   return data;
 }
