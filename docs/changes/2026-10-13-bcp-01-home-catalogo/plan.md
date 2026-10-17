@@ -117,3 +117,29 @@ Plan: [ampliacion-plan.md](ampliacion-plan.md), aprobado por Fabricio el 2026-10
 - **C**, recorrido editorial (`0196`).
 
 Tareas X0–X13. Los números de migración se vuelven a comprobar antes de cada push.
+
+## Hoja de ruta (17 de octubre de 2026, Fabricio)
+
+**Estado de la fase 4 (descargar el PDF editorial):** cerrada.
+- Entró por su propio expediente, [`2026-10-16-bcp-01-pdf`](../2026-10-16-bcp-01-pdf/result.md), en el PR #323 (`38d2151`).
+- Fabricio aprobó el PDF real en producción el 17 de octubre de 2026.
+
+**Orden siguiente:**
+1. **Mejorar el rendimiento del PDF:** sacar la maquetación del bucle de eventos de la web. Primero se planifica y se aprueba. Expediente: [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
+2. **Implementar y verificar esa mejora**, con la QA de Fabricio.
+3. **Importar PDF de colaboradores al catálogo** (la siguiente entrega funcional; aquí era la fase 3). Primero se explora con muestras representativas; después vienen la especificación y el plan.
+
+**Alcance previsto de la importación** (solo para orientar su futura exploración y especificación; **no está aprobada ni empezada**):
+- **Qué PDF:** se intenta extraer de PDF digitales, escaneados y mixtos, también de archivos con varias viviendas.
+- **Qué sale:** los datos y las fotos de cada vivienda, como **borradores editables** que revisa Fabricio.
+  - Se señala con claridad lo que falta o es dudoso.
+  - No se inventa nada y no se publica nada automáticamente.
+- **Cómo se extrae:**
+  - se prefiere la extracción y el OCR gratuitos en el navegador, como ya se acordó (PDF.js y Tesseract.js);
+  - cualquier procesamiento en el servidor o dependencia nueva tendrá que justificarse en su plan. Las versiones que anotó el plan original para esta fase no autorizan instalar nada ahora;
+  - **no se envían documentos a servicios externos.**
+- **Privacidad:** la del catálogo se respeta. Lo importado **no se publica solo** en la web pública.
+- **Fichas del CRM:** antes de proponer que la importación cree fichas de propiedad, hay que determinar sus efectos (publicación, sincronizaciones, matching, listados…). La puerta G3 de la fase 3 sigue en pie.
+- **Muestras:** el soporte real, los límites y los criterios de aceptación se fijan con muestras representativas de Fabricio. No se promete una extracción fiable de cualquier PDF.
+
+**Siguen pendientes, sin cambios:** G-ALQ, el caso original de Recoletos y D13 en vivo.

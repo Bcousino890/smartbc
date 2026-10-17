@@ -4,7 +4,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 
 - **Tamaño:** grande o sensible: generación en el servidor de producción con fotos reales, **dos rutas nuevas (una pública, por el enlace)** y fuentes incluidas en el repositorio. Sin migración prevista.
 - **Responsable:** Fabricio.
-- **Estado:** **aprobada** (16 de octubre de 2026): la especificación y la dirección visual Boutique con P1–P10, y la ejecución de T0–T12 con las correcciones K1–K5. **La aprobación visual final sigue pendiente**: se da sobre los PDF reales (P9).
+- **Estado:** **aprobada** (16 de octubre de 2026): la especificación y la dirección visual Boutique con P1–P10, y la ejecución de T0–T12 con las correcciones K1–K5. **Aprobación visual (P9): dada el 17 de octubre de 2026** sobre el PDF real en producción, tras el merge de #323 (`38d2151`).
 - **Base explorada:** `origin/main` = `94b513f` (merge de #322), 16 de octubre de 2026. Solo lectura.
 - **Maqueta:** [`maquetas/pdf.html`](maquetas/pdf.html), con las capturas `maqueta-*.png`.
 
@@ -214,4 +214,7 @@ Descargar un catálogo existente como un PDF editorial (dirección Boutique) que
 - **16 de octubre de 2026:** Fabricio aprueba la ejecución de T0–T12 con P10 (sitio de los botones) y las correcciones K1–K5.
   - **Autoriza:** comprobar `main` y rebasar; `npm ci` con el lockfile existente y sin paquetes nuevos; descargar los archivos de fuentes estáticas aprobados, con su licencia y su procedencia; entorno aislado sin `.env*` ni credenciales heredadas; Postgres temporal sintético si hace falta; el Chromium ya disponible; pruebas sintéticas, inspección de PDF reales, mediciones, commits, push, PR y CI.
   - **No autoriza:** producción, credenciales, escrituras reales, IA real, migraciones, dependencias nuevas ni revisión adicional de Codex.
-- **Pendiente:** la **aprobación visual** de Fabricio sobre los PDF reales (P9), antes del merge.
+- **17 de octubre de 2026 (informe de Fabricio, después del merge de #323, `38d2151`):**
+  - la descarga funciona en producción;
+  - **aprueba el aspecto del PDF real** (portada, fotos, índice, texto completo y contacto): P9 y PDF12 quedan cumplidos;
+  - la mejora del rendimiento va en una tarea aparte, solo para planificar: [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).

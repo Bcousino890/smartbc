@@ -6,7 +6,11 @@
 - medición: [`medicion.md`](medicion.md);
 - muestras para la QA visual: [`capturas/`](capturas/README.md).
 
-> **Aprobación visual de Fabricio: PENDIENTE (P9 / PDF12).** No se hace merge sin ella.
+> **Cerrado el 17 de octubre de 2026.**
+> - **Merge:** #323 fusionado por Fabricio (`38d2151`).
+> - **Producción:** funciona según su informe.
+> - **Aprobación visual (P9 / PDF12):** aprobada por Fabricio sobre el PDF real.
+> - **Parón del proceso al maquetar:** va en una tarea aparte, [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
 
 ## Base y commits
 
@@ -154,8 +158,8 @@ Todo se ejecutó en local con datos sintéticos, en un entorno sin `.env*` ni cr
 | PDF8 | demostrado | cambio a mitad: un PDF de la versión nueva; cambios continuos: «changed»; generar no cambia la versión ni avisa a los lectores |
 | PDF9 | demostrado | sin fotos («Sin fotos»), sin precio («Precio · sin dato»), sin datos («—»), reservada |
 | PDF10 | demostrado | rutas y `check-catalog-pdfs`: dueño con el catálogo archivado; cliente con 404 en todos los casos; revocado a mitad, sin bytes |
-| PDF11 | demostrado en local | 1 vivienda: 0,75 s y 0,17 MB; 24 viviendas: 5,3 s y 2,5 MB, con un pico de +60 MB. **Parón del proceso** de ~0,9 s, dos veces: decisión para Fabricio en `medicion.md` |
-| PDF12 | **pendiente** | Aprobación visual de Fabricio sobre los PDF reales de `capturas/` y, tras el despliegue, con un catálogo suyo |
+| PDF11 | demostrado en local | 1 vivienda: 0,75 s y 0,17 MB; 24 viviendas: 5,3 s y 2,5 MB, con un pico de +60 MB. El **parón del proceso** (~0,9 s, dos veces) **no se acepta como definitivo**: se trata en la tarea aparte `2026-10-17-bcp-01-pdf-worker` |
+| PDF12 | **aprobado** (17-10-2026, informe de Fabricio) | Aprobó el aspecto del PDF real en producción: portada, fotos, índice, texto completo y contacto |
 | PDF13 | demostrado | `private, no-store`; cola, límites por enlace y dueño y tiempos máximos; ningún archivo en el servidor |
 | PDF14 | demostrado | cada imagen incrustada identificada por su código de 24 bits (K5): por vivienda, exactamente las previstas, en orden y sin repetir |
 | PDF15 | demostrado | ni `http`, ni `www`, ni el token, ni la URL; no hay QR |
@@ -163,7 +167,14 @@ Todo se ejecutó en local con datos sintéticos, en un entorno sin `.env*` ni cr
 
 ## QA de Fabricio
 
-**Pendiente.** Hay que revisar los PDF y las páginas de [`capturas/`](capturas/README.md) y los botones en el gestor y el lector. Después del despliegue, falta probar con un catálogo real suyo (fotos de verdad), en escritorio y en el móvil.
+**Superada (17 de octubre de 2026, informe de Fabricio, después del despliegue de #323):**
+- la descarga en PDF funciona bien en producción;
+- **aprueba expresamente el aspecto del PDF real:** portada, fotos, índice, texto completo y contacto. Con esto quedan aprobados **P9 y PDF12**;
+- el agente no ha comprobado nada en producción (P-1): todo esto es el informe de Fabricio.
+
+**Rendimiento:** Fabricio pide **preparar un plan aparte** para reducir el bloqueo de la web mientras se genera el PDF.
+- Es **solo autorización para planificar**: no aprueba implementar nada, ni acepta los parones actuales como un compromiso definitivo.
+- Expediente: [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
 
 Se conserva la QA ya registrada de #320 y de E3. Siguen pendientes, sin cambios: G-ALQ, el caso original de Recoletos y D13 en vivo.
 
@@ -173,8 +184,8 @@ No se pidió revisión adicional de Codex; la aprobación lo excluía expresamen
 
 ## Pendiente o no demostrado
 
-- **Aprobación visual (PDF12):** pendiente, antes del merge.
-- **Parón del proceso web:** con 24 viviendas son ~0,9 s, dos veces, en un M2; en el VPS puede ser más largo y, por encima de 2 s, un lector abierto vería «Sin conexión» un instante. Opciones en [`medicion.md`](medicion.md).
+- **Parón del proceso web:** con 24 viviendas son ~0,9 s, dos veces, en un M2; en el VPS puede ser más largo y, por encima de 2 s, un lector abierto vería «Sin conexión» un instante.
+  - Se trata en la tarea aparte [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md); no se acepta como definitivo.
 - **Sin comprobar en el VPS** (no hay acceso):
   - el tiempo de las descargas desde el almacén;
   - la CPU real;
@@ -185,4 +196,6 @@ No se pidió revisión adicional de Codex; la aprobación lo excluía expresamen
 ## PR, CI y merge
 
 - PR: https://github.com/Bcousino890/smartbc/pull/323 (rama `fabri/bcp-01-pdf`). La CI se comprueba en el último commit.
-- El merge lo hace Fabricio, y solo después de su aprobación visual. **No hay migración**, pero el merge dispara el autodespliegue.
+- **Merge:** Fabricio fusionó #323 el 16 de octubre de 2026 a las 23:21 UTC. El commit de merge es `38d2151` y su contenido es idéntico al último de la rama, `222bf8a`.
+- **CI de `main`:** en verde en `38d2151`.
+- **Después del merge** entraron en `main` dos commits ajenos a esta tarea (`98e1e00` y `4ceb314`, de particulares y la migración `0208`), que no tocan el PDF ni los catálogos.
