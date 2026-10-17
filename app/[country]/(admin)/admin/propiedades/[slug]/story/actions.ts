@@ -5,10 +5,8 @@
 // propiedad. Sin aprobación, el SmartLink usa el fallback determinista.
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCurrentProfile } from "@/lib/db/queries/session";
-import { isStaffRole } from "@/lib/permissions";
+import { assertPermission } from "@/lib/auth/guard";
 import { generateStoryForProperty } from "@/lib/services/story/engine";
 import { classifyPropertyPhotos } from "@/lib/services/photos/classify";
 import { probePropertyVideos } from "@/lib/services/video/probe";
@@ -61,10 +59,16 @@ export async function nextInQueueAction(
     : null;
 }
 
+/**
+ * Gate de todas las acciones del story. Antes solo comprobaba `isStaffRole`,
+ * que incluye a la captadora y no mira la matriz: cualquiera con rol de staff
+ * podía generar, aprobar (= publicar el story) o desactivar el story de una
+ * propiedad conociendo su id. Ahora exige `properties.edit` efectivo.
+ * (Aprobar/desactivar son "publicar": cuando entre el motor de 3 roles pasarán
+ * a `properties.publish`.)
+ */
 async function requireStaff() {
-  const profile = await getCurrentProfile();
-  if (!profile || !isStaffRole(profile.role)) redirect("/login");
-  return profile;
+  return assertPermission("properties", "edit");
 }
 
 export async function generateStoryAction(propertyId: string, path: string) {

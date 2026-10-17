@@ -1,24 +1,16 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { unpublishPropertyFromML } from "@/lib/sync/portalinmobiliario/ml-publisher";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requireRoles } from "@/lib/auth/guard";
 
 export async function POST(request: Request) {
   try {
-    const profile = await getCurrentProfile();
-    if (!profile) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Usuarios de Chile o admins multi-país (mismo criterio que el publish).
-    const userCountry = (profile as any).country ?? "es";
-    const isMultiCountryAdmin = profile.role === "admin" || (profile.role as string) === "owner";
-    if (userCountry !== "cl" && !isMultiCountryAdmin) {
-      return NextResponse.json(
-        { error: "Solo usuarios Chile pueden gestionar PortalInmobiliario" },
-        { status: 403 }
-      );
-    }
+    // Mismo criterio que publicar: Propietario y Administrador.
+    const gate = await requireRoles(["owner", "admin"], {
+      country: "cl",
+      message: "Solo el Propietario o un Administrador pueden gestionar Portal Inmobiliario",
+    });
+    if (!gate.ok) return gate.response;
 
     const { propertyId } = await request.json();
     if (!propertyId) {

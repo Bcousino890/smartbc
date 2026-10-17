@@ -156,12 +156,15 @@ export async function getValidAccessToken(): Promise<string | null> {
   return tokens?.access_token ?? null;
 }
 
-export function buildOAuthUrl(redirectUri: string): string {
+export function buildOAuthUrl(redirectUri: string, state?: string): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: ML_APP_ID,
     redirect_uri: redirectUri,
   });
+  // `state` anti-CSRF: lo genera ml-connect, viaja a MercadoLibre y vuelve en
+  // el callback, donde se compara con la cookie del navegador que inició el flujo.
+  if (state) params.set("state", state);
   return `${ML_AUTH_URL}?${params.toString()}`;
 }
 
