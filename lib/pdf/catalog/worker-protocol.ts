@@ -31,11 +31,11 @@ export interface WorkerData {
   /** Carpeta del proyecto (las fuentes están en lib/pdf/fonts). */
   root: string;
   /** SOLO PRUEBAS: fallos provocados. La app nunca los pone. */
-  test?: { failStartup?: boolean; renderDelayMs?: number; throwInRender?: boolean };
+  test?: { failStartup?: boolean; renderDelayMs?: number; throwInRender?: boolean; oomInRender?: boolean; echoEnv?: boolean; maxOldMb?: number };
 }
 
 export type WorkerMessage =
-  | { type: "ready" }
+  | { type: "ready"; envKeys?: string[] }
   | { type: "startup-error"; code: "fonts_missing" | "startup_failed" }
   | { type: "done"; pdf: ArrayBuffer; passes: number; ms: number; heapUsedMB: number; heapTotalMB: number }
   | { type: "error"; code: "index_unstable" | "render_failed" };

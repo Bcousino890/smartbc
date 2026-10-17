@@ -30,13 +30,13 @@ const STARTUP_TIMEOUT_MS = 10_000;
  *  Fijado tras medir (T5, medicion.md). */
 export const WORKER_MAX_OLD_GENERATION_MB = 768;
 
-type Stats = { worker: number; fallback: number; inline: number; transferCopies: number; lastHeapUsedMB: number; lastHeapTotalMB: number };
+type Stats = { worker: number; fallback: number; inline: number; transferCopies: number; lastTransferDetached: boolean; lastHeapUsedMB: number; lastHeapTotalMB: number; lastEnvKeys: string[] | null };
 const KEY = "__bcpCatalogPdfWorkerStats";
 type G = typeof globalThis & { [KEY]?: Stats; __bcpCatalogPdfWorkerTest?: WorkerData["test"] };
 
 function stats(): Stats {
   const g = globalThis as G;
-  if (!g[KEY]) g[KEY] = { worker: 0, fallback: 0, inline: 0, transferCopies: 0, lastHeapUsedMB: 0, lastHeapTotalMB: 0 };
+  if (!g[KEY]) g[KEY] = { worker: 0, fallback: 0, inline: 0, transferCopies: 0, lastTransferDetached: false, lastHeapUsedMB: 0, lastHeapTotalMB: 0, lastEnvKeys: null };
   return g[KEY]!;
 }
 
@@ -50,26 +50,25 @@ export function __setCatalogPdfWorkerTestHooks(test: WorkerData["test"] | undefi
   (globalThis as G).__bcpCatalogPdfWorkerTest = test;
 }
 
-/** Un ArrayBuffer transferible con los bytes de la foto.
- *  · Si el Buffer ocupa entero un ArrayBuffer normal, se usa ese (cero copias).
- *  · Si no, o si `force` (los Buffer de sharp son memoria EXTERNA y Node no
- *    deja transferirlos: DataCloneError, comprobado), UNA copia a un
- *    ArrayBuffer propio, que después se transfiere sin otra copia. */
-function transferable(b: Buffer, force: boolean): { ab: ArrayBuffer; copied: boolean } {
-  if (!force && b.byteOffset === 0 && b.byteLength === b.buffer.byteLength && b.buffer instanceof ArrayBuffer) return { ab: b.buffer, copied: false };
+/** Los bytes de la foto en un ArrayBuffer propio, transferible. Las fotos
+ *  salen de sharp, cuyos Buffer son memoria EXTERNA que Node no deja
+ *  transferir (DataCloneError, comprobado): UNA copia por foto, que después se
+ *  transfiere al hilo sin otra copia. Los originales quedan intactos. */
+function transferable(b: Buffer): ArrayBuffer {
   const ab = new ArrayBuffer(b.byteLength);
   new Uint8Array(ab).set(b);
-  return { ab, copied: true };
+  return ab;
 }
 
 function spawn(root: string): Worker {
-  const data: WorkerData = { v: WORKER_PROTOCOL, root, test: (globalThis as G).__bcpCatalogPdfWorkerTest };
+  const test = (globalThis as G).__bcpCatalogPdfWorkerTest;
+  const data: WorkerData = { v: WORKER_PROTOCOL, root, test };
   return new Worker(new URL("./render-worker.ts", import.meta.url), {
     workerData: data,
     // Entorno mínimo: nada de credenciales. NODE_ENV para que React y
     // react-pdf usen su versión de producción, como en el hilo principal.
     env: { NODE_ENV: process.env.NODE_ENV ?? "production" },
-    resourceLimits: { maxOldGenerationSizeMb: WORKER_MAX_OLD_GENERATION_MB },
+    resourceLimits: { maxOldGenerationSizeMb: test?.maxOldMb ?? WORKER_MAX_OLD_GENERATION_MB },
   });
 }
 
@@ -177,43 +176,31 @@ export function prepareCatalogPdfWorker(signal: AbortSignal, opts: { root?: stri
         const first = worker ? await next(STARTUP_TIMEOUT_MS - (Date.now() - spawnedAt)) : ("failed" as const);
         if (first === "aborted") throw new Error("cancelled");
         if (first !== "timeout" && first !== "failed" && first.type === "ready") {
+          if (first.envKeys) stats().lastEnvKeys = first.envKeys;
           // ── 3 · listo: transferir y maquetar. Desde aquí, NUNCA respaldo. ──
-          const build = (force: boolean) => {
-            const transfer: ArrayBuffer[] = [];
-            const photos: WorkerPhoto[] = [];
-            let copies = 0;
-            for (const [id, ph] of input.photos) {
-              if (!ph.ok) {
-                photos.push({ id, ok: false });
-                continue;
-              }
-              const { ab, copied } = transferable(ph.data, force);
-              if (copied) copies++;
-              transfer.push(ab);
-              photos.push({ id, ok: true, width: ph.width, height: ph.height, data: ab });
+          const transfer: ArrayBuffer[] = [];
+          const photos: WorkerPhoto[] = [];
+          for (const [id, ph] of input.photos) {
+            if (!ph.ok) {
+              photos.push({ id, ok: false });
+              continue;
             }
-            const req: WorkerRenderRequest = {
-              type: "render",
-              v: WORKER_PROTOCOL,
-              catalog: sanitizeCatalogForWorker(input.catalog),
-              capturedAt: input.capturedAt.toISOString(),
-              logo: input.logo,
-              photos,
-            };
-            return { req, transfer, copies };
+            const ab = transferable(ph.data);
+            transfer.push(ab);
+            photos.push({ id, ok: true, width: ph.width, height: ph.height, data: ab });
+          }
+          const req: WorkerRenderRequest = {
+            type: "render",
+            v: WORKER_PROTOCOL,
+            catalog: sanitizeCatalogForWorker(input.catalog),
+            capturedAt: input.capturedAt.toISOString(),
+            logo: input.logo,
+            photos,
           };
           const t0 = performance.now();
-          let msg = build(false);
-          try {
-            worker!.postMessage(msg.req, msg.transfer);
-          } catch (e) {
-            if ((e as Error)?.name !== "DataCloneError") throw e;
-            // Algún Buffer no es transferible (los de sharp): una copia de cada
-            // foto a un ArrayBuffer propio y se transfiere. Nada se ha enviado.
-            msg = build(true);
-            worker!.postMessage(msg.req, msg.transfer);
-          }
-          stats().transferCopies += msg.copies;
+          worker!.postMessage(req, transfer);
+          stats().transferCopies += transfer.length;
+          stats().lastTransferDetached = transfer.every((ab) => ab.byteLength === 0);
           const out = await next(null);
           if (out === "aborted") throw new Error("cancelled");
           if (out === "timeout" || out === "failed") throw new Error(`render_failed:${failure ?? "unknown"}`);

@@ -36,6 +36,11 @@ if (port) {
           }
         }
         if (data.test?.throwInRender) throw new Error("fallo provocado");
+        if (data.test?.oomInRender) {
+          // SOLO PRUEBAS: agota el heap del hilo (con un límite pequeño).
+          const hog: unknown[] = [];
+          for (;;) hog.push(new Array(1e5).fill({ x: hog.length }));
+        }
         const photos = new Map<string, PdfPhoto>();
         for (const ph of req.photos) photos.set(ph.id, ph.ok ? { ok: true, data: Buffer.from(ph.data), width: ph.width, height: ph.height } : { ok: false });
         const { pdf, passes } = await renderCatalogPdf({ catalog: req.catalog, capturedAt: new Date(req.capturedAt), logo: req.logo, photos }, { root: data.root });
@@ -46,6 +51,6 @@ if (port) {
         post({ type: "error", code: err instanceof IndexUnstableError ? "index_unstable" : "render_failed" });
       }
     });
-    post({ type: "ready" });
+    post(data.test?.echoEnv ? { type: "ready", envKeys: Object.keys(process.env) } : { type: "ready" });
   }
 }
