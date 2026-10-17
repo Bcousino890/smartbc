@@ -29,13 +29,18 @@ export type PhotoPlanItem = {
   property_id: string;
   slug: string;
   action: "replace" | "skip";
-  reason: "replace" | "ya_limpias" | "restaurada_a_mano" | "sin_web_verificada";
+  reason: "replace" | "ya_limpias" | "restaurada_a_mano" | "colaboradora" | "sin_web_verificada";
   sig?: string;
 };
 
-export function planWebPhotoReplacements(inputs: PhotoPlanInput[]): PhotoPlanItem[] {
+/**
+ * `includeCollab` (PARTICULARES_PHOTOS_INCLUDE_COLLAB=1, apagado por defecto): las colaboradoras (Level, Housingo…) ya
+ * traen fotos limpias de su scraper; reemplazarlas solo cambiaría orden/portada/nº de fotos, así que por defecto se saltan.
+ */
+export function planWebPhotoReplacements(inputs: PhotoPlanInput[], opts: { includeCollab?: boolean } = {}): PhotoPlanItem[] {
   return inputs.map((i): PhotoPlanItem => {
     const base = { property_id: i.property_id, slug: i.slug };
+    if (i.collab && !opts.includeCollab) return { ...base, action: "skip", reason: "colaboradora" };
     if (!i.web) return { ...base, action: "skip", reason: "sin_web_verificada" };
     if (i.photos_source === "restored") return { ...base, action: "skip", reason: "restaurada_a_mano" };
     if (i.photos_source === "web_clean" && i.photos_source_sig === i.web.sig) return { ...base, action: "skip", reason: "ya_limpias", sig: i.web.sig };

@@ -347,7 +347,7 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
       }
       inputs.push({ property_id: prop.id, slug: prop.slug, photos_source: prop.photos_source ?? null, photos_source_sig: prop.photos_source_sig ?? null, collab, web });
     }
-    const plan = planWebPhotoReplacements(inputs);
+    const plan = planWebPhotoReplacements(inputs, { includeCollab: process.env.PARTICULARES_PHOTOS_INCLUDE_COLLAB === "1" });
     for (const it of plan) if (it.action === "skip") out.skipped[it.reason] = (out.skipped[it.reason] ?? 0) + 1;
     const todo = plan.filter((it) => it.action === "replace");
     out.to_replace = todo.length;

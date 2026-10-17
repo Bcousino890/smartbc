@@ -274,8 +274,10 @@ check("sin web verificada: nada", one({ web: null }).reason === "sin_web_verific
 check("ya tiene las limpias con la misma huella: idempotente", one({ photos_source: "web_clean", photos_source_sig: sigA }).reason === "ya_limpias");
 check("la web cambió de fotos (otra huella): se rehace", one({ photos_source: "web_clean", photos_source_sig: "otra" }).action === "replace");
 check("restaurada a mano: el job no vuelve a reemplazar", one({ photos_source: "restored" }).reason === "restaurada_a_mano");
-check("agencia colaboradora con web Mobilia verificada: también se reemplaza", one({ collab: true }).action === "replace");
-check("colaboradora sin web verificada: nada", one({ collab: true, web: null }).reason === "sin_web_verificada");
+check("colaboradora: se salta por defecto (ya trae fotos limpias)", one({ collab: true }).reason === "colaboradora");
+check("colaboradora con el interruptor encendido: se reemplaza", planWebPhotoReplacements([{ ...base, collab: true }], { includeCollab: true })[0].action === "replace");
+check("colaboradora sin web y con el interruptor: sin web verificada", planWebPhotoReplacements([{ ...base, collab: true, web: null }], { includeCollab: true })[0].reason === "sin_web_verificada");
+
 check("varias propiedades: cada una su plan", planWebPhotoReplacements([base, { ...base, property_id: "p2", slug: "s2", web: null }]).map((x) => x.action).join() === "replace,skip");
 
 console.log("— Resultados estables: no se reintentan");
