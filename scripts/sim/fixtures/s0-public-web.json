@@ -1,0 +1,358 @@
+{
+ "properties": [
+  {
+   "id": "00000000-0000-4000-8000-0000000000011",
+   "slug": "s0-p1",
+   "bc_reference": "BC-9901",
+   "property_reference": "PROP-S0-1",
+   "title": "S0 Prueba P1",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 91",
+   "country": "es",
+   "price": 501000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P1.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "available",
+   "archived_at": null,
+   "published_web": true,
+   "created_at": "2026-10-01T10:00:00Z",
+   "updated_at": "2026-10-01T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f1",
+     "url": "https://fotos.invalid/s0/p1.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-0000000000022",
+   "slug": "s0-p2",
+   "bc_reference": "BC-9902",
+   "property_reference": "PROP-S0-2",
+   "title": "S0 Prueba P2",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 92",
+   "country": "es",
+   "price": 502000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P2.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "reserved",
+   "archived_at": null,
+   "published_web": true,
+   "created_at": "2026-10-02T10:00:00Z",
+   "updated_at": "2026-10-02T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f2",
+     "url": "https://fotos.invalid/s0/p2.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-0000000000073",
+   "slug": "s0-p3",
+   "bc_reference": "BC-9903",
+   "property_reference": "PROP-S0-3",
+   "title": "S0 Prueba P3",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 93",
+   "country": "es",
+   "price": 503000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P3.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "available",
+   "archived_at": null,
+   "published_web": false,
+   "created_at": "2026-10-07T10:00:00Z",
+   "updated_at": "2026-10-07T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f3",
+     "url": "https://fotos.invalid/s0/p3.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-0000000000064",
+   "slug": "s0-p4",
+   "bc_reference": "BC-9904",
+   "property_reference": "PROP-S0-4",
+   "title": "S0 Prueba P4",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 94",
+   "country": "es",
+   "price": 504000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P4.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "reserved",
+   "archived_at": null,
+   "published_web": false,
+   "created_at": "2026-10-06T10:00:00Z",
+   "updated_at": "2026-10-06T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f4",
+     "url": "https://fotos.invalid/s0/p4.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-0000000000055",
+   "slug": "s0-p5",
+   "bc_reference": "BC-9905",
+   "property_reference": "PROP-S0-5",
+   "title": "S0 Prueba P5",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 95",
+   "country": "es",
+   "price": 505000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P5.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "sold",
+   "archived_at": null,
+   "published_web": true,
+   "created_at": "2026-10-05T10:00:00Z",
+   "updated_at": "2026-10-05T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f5",
+     "url": "https://fotos.invalid/s0/p5.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-0000000000046",
+   "slug": "s0-p6",
+   "bc_reference": "BC-9906",
+   "property_reference": "PROP-S0-6",
+   "title": "S0 Prueba P6",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 96",
+   "country": "es",
+   "price": 506000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P6.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "archived",
+   "archived_at": null,
+   "published_web": true,
+   "created_at": "2026-10-04T10:00:00Z",
+   "updated_at": "2026-10-04T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f6",
+     "url": "https://fotos.invalid/s0/p6.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-0000000000037",
+   "slug": "s0-p7",
+   "bc_reference": "BC-9907",
+   "property_reference": "PROP-S0-7",
+   "title": "S0 Prueba P7",
+   "zone": "Chamberí",
+   "subzone": "Almagro",
+   "address": "CALLE-SENTINELA-S0 97",
+   "country": "es",
+   "price": 507000,
+   "rent_price": null,
+   "currency": "eur",
+   "operation": "sale",
+   "operations": null,
+   "stay": null,
+   "bedrooms": 2,
+   "bathrooms": 1,
+   "square_meters": 80,
+   "description": "Descripción sintética de P7.",
+   "features": [
+    "Ascensor"
+   ],
+   "features_manual": [],
+   "cover_photo_url": null,
+   "latitude": 40.43,
+   "longitude": -3.69,
+   "location_precision": "approximate",
+   "status": "available",
+   "archived_at": "2026-10-01T00:00:00Z",
+   "published_web": true,
+   "created_at": "2026-10-03T10:00:00Z",
+   "updated_at": "2026-10-03T10:00:00Z",
+   "agency_id": "a0000000-0000-4000-8000-000000000001",
+   "source": "manual",
+   "property_photos": [
+    {
+     "id": "f7",
+     "url": "https://fotos.invalid/s0/p7.jpg",
+     "is_cover": true,
+     "position": 0
+    }
+   ],
+   "property_media": [],
+   "agencies": {
+    "name": "Agencia Sintética S0",
+    "slug": "agencia-sintetica-s0",
+    "logo_url": null
+   }
+  }
+ ],
+ "property_media": [],
+ "property_client_descriptions": [],
+ "legacy_slugs": [],
+ "countries": []
+}
