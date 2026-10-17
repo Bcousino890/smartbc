@@ -407,6 +407,16 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
           wr.push(...(data ?? []));
           if (!data || data.length < PAGE) break;
         }
+        // Propiedades del CRM cuyo propio source_url es una ficha Mobilia: también se leen (verifican contra la propiedad).
+        const sp = await db
+          .from("properties")
+          .select("source_url, price, external_id, property_reference")
+          .is("archived_at", null)
+          .or("source_url.ilike.%Mobilia/VerInmueble%,source_url.ilike.%mobiliagestion.es%")
+          .limit(2000);
+        for (const r of (sp.data ?? []) as Array<{ source_url: string; price: number | string | null; external_id: string | null; property_reference: string | null }>) {
+          wr.push({ agency_url: r.source_url, price: r.price == null ? null : Number(r.price), is_active: true, reference: r.external_id, agency_reference: r.property_reference });
+        }
         const cache = await loadAgencyWebCache(db, wr.map((r) => r.agency_url));
         // Primero las FOTOS LIMPIAS (rápido de planificar y es lo que más importa): antes iba detrás de la lectura de
         // webs (25 s) y cuando llegaba quedaban < 15 s de presupuesto, así que NUNCA se ejecutaba.

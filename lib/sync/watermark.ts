@@ -53,9 +53,12 @@ export async function downloadAndWatermark(params: {
     // el perfil "seguro" del CDN da 850px; se prueba antes el grande y se cae
     // al seguro si no existe, en vez de fiarse de que un perfil concreto siga
     // ahí. Para el resto de orígenes hay un único candidato y esto es un no-op.
+    // Mobilia: primero la `-original.jpg` (sin rótulo); si esa no existe (404) se cae a la normal, que sí se sirve.
     const sourceCandidates = isIdealistaImageUrl(fetchUrl)
       ? idealistaSourceCandidates(fetchUrl)
-      : [fetchUrl];
+      : isMobiliaImageUrl(params.sourceUrl) && fetchUrl !== params.sourceUrl
+        ? [fetchUrl, params.sourceUrl.replace(/-original(?=\.jpg)/i, "")]
+        : [fetchUrl];
 
     let rawBuf: Buffer | null = null;
     let usedUrl = fetchUrl;

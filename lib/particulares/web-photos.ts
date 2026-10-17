@@ -36,10 +36,10 @@ export type WebPhotosOffer = {
   applied: { source: string | null; same: boolean; at: string | null };
 };
 
-type PropRow = { id: string; slug: string; external_id: string | null; bc_reference: string | null; photos_source?: string | null; photos_source_sig?: string | null; photos_source_at?: string | null; agencies: { slug: string | null } | Array<{ slug: string | null }> | null };
+type PropRow = { id: string; slug: string; external_id: string | null; bc_reference: string | null; photos_source?: string | null; photos_source_sig?: string | null; photos_source_at?: string | null; source_url?: string | null; price?: number | string | null; square_meters?: number | null; bedrooms?: number | null; bathrooms?: number | null; property_reference?: string | null; agencies: { slug: string | null } | Array<{ slug: string | null }> | null };
 
 async function loadProperty(db: Db, slug: string): Promise<PropRow | null> {
-  const { data } = await db.from("properties").select("id, slug, external_id, bc_reference, photos_source, photos_source_sig, photos_source_at, agencies(slug)").eq("slug", slug).maybeSingle();
+  const { data } = await db.from("properties").select("id, slug, external_id, bc_reference, property_reference, source_url, price, square_meters, bedrooms, bathrooms, photos_source, photos_source_sig, photos_source_at, agencies(slug)").eq("slug", slug).maybeSingle();
   return (data as PropRow | null) ?? null;
 }
 
@@ -87,6 +87,25 @@ async function resolveFromParticulars(db: Db, ids: string[], preCache?: Map<stri
   return { reason: why, code };
 }
 
+/**
+ * Propiedad cuyo PROPIO `source_url` es una ficha Mobilia (sin anuncio de portal enlazado): se verifica contra la propia
+ * propiedad (referencia / precio + m² + habitaciones). `particularId` va vacío (no hay anuncio).
+ */
+function resolveFromSourceUrl(prop: PropRow, cache: Map<string, CachedWeb>): Resolved | { reason: string; code: string } {
+  const n = normalizeAgencyUrl(prop.source_url);
+  if (!n?.isListing) return { reason: "La propiedad no tiene una ficha web propia.", code: "sin_source_url" };
+  const [w] = buildAgencyWebSources(
+    [{ id: prop.id, agency_url: prop.source_url, agency_reference: prop.property_reference ?? null, reference: prop.external_id?.replace(/^.*?(\d+)\s*$/, "$1") ?? prop.bc_reference ?? null, price: prop.price == null ? null : Number(prop.price), square_meters: prop.square_meters ?? null, bedrooms: prop.bedrooms ?? null, bathrooms: prop.bathrooms ?? null } as never],
+    cache,
+  );
+  if (!w) return { reason: "Sin ficha.", code: "sin_source_url" };
+  if (!w.read) return { reason: "La ficha web de la propiedad aún no se ha leído.", code: w.blocked ? "web_bloqueada" : "web_no_leida" };
+  if (w.cms !== "mobilia") return { reason: "Solo webs Mobilia.", code: "no_mobilia" };
+  if (w.verdict.state !== "verificada") return { reason: "La ficha de la web no está verificada como esta propiedad.", code: "no_verificada" };
+  if (w.photos.length === 0) return { reason: "La ficha de la web no tiene fotos.", code: "web_sin_fotos" };
+  return { web: w, particularId: "" };
+}
+
 /** La web de agencia leída y verificada de esta propiedad (Mobilia, con fotos), o el motivo. */
 async function resolveWeb(db: Db, prop: PropRow): Promise<Resolved | { reason: string; code: string }> {
   const ids = new Set<string>();
@@ -97,7 +116,17 @@ async function resolveWeb(db: Db, prop: PropRow): Promise<Resolved | { reason: s
     const p = await db.from("particulares").select("id").eq("portal", "idealista").eq("external_id", ext).limit(5);
     for (const r of p.data ?? []) ids.add(r.id as string);
   }
-  return resolveFromParticulars(db, [...ids]);
+  const viaAds = await resolveFromParticulars(db, [...ids]);
+  if (!("reason" in viaAds)) return viaAds;
+  // Sin web por los anuncios: la propia ficha Mobilia de la propiedad (source_url), si la hay.
+  if (normalizeAgencyUrl(prop.source_url)?.isListing) {
+    const cache = await loadAgencyWebCache(db, [prop.source_url]);
+    if (cache) {
+      const viaSrc = resolveFromSourceUrl(prop, cache);
+      if (!("reason" in viaSrc)) return viaSrc;
+    }
+  }
+  return viaAds;
 }
 
 export async function getWebPhotosOffer(slug: string): Promise<WebPhotosOffer | null> {
@@ -256,7 +285,7 @@ export type AutoPhotosSummary = {
 };
 
 /** Por defecto, propiedades que se reemplazan en cada pasada del cron (las descargas son lentas). */
-export const AUTO_PHOTOS_PER_RUN = 3;
+export const AUTO_PHOTOS_PER_RUN = 6;
 
 /**
  * Reemplaza solas las fotos de las propiedades del CRM importadas de portales cuya web de agencia (Mobilia) está
@@ -273,13 +302,16 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
     const matches = ((mt.data ?? []) as Array<{ property_id: string; particular_id: string; level: string; status: string }>).filter((m) => m.level === "cierto" || m.status === "confirmado");
     const byProp = new Map<string, string[]>();
     for (const m of matches) byProp.set(m.property_id, [...(byProp.get(m.property_id) ?? []), m.particular_id]);
-    const propIds = [...byProp.keys()];
+    // Propiedades cuyo propio source_url es una ficha Mobilia (sin necesidad de anuncio enlazado).
+    const sr = await db.from("properties").select("id").is("archived_at", null).or("source_url.ilike.%Mobilia/VerInmueble%,source_url.ilike.%mobiliagestion.es%").limit(2000);
+    const srcIds = new Set<string>(((sr.data ?? []) as Array<{ id: string }>).map((r) => r.id));
+    const propIds = [...new Set([...byProp.keys(), ...srcIds])];
     out.candidates = propIds.length;
     if (propIds.length === 0) return out;
 
     const props: PropRow[] = [];
     for (let i = 0; i < propIds.length; i += 50) {
-      const r = await db.from("properties").select("id, slug, external_id, bc_reference, photos_source, photos_source_sig, photos_source_at, agency_id, agencies(slug)").in("id", propIds.slice(i, i + 50));
+      const r = await db.from("properties").select("id, slug, external_id, bc_reference, property_reference, source_url, price, square_meters, bedrooms, bathrooms, photos_source, photos_source_sig, photos_source_at, agency_id, agencies(slug)").in("id", propIds.slice(i, i + 50));
       if (r.error) return null; // 0206 sin aplicar
       props.push(...((r.data ?? []) as PropRow[]));
     }
@@ -292,7 +324,7 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
       const r = await db.from("particulares").select("agency_url:scraper_extra->>agency_url").in("id", partIds.slice(i, i + 50));
       urlRows.push(...((r.data ?? []) as Array<{ agency_url: string | null }>));
     }
-    const cache = await loadAgencyWebCache(db, urlRows.map((x) => x.agency_url));
+    const cache = await loadAgencyWebCache(db, [...urlRows.map((x) => x.agency_url), ...props.filter((p) => srcIds.has(p.id)).map((p) => p.source_url)]);
     if (!cache) return null;
 
     const resolved = new Map<string, Resolved>();
@@ -302,8 +334,11 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
       const slugOf = (agency?.slug ?? "").trim().toLowerCase();
       const collab = feeds ? (feeds as Set<string>).has((prop as unknown as { agency_id: string }).agency_id) : slugOf !== "portales-externos";
       let web: PhotoPlanInput["web"] = null;
-      if (!collab && prop.photos_source !== "restored") {
-        const r = await resolveFromParticulars(db, byProp.get(prop.id) ?? [], cache);
+      if (prop.photos_source !== "restored") {
+        let r: Resolved | { reason: string; code: string } = byProp.has(prop.id)
+          ? await resolveFromParticulars(db, byProp.get(prop.id) ?? [], cache)
+          : { reason: "sin anuncio enlazado", code: "sin_anuncio" };
+        if ("reason" in r && srcIds.has(prop.id)) r = resolveFromSourceUrl(prop, cache);
         if ("reason" in r) out.skipped_detail[r.code] = (out.skipped_detail[r.code] ?? 0) + 1;
         else {
           resolved.set(prop.id, r);

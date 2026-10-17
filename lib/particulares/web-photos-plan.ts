@@ -19,7 +19,7 @@ export type PhotoPlanInput = {
   /** `properties.photos_source`: `web_clean` (ya limpias) · `restored` (alguien las devolvió a mano) · null. */
   photos_source: string | null;
   photos_source_sig: string | null;
-  /** Agencia colaboradora de sindicación: sus fotos vienen de su feed, no del portal; no se tocan solas. */
+  /** Agencia colaboradora de sindicación (informativo: con web Mobilia verificada también se reemplazan; el dueño lo confirmó). */
   collab: boolean | null;
   /** La web leída y VERIFICADA con originales limpias (Mobilia) y fotos; null si no hay. */
   web: { sig: string; n: number } | null;
@@ -29,14 +29,13 @@ export type PhotoPlanItem = {
   property_id: string;
   slug: string;
   action: "replace" | "skip";
-  reason: "replace" | "ya_limpias" | "restaurada_a_mano" | "colaboradora" | "sin_web_verificada";
+  reason: "replace" | "ya_limpias" | "restaurada_a_mano" | "sin_web_verificada";
   sig?: string;
 };
 
 export function planWebPhotoReplacements(inputs: PhotoPlanInput[]): PhotoPlanItem[] {
   return inputs.map((i): PhotoPlanItem => {
     const base = { property_id: i.property_id, slug: i.slug };
-    if (i.collab) return { ...base, action: "skip", reason: "colaboradora" };
     if (!i.web) return { ...base, action: "skip", reason: "sin_web_verificada" };
     if (i.photos_source === "restored") return { ...base, action: "skip", reason: "restaurada_a_mano" };
     if (i.photos_source === "web_clean" && i.photos_source_sig === i.web.sig) return { ...base, action: "skip", reason: "ya_limpias", sig: i.web.sig };
