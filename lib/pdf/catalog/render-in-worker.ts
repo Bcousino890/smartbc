@@ -26,9 +26,11 @@ import { sanitizeCatalogForWorker, WORKER_PROTOCOL, type WorkerData, type Worker
 export type RenderPath = "worker" | "fallback" | "inline";
 
 const STARTUP_TIMEOUT_MS = 10_000;
-/** Heap de V8 del HILO (no es un techo de la memoria total del proceso).
- *  Fijado tras medir (T5, medicion.md). */
-export const WORKER_MAX_OLD_GENERATION_MB = 768;
+/** Límite del heap de V8 (generación vieja) del HILO: ~2 veces el pico medido
+ *  (124 MB con 24 viviendas, T5, medicion.md). NO es un techo de la memoria
+ *  total del proceso: las fotos van en ArrayBuffer (fuera de este heap) y el
+ *  proceso suma además el hilo principal, sharp y los buffers. */
+export const WORKER_MAX_OLD_GENERATION_MB = 256;
 
 type Stats = { worker: number; fallback: number; inline: number; transferCopies: number; lastTransferDetached: boolean; lastHeapUsedMB: number; lastHeapTotalMB: number; lastEnvKeys: string[] | null };
 const KEY = "__bcpCatalogPdfWorkerStats";
