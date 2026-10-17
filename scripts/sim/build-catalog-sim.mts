@@ -52,8 +52,12 @@ for (const [name, token] of Object.entries(TOKENS)) {
   const meta = (await fixtureGetMetas([token])).get(token);
   if (!pub || !meta) throw new Error(`${name}: sin datos`);
   const snap = structuredClone(pub.snapshot) as InternalSnapshot;
-  const map = new Map<string, string>();
+  // Una tabla de sustitución POR VIVIENDA: las fixtures repiten versiones de
+  // foto (`u`) entre viviendas distintas.
+  const maps = new Map<string, Map<string, string>>();
   for (const it of snap.items) {
+    const map = new Map<string, string>();
+    maps.set(String(it.key), map);
     const rows: unknown[] = [];
     for (const [i, ph] of it.photos.entries()) {
       const id = uuidOf(`${it.slug}#${i}`);
@@ -71,9 +75,15 @@ for (const [name, token] of Object.entries(TOKENS)) {
         images++;
       }
     }
-    if (!properties.has(it.slug)) properties.set(it.slug, { id: uuidOf(`prop:${it.slug}`), slug: it.slug, archived_at: null, status: "available", property_photos: rows });
+    // La misma vivienda puede estar en varios catálogos con distinto número de
+    // fotos: la fila de la propiedad lleva la lista más larga (las URL e ids
+    // dependen solo de slug + índice, así que coinciden).
+    const prev = properties.get(it.slug);
+    if (!prev || prev.property_photos.length < rows.length) properties.set(it.slug, { id: uuidOf(`prop:${it.slug}`), slug: it.slug, archived_at: null, status: "available", property_photos: rows });
   }
-  const remapped = remap(snap, map) as InternalSnapshot;
+  const items = snap.items.map((it) => remap(it, maps.get(String(it.key))!));
+  const coverMap = snap.cover?.key ? maps.get(String(snap.cover.key)) : undefined;
+  const remapped = { ...snap, items, cover: snap.cover && coverMap ? remap(snap.cover, coverMap) : snap.cover } as InternalSnapshot;
   shares.push({ token, catalogs: { version: meta.version, criteria: { operation: meta.operation } } });
   byArg[token] = { valid: true, snapshot: remapped, fingerprint: `sim-${name}`, expires_at: "2027-01-01T00:00:00Z" };
 }

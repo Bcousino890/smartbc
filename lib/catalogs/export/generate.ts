@@ -1,6 +1,6 @@
 import "server-only";
 import { loadLogoDataUri } from "@/lib/pdf/load-logo";
-import { renderCatalogInWorker } from "@/lib/pdf/catalog/render-in-worker";
+import { prepareCatalogPdfWorker } from "@/lib/pdf/catalog/render-in-worker";
 import { photoId, type PdfPhoto } from "@/lib/pdf/catalog/document";
 import { toPublicCatalog, type InternalSnapshot } from "../to-public";
 import type { CatalogOperation } from "../operation-price";
@@ -98,15 +98,22 @@ async function loadAll(needs: Map<string, PhotoNeed>, signal: AbortSignal): Prom
 /** Construye el PDF de una captura. «changed» si una foto ya no es la de S1. */
 export async function buildCatalogPdf(cap: Cap, signal: AbortSignal): Promise<{ pdf: Buffer; fileName: string } | { changed: true }> {
   const catalog = toPublicCatalog(cap.snapshot, cap.operation);
-  const photos = await loadAll(photoNeeds(cap.snapshot, cap.operation), signal);
-  if (photos === "changed") return { changed: true };
-  if (signal.aborted) throw new Error("cancelled");
-  const logo = await loadLogoDataUri();
-  // La maquetación va en un hilo aparte (expediente 2026-10-17-bcp-01-pdf-worker):
-  // la señal del trabajo lo TERMINA de verdad, y no se devuelve hasta que el
-  // hilo ha salido, así que el turno (K3) sigue ocupado hasta entonces.
-  const { pdf } = await renderCatalogInWorker({ catalog, capturedAt: cap.capturedAt, logo, photos }, signal);
-  return { pdf, fileName: pdfFileName(catalog.title, cap.capturedAt) };
+  // La maquetación va en un hilo aparte (expediente 2026-10-17-bcp-01-pdf-worker).
+  // Se lanza YA, para que arranque mientras se descargan las fotos; no recibe
+  // nada hasta que las fotos están listas y él ha dicho «ready». La señal del
+  // trabajo lo TERMINA de verdad, y no se devuelve hasta que el hilo ha
+  // salido, así que el turno (K3) sigue ocupado hasta entonces.
+  const worker = prepareCatalogPdfWorker(signal);
+  try {
+    const photos = await loadAll(photoNeeds(cap.snapshot, cap.operation), signal);
+    if (photos === "changed") return { changed: true };
+    if (signal.aborted) throw new Error("cancelled");
+    const logo = await loadLogoDataUri();
+    const { pdf } = await worker.render({ catalog, capturedAt: cap.capturedAt, logo, photos });
+    return { pdf, fileName: pdfFileName(catalog.title, cap.capturedAt) };
+  } finally {
+    await worker.dispose();
+  }
 }
 
 const KEY = "__bcpCatalogPdfRunner";

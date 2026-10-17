@@ -79,44 +79,61 @@ function stop(worker: Worker, exited: Promise<number>): Promise<number> {
   return exited;
 }
 
-export async function renderCatalogInWorker(
-  input: Omit<CatalogPdfInput, "pageOf" | "onPage">,
-  signal: AbortSignal,
-  opts: { root?: string } = {},
-): Promise<{ pdf: Buffer; passes: number; path: RenderPath }> {
+type Input = Omit<CatalogPdfInput, "pageOf" | "onPage">;
+type RenderResult = { pdf: Buffer; passes: number; path: RenderPath };
+
+export interface CatalogPdfWorker {
+  /** Espera a que el hilo esté listo, le transfiere las fotos y maqueta.
+   *  Solo se llama una vez. */
+  render(input: Input): Promise<RenderResult>;
+  /** Termina el hilo (si sigue vivo) y espera a su salida. Idempotente. */
+  dispose(): Promise<void>;
+}
+
+/** Lanza el hilo YA (para que arranque mientras se descargan las fotos). No
+ *  transfiere nada hasta `render`. Quien lo llama debe llamar a `dispose`. */
+export function prepareCatalogPdfWorker(signal: AbortSignal, opts: { root?: string } = {}): CatalogPdfWorker {
   const root = opts.root ?? process.cwd();
-  if (signal.aborted) throw new Error("cancelled");
 
   if (process.env.CATALOG_PDF_WORKER === "0") {
-    console.warn("[catalogos] pdf hilo desactivado (CATALOG_PDF_WORKER=0)");
-    const r = await renderCatalogPdf(input, { root });
-    stats().inline++;
-    return { pdf: r.pdf, passes: r.passes, path: "inline" };
+    return {
+      async render(input) {
+        if (signal.aborted) throw new Error("cancelled");
+        console.warn("[catalogos] pdf hilo desactivado (CATALOG_PDF_WORKER=0)");
+        const r = await renderCatalogPdf(input, { root });
+        stats().inline++;
+        return { pdf: r.pdf, passes: r.passes, path: "inline" };
+      },
+      async dispose() {},
+    };
   }
 
   // ── 1-2 · arranque, hasta «ready» (aún no se ha transferido nada) ──────────
-  let worker: Worker;
+  const spawnedAt = Date.now();
+  let worker: Worker | null = null;
   try {
     worker = spawn(root);
   } catch {
-    return fallback(input, root, "spawn_failed");
+    worker = null;
   }
-  const exited = new Promise<number>((resolve) => worker.once("exit", resolve));
+  const exited: Promise<number> = worker ? new Promise((resolve) => worker!.once("exit", resolve)) : Promise.resolve(0);
   const inbox: WorkerMessage[] = [];
   let wake: (() => void) | null = null;
-  let failure: string | null = null;
-  worker.on("message", (m: WorkerMessage) => {
-    inbox.push(m);
-    wake?.();
-  });
-  worker.on("error", (e: Error & { code?: string }) => {
-    failure = e?.code === "ERR_WORKER_OUT_OF_MEMORY" ? "out_of_memory" : "worker_error";
-    wake?.();
-  });
-  void exited.then(() => {
-    failure ??= "exited";
-    wake?.();
-  });
+  let failure: string | null = worker ? null : "spawn_failed";
+  if (worker) {
+    worker.on("message", (m: WorkerMessage) => {
+      inbox.push(m);
+      wake?.();
+    });
+    worker.on("error", (e: Error & { code?: string }) => {
+      failure = e?.code === "ERR_WORKER_OUT_OF_MEMORY" ? "out_of_memory" : "worker_error";
+      wake?.();
+    });
+    void exited.then(() => {
+      failure ??= "exited";
+      wake?.();
+    });
+  }
   const onAbort = () => wake?.();
   signal.addEventListener("abort", onAbort);
   const next = (timeoutMs: number | null): Promise<WorkerMessage | "timeout" | "aborted" | "failed"> =>
@@ -139,84 +156,102 @@ export async function renderCatalogInWorker(
         timer = setTimeout(() => {
           wake = null;
           resolve("timeout");
-        }, timeoutMs);
+        }, Math.max(0, timeoutMs));
     });
 
-  try {
-    const first = await next(STARTUP_TIMEOUT_MS);
-    if (first === "aborted") {
-      await stop(worker, exited);
-      throw new Error("cancelled");
-    }
-    if (first !== "timeout" && first !== "failed" && first.type === "ready") {
-      // ── 3 · listo: transferir y maquetar. Desde aquí, NUNCA respaldo. ──────
-      const build = (force: boolean) => {
-        const transfer: ArrayBuffer[] = [];
-        const photos: WorkerPhoto[] = [];
-        let copies = 0;
-        for (const [id, ph] of input.photos) {
-          if (!ph.ok) {
-            photos.push({ id, ok: false });
-            continue;
-          }
-          const { ab, copied } = transferable(ph.data, force);
-          if (copied) copies++;
-          transfer.push(ab);
-          photos.push({ id, ok: true, width: ph.width, height: ph.height, data: ab });
-        }
-        const req: WorkerRenderRequest = {
-          type: "render",
-          v: WORKER_PROTOCOL,
-          catalog: sanitizeCatalogForWorker(input.catalog),
-          capturedAt: input.capturedAt.toISOString(),
-          logo: input.logo,
-          photos,
-        };
-        return { req, transfer, copies };
-      };
-      const t0 = performance.now();
-      let msg = build(false);
+  let disposed: Promise<void> | null = null;
+  const dispose = () => {
+    disposed ??= (async () => {
+      signal.removeEventListener("abort", onAbort);
+      if (worker) await stop(worker, exited);
+    })();
+    return disposed;
+  };
+
+  return {
+    dispose,
+    async render(input) {
       try {
-        worker.postMessage(msg.req, msg.transfer);
-      } catch (e) {
-        if ((e as Error)?.name !== "DataCloneError") throw e;
-        // Algún Buffer no es transferible (los de sharp): una copia de cada
-        // foto a un ArrayBuffer propio y se transfiere. Nada se ha enviado aún.
-        msg = build(true);
-        worker.postMessage(msg.req, msg.transfer);
+        if (signal.aborted) throw new Error("cancelled");
+        // El plazo de arranque cuenta desde que se lanzó el hilo.
+        const first = worker ? await next(STARTUP_TIMEOUT_MS - (Date.now() - spawnedAt)) : ("failed" as const);
+        if (first === "aborted") throw new Error("cancelled");
+        if (first !== "timeout" && first !== "failed" && first.type === "ready") {
+          // ── 3 · listo: transferir y maquetar. Desde aquí, NUNCA respaldo. ──
+          const build = (force: boolean) => {
+            const transfer: ArrayBuffer[] = [];
+            const photos: WorkerPhoto[] = [];
+            let copies = 0;
+            for (const [id, ph] of input.photos) {
+              if (!ph.ok) {
+                photos.push({ id, ok: false });
+                continue;
+              }
+              const { ab, copied } = transferable(ph.data, force);
+              if (copied) copies++;
+              transfer.push(ab);
+              photos.push({ id, ok: true, width: ph.width, height: ph.height, data: ab });
+            }
+            const req: WorkerRenderRequest = {
+              type: "render",
+              v: WORKER_PROTOCOL,
+              catalog: sanitizeCatalogForWorker(input.catalog),
+              capturedAt: input.capturedAt.toISOString(),
+              logo: input.logo,
+              photos,
+            };
+            return { req, transfer, copies };
+          };
+          const t0 = performance.now();
+          let msg = build(false);
+          try {
+            worker!.postMessage(msg.req, msg.transfer);
+          } catch (e) {
+            if ((e as Error)?.name !== "DataCloneError") throw e;
+            // Algún Buffer no es transferible (los de sharp): una copia de cada
+            // foto a un ArrayBuffer propio y se transfiere. Nada se ha enviado.
+            msg = build(true);
+            worker!.postMessage(msg.req, msg.transfer);
+          }
+          stats().transferCopies += msg.copies;
+          const out = await next(null);
+          if (out === "aborted") throw new Error("cancelled");
+          if (out === "timeout" || out === "failed") throw new Error(`render_failed:${failure ?? "unknown"}`);
+          if (out.type === "done") {
+            const s = stats();
+            s.worker++;
+            s.lastHeapUsedMB = out.heapUsedMB;
+            s.lastHeapTotalMB = out.heapTotalMB;
+            console.info(`[catalogos] pdf hilo: ${Math.round(performance.now() - t0)} ms · maquetación ${out.ms} ms · heap ${out.heapUsedMB}/${out.heapTotalMB} MB`);
+            return { pdf: Buffer.from(out.pdf), passes: out.passes, path: "worker" };
+          }
+          throw new Error(out.type === "error" ? out.code : "render_failed");
+        }
+        // ── no llegó a estar listo: el hilo sale y se maqueta aquí (O1 = A) ──
+        const code = first === "timeout" ? "startup_timeout" : first === "failed" ? (failure === "spawn_failed" ? "spawn_failed" : `startup_${failure}`) : first.type === "startup-error" ? first.code : "unexpected_message";
+        await dispose();
+        if (signal.aborted) throw new Error("cancelled");
+        return await fallback(input, root, code);
+      } finally {
+        // Pase lo que pase, no se devuelve con el hilo vivo: el turno (K3) se
+        // libera después de esto.
+        await dispose();
       }
-      stats().transferCopies += msg.copies;
-      const out = await next(null);
-      if (out === "aborted") {
-        await stop(worker, exited);
-        throw new Error("cancelled");
-      }
-      await stop(worker, exited);
-      if (out === "timeout" || out === "failed") throw new Error(`render_failed:${failure ?? "unknown"}`);
-      if (out.type === "done") {
-        const s = stats();
-        s.worker++;
-        s.lastHeapUsedMB = out.heapUsedMB;
-        s.lastHeapTotalMB = out.heapTotalMB;
-        console.info(`[catalogos] pdf hilo: ${Math.round(performance.now() - t0)} ms · maquetación ${out.ms} ms · heap ${out.heapUsedMB}/${out.heapTotalMB} MB`);
-        return { pdf: Buffer.from(out.pdf), passes: out.passes, path: "worker" };
-      }
-      throw new Error(out.type === "error" ? out.code : "render_failed");
-    }
-    // ── no llegó a estar listo: el hilo sale y se maqueta aquí (O1 = A) ──────
-    const code = first === "timeout" ? "startup_timeout" : first === "failed" ? `startup_${failure}` : first.type === "startup-error" ? first.code : "unexpected_message";
-    await stop(worker, exited);
-    if (signal.aborted) throw new Error("cancelled");
-    return fallback(input, root, code);
+    },
+  };
+}
+
+/** Atajo: lanza el hilo y maqueta (sin solaparlo con nada). */
+export async function renderCatalogInWorker(input: Input, signal: AbortSignal, opts: { root?: string } = {}): Promise<RenderResult> {
+  const w = prepareCatalogPdfWorker(signal, opts);
+  try {
+    return await w.render(input);
   } finally {
-    signal.removeEventListener("abort", onAbort);
-    // Pase lo que pase, no se devuelve con el hilo vivo: el turno (K3) se
-    // libera después de esto.
-    await stop(worker, exited);
+    await w.dispose();
   }
 }
 
-async function fallback(input: Omit<CatalogPdfInput, "pageOf" | "onPage">, root: string, code: string) {
+async function fallback(input: Input, root: string, code: string): Promise<RenderResult> {
   // Log saneado: solo un código, sin rutas, datos ni mensajes del error.
   console.warn(`[catalogos] pdf hilo no disponible: ${code}`);
   const r = await renderCatalogPdf(input, { root });
