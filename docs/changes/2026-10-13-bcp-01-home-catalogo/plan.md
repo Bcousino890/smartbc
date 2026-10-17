@@ -175,8 +175,8 @@ Exploración de solo lectura: [`2026-10-17-bcp-01-importar-y-buscar/exploracion.
   - los catálogos automáticos que ya existen siguen como hoy hasta que se apruebe una transición explícita, sin perder contenido, inclusiones ni exclusiones.
 - **D-I2:** anuncio externo o PDF → ficha revisada → nuestro enlace para compartir → catálogo opcional. Se usa desde Propiedades (staff autorizado) y desde el flujo de catálogos de Fabricio. La HOME es privada. La privacidad del borrador, la agencia colaboradora y las alertas se deciden en su especificación.
 - **D-O1, orden aprobado:**
-  1. **S0** · que la web pública solo descubra viviendas publicadas. Expediente [`2026-10-17-s0-web-publicacion`](../2026-10-17-s0-web-publicacion/spec.md), en borrador.
-  2. **Mejora del PDF** (hilo). Expediente [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md), en borrador, con O1 pendiente.
+  1. **S0** · que la web pública solo descubra viviendas publicadas. **Hecho:** #324 (`ab7bbcd`); Fabricio confirma que funciona en producción. Expediente [`2026-10-17-s0-web-publicacion`](../2026-10-17-s0-web-publicacion/result.md).
+  2. **Mejora del PDF** (hilo). **En ejecución** desde el 17-10-2026, con O1 = A (respaldo solo si el hilo no arranca). Expediente [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
   3. **Nuevo buscador del catálogo**, con la transición de los catálogos automáticos.
   4. **Importar desde enlace o PDF.**
 - Cada entrega va por separado: su expediente, su aprobación y su PR.

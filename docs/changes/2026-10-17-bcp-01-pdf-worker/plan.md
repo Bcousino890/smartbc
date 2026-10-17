@@ -1,19 +1,20 @@
 # PDF del catálogo · maquetar fuera del bucle de eventos: plan
 
-Especificación: [`spec.md`](spec.md), en borrador.
+Especificación: [`spec.md`](spec.md), aprobada el 17-10-2026.
 
-- **Rama:** `fabri/bcp-01-pdf-worker`, en el worktree `wt/bcp-01-pdf-worker`. La rama solo existe en local: no se ha hecho push.
-- **Estado:** **borrador**. Solo está autorizado planificar.
+- **Rama:** `fabri/bcp-01-pdf-worker`, en el worktree `wt/bcp-01-pdf-worker`. Rebasada sobre `ab7bbcd`; lleva además el cierre del PDF (#323) y la hoja de ruta (D-B2, D-I2 y D-O1).
+- **Estado:** **aprobado** el 17-10-2026 (T0–T6, O1 = A, salvaguardas S1–S5 de la especificación).
 
 ## Base
 
-- `origin/main` = `4ccbfa6`, comprobado con `git ls-remote` el 17 de octubre de 2026. Incluye #323 (`38d2151`).
+- `origin/main` = **`ab7bbcd`** (merge de #324, S0), comprobado con `git ls-remote` el 17 de octubre de 2026. Incluye #323 (`38d2151`).
+- El borrador se escribió sobre `4ccbfa6` y se rebasó sin conflictos en código. El expediente de S0 se queda tal como está en `main`.
 - Si `main` avanza antes del PR:
   - si no toca los archivos de la tarea, se anota el SHA nuevo;
   - si los toca, se rebasa y se repiten las comprobaciones;
   - si hay conflicto, se para y se avisa.
 
-## Pasos de entorno que autorizaría el plan (al aprobarlo)
+## Pasos de entorno que autoriza el plan (aprobado)
 
 1. `npm ci` en el worktree, con el lockfile existente y **sin paquetes nuevos**. Es una instalación: descarga paquetes y puede ejecutar sus scripts.
 2. **Copias aisladas** como en #323 (`iso.sh`: `env -i`, sin `.env*`, verificadas):
@@ -76,11 +77,25 @@ Especificación: [`spec.md`](spec.md), en borrador.
   - `env: {}`;
   - el módulo del hilo solo importa `render.ts` y sus dependencias puras. Una prueba busca en el chunk compilado nombres prohibidos (`createAdminClient`, `supabase`, `SUPABASE_`, `server-only`, `cookies`).
 
-### Si el hilo no puede arrancar (O1)
+### Si el hilo no puede arrancar (O1 = A, decidida)
 
-Según la decisión de Fabricio:
-- **A:** se maqueta en el propio hilo, como #323, con el log `[catalogos] pdf hilo no disponible: …`. Además, el interruptor `CATALOG_PDF_WORKER=0` fuerza ese modo.
-- **B:** se responde 503.
+1. Se crea el hilo, que carga react-pdf, comprueba que existen las fuentes y responde `ready`.
+2. **Solo entonces** se le transfieren las fotos.
+3. Si no llega `ready` (error, salida o 10 s sin respuesta):
+   - se termina el hilo y se **espera a su salida**;
+   - las fotos siguen intactas, porque no se transfirieron;
+   - se maqueta en el propio hilo, como #323, con el log saneado `[catalogos] pdf hilo no disponible: <código>` (sin rutas ni datos).
+4. Si la petición se cancela durante el arranque, se termina el hilo y **no** hay respaldo.
+5. **Nunca hay respaldo** después de transferir las fotos: ni por un fallo de maquetación, ni por un tiempo agotado, ni por una cancelación. Esos casos dan su error.
+6. `CATALOG_PDF_WORKER=0` fuerza la maquetación en el propio hilo, con el log `[catalogos] pdf hilo desactivado`.
+
+### Cómo se demuestra el camino real (S2)
+
+- **Log por PDF:** cada PDF deja una línea:
+  - `[catalogos] pdf hilo: <ms> ms · heap <MB>` si lo maquetó el hilo;
+  - `[catalogos] pdf hilo no disponible: …` si hubo respaldo.
+- **Contadores en el proceso** (`hilo`, `respaldo`, `en línea`), consultables desde las pruebas de Node.
+- **La puerta T1 y la prueba del build de producción exigen** la línea del hilo y ninguna de respaldo.
 
 ## Tareas
 
@@ -91,7 +106,7 @@ Según la decisión de Fabricio:
   - anotar la aprobación y la decisión O1 en `spec.md` y en este plan;
   - volver a comprobar `origin/main`;
   - ejecutar `npm ci`.
-- **Verificación:** `git ls-remote`; `tsc` en verde sin cambios.
+- **Verificación:** `git ls-remote`; `tsc` en verde sin cambios. Se registra en el expediente de S0 que Fabricio confirma su funcionamiento en producción, junto con la identidad del merge comprobada en GitHub.
 - **Commit:** «PDF hilo T0: aprobación y base».
 
 ### T1. Puerta: el hilo en el build compilado

@@ -4,8 +4,8 @@ Sacar la maquetación del PDF del catálogo (react-pdf, síncrona y pesada) del 
 
 - **Tamaño:** grande o sensible. Cambia cómo se ejecuta una parte del servidor de producción (hilos), tiene que funcionar con el build compilado de Next y con el despliegue atómico del VPS, y toca la cancelación y los límites de una ruta pública.
 - **Responsable:** Fabricio.
-- **Estado:** **borrador**. Fabricio pidió preparar el plan el 17 de octubre de 2026. Eso **solo autoriza planificar**: no autoriza implementar, ni acepta los parones actuales como un compromiso definitivo.
-- **Base:** `origin/main` = `4ccbfa6`, comprobado con `git ls-remote`. Incluye #323 (`38d2151`).
+- **Estado:** **aprobada** para ejecutar T0–T6 el 17 de octubre de 2026, con O1 decidida y las salvaguardas de abajo.
+- **Base:** `origin/main` = `ab7bbcd` (merge de #324, S0), comprobado con `git ls-remote`. Incluye #323 (`38d2151`). El borrador se escribió sobre `4ccbfa6` y la rama se rebasó.
 
 ## Contexto
 
@@ -70,7 +70,27 @@ Un hilo aparte **no elimina** la competencia por la CPU ni por la memoria de la 
 
 - **D1 (17-10-2026):** el PDF ya está aprobado; ni su diseño ni su contenido se tocan.
 - **D2 (17-10-2026):** el rendimiento se trata en una tarea aparte. Por ahora solo se planifica.
-- **Pendiente O1:** qué pasa si el hilo **no puede arrancar** (ver «Preguntas abiertas»).
+- **D3 · O1 (17-10-2026, Fabricio): opción A.** Si el hilo **no puede arrancar**, se usa temporalmente la maquetación actual en el propio hilo, con un log claro y saneado. Con las salvaguardas S1–S5 de abajo.
+
+### Salvaguardas de la aprobación (17-10-2026)
+
+- **S1 · Arranque y respaldo:**
+  - el hilo confirma que está **listo** antes de recibir las fotos;
+  - si no arranca, las entradas siguen intactas (no se han transferido), el hilo ha salido, y entonces se usa la maquetación actual;
+  - **nunca** hay respaldo una vez empezada la maquetación, tras un fallo de maquetación ni tras un tiempo agotado.
+- **S2 · Prueba del camino real:**
+  - las pruebas del build de producción demuestran que el PDF lo maquetó **el hilo**;
+  - un PDF que sale bien por el respaldo **no cuenta** para la puerta de compatibilidad.
+- **S3 · Ciclo de vida:**
+  - se conservan la concurrencia y la cola acotadas;
+  - cancelar o agotar el tiempo termina el hilo, y el turno sigue ocupado hasta su salida;
+  - cada petición en espera conserva su comprobación final de autorización.
+- **S4 · Memoria:**
+  - se mide la RSS total del proceso, además del heap del hilo;
+  - `resourceLimits` de V8 **no** es un techo de la memoria total del proceso, y no se presenta así.
+- **S5 · Rendimiento:**
+  - el antes y el después se comparan con la base de `main` actualizada (`ab7bbcd`), en condiciones equivalentes;
+  - los umbrales que dependen de la máquina son criterios de evaluación **locales**, no garantías globales de la CI.
 
 ## Alcance
 
@@ -125,17 +145,17 @@ No hay migraciones.
 ## Recuperación del cambio
 
 - **Vuelta atrás:** revertir el merge con un PR (`git revert`). El código vuelve a maquetar en el hilo principal, como #323.
-- **Opcional (O1):** un interruptor `CATALOG_PDF_WORKER=0` en el entorno, que fuerza la maquetación en el propio hilo sin tocar el código. Lo cambiaría Fabricio en el VPS y exige reiniciar PM2.
+- **Interruptor (O1, opción A):** `CATALOG_PDF_WORKER=0` en el entorno fuerza la maquetación en el propio hilo sin tocar el código. Lo cambiaría Fabricio en el VPS y exige reiniciar PM2. Esta tarea **no** cambia nada del VPS.
 
 ## Criterios de aceptación
 
 | # | Criterio |
 |---|---|
 | W1 | **Mismo PDF.** `scripts/pdf/check-catalog-pdfs.mts`, con el hilo, pasa entero (hoy son 529 comprobaciones). Para cada fixture, el hilo y el renderizado actual dan el mismo número de páginas, el mismo texto extraído por página y las mismas imágenes por página (por su código). |
-| W2 | **Bucle de eventos libre** (en local, M2, la herramienta de `measure.mts`). Mientras se genera el PDF de 24 viviendas, el hilo principal no se bloquea más de 150 ms seguidos y el p99 de su retraso es de 50 ms o menos. Hoy son ~900 ms, dos veces. Los valores se presentan; no se prometen en producción. |
+| W2 | **Bucle de eventos libre** (criterio de evaluación **local**, en el M2, con la herramienta de `measure.mts`; no es una garantía de la CI ni de producción). Mientras se genera el PDF de 24 viviendas, el hilo principal no se bloquea más de 150 ms seguidos y el p99 de su retraso es de 50 ms o menos. Hoy son ~900 ms, dos veces. Los valores se presentan; no se prometen en producción. |
 | W3 | **Respuesta de la web, antes y después en el mismo entorno** (`next start`, build compilado y simulador local). Se mide la latencia de una ruta ligera en reposo y durante el PDF de 24 viviendas, para el código de `main` y para el de la rama. Se presentan p50, p95 y máximo. Se espera que el máximo baje claramente frente a «antes»; si no baja, se informa antes de seguir. |
 | W4 | **Duración:** el PDF de 1, 12 y 24 viviendas no tarda más de un 25 % que antes (en el mismo entorno). Se mide el arranque del hilo por separado. |
-| W5 | **Memoria:** se mide la RSS pico del proceso y el heap del hilo, antes y después. Con esos datos se fija `resourceLimits`, que se presenta junto a los números. |
+| W5 | **Memoria:** se mide la **RSS total del proceso** (incluye el hilo) y el **heap del hilo**, antes y después. Con esos datos se fija `resourceLimits.maxOldGenerationSizeMb`. Se presenta como lo que es: un límite del heap de V8 del hilo, **no** un techo de la memoria total del proceso (que incluye buffers, react-pdf nativo y libvips). |
 | W6 | **Terminación real:** cuando se cancela (no queda nadie esperando) o se acaba el presupuesto durante la maquetación, el hilo se termina (`exit` observado). El turno se libera solo después, y la petición siguiente funciona. |
 | W7 | **Fallos acotados:** una excepción, falta de memoria o salida inesperada del hilo dan «failed» (500) a la petición, liberan el turno al salir el hilo y el PDF siguiente sale bien. No queda ningún hilo vivo. |
 | W8 | **Sin secretos en el hilo:** dentro del hilo, `process.env` está vacío. El chunk compilado del hilo no contiene el cliente de la base de datos, la autenticación ni nombres de variables secretas (búsqueda en `.next`). Una prueba comprueba que el mensaje al hilo no contiene el token, los slugs, las claves `f`, los valores `u` ni `/p/`. |
@@ -143,8 +163,12 @@ No hay migraciones.
 | W10 | **Build de producción:** `next build` emite el chunk del hilo. Después de renombrar `.next.new` → `.next` y reescribir `distDir` como el script de despliegue, y también desde **otra ruta absoluta**, `next start` genera un PDF válido de punta a punta (ruta del enlace con el simulador), que pasa las comprobaciones de W1. |
 | W11 | **Nada persistente:** antes y después de generar no aparecen archivos nuevos en el directorio temporal ni en el proyecto. |
 | W12 | **Copias de fotos:** las fotos van al hilo **transferidas**, sin copiarse (los `ArrayBuffer` quedan separados en el hilo principal), y el PDF vuelve transferido. Lo comprueba una prueba. |
+| W13 | **Camino real del hilo (S2):** en el build de producción, cada PDF de la prueba deja en el log del servidor la línea del hilo (`[catalogos] pdf hilo: …`) y **ninguna** de respaldo. Unos contadores internos (`hilo`, `respaldo`, `en línea`) lo confirman en las pruebas de Node. Un PDF por respaldo hace fallar la puerta. |
+| W14 | **Respaldo solo al arrancar (S1):** con un hilo que no arranca (prueba con un fallo provocado), el PDF sale por el camino actual, con las fotos intactas y el hilo ya salido, y queda el log saneado `[catalogos] pdf hilo no disponible: <código>`. Con un fallo **durante** la maquetación, un tiempo agotado o una cancelación, **no** hay respaldo: la petición recibe el error correspondiente. |
 
 ## Preguntas abiertas
+
+Ninguna. O1 se decidió (D3). Lo que sigue queda como registro de cómo se planteó:
 
 - **O1 · Si el hilo no puede arrancar** (falta el chunk, falla al cargar react-pdf…):
   - **A) Maquetar en el propio hilo, como hoy:** el PDF sigue funcionando, pero vuelve el parón. Se registra en el log con una etiqueta clara, y además se añade el interruptor `CATALOG_PDF_WORKER=0`.
@@ -154,4 +178,20 @@ No hay migraciones.
 
 ## Aprobación
 
-Pendiente. Aprobar la especificación permite preparar el plan definitivo, no implementar.
+**17 de octubre de 2026 · Fabricio aprueba la ejecución de T0–T6**, con O1 = A y las salvaguardas S1–S5.
+
+- **Conservar exactamente el PDF aprobado:**
+  - la maquetación, el contenido completo, las páginas y destinos del índice y las fuentes;
+  - la identidad de las fotos y las exclusiones;
+  - los precios, el contacto y la privacidad.
+- **En el hilo principal** quedan la autorización, la captura coherente, la obtención de las fotos y las comprobaciones de acceso por petición. Al hilo no van credenciales ni tokens de enlace.
+- **Autoriza:**
+  - `npm ci` con el lockfile existente, sin paquetes nuevos;
+  - copias aisladas de dev y de producción compilada, sin `.env*` ni credenciales reales;
+  - el simulador sintético de Supabase, solo en loopback;
+  - Chromium, Swift/PDFKit y Python, que ya están;
+  - pruebas, mediciones equivalentes de antes y después, commits, push, PR y CI.
+- **Compatibilidad con el despliegue:** demostrar con el build compilado local que funciona tras el renombrado del directorio de build y tras moverlo de sitio. **No** se autorizan cambios en el VPS ni en el despliegue.
+- **Paradas:** si falla la compatibilidad del hilo, o si el rendimiento o la memoria no son aceptables, se para en las puertas del plan y se presenta la evidencia antes de cambiar la arquitectura o el comportamiento aprobado.
+- **No autoriza:** producción, registros reales, migraciones, IA real ni revisión adicional de Codex.
+- **Se para antes del merge.**
