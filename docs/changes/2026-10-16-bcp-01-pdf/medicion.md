@@ -48,7 +48,14 @@ Medida en el servidor de desarrollo aislado, que es más lento que el de producc
 
 No se ha recortado nada del contenido aprobado.
 
-## Para decidir (Fabricio)
+## Decisión (17 de octubre de 2026)
+
+Fabricio pide **preparar un plan aparte** para sacar la maquetación del proceso web (opción B como dirección que se va a planificar).
+- No aprueba implementarla todavía.
+- Tampoco acepta los parones actuales como un compromiso definitivo.
+- Expediente: [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
+
+## Para decidir (Fabricio), tal como se planteó
 
 **Hecho:** en el peor caso (24 viviendas), mientras se maqueta el PDF el proceso web queda parado unas dos veces ~0,9 s en un M2 (una vez llegó a 1,4 s). En el VPS, con vCPU más lentas, puede ser algo más. Durante esos instantes, cualquier página del CRM o del lector que se pida tarda ese tiempo de más. Solo ocurre mientras alguien descarga un PDF, y nunca hay más de uno a la vez.
 

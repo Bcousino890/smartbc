@@ -1,6 +1,6 @@
 # PDF del catálogo · muestras para la revisión visual
 
-> **Aprobación visual: PENDIENTE.** Fabricio todavía no ha dado su aprobación (P9). No se hace merge hasta que la dé.
+> **Aprobación visual: dada** por Fabricio el 17 de octubre de 2026, sobre el PDF real en producción (P9 / PDF12). Estas muestras sintéticas fueron el paquete de revisión previo al merge.
 
 Son PDF reales, generados por el mismo camino que el servidor con los datos sintéticos de desarrollo (T9, `scripts/pdf/check-catalog-pdfs.mts`).
 

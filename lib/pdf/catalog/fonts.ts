@@ -23,6 +23,21 @@ export const TEXT = "CatalogKarla";
 
 let registered = false;
 
+const FONT_FILES = [
+  "fraunces-latin-400-normal.woff",
+  "fraunces-latin-400-italic.woff",
+  "fraunces-latin-600-normal.woff",
+  "fraunces-latin-600-italic.woff",
+  "karla-latin-400-normal.woff",
+  "karla-latin-600-normal.woff",
+] as const;
+
+/** Rutas de los archivos de fuentes del catálogo (el hilo de maquetación
+ *  comprueba que existen antes de declararse listo). */
+export function catalogFontFiles(root = process.cwd()): string[] {
+  return FONT_FILES.map((name) => path.join(root, "lib", "pdf", "fonts", name));
+}
+
 export function registerCatalogFonts(root = process.cwd()): void {
   if (registered) return;
   registered = true;

@@ -117,3 +117,68 @@ Plan: [ampliacion-plan.md](ampliacion-plan.md), aprobado por Fabricio el 2026-10
 - **C**, recorrido editorial (`0196`).
 
 Tareas X0–X13. Los números de migración se vuelven a comprobar antes de cada push.
+
+## Hoja de ruta (17 de octubre de 2026, Fabricio)
+
+**Estado de la fase 4 (descargar el PDF editorial):** cerrada.
+- Entró por su propio expediente, [`2026-10-16-bcp-01-pdf`](../2026-10-16-bcp-01-pdf/result.md), en el PR #323 (`38d2151`).
+- Fabricio aprobó el PDF real en producción el 17 de octubre de 2026.
+
+**Orden siguiente:**
+1. **Mejorar el rendimiento del PDF:** sacar la maquetación del bucle de eventos de la web. Primero se planifica y se aprueba. Expediente: [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
+2. **Implementar y verificar esa mejora**, con la QA de Fabricio.
+3. **Importar PDF de colaboradores al catálogo** (la siguiente entrega funcional; aquí era la fase 3). Primero se explora con muestras representativas; después vienen la especificación y el plan.
+
+**Alcance previsto de la importación** (solo para orientar su futura exploración y especificación; **no está aprobada ni empezada**):
+- **Qué PDF:** se intenta extraer de PDF digitales, escaneados y mixtos, también de archivos con varias viviendas.
+- **Qué sale:** los datos y las fotos de cada vivienda, como **borradores editables** que revisa Fabricio.
+  - Se señala con claridad lo que falta o es dudoso.
+  - No se inventa nada y no se publica nada automáticamente.
+- **Cómo se extrae:**
+  - se prefiere la extracción y el OCR gratuitos en el navegador, como ya se acordó (PDF.js y Tesseract.js);
+  - cualquier procesamiento en el servidor o dependencia nueva tendrá que justificarse en su plan. Las versiones que anotó el plan original para esta fase no autorizan instalar nada ahora;
+  - **no se envían documentos a servicios externos.**
+- **Privacidad:** la del catálogo se respeta. Lo importado **no se publica solo** en la web pública.
+- **Fichas del CRM:** antes de proponer que la importación cree fichas de propiedad, hay que determinar sus efectos (publicación, sincronizaciones, matching, listados…). La puerta G3 de la fase 3 sigue en pie.
+- **Muestras:** el soporte real, los límites y los criterios de aceptación se fijan con muestras representativas de Fabricio. No se promete una extracción fiable de cualquier PDF.
+
+### Aclaración y ampliación (17 de octubre de 2026)
+
+Exploración de solo lectura: [`2026-10-17-bcp-01-importar-y-buscar/exploracion.md`](../2026-10-17-bcp-01-importar-y-buscar/exploracion.md).
+
+**Aprobado por Fabricio:**
+- **D-B1:** la selección del catálogo usará un buscador **como el de Propiedades** en lugar de «Modificar criterios», **conservando la selección manual y la automática**.
+  - Los filtros sirven para buscar y elegir a mano, y guardados, deciden la pertenencia automática.
+  - Se respetan las inclusiones y exclusiones manuales.
+  - Se conservan los catálogos existentes, sus criterios guardados, orden, límites y ajustes.
+  - No autoriza implementar.
+
+**Aclaración de alcance (Fabricio):**
+- Importar un PDF = **crear nuestra propia ficha y su enlace de siempre**: PDF → extracción → revisión editable → ficha confirmada → inclusión opcional en un catálogo.
+- Acceso desde Propiedades (staff autorizado, con los permisos que ya existen) y desde el flujo de catálogos de Fabricio.
+- **La HOME sigue siendo privada.**
+
+**Propuesto, pendiente de decisión** (ver §6 y §7 de la exploración):
+- **Entregas:** S0, fugas de la web pública; S1, buscador compartido; S2, criterios ampliados (migración); S3, nueva selección del catálogo; S4, enlace → catálogo; S5, importar PDF.
+- **Decisiones:** O-I1 (qué es «Crear link»), O-B1 a O-B3, O-I3 a O-I5, O-S0, el orden de las entregas y las muestras.
+- **El orden registrado no cambia sin decisión:**
+  1. plan y aprobación del PDF en un hilo (con O1 pendiente);
+  2. su implementación y QA;
+  3. importar PDF.
+- El buscador (S1–S3) todavía **no tiene sitio** en esa secuencia.
+
+### Decisiones vigentes (17 de octubre de 2026, segunda aclaración)
+
+- **D-B2**, que **sustituye a D-B1**:
+  - el buscador del catálogo es como el de Propiedades, para filtrar, mirar y **elegir a mano**, con los precios de alquiler y las zonas correctos;
+  - **no hay modo automático** ni cambio de modo;
+  - los catálogos automáticos que ya existen siguen como hoy hasta que se apruebe una transición explícita, sin perder contenido, inclusiones ni exclusiones.
+- **D-I2:** anuncio externo o PDF → ficha revisada → nuestro enlace para compartir → catálogo opcional. Se usa desde Propiedades (staff autorizado) y desde el flujo de catálogos de Fabricio. La HOME es privada. La privacidad del borrador, la agencia colaboradora y las alertas se deciden en su especificación.
+- **D-O1, orden aprobado:**
+  1. **S0** · que la web pública solo descubra viviendas publicadas. **Hecho:** #324 (`ab7bbcd`); Fabricio confirma que funciona en producción. Expediente [`2026-10-17-s0-web-publicacion`](../2026-10-17-s0-web-publicacion/result.md).
+  2. **Mejora del PDF** (hilo). **En ejecución** desde el 17-10-2026, con O1 = A (respaldo solo si el hilo no arranca). Expediente [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
+  3. **Nuevo buscador del catálogo**, con la transición de los catálogos automáticos.
+  4. **Importar desde enlace o PDF.**
+- Cada entrega va por separado: su expediente, su aprobación y su PR.
+
+**Siguen pendientes, sin cambios:** G-ALQ, el caso original de Recoletos y D13 en vivo.

@@ -132,6 +132,15 @@ Revertir el merge con un PR (`git revert`). No hay datos ni esquema que deshacer
 4. Al publicarla en el panel, aparece en la portada y el catálogo en unos 5 minutos. Al retirarla, desaparece en el mismo tiempo.
 5. Opcional: abrir `/api/portal/properties` en el navegador. Ningún objeto tiene `address`, y solo salen viviendas publicadas.
 
+## Merge y QA en producción
+
+- **Merge:** Fabricio fusionó #324 el 17-10-2026 a las 14:25 UTC.
+  - El commit de merge es `ab7bbcd`, con el mismo contenido que el último commit de la rama, `acd8c35` (comprobado con `gh pr view` y `git diff`).
+  - La CI de `main` en `ab7bbcd`, en verde.
+- **Producción:** **Fabricio confirma que S0 funciona en producción** (su informe del 17-10-2026).
+  - El agente no ha comprobado nada en producción (P-1).
+  - No hay evidencia propia del despliegue ni de la base de datos: lo que consta aquí es el informe de Fabricio.
+
 ## Revisión
 
 No se pidió revisión adicional de Codex: la aprobación lo excluía.
