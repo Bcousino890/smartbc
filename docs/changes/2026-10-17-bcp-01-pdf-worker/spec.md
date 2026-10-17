@@ -72,6 +72,12 @@ Un hilo aparte **no elimina** la competencia por la CPU ni por la memoria de la 
 - **D2 (17-10-2026):** el rendimiento se trata en una tarea aparte. Por ahora solo se planifica.
 - **D3 · O1 (17-10-2026, Fabricio): opción A.** Si el hilo **no puede arrancar**, se usa temporalmente la maquetación actual en el propio hilo, con un log claro y saneado. Con las salvaguardas S1–S5 de abajo.
 
+- **D4 · Excepción a W4 (17-10-2026, Fabricio, opción A en la puerta T5):**
+  - se acepta el aumento medido de **~0,2 s** en el PDF de **1 vivienda** (+25 % a +33 % en local), por encima del criterio local de +25 %;
+  - se mantiene **un hilo por PDF** y los mismos límites de cola y concurrencia;
+  - **no** se introduce un hilo persistente «caliente»;
+  - se acepta el compromiso **medido en local**; no es una garantía de rendimiento en producción.
+
 ### Salvaguardas de la aprobación (17-10-2026)
 
 - **S1 · Arranque y respaldo:**
@@ -154,7 +160,7 @@ No hay migraciones.
 | W1 | **Mismo PDF.** `scripts/pdf/check-catalog-pdfs.mts`, con el hilo, pasa entero (hoy son 529 comprobaciones). Para cada fixture, el hilo y el renderizado actual dan el mismo número de páginas, el mismo texto extraído por página y las mismas imágenes por página (por su código). |
 | W2 | **Bucle de eventos libre** (criterio de evaluación **local**, en el M2, con la herramienta de `measure.mts`; no es una garantía de la CI ni de producción). Mientras se genera el PDF de 24 viviendas, el hilo principal no se bloquea más de 150 ms seguidos y el p99 de su retraso es de 50 ms o menos. Hoy son ~900 ms, dos veces. Los valores se presentan; no se prometen en producción. |
 | W3 | **Respuesta de la web, antes y después en el mismo entorno** (`next start`, build compilado y simulador local). Se mide la latencia de una ruta ligera en reposo y durante el PDF de 24 viviendas, para el código de `main` y para el de la rama. Se presentan p50, p95 y máximo. Se espera que el máximo baje claramente frente a «antes»; si no baja, se informa antes de seguir. |
-| W4 | **Duración:** el PDF de 1, 12 y 24 viviendas no tarda más de un 25 % que antes (en el mismo entorno). Se mide el arranque del hilo por separado. |
+| W4 | **Duración:** el PDF de 1, 12 y 24 viviendas no tarda más de un 25 % que antes (en el mismo entorno). Se mide el arranque del hilo por separado. **Excepción aprobada (D4):** con 1 vivienda se aceptan los ~+0,2 s medidos (+25 % a +33 %). |
 | W5 | **Memoria:** se mide la **RSS total del proceso** (incluye el hilo) y el **heap del hilo**, antes y después. Con esos datos se fija `resourceLimits.maxOldGenerationSizeMb`. Se presenta como lo que es: un límite del heap de V8 del hilo, **no** un techo de la memoria total del proceso (que incluye buffers, react-pdf nativo y libvips). |
 | W6 | **Terminación real:** cuando se cancela (no queda nadie esperando) o se acaba el presupuesto durante la maquetación, el hilo se termina (`exit` observado). El turno se libera solo después, y la petición siguiente funciona. |
 | W7 | **Fallos acotados:** una excepción, falta de memoria o salida inesperada del hilo dan «failed» (500) a la petición, liberan el turno al salir el hilo y el PDF siguiente sale bien. No queda ningún hilo vivo. |

@@ -4,6 +4,7 @@ Especificación: [`spec.md`](spec.md), aprobada el 17-10-2026.
 
 - **Rama:** `fabri/bcp-01-pdf-worker`, en el worktree `wt/bcp-01-pdf-worker`. Rebasada sobre `ab7bbcd`; lleva además el cierre del PDF (#323) y la hoja de ruta (D-B2, D-I2 y D-O1).
 - **Estado:** **aprobado** el 17-10-2026 (T0–T6, O1 = A, salvaguardas S1–S5 de la especificación).
+- **Puerta T5:** parada el 17-10-2026 por W4 con 1 vivienda. Fabricio eligió la **opción A** (D4): se acepta el ~+0,2 s medido, se mantiene un hilo por PDF y no hay hilo persistente. Se continúa con T6, sin más optimización ni mediciones repetidas salvo que un cambio o un fallo lo justifiquen.
 
 ## Base
 

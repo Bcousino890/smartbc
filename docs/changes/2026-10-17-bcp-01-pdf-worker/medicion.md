@@ -76,4 +76,12 @@ Los umbrales (W2–W5) son **criterios de evaluación locales**. No son garantí
 | W5, memoria medida y acotada | **medida**: +50–75 MB de pico mientras vive el hilo |
 | W4, duración ≤ +25 % | **cumple** en 12 y 24 viviendas (+4 % a +9 %). **En 1 vivienda queda en el límite o algo por encima: +25 % en proceso y +33 % en la pasada limpia del build** (unos +0,2 s: de ~0,7–0,8 s a ~0,9–1 s) |
 
-Según el plan, **se para aquí** y se presenta a Fabricio antes de seguir.
+Según el plan, **se paró aquí** y se presentó a Fabricio.
+
+**Decisión (17-10-2026, Fabricio, D4 = opción A):**
+- se acepta el aumento medido de ~0,2 s en el PDF de 1 vivienda;
+- se mantiene un hilo por PDF, con la cola y la concurrencia de siempre;
+- no hay hilo persistente;
+- se acepta el compromiso medido en local, no una garantía de rendimiento en producción.
+
+Se sigue con T6.
