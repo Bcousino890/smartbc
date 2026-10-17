@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getDashboardData } from "@/lib/db/queries/dashboard";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { getEffectivePermissions } from "@/lib/db/queries/permissions";
+import { getAssignedClientIds, resolveViewScope } from "@/lib/db/queries/view-scope";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { DashboardGreetingCard, DashboardGreetingSkeleton } from "@/components/admin/dashboard-greeting-card";
 
@@ -54,31 +56,68 @@ export default async function AdminDashboardPage({
   };
   const profile = await getCurrentProfile();
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] || null;
-  const data = await getDashboardData(country);
+
+  // Cada bloque del dashboard se enseña solo si el usuario tiene el permiso
+  // correspondiente, y los datos de clientes se acotan a su alcance (antes
+  // todo el staff, también la captadora y el agent_junior, veía el nombre y el
+  // email de los clientes de las últimas visitas de todos los asesores).
+  const effective = profile
+    ? await getEffectivePermissions(profile.id, profile.role, country)
+    : null;
+  const canProperties = effective?.properties?.view ?? false;
+  const canClients = effective?.clientes?.view ?? false;
+  const canVisits =
+    (effective?.solicitudes?.view ?? false) || (effective?.calendario?.view ?? false);
+  const canGreeting = effective?.publicacion?.view ?? false;
+
+  let clientsMode: "all" | "own" | "none" = canClients ? "all" : "none";
+  let visitsMode: "all" | "none" | { clientIds: string[] } = canVisits ? "all" : "none";
+  if (profile && (canClients || canVisits)) {
+    const [clientScope, visitScope] = await Promise.all([
+      canClients ? resolveViewScope("clientes") : null,
+      canVisits ? resolveViewScope("solicitudes") : null,
+    ]);
+    if (clientScope && clientScope.restriction !== "all") {
+      clientsMode = clientScope.restriction === "none" ? "none" : "own";
+    }
+    if (visitScope && visitScope.restriction !== "all") {
+      visitsMode =
+        visitScope.restriction === "none"
+          ? "none"
+          : { clientIds: await getAssignedClientIds(profile.id, country) };
+    }
+  }
+
+  const data = await getDashboardData(country, {
+    properties: canProperties,
+    clients: clientsMode,
+    visits: visitsMode,
+    advisorId: profile?.id,
+  });
   const { kpis, recentProperties, recentVisits } = data;
 
   const kpiItems = [
-    {
+    canProperties && {
       label: "PROPIEDADES ACTIVAS",
       value: kpis.activeProperties,
       icon: Home,
     },
-    {
+    canClients && {
       label: "CLIENTES",
       value: kpis.totalClients,
       icon: Users,
     },
-    {
+    canVisits && {
       label: "VISITAS PENDIENTES",
       value: kpis.pendingVisits,
       icon: CalendarClock,
     },
-    {
+    canProperties && {
       label: "SMARTLINKS",
       value: kpis.smartLinks,
       icon: Send,
     },
-  ];
+  ].filter(Boolean) as { label: string; value: number; icon: typeof Home }[];
 
   return (
     <div className="space-y-8 p-6 lg:p-8">
@@ -93,7 +132,7 @@ export default async function AdminDashboardPage({
       {/* Saludo con IA: leads recientes + una sugerencia sobre fichas de
           Idealista. Solo España — es donde vive todo ese análisis (ver
           lib/services/idealista/ai-suggestions.ts). */}
-      {country === "es" && (
+      {country === "es" && canGreeting && (
         <Suspense fallback={<DashboardGreetingSkeleton />}>
           <DashboardGreetingCard firstName={firstName} />
         </Suspense>
@@ -122,134 +161,138 @@ export default async function AdminDashboardPage({
       {/* Tables row */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {/* Últimas propiedades */}
-        <section className="rounded-2xl border border-gold/15 bg-cream-50/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
-          <div className="flex items-center justify-between border-b border-gold/10 px-5 py-4">
-            <h2 className="crm-section-title text-ink">
-              Últimas propiedades
-            </h2>
-            <Link
-              href={`${config.prefix}/propiedades`}
-              className="text-xs font-medium text-gold hover:underline"
-            >
-              Ver todas →
-            </Link>
-          </div>
-          {recentProperties.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-ink/45">
-              Sin propiedades aún.
-            </p>
-          ) : (
-            <div className="divide-y divide-gold/8">
-              {recentProperties.map((prop) => (
-                <Link
-                  key={prop.id}
-                  href={`${config.prefix}/propiedades/${prop.slug}`}
-                  className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-gold/5"
-                >
-                  {/* Miniatura */}
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-ink/8">
-                    {prop.cover_photo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={prop.cover_photo_url}
-                        alt={prop.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-ink/30">
-                        <Home size={16} />
-                      </div>
-                    )}
-                  </div>
-                  {/* Info */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {prop.title}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-ink/50">
-                      {country === "cl" ? (prop.commune ?? prop.zone ?? "—") : (prop.zone ?? "—")}
-                      {prop.bc_reference ? ` · Ref. ${prop.bc_reference}` : ""}
-                    </p>
-                  </div>
-                  {/* Precio + estado */}
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs font-semibold text-ink">
-                      {config.formatPrice(prop.price, prop.currency, prop.operation)}
-                    </p>
-                    {prop.status && (
-                      <span
-                        className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_PROP_COLORS[prop.status] ?? "bg-ink/10 text-ink/60"}`}
-                      >
-                        {STATUS_PROP_LABELS[prop.status] ?? prop.status}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-              ))}
+        {canProperties && (
+          <section className="rounded-2xl border border-gold/15 bg-cream-50/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-gold/10 px-5 py-4">
+              <h2 className="crm-section-title text-ink">
+                Últimas propiedades
+              </h2>
+              <Link
+                href={`${config.prefix}/propiedades`}
+                className="text-xs font-medium text-gold hover:underline"
+              >
+                Ver todas →
+              </Link>
             </div>
-          )}
-        </section>
+            {recentProperties.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink/45">
+                Sin propiedades aún.
+              </p>
+            ) : (
+              <div className="divide-y divide-gold/8">
+                {recentProperties.map((prop) => (
+                  <Link
+                    key={prop.id}
+                    href={`${config.prefix}/propiedades/${prop.slug}`}
+                    className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-gold/5"
+                  >
+                    {/* Miniatura */}
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-ink/8">
+                      {prop.cover_photo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={prop.cover_photo_url}
+                          alt={prop.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-ink/30">
+                          <Home size={16} />
+                        </div>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {prop.title}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-ink/50">
+                        {country === "cl" ? (prop.commune ?? prop.zone ?? "—") : (prop.zone ?? "—")}
+                        {prop.bc_reference ? ` · Ref. ${prop.bc_reference}` : ""}
+                      </p>
+                    </div>
+                    {/* Precio + estado */}
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs font-semibold text-ink">
+                        {config.formatPrice(prop.price, prop.currency, prop.operation)}
+                      </p>
+                      {prop.status && (
+                        <span
+                          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_PROP_COLORS[prop.status] ?? "bg-ink/10 text-ink/60"}`}
+                        >
+                          {STATUS_PROP_LABELS[prop.status] ?? prop.status}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Últimas solicitudes */}
-        <section className="rounded-2xl border border-gold/15 bg-cream-50/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
-          <div className="flex items-center justify-between border-b border-gold/10 px-5 py-4">
-            <h2 className="crm-section-title text-ink">
-              Últimas solicitudes de visita
-            </h2>
-            <Link
-              href={`${config.prefix}/solicitudes`}
-              className="text-xs font-medium text-gold hover:underline"
-            >
-              Ver todas →
-            </Link>
-          </div>
-          {recentVisits.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-ink/45">
-              Sin solicitudes aún.
-            </p>
-          ) : (
-            <div className="divide-y divide-gold/8">
-              {recentVisits.map((visit) => (
-                <div
-                  key={visit.id}
-                  className="flex items-center gap-4 px-5 py-3.5"
-                >
-                  {/* Avatar inicial */}
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold/10 text-sm font-semibold text-gold">
-                    {visit.profiles?.full_name
-                      ? visit.profiles.full_name.charAt(0).toUpperCase()
-                      : "?"}
-                  </div>
-                  {/* Info */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {visit.profiles?.full_name ??
-                        visit.profiles?.email ??
-                        "Cliente desconocido"}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-ink/50">
-                      {visit.properties?.title ?? "Propiedad eliminada"}
-                      {visit.properties?.bc_reference
-                        ? ` · Ref. ${visit.properties.bc_reference}`
-                        : ""}
-                    </p>
-                  </div>
-                  {/* Fecha + badge */}
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs text-ink/45">
-                      {formatDate(visit.created_at, config.locale)}
-                    </p>
-                    <span
-                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_VISIT_COLORS[visit.status] ?? "bg-ink/10 text-ink/60"}`}
-                    >
-                      {STATUS_VISIT_LABELS[visit.status] ?? visit.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+        {canVisits && (
+          <section className="rounded-2xl border border-gold/15 bg-cream-50/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-gold/10 px-5 py-4">
+              <h2 className="crm-section-title text-ink">
+                Últimas solicitudes de visita
+              </h2>
+              <Link
+                href={`${config.prefix}/solicitudes`}
+                className="text-xs font-medium text-gold hover:underline"
+              >
+                Ver todas →
+              </Link>
             </div>
-          )}
-        </section>
+            {recentVisits.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink/45">
+                Sin solicitudes aún.
+              </p>
+            ) : (
+              <div className="divide-y divide-gold/8">
+                {recentVisits.map((visit) => (
+                  <div
+                    key={visit.id}
+                    className="flex items-center gap-4 px-5 py-3.5"
+                  >
+                    {/* Avatar inicial */}
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold/10 text-sm font-semibold text-gold">
+                      {visit.profiles?.full_name
+                        ? visit.profiles.full_name.charAt(0).toUpperCase()
+                        : "?"}
+                    </div>
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {visit.profiles?.full_name ??
+                          visit.profiles?.email ??
+                          "Cliente desconocido"}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-ink/50">
+                        {visit.properties?.title ?? "Propiedad eliminada"}
+                        {visit.properties?.bc_reference
+                          ? ` · Ref. ${visit.properties.bc_reference}`
+                          : ""}
+                      </p>
+                    </div>
+                    {/* Fecha + badge */}
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs text-ink/45">
+                        {formatDate(visit.created_at, config.locale)}
+                      </p>
+                      <span
+                        className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_VISIT_COLORS[visit.status] ?? "bg-ink/10 text-ink/60"}`}
+                      >
+                        {STATUS_VISIT_LABELS[visit.status] ?? visit.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
