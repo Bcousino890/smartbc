@@ -2,6 +2,11 @@
 // Supabase) para probar el build de producción sin ninguna base de datos real.
 //
 //   · Escucha SOLO en 127.0.0.1. No se conecta a nada.
+//   · RPC: si el JSON trae `rpc.<función>`, responde con ese valor; si es un
+//     objeto con la clave `byArg`, elige la respuesta por el valor del primer
+//     argumento del cuerpo (p. ej. el token). Si no, null.
+//   · `/img/<archivo>`: sirve imágenes de la carpeta indicada (4.º argumento);
+//     si no existe, 404.
 //   · Sirve tablas en memoria cargadas de un JSON sintético.
 //   · Respeta lo que la app pide de verdad: las columnas del `select` (con las
 //     relaciones anidadas tal como están en el JSON) y los filtros eq, neq,
@@ -12,8 +17,9 @@
 //     guardar. Las RPC devuelven null. Todo queda en el registro de
 //     peticiones, para poder comprobar qué consultas hizo la app.
 //
-//   node --experimental-strip-types scripts/sim/postgrest-sim.mts <puerto> <datos.json> <registro.jsonl>
-import { appendFileSync, readFileSync } from "node:fs";
+//   node --experimental-strip-types scripts/sim/postgrest-sim.mts <puerto> <datos.json> <registro.jsonl> [carpeta-imágenes]
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 type Row = Record<string, unknown>;
@@ -152,8 +158,10 @@ export function applyOrder(rows: Row[], order: string | null): Row[] {
   });
 }
 
-function startServer(port: number, dataFile: string, logFile: string) {
-  const tables = JSON.parse(readFileSync(dataFile, "utf8")) as Record<string, Row[]>;
+function startServer(port: number, dataFile: string, logFile: string, imgDir: string | null) {
+  const all = JSON.parse(readFileSync(dataFile, "utf8")) as Record<string, unknown>;
+  const rpcs = (all.rpc ?? {}) as Record<string, unknown>;
+  const tables = Object.fromEntries(Object.entries(all).filter(([k]) => k !== "rpc")) as Record<string, Row[]>;
   const log = (entry: Record<string, unknown>) => appendFileSync(logFile, JSON.stringify({ t: Date.now(), ...entry }) + "\n");
 
   const send = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
@@ -165,13 +173,41 @@ function startServer(port: number, dataFile: string, logFile: string) {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
     const method = req.method ?? "GET";
     const path = url.pathname;
-    // Se consume el cuerpo (escrituras y RPC) sin guardarlo.
-    req.resume();
-
-    if (path.startsWith("/rest/v1/rpc/")) {
-      log({ method, path, kind: "rpc" });
-      return send(res, 200, null);
+    if (path.startsWith("/img/")) {
+      const file = imgDir ? join(imgDir, basename(path)) : "";
+      req.resume();
+      if (!imgDir || !existsSync(file)) {
+        log({ method, path, kind: "img", status: 404 });
+        res.writeHead(404);
+        return res.end();
+      }
+      const body = readFileSync(file);
+      log({ method, path, kind: "img", status: 200, bytes: body.length });
+      res.writeHead(200, { "Content-Type": "image/jpeg", "Content-Length": String(body.length) });
+      return res.end(body);
     }
+    if (path.startsWith("/rest/v1/rpc/")) {
+      const fn = path.slice("/rest/v1/rpc/".length);
+      let raw = "";
+      req.setEncoding("utf8");
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        let args: Record<string, unknown> = {};
+        try {
+          args = raw ? JSON.parse(raw) : {};
+        } catch {
+          /* cuerpo vacío o no JSON */
+        }
+        const def = rpcs[fn] as { byArg?: Record<string, unknown> } | undefined;
+        const first = Object.values(args)[0];
+        const out = def && typeof def === "object" && "byArg" in def ? (def.byArg?.[String(first)] ?? null) : (def ?? null);
+        log({ method, path, kind: "rpc", fn, arg: typeof first === "string" ? first.slice(0, 6) + "…" : null, hit: out !== null });
+        send(res, 200, out);
+      });
+      return;
+    }
+    // Se consume el cuerpo (escrituras) sin guardarlo.
+    req.resume();
     const m = path.match(/^\/rest\/v1\/([a-zA-Z_]\w*)$/);
     if (!m) {
       log({ method, path, kind: "other" });
@@ -201,6 +237,6 @@ function startServer(port: number, dataFile: string, logFile: string) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()!)) {
-  const [port, dataFile, logFile] = process.argv.slice(2);
-  startServer(Number(port), dataFile, logFile);
+  const [port, dataFile, logFile, imgDir] = process.argv.slice(2);
+  startServer(Number(port), dataFile, logFile, imgDir ?? null);
 }

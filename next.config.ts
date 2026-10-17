@@ -31,6 +31,18 @@ const nextConfig: NextConfig = {
     "imapflow",
     "mailparser",
   ],
+  // PDF del catálogo en un hilo (expediente 2026-10-17-bcp-01-pdf-worker): en
+  // el SERVIDOR, webpack resuelve `new Worker(new URL(…))` como
+  // publicPath + chunk respecto a `.next/server/chunks/`; con el publicPath de
+  // Next ("/_next/", pensado para el navegador) apuntaba a `file:///_next/…` y
+  // el hilo no arrancaba. "./" = el chunk del hilo junto a los demás chunks,
+  // con una ruta calculada al ejecutar desde __dirname (aguanta el renombrado
+  // .next.new → .next y mover la app de sitio). "" no sirve: webpack lo trata
+  // como «sin valor» y vuelve al publicPath. Solo afecta a los hilos del servidor.
+  webpack(config, { isServer }) {
+    if (isServer) config.output = { ...config.output, workerPublicPath: "./" };
+    return config;
+  },
   async headers() {
     return [
       {

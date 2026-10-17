@@ -1,6 +1,6 @@
 import "server-only";
 import { loadLogoDataUri } from "@/lib/pdf/load-logo";
-import { renderCatalogPdf } from "@/lib/pdf/catalog/render";
+import { renderCatalogInWorker } from "@/lib/pdf/catalog/render-in-worker";
 import { photoId, type PdfPhoto } from "@/lib/pdf/catalog/document";
 import { toPublicCatalog, type InternalSnapshot } from "../to-public";
 import type { CatalogOperation } from "../operation-price";
@@ -102,8 +102,10 @@ export async function buildCatalogPdf(cap: Cap, signal: AbortSignal): Promise<{ 
   if (photos === "changed") return { changed: true };
   if (signal.aborted) throw new Error("cancelled");
   const logo = await loadLogoDataUri();
-  // Desde aquí, el renderizado no se puede interrumpir (K3).
-  const { pdf } = await renderCatalogPdf({ catalog, capturedAt: cap.capturedAt, logo, photos });
+  // La maquetación va en un hilo aparte (expediente 2026-10-17-bcp-01-pdf-worker):
+  // la señal del trabajo lo TERMINA de verdad, y no se devuelve hasta que el
+  // hilo ha salido, así que el turno (K3) sigue ocupado hasta entonces.
+  const { pdf } = await renderCatalogInWorker({ catalog, capturedAt: cap.capturedAt, logo, photos }, signal);
   return { pdf, fileName: pdfFileName(catalog.title, cap.capturedAt) };
 }
 
