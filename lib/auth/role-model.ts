@@ -103,12 +103,14 @@ const CHOICES: Record<AssignableStaffRole, RoleChoice> = {
 /**
  * Opciones del desplegable de rol al editar una cuenta.
  *
- * Siempre los cuatro perfiles asignables. Si la cuenta tiene hoy un perfil que
- * ya no se asigna (Propietario, o uno heredado) se añade como opción propia:
- * así el <select> nunca queda en blanco y guardar sin tocar el rol no lo cambia.
+ * Siempre los cuatro perfiles asignables. Si la cuenta tiene hoy un rol que ya
+ * no se asigna (Propietario, un perfil heredado, un Visualizador…) se añade como
+ * opción propia: así el <select> nunca muestra otro perfil por error y guardar
+ * sin tocar el rol no lo cambia.
  */
 export function roleChoices(currentRole?: string | null): RoleChoice[] {
   const base = ASSIGNABLE_STAFF_ROLES.map((r) => CHOICES[r]);
+  if (!currentRole || isAssignableStaffRole(currentRole)) return base;
   if (currentRole === "owner") {
     return [{ value: "owner", label: "Propietario", detail: null }, ...base];
   }
@@ -117,9 +119,9 @@ export function roleChoices(currentRole?: string | null): RoleChoice[] {
       currentRole === "agent_admin"
         ? "Administrador · acceso limitado (heredado)"
         : "Asesor · solo lectura (heredado)";
-    return [...base, { value: currentRole as string, label, detail: roleDetail(currentRole) }];
+    return [...base, { value: currentRole, label, detail: roleDetail(currentRole) }];
   }
-  return base;
+  return [...base, { value: currentRole, label: roleLabel(currentRole), detail: null }];
 }
 
 /**

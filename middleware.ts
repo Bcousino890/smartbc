@@ -151,7 +151,13 @@ export async function middleware(request: NextRequest) {
     url.search = "";
     url.searchParams.set("suspended", "1");
     const redirectResponse = NextResponse.redirect(url);
-    response.cookies.getAll().forEach((c) => redirectResponse.cookies.set(c));
+    // Las cookies de sesión de Supabase (`sb-…`, también las troceadas `.0`,
+    // `.1`) se borran a mano: `signOut` las limpia en una respuesta interna que
+    // no es la que devolvemos.
+    request.cookies
+      .getAll()
+      .filter((c) => c.name.startsWith("sb-"))
+      .forEach((c) => redirectResponse.cookies.set(c.name, "", { maxAge: 0, path: "/" }));
     return redirectResponse;
   }
 

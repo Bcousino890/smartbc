@@ -107,6 +107,13 @@ t("un Propietario aparece como su propia opción (no se puede perder al editarlo
   assert.equal(choices[0].label, "Propietario");
 });
 
+t("un Visualizador (o un rol que ya no se asigna) aparece como su propia opción, para no mostrar otro perfil por error", () => {
+  const choices = roleChoices("viewer");
+  assert.equal(choices[choices.length - 1].value, "viewer");
+  assert.equal(choices[choices.length - 1].label, "Visualizador");
+  assert.equal(choices.length, 5);
+});
+
 t("ninguna etiqueta del desplegable dice «agente»", () => {
   for (const current of ["owner", "agent_admin", "agent_junior", "agent_senior"]) {
     for (const c of roleChoices(current)) assert.ok(!/agente/i.test(c.label), `${current}: ${c.label}`);

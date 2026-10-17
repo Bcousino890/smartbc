@@ -834,6 +834,12 @@ function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, o
                           {r.label}
                         </option>
                       ))}
+                      {countryRoleOverrides[c] &&
+                        !COUNTRY_ROLE_CHOICES.some((r) => r.value === countryRoleOverrides[c]) && (
+                          <option value={countryRoleOverrides[c]}>
+                            {roleLabel(countryRoleOverrides[c])} (heredado)
+                          </option>
+                        )}
                     </select>
                   </div>
                 ))}
