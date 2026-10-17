@@ -83,7 +83,12 @@ export default async function AdminUsuariosPage({
         subtitleKey="usuarios.subtitle"
       />
 
-      <UsuariosClient users={allUsers} currentUserRole={currentUserRole} country={country} />
+      <UsuariosClient
+        users={allUsers}
+        currentUserId={currentUser?.id ?? ""}
+        currentUserRole={currentUserRole}
+        country={country}
+      />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

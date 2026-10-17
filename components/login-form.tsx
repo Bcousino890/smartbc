@@ -20,7 +20,7 @@ type Role = "client" | "admin";
 
 const initialState: SignInState = {};
 
-export function LoginForm() {
+export function LoginForm({ suspended = false }: { suspended?: boolean }) {
   const t = useT();
   const [state, formAction, pending] = useActionState(signInAction, initialState);
   const [role, setRole] = useState<Role>("client");
@@ -156,12 +156,12 @@ export function LoginForm() {
         </div>
       )}
 
-      {state.error && (
+      {(state.error || suspended) && (
         <p
           role="alert"
           className="mt-3 rounded-lg border border-red-300/60 bg-red-50/80 px-3 py-2 text-xs text-red-700"
         >
-          {t(state.error)}
+          {t(state.error ?? "auth.error.suspended")}
         </p>
       )}
 

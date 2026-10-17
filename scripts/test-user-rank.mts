@@ -9,6 +9,10 @@ import {
   KNOWN_ROLES,
   canAssignRole,
   canManageUser,
+  canResetPassword,
+  canSetPasswordDirectly,
+  canSuspendUser,
+  isSuspended,
   isUserAdminRole,
   changedPrivilegeFields,
   roleRank,
@@ -168,6 +172,44 @@ t("changedPrivilegeFields: sin países guardados, el país por defecto es el con
   const s2 = { ...snap, countries: null, countryRoles: {} };
   assert.deepEqual(changedPrivilegeFields({ countries: ["es"] }, s2), []);
   assert.deepEqual(changedPrivilegeFields({ countries: ["es", "cl"] }, s2), ["countries"]);
+});
+
+// ── Contraseña ajena: nadie la fija, se envía un enlace ─────────────────────
+t("la contraseña se fija directamente solo en la cuenta propia", () => {
+  assert.equal(canSetPasswordDirectly("a", "a"), true);
+  assert.equal(canSetPasswordDirectly("a", "b"), false);
+  assert.equal(canSetPasswordDirectly("", ""), false);
+  assert.equal(canSetPasswordDirectly(undefined, undefined), false);
+});
+
+t("el enlace de restablecimiento lo envía quien administra esa cuenta, nunca sobre sí mismo", () => {
+  assert.equal(canResetPassword(u("o", "owner"), u("x", "admin")), true);
+  assert.equal(canResetPassword(u("o", "owner"), u("x", "advisor")), true);
+  assert.equal(canResetPassword(u("a", "admin"), u("x", "advisor")), true);
+  assert.equal(canResetPassword(u("a", "admin"), u("x", "captadora")), true);
+  assert.equal(canResetPassword(u("a", "admin"), u("x", "admin")), false);
+  assert.equal(canResetPassword(u("a", "admin"), u("x", "owner")), false);
+  assert.equal(canResetPassword(u("a", "advisor"), u("x", "client")), false);
+  assert.equal(canResetPassword(u("a", "owner"), u("a", "owner")), false);
+});
+
+t("suspender sigue la misma jerarquía: solo a rangos inferiores y nunca a uno mismo", () => {
+  assert.equal(canSuspendUser(u("o", "owner"), u("x", "admin")), true);
+  assert.equal(canSuspendUser(u("a", "admin"), u("x", "agent_senior")), true);
+  assert.equal(canSuspendUser(u("a", "admin"), u("x", "captadora")), true);
+  assert.equal(canSuspendUser(u("a", "admin"), u("x", "admin")), false);
+  assert.equal(canSuspendUser(u("a", "admin"), u("x", "owner")), false);
+  assert.equal(canSuspendUser(u("a", "admin"), u("a", "admin")), false);
+  assert.equal(canSuspendUser(u("a", "advisor"), u("x", "client")), false);
+});
+
+t("isSuspended: solo con una fecha de suspensión válida", () => {
+  assert.equal(isSuspended({ suspended_at: "2026-10-17T10:00:00Z" }), true);
+  assert.equal(isSuspended({ suspended_at: null }), false);
+  assert.equal(isSuspended({}), false);
+  assert.equal(isSuspended(null), false);
+  assert.equal(isSuspended(undefined), false);
+  assert.equal(isSuspended({ suspended_at: "" }), false);
 });
 
 console.log(`\n✓ test:user-rank — ${n} pruebas`);

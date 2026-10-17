@@ -13,6 +13,7 @@ import { requestJson, type RequestJsonFailure } from "@/lib/http/request-json";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PermissionsDrawer } from "@/components/admin/permissions/permissions-drawer";
 import { roleChoices, roleDetail, roleLabel, staffGroup } from "@/lib/auth/role-model";
+import { canManageUser } from "@/lib/auth/user-rank";
 
 const ROLE_BADGE: Record<InternalUserRole, string> = {
   owner:        "border-violet-200 bg-violet-50 text-violet-700",
@@ -505,12 +506,13 @@ function CreateUserModal({
 interface EditUserModalProps {
   user: InternalUser;
   defaultCountry: string;
+  currentUserId: string;
   currentUserRole: InternalUserRole;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSuccess }: EditUserModalProps) {
+function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, onClose, onSuccess }: EditUserModalProps) {
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
@@ -538,6 +540,52 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
   const [errorMsg, setErrorMsg] = useState("");
 
   const isClient = user.roleKey === "client";
+
+  // Acceso de la cuenta. Cada uno cambia su propia contraseña; la de otra
+  // persona nadie la fija: se le envía un enlace para que la elija ella. El
+  // enlace y la suspensión los hace quien administra esa cuenta (el servidor
+  // lo exige igual).
+  const isSelf = user.id === currentUserId;
+  const canManage = canManageUser(
+    { id: currentUserId, role: currentUserRole },
+    { id: user.id, role: user.roleKey },
+  );
+  const isSuspendedUser = user.status === "suspended";
+  const [accessBusy, setAccessBusy] = useState<null | "reset" | "suspend">(null);
+  const [accessMsg, setAccessMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [confirmSuspend, setConfirmSuspend] = useState(false);
+
+  const sendResetLink = async () => {
+    setAccessBusy("reset");
+    setAccessMsg(null);
+    const result = await requestJson(`/api/admin/usuarios/${user.id}/reset-password`, { method: "POST" });
+    setAccessBusy(null);
+    setAccessMsg(
+      result.ok
+        ? { kind: "ok", text: `Enlace enviado a ${user.email}. Caduca en 24 horas.` }
+        : { kind: "error", text: result.error },
+    );
+  };
+
+  const toggleSuspension = async () => {
+    setAccessBusy("suspend");
+    setAccessMsg(null);
+    const result = await requestJson(`/api/admin/usuarios/${user.id}/suspend`, {
+      method: "POST",
+      body: { suspended: !isSuspendedUser },
+    });
+    setAccessBusy(null);
+    setConfirmSuspend(false);
+    if (!result.ok) {
+      setAccessMsg({ kind: "error", text: result.error });
+      return;
+    }
+    setAccessMsg({
+      kind: "ok",
+      text: isSuspendedUser ? "Cuenta reactivada." : "Cuenta suspendida: ya no puede entrar.",
+    });
+    onSuccess?.();
+  };
 
   // El Administrador solo lo asigna el Propietario (el servidor lo exige igual);
   // el perfil actual de la cuenta siempre se muestra para no dejar el <select>
@@ -586,7 +634,8 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
       // credenciales de acceso, y no queremos hacerlo en cada guardado.
       const nextEmail = email.trim();
       if (nextEmail && nextEmail !== user.email) payload.email = nextEmail;
-      if (newPassword) payload.password = newPassword;
+      // Solo la propia: la de otra cuenta el servidor la rechaza.
+      if (newPassword && isSelf) payload.password = newPassword;
 
       const result = await requestJson("/api/admin/usuarios/update", {
         method: "PATCH",
@@ -791,29 +840,115 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
               </div>
             )}
 
-            <div>
-              <label className="mb-1.5 block crm-label-sm text-ink/50">
-                Nueva contraseña{" "}
-                <span className="font-normal normal-case text-ink/40">(dejar vacío para no cambiar)</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showNewPassword ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 pr-10 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink/70"
-                  tabIndex={-1}
-                >
-                  {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+            {isSelf && (
+              <div>
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
+                  Nueva contraseña{" "}
+                  <span className="font-normal normal-case text-ink/40">(dejar vacío para no cambiar)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 pr-10 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink/70"
+                    tabIndex={-1}
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
+
+            {!isSelf && canManage && (
+              <div className="space-y-2.5 rounded-xl border border-ink/10 bg-white/50 p-3">
+                <p className="crm-label-sm text-ink/50">Acceso de la cuenta</p>
+
+                <div>
+                  <button
+                    type="button"
+                    onClick={sendResetLink}
+                    disabled={accessBusy !== null}
+                    className="inline-flex items-center gap-2 rounded-lg border border-ink/10 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-ink/20 hover:text-ink disabled:opacity-50"
+                  >
+                    {accessBusy === "reset" ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Mail size={13} strokeWidth={1.75} />
+                    )}
+                    Enviar enlace para elegir contraseña
+                  </button>
+                  <p className="mt-1 text-xs text-ink/40">
+                    Le llega a {user.email} y la elige ella: nadie fija la contraseña de otra persona.
+                  </p>
+                </div>
+
+                {confirmSuspend ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-2.5">
+                    <p className="text-xs leading-relaxed text-red-800">
+                      {isSuspendedUser
+                        ? `¿Reactivar a ${user.firstName}? Podrá volver a entrar.`
+                        : `¿Suspender a ${user.firstName}? Dejará de poder entrar y operar. No se borra nada: sus clientes, captaciones y mensajes siguen en su sitio.`}
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleSuspension}
+                        disabled={accessBusy !== null}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50",
+                          isSuspendedUser ? "bg-emerald-700 hover:bg-emerald-800" : "bg-red-700 hover:bg-red-800",
+                        )}
+                      >
+                        {accessBusy === "suspend" && <Loader2 size={12} className="animate-spin" />}
+                        {isSuspendedUser ? "Sí, reactivar" : "Sí, suspender"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmSuspend(false)}
+                        disabled={accessBusy !== null}
+                        className="rounded-lg border border-ink/10 bg-white px-3 py-1.5 text-xs text-ink/65 transition hover:text-ink"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmSuspend(true)}
+                    disabled={accessBusy !== null}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50",
+                      isSuspendedUser
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        : "border-red-200 bg-white text-red-700 hover:bg-red-50",
+                    )}
+                  >
+                    {isSuspendedUser ? "Reactivar cuenta" : "Suspender cuenta"}
+                  </button>
+                )}
+
+                {accessMsg && (
+                  <p
+                    role={accessMsg.kind === "error" ? "alert" : "status"}
+                    className={cn(
+                      "rounded-lg px-3 py-2 text-xs",
+                      accessMsg.kind === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700",
+                    )}
+                  >
+                    {accessMsg.text}
+                  </p>
+                )}
+              </div>
+            )}
 
             {status === "error" && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1006,11 +1141,12 @@ function UsersTable({
 
 interface UsuariosClientProps {
   users: InternalUser[];
+  currentUserId: string;
   currentUserRole: InternalUserRole;
   country: string;
 }
 
-export function UsuariosClient({ users, currentUserRole, country }: UsuariosClientProps) {
+export function UsuariosClient({ users, currentUserId, currentUserRole, country }: UsuariosClientProps) {
   const router = useRouter();
   const [queryAdmins, setQueryAdmins] = useState("");
   const [queryAdvisors, setQueryAdvisors] = useState("");
@@ -1095,6 +1231,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
         <EditUserModal
           user={editUser}
           defaultCountry={country}
+          currentUserId={currentUserId}
           currentUserRole={currentUserRole}
           onClose={() => setEditUser(null)}
           onSuccess={handleSuccess}

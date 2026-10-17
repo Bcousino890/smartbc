@@ -69,6 +69,11 @@ export async function signInAction(
   }
 
   if (signInError) {
+    // Una cuenta suspendida está baneada en GoTrue ("User is banned"): se dice
+    // como lo que es, en vez de como una contraseña incorrecta.
+    if (/banned/i.test(signInError.message ?? "")) {
+      return { error: "auth.error.suspended" };
+    }
     return { error: "auth.error.invalidCredentials" };
   }
 

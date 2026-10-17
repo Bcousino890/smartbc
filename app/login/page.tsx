@@ -2,7 +2,15 @@ import Image from "next/image";
 import { BrandLogo } from "@/components/brand-logo";
 import { LoginForm } from "@/components/login-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ suspended?: string }>;
+}) {
+  // El middleware devuelve aquí, con ?suspended=1, a quien entra con una cuenta
+  // suspendida cuya sesión seguía viva.
+  const { suspended } = await searchParams;
+
   return (
     <main className="crm-root relative min-h-screen overflow-y-auto md:h-screen md:overflow-hidden">
       {/* Lobby photo background */}
@@ -47,7 +55,7 @@ export default function LoginPage() {
 
       <div className="relative flex min-h-screen flex-col items-center px-4 pb-8 pt-8 md:h-screen md:pb-6 md:pt-16">
         <BrandLogo size="xl" priority className="mb-6 md:mb-16" />
-        <LoginForm />
+        <LoginForm suspended={suspended === "1"} />
       </div>
     </main>
   );

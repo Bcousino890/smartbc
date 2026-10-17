@@ -107,6 +107,45 @@ export function canManageUser(
   return false;
 }
 
+/**
+ * ¿Puede el actor fijar DIRECTAMENTE la contraseña de esta cuenta? Solo la
+ * propia: la de otra persona nunca la fija nadie (ni el Propietario); se le
+ * envía un enlace de restablecimiento (`canResetPassword`).
+ */
+export function canSetPasswordDirectly(
+  actorId: string | null | undefined,
+  targetId: string | null | undefined,
+): boolean {
+  return Boolean(actorId) && actorId === targetId;
+}
+
+/**
+ * ¿Puede el actor enviar un enlace de restablecimiento de contraseña a esta
+ * cuenta? Quien administra esa cuenta (`canManageUser`); sobre sí mismo no: para
+ * eso está «Olvidé mi contraseña».
+ */
+export function canResetPassword(
+  actor: { id: string; role: string | null | undefined },
+  target: { id: string; role: string | null | undefined },
+): boolean {
+  return canManageUser(actor, target);
+}
+
+/** ¿Puede el actor suspender o reactivar esta cuenta? Misma jerarquía que administrarla. */
+export function canSuspendUser(
+  actor: { id: string; role: string | null | undefined },
+  target: { id: string; role: string | null | undefined },
+): boolean {
+  return canManageUser(actor, target);
+}
+
+/** ¿Está la cuenta suspendida? (`profiles.suspended_at` con valor). */
+export function isSuspended(
+  profile: { suspended_at?: string | null } | null | undefined,
+): boolean {
+  return typeof profile?.suspended_at === "string" && profile.suspended_at.length > 0;
+}
+
 /** Campos del propio perfil que cualquiera puede cambiarse a sí mismo (no dan poder). */
 export const SELF_EDITABLE_FIELDS = ["firstName", "lastName", "phone", "email", "password"] as const;
 

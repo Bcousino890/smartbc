@@ -8,6 +8,11 @@ export type PermissionAuditEventType =
   | "country_changed"
   | "permissions_updated"
   | "user_created"
+  // Acceso de la cuenta: enlace de restablecimiento enviado, suspensión y
+  // reactivación (el valor guardado nunca incluye el enlace ni contraseñas).
+  | "password_reset_sent"
+  | "user_suspended"
+  | "user_reactivated"
   // Acciones de infraestructura lanzadas desde el panel (migraciones, deploy).
   // No son cambios de permisos, pero comparten esta tabla (event_type es texto
   // libre) para que quede quién las lanzó y cuándo; el "usuario afectado" es el

@@ -42,6 +42,7 @@ const es: Strings = {
   "login.forgot": "¿Olvidaste tu contraseña?",
   "login.footer": "Acceso seguro a propiedades disponibles y seguimiento personalizado",
   "auth.error.invalidCredentials": "Email o contraseña incorrectos.",
+  "auth.error.suspended": "Tu cuenta está suspendida. Habla con un administrador.",
   "auth.error.invalidEmail": "Revisa el email: no parece una dirección válida.",
   "auth.error.notAdmin": "Esta cuenta no tiene acceso de administrador.",
   "auth.error.noProfile": "La cuenta no tiene perfil asociado. Contacta con soporte.",
@@ -1551,6 +1552,7 @@ const en: Strings = {
   "login.forgot": "Forgot your password?",
   "login.footer": "Secure access to available properties and personalized tracking",
   "auth.error.invalidCredentials": "Incorrect email or password.",
+  "auth.error.suspended": "Your account is suspended. Contact an administrator.",
   "auth.error.invalidEmail": "Check the email: it doesn't look like a valid address.",
   "auth.error.notAdmin": "This account does not have admin access.",
   "auth.error.noProfile": "This account has no profile linked. Contact support.",
@@ -3028,6 +3030,7 @@ const fr: Strings = {
   "login.footer":
     "Accès sécurisé aux propriétés disponibles et suivi personnalisé",
   "auth.error.invalidCredentials": "E-mail ou mot de passe incorrect.",
+  "auth.error.suspended": "Votre compte est suspendu. Contactez un administrateur.",
   "auth.error.invalidEmail": "Vérifiez l'e-mail : ce n'est pas une adresse valide.",
   "auth.error.notAdmin": "Ce compte n'a pas d'accès administrateur.",
   "auth.error.noProfile": "Ce compte n'a pas de profil associé. Contactez le support.",
@@ -4491,6 +4494,7 @@ const de: Strings = {
   "login.footer":
     "Sicherer Zugang zu verfügbaren Immobilien und persönliche Betreuung",
   "auth.error.invalidCredentials": "E-Mail oder Passwort ist falsch.",
+  "auth.error.suspended": "Ihr Konto ist gesperrt. Wenden Sie sich an einen Administrator.",
   "auth.error.invalidEmail": "Prüfe die E-Mail: Sie sieht nicht wie eine gültige Adresse aus.",
   "auth.error.notAdmin": "Dieses Konto hat keinen Admin-Zugriff.",
   "auth.error.noProfile": "Dieses Konto hat kein verknüpftes Profil. Kontaktieren Sie den Support.",

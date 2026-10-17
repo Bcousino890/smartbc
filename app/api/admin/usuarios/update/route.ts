@@ -7,6 +7,7 @@ import { resolveRoleCountries } from "@/lib/auth/role-model";
 import {
   canAssignRole,
   canManageUser,
+  canSetPasswordDirectly,
   isKnownRole,
   isUserAdminRole,
   changedPrivilegeFields,
@@ -158,6 +159,20 @@ export async function PATCH(req: Request) {
   ) {
     return Response.json(
       { error: "No puedes modificar a un usuario de rango igual o superior al tuyo" },
+      { status: 403 },
+    );
+  }
+
+  // Nadie fija la contraseña de OTRA cuenta (ni el Propietario): a esa persona
+  // se le envía un enlace para que la elija ella (`/[id]/reset-password`). Se
+  // comprueba antes de cualquier cambio. Cada uno sí puede cambiar la suya.
+  if (password && !canSetPasswordDirectly(currentProfile.id, userId)) {
+    return Response.json(
+      {
+        error:
+          "Nadie fija la contraseña de otra persona. Usa «Enviar enlace para elegir contraseña» y ella la elige.",
+        code: "password_not_allowed",
+      },
       { status: 403 },
     );
   }

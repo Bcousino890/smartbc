@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/db/middleware";
 import { isStaffRole } from "@/lib/permissions";
 import { apiAdminNeedsSession } from "@/lib/auth/api-session-policy";
+import { isSuspended } from "@/lib/auth/user-rank";
 import {
   getClientIP,
   isIPWhitelisted,
@@ -125,11 +126,34 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const { data: profile } = await supabase
+  // `suspended_at` (migración 0210) viaja en la misma consulta; si la columna
+  // aún no existe, la consulta falla y se repite solo con el rol — así el
+  // despliegue nunca depende del orden en que se apliquen código y migración.
+  let { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, suspended_at")
     .eq("id", user.id)
     .maybeSingle();
+  if (profileError) {
+    ({ data: profile } = (await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle()) as { data: typeof profile });
+  }
+
+  // Cuenta suspendida: se cierra la sesión y se vuelve al login. El baneo de
+  // GoTrue impide renovar el token; esto corta la sesión que aún siga viva.
+  if (isSuspended(profile as { suspended_at?: string | null } | null)) {
+    await supabase.auth.signOut();
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("suspended", "1");
+    const redirectResponse = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((c) => redirectResponse.cookies.set(c));
+    return redirectResponse;
+  }
 
   const role = profile?.role ?? "client";
   const isStaff = isStaffRole(role);
