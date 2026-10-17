@@ -22,11 +22,27 @@ CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $f$
   SELECT coalesce(nullif(current_setting('request.jwt.claim', true), ''),
                   nullif(current_setting('request.jwt.claims', true), ''))::jsonb
 $f$;
+CREATE TYPE user_role AS ENUM ('client', 'advisor', 'admin', 'owner');
 CREATE TABLE profiles (
-  id uuid PRIMARY KEY, email text, role text DEFAULT 'client', full_name text, phone text,
+  id uuid PRIMARY KEY, email text, role user_role DEFAULT 'client', full_name text, phone text,
   country text DEFAULT 'es', countries text[], multi_country boolean DEFAULT false,
-  custom_role_id uuid, assigned_advisor_id uuid
+  custom_role_id uuid, assigned_advisor_id uuid, created_at timestamptz, updated_at timestamptz
 );
+-- Funciones SECURITY DEFINER expuestas (como las de 0030/0043).
+CREATE FUNCTION cleanup_password_reset_tokens() RETURNS integer LANGUAGE sql SECURITY DEFINER AS 'select 1';
+CREATE FUNCTION create_user_profile(p_id uuid, p_email text) RETURNS void LANGUAGE sql SECURITY DEFINER AS 'select';
+CREATE FUNCTION fix_missing_admin_profiles() RETURNS integer LANGUAGE sql SECURITY DEFINER AS 'select 1';
+-- handle_new_user ANTERIOR (0044): el rol sale de los metadatos del registro.
+CREATE OR REPLACE FUNCTION handle_new_user() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $f$
+BEGIN
+  INSERT INTO profiles (id, email, full_name, country, role, created_at, updated_at)
+  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'full_name', new.email),
+          COALESCE(new.raw_user_meta_data->>'country', 'es')::text,
+          COALESCE(new.raw_user_meta_data->>'role', 'client')::user_role, now(), now())
+  ON CONFLICT (id) DO NOTHING;
+  RETURN new;
+END; $f$;
+CREATE TRIGGER on_auth_user_created_test AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 CREATE TABLE password_reset_tokens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES auth.users(id),
   token text NOT NULL UNIQUE, expires_at timestamptz NOT NULL, used_at timestamptz, created_at timestamptz DEFAULT now()
@@ -52,6 +68,7 @@ CREATE POLICY profiles_insert ON profiles FOR INSERT WITH CHECK (auth.uid() = id
 CREATE POLICY profiles_update ON profiles FOR UPDATE USING (auth.uid() = id OR auth.jwt() ->> 'role' = 'service_role');
 
 INSERT INTO auth.users (id) VALUES ('aaaaaaaa-0000-0000-0000-000000000001'), ('bbbbbbbb-0000-0000-0000-000000000002');
+DELETE FROM profiles;
 INSERT INTO profiles (id, email, role) VALUES
   ('aaaaaaaa-0000-0000-0000-000000000001', 'owner@x.com', 'owner'),
   ('bbbbbbbb-0000-0000-0000-000000000002', 'cliente@x.com', 'client');
@@ -76,6 +93,16 @@ BEGIN; :anon
 WITH i AS (INSERT INTO user_permission_overrides VALUES ('bbbbbbbb-0000-0000-0000-000000000002', 'usuarios', 'edit', true, NULL) RETURNING 1)
 SELECT CASE WHEN count(*) = 1 THEN 'VULNERABLE: anon escribe excepciones de permisos' ELSE 'no vulnerable' END FROM i;
 ROLLBACK;
+
+-- Registro con data.role = owner (GoTrue inserta en auth.users sin claims de PostgREST).
+INSERT INTO auth.users (id, raw_user_meta_data, email) VALUES
+  ('cccccccc-0000-0000-0000-000000000003', '{"role":"owner"}', 'atacante@x.com');
+SELECT CASE WHEN role = 'owner' THEN 'VULNERABLE: quien se registra con data.role=owner obtiene un perfil owner' ELSE 'no vulnerable' END FROM profiles WHERE id = 'cccccccc-0000-0000-0000-000000000003';
+-- Funciones expuestas
+SELECT CASE WHEN has_function_privilege('anon', 'cleanup_password_reset_tokens()', 'EXECUTE')
+            THEN 'VULNERABLE: anon puede ejecutar cleanup_password_reset_tokens()' ELSE 'no vulnerable' END;
+SELECT CASE WHEN has_function_privilege('anon', 'create_user_profile(uuid, text)', 'EXECUTE')
+            THEN 'VULNERABLE: anon puede ejecutar create_user_profile()' ELSE 'no vulnerable' END;
 
 \echo '=== Se aplica la migración (dos veces: debe ser idempotente) ==='
 \i /tmp/0210.sql
@@ -115,6 +142,28 @@ INSERT INTO profiles_country_roles VALUES ('bbbbbbbb-0000-0000-0000-000000000002
 ROLLBACK;
 BEGIN; :cliente
 INSERT INTO profiles (id, email, role) VALUES (gen_random_uuid(), 'nuevo@x.com', 'owner');
+ROLLBACK;
+
+-- Registro con data.role = owner: ahora el perfil nace como cliente.
+INSERT INTO auth.users (id, raw_user_meta_data, email) VALUES
+  ('dddddddd-0000-0000-0000-000000000004', '{"role":"owner","full_name":"Ana"}', 'atacante2@x.com');
+SELECT CASE WHEN role = 'client' AND full_name = 'Ana' THEN 'OK: el registro con data.role=owner crea un cliente (y conserva el nombre)' ELSE 'FALLO: el registro dio rol ' || role END FROM profiles WHERE id = 'dddddddd-0000-0000-0000-000000000004';
+SELECT CASE WHEN NOT has_function_privilege('anon', 'cleanup_password_reset_tokens()', 'EXECUTE')
+             AND NOT has_function_privilege('authenticated', 'create_user_profile(uuid, text)', 'EXECUTE')
+             AND NOT has_function_privilege('anon', 'fix_missing_admin_profiles()', 'EXECUTE')
+            THEN 'OK: anon/authenticated ya no ejecutan las funciones SECURITY DEFINER' ELSE 'FALLO: siguen ejecutables' END;
+-- Altas con una sesión de usuario: sin rol personalizado, asesor asignado, multi-país ni varios países.
+BEGIN; :cliente
+INSERT INTO profiles (id, email, custom_role_id) VALUES (gen_random_uuid(), 'a@x.com', gen_random_uuid());
+ROLLBACK;
+BEGIN; :cliente
+INSERT INTO profiles (id, email, assigned_advisor_id) VALUES (gen_random_uuid(), 'a@x.com', 'aaaaaaaa-0000-0000-0000-000000000001');
+ROLLBACK;
+BEGIN; :cliente
+INSERT INTO profiles (id, email, multi_country) VALUES (gen_random_uuid(), 'a@x.com', true);
+ROLLBACK;
+BEGIN; :cliente
+INSERT INTO profiles (id, email, countries) VALUES (gen_random_uuid(), 'a@x.com', ARRAY['es','cl']);
 ROLLBACK;
 
 \echo '=== DESPUÉS: lo legítimo sigue funcionando ==='
