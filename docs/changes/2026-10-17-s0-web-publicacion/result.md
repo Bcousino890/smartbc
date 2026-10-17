@@ -146,4 +146,5 @@ No se pidió revisión adicional de Codex: la aprobación lo excluía.
 
 ## PR, CI y merge
 
-Pendiente de publicar. El merge lo hace Fabricio.
+- PR: https://github.com/Bcousino890/smartbc/pull/324 (rama `fabri/s0-web-publicacion`). La CI se comprueba en el último commit.
+- El merge lo hace Fabricio. Sin migración; el merge dispara el autodespliegue.
