@@ -70,6 +70,8 @@ type FilterValues = {
   last24h: boolean;
   /** Mostrar también los anuncios enlazados (copias del mismo inmueble). */
   showLinked: boolean;
+  /** Incluir los anuncios fuera de zona (su zona ya no está marcada en Sindicación; no se rastrean). */
+  showOutOfZone: boolean;
   phoneFilter: PhoneFilterValue;
   gestion: GestionFilter;
   advertiser: AdvertiserFilter;
@@ -139,6 +141,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   areaMin: "areaMin",
   last24h: "last24h",
   showLinked: "enlazados",
+  showOutOfZone: "fuera_zona",
   phoneFilter: "phone",
   gestion: "gestion",
   advertiser: "advertiser",
@@ -229,6 +232,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
   const [areaMin, setAreaMin] = useState(() => searchParams.get(PARAM_KEYS.areaMin) ?? "");
   const [last24h, setLast24h] = useState(() => searchParams.get(PARAM_KEYS.last24h) === "1");
   const [showLinked, setShowLinked] = useState(() => searchParams.get(PARAM_KEYS.showLinked) === "1");
+  const [showOutOfZone, setShowOutOfZone] = useState(() => searchParams.get(PARAM_KEYS.showOutOfZone) === "1");
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilterValue>(() =>
     readEnum<PhoneFilterValue>(searchParams.get(PARAM_KEYS.phoneFilter), PHONE_VALUES),
   );
@@ -323,6 +327,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     areaMin,
     last24h,
     showLinked,
+    showOutOfZone,
     phoneFilter,
     gestion,
     advertiser,
@@ -413,6 +418,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     areaMin,
     last24h,
     showLinked,
+    showOutOfZone,
     phoneFilter,
     gestion,
     advertiser,
@@ -469,6 +475,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setAreaMin("");
     setLast24h(false);
     setShowLinked(false);
+    setShowOutOfZone(false);
     setPhoneFilter("");
     setGestion("");
     setAdvertiser(DEFAULT_ADVERTISER);
@@ -528,6 +535,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setLast24h,
     showLinked,
     setShowLinked,
+    showOutOfZone,
+    setShowOutOfZone,
     phoneFilter,
     setPhoneFilter,
     gestion,

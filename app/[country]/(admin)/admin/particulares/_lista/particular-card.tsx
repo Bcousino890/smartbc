@@ -380,6 +380,11 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             {retired && row.taken_down_at && (
               <Pill tone="red">Retirado · {SHORT_DATE.format(new Date(row.taken_down_at))}</Pill>
             )}
+            {row.fuera_de_zona === "true" && (
+              <Pill tone="grey" title="Ya no se rastrea: su zona no está marcada en Sindicación">
+                Fuera de zona
+              </Pill>
+            )}
             {hasVideo && (
               <Pill tone="neutral" icon={<Video size={12} strokeWidth={2} />}>
                 Vídeo
@@ -488,14 +493,17 @@ const TONES = {
 function Pill({
   tone,
   icon,
+  title,
   children,
 }: {
   tone: keyof typeof TONES;
   icon?: React.ReactNode;
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex h-7 max-w-full items-center gap-1 rounded-full border px-2.5 text-xs font-semibold",
         TONES[tone],

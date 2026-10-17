@@ -28,7 +28,7 @@ import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filte
 // del payload de la página): la ficha los pide con el resto del detalle en
 // /api/admin/particulares/detail.
 const BASE_COLUMNS =
-  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, cover_url, owner_name, phone, chat_only, latitude, longitude, location_precision, taken_down_at, detected_at, created_at, updated_at, is_active";
+  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, cover_url, owner_name, phone, chat_only, latitude, longitude, location_precision, taken_down_at, detected_at, created_at, updated_at, is_active, fuera_de_zona:scraper_extra->>fuera_de_zona";
 
 // Columnas de la migración 0036 (plano + vídeo). Pueden no existir aún en el
 // VPS — por eso van en intentos separados (degradación elegante).
@@ -214,7 +214,13 @@ export type ParticularesFilters = {
   furnished?: "yes" | "no" | "";
   /** Alquiler de larga duración o de temporada (etiqueta `temporada`). */
   rentalKind?: "larga" | "temporada" | "";
+  /** Por defecto se ocultan los anuncios FUERA DE ZONA (`scraper_extra.fuera_de_zona`):
+   *  su zona ya no está marcada en Sindicación y el crawler dejó de rastrearlos. `true` los incluye. */
+  showOutOfZone?: boolean;
 };
+
+/** Excluye los marcados `scraper_extra.fuera_de_zona = true` (los NULL pasan: `neq` solo los descartaría). */
+export const NOT_FUERA_DE_ZONA = "scraper_extra->>fuera_de_zona.is.null,scraper_extra->>fuera_de_zona.neq.true";
 
 /** Estado del inmueble → etiquetas de `attrs` (migración 0183). Incluye los valores antiguos. */
 export const PARTICULARES_CONDITION_TAGS: Record<string, string[]> = {
@@ -289,6 +295,7 @@ function applyParticularesFilters(
   hasLinks = false,
 ) {
   let q = query;
+  if (!f.showOutOfZone) q = q.or(NOT_FUERA_DE_ZONA);
   // Un inmueble con venta Y alquiler enlazados es UNA fila (la del principal):
   // si se filtra por operación hay que mirar también las de sus enlazados.
   if (hasLinks && !f.showDuplicates && !(f.searchAllStates && f.search?.trim())) q = q.is("duplicate_of", null);
@@ -687,7 +694,7 @@ export type ParticularesStats = {
  */
 export const getParticularesStats: () => Promise<ParticularesStats> = unstable_cache(
   () => computeParticularesStats(),
-  ["particulares-stats"],
+  ["particulares-stats-v2"],
   { revalidate: 30 },
 );
 
@@ -711,6 +718,8 @@ async function computeParticularesStats(): Promise<ParticularesStats> {
       let q = supabase.from("particulares").select("*", { count: "exact", head: true });
       if (v.advertiser) q = q.eq("advertiser_type", "particular");
       if (v.links) q = q.is("duplicate_of", null);
+      // Los anuncios fuera de zona (ya no se rastrean) no cuentan en la cabecera.
+      q = q.or(NOT_FUERA_DE_ZONA);
       return build(q);
     };
     last = await Promise.all([
@@ -823,9 +832,11 @@ export async function getParticularesZoneCounts(
    *  enseña particulares, y el desplegable de zonas debe contar lo mismo; ver
    *  getParticularesStats). "" = todos, como antes. */
   advertiser: "particular" | "professional" | "unknown" | "" = "",
+  /** Cuenta también los anuncios fuera de zona (por defecto no). */
+  includeOutOfZone = false,
 ): Promise<{ zoneGroups: ZoneFilterGroup[]; portalCounts: Record<string, number> }> {
   try {
-    const rows = await getZoneCountRows(advertiser);
+    const rows = await getZoneCountRows(advertiser, includeOutOfZone);
     return {
       zoneGroups: buildZoneGroups(rows, showRetired),
       portalCounts: buildPortalCounts(rows),
@@ -848,7 +859,7 @@ export async function getParticularesZoneCounts(
  * antiguo.
  */
 const getZoneCountRows = unstable_cache(
-  async (advertiser: string): Promise<ZoneCountRow[]> => {
+  async (advertiser: string, includeOutOfZone: boolean): Promise<ZoneCountRow[]> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = createAdminClient() as any;
     // PostgREST corta CUALQUIER respuesta a 1.000 filas (db-max-rows) y esta función devuelve ≈2k grupos
@@ -860,7 +871,7 @@ const getZoneCountRows = unstable_cache(
     let rpcError: unknown = null;
     for (let page = 0; page < 50; page++) {
       const res = await supabase
-        .rpc("particulares_zone_counts", { p_advertiser: advertiser })
+        .rpc("particulares_zone_counts", includeOutOfZone ? { p_advertiser: advertiser, p_include_fuera: true } : { p_advertiser: advertiser })
         .order("portal", { ascending: true })
         .order("zone", { ascending: true })
         .order("municipality", { ascending: true })
@@ -889,6 +900,7 @@ const getZoneCountRows = unstable_cache(
     const run = (withAdvertiser: boolean) =>
       fetchAllRows((from, to) => {
         let q = supabase.from("particulares").select("zone, is_active, phone, portal, municipality:scraper_extra->>municipality");
+        if (!includeOutOfZone) q = q.or(NOT_FUERA_DE_ZONA);
         if (withAdvertiser && advertiser === "unknown") {
           q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
         } else if (withAdvertiser && advertiser) {
@@ -913,7 +925,7 @@ const getZoneCountRows = unstable_cache(
     }
     return [...agg.values()];
   },
-  ["particulares-zone-counts"],
+  ["particulares-zone-counts-v2"],
   { revalidate: 60 },
 );
 

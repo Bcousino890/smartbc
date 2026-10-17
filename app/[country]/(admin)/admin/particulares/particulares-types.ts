@@ -73,6 +73,8 @@ export type ParticularRow = {
   created_at: string | null;
   taken_down_at: string | null;
   is_active: boolean;
+  /** "true" si su zona ya no está marcada en Sindicación (el crawler dejó de rastrearlo). */
+  fuera_de_zona?: string | null;
   // Gestión interna (enriquecido en el servidor — ver lib/db/queries/particulares.ts)
   assigned_to?: string | null;
   assigned_name?: string | null;

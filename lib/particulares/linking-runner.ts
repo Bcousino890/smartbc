@@ -175,6 +175,43 @@ async function loadAgencyProperties(db: Db): Promise<AgencyPropertyInput[] | nul
   return out;
 }
 
+/**
+ * Anuncios FUERA DE ZONA (`scraper_extra.fuera_de_zona = true`): su zona ya no está marcada en
+ * Sindicación y el crawler dejó de rastrearlos. Los pases de agencias (CRM, portales, webs) no
+ * gastan trabajo en ellos, SALVO los que ya están enlazados con una propiedad del CRM (así no se
+ * pierde un enlace existente ni el prune lo borra). Si algo falla, no se excluye nada.
+ */
+async function loadFueraDeZonaSkip(db: Db): Promise<Set<string>> {
+  const fuera = new Set<string>();
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("particulares")
+      .select("id")
+      .eq("scraper_extra->>fuera_de_zona", "true")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.warn("[particulares-linking] fuera_de_zona:", error.message);
+      return new Set();
+    }
+    for (const r of data ?? []) fuera.add(r.id as string);
+    if (!data || data.length < PAGE) break;
+  }
+  if (fuera.size === 0) return fuera;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("particulares_agency_matches")
+      .select("particular_id")
+      .neq("status", "descartado")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) break; // sin la tabla (0199): nada que conservar
+    for (const r of data ?? []) fuera.delete(r.particular_id as string);
+    if (!data || data.length < PAGE) break;
+  }
+  return fuera;
+}
+
 async function loadAgencyDecisions(db: Db): Promise<AgencyDecision[] | null> {
   const out: AgencyDecision[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -299,6 +336,9 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     let changedRows = baseChanges.length;
 
     // ── 2. PASES DE AGENCIAS (después, con presupuesto y aislados) ──
+    // Fuera de zona y sin enlace con el CRM: no se cruzan ni se leen sus webs (ahorra trabajo).
+    const skipFuera = AGENCY_PASSES ? await loadFueraDeZonaSkip(db) : new Set<string>();
+    if (skipFuera.size) result.stats.fuera_de_zona_omitidos = skipFuera.size;
     let allRows: CurrentRow[] = rows;
     let agencyMatches: ReturnType<typeof computeAgencyMatches> = [];
     let agencyReady = false;
@@ -312,7 +352,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
         // Solo las candidatas (0208): ~9.500 de las ~70.000. Sin la función, el pase se salta.
         const rpc = await db.rpc("get_particulares_agency_candidates");
         if (rpc.error) return void (skipped.pro = `migración 0208 sin aplicar (${rpc.error.message})`);
-        proRows = ((rpc.data ?? []) as ViewRow[]).map((r) => ({
+        proRows = ((rpc.data ?? []) as ViewRow[]).filter((r) => !skipFuera.has((r as unknown as CurrentRow).id)).map((r) => ({
           ...viewRowToLinkRow(r),
           duplicate_of: (r as unknown as CurrentRow).duplicate_of,
           link_summary: (r as unknown as CurrentRow).link_summary,
@@ -358,7 +398,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
         agencyReady = true;
         // Solo el anuncio principal de cada grupo: sus copias (otro portal, mismo piso) serían
         // «gemelos parecidos» y degradarían a «probable» un enlace que es cierto.
-        const primaries = crmCandidateRows(allRows.filter((r) => !result.state.get(r.id)?.duplicate_of), props) as CurrentRow[];
+        const primaries = crmCandidateRows(allRows.filter((r) => !skipFuera.has(r.id) && !result.state.get(r.id)?.duplicate_of), props) as CurrentRow[];
         result.stats.crm_candidates = primaries.length;
         agencyMatches = computeAgencyMatches(primaries, props, agencyDecisions);
         applyAgencyToState(result, primaries, props, agencyMatches);
@@ -399,12 +439,12 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
         for (let from = 0; ; from += PAGE) {
           const { data, error } = await db
             .from("particulares")
-            .select("agency_url:scraper_extra->>agency_url, price, is_active, reference, agency_reference:scraper_extra->>agency_reference")
+            .select("id, agency_url:scraper_extra->>agency_url, price, is_active, reference, agency_reference:scraper_extra->>agency_reference")
             .not("scraper_extra->>agency_url", "is", null)
             .order("id", { ascending: true })
             .range(from, from + PAGE - 1);
           if (error) throw new Error(error.message);
-          wr.push(...(data ?? []));
+          wr.push(...(data ?? []).filter((r: { id: string }) => !skipFuera.has(r.id)));
           if (!data || data.length < PAGE) break;
         }
         // Propiedades del CRM cuyo propio source_url es una ficha Mobilia: también se leen (verifican contra la propiedad).

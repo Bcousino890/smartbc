@@ -65,6 +65,8 @@ export default async function AdminParticularesPage({
     redirect(`${getCountryConfig(country).prefix}/sindicacion?tab=portales`);
   }
   const showRetired = one(sp.retired) === "1";
+  // Anuncios fuera de zona (ya no se rastrean): ocultos salvo `?fuera_zona=1`.
+  const showOutOfZone = one(sp.fuera_zona) === "1";
   const zoneParam = one(sp.zone) ?? "";
   // Zona dibujada a mano en el mapa (alternativa al desplegable de arriba —
   // ver el comentario de mutua exclusión en use-particulares-filters.ts).
@@ -101,7 +103,7 @@ export default async function AdminParticularesPage({
   // resolver la zona dibujada), el resto no depende de nada de esto.
   // El desplegable de zonas cuenta lo mismo que enseña la lista (mismo tipo de
   // anunciante), si no, "Chamberí (900)" prometería agencias que no se ven.
-  const zoneCountsPromise = getParticularesZoneCounts(showRetired, advertiserFilter);
+  const zoneCountsPromise = getParticularesZoneCounts(showRetired, advertiserFilter, showOutOfZone);
   const statsPromise = getParticularesStats();
   const staffOptionsPromise = getStaffOptionsCached().catch(() => []);
   const scraperConfigPromise = getIdealistaScraperConfig();
@@ -150,6 +152,7 @@ export default async function AdminParticularesPage({
     areaMin: numOrUndef(one(sp.areaMin)),
     last24h: one(sp.last24h) === "1",
     showDuplicates: one(sp.enlazados) === "1",
+    showOutOfZone,
     phoneFilter: pick(one(sp.phone), ["no_phone", "with_phone"] as const),
     gestion: pick(one(sp.gestion), ["unmanaged", "contacted", "assigned", "mine"] as const),
     currentUserId: currentProfile?.id,

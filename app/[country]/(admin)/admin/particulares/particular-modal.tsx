@@ -1309,6 +1309,14 @@ export function ParticularModal({
 
               {/* Columna derecha: precio, contacto, asignación y acciones */}
               <aside className="min-w-0 space-y-4 lg:sticky lg:top-0 lg:self-start">
+                {currentRow.fuera_de_zona === "true" && (
+                  <span
+                    title="Ya no se rastrea: su zona no está marcada en Sindicación"
+                    className="inline-flex h-7 items-center rounded-full border border-ink/15 bg-ink/5 px-2.5 text-xs font-semibold text-ink/70"
+                  >
+                    Fuera de zona
+                  </span>
+                )}
                 {!currentRow.is_active && (
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                     <span className="font-semibold">Anuncio retirado</span>

@@ -388,6 +388,12 @@ export function FiltersPanel({
               checked={f.showLinked}
               onChange={f.setShowLinked}
             />
+            <SwitchRow
+              label="Mostrar anuncios fuera de mis zonas"
+              description="Anuncios antiguos de zonas que ya no están marcadas en Sindicación: no se rastrean."
+              checked={f.showOutOfZone}
+              onChange={f.setShowOutOfZone}
+            />
           </div>
         </div>
 

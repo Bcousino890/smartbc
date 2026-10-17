@@ -276,6 +276,7 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
   }
   if (f.since) chips.push({ id: "since", label: SINCE_LABEL[f.since] ?? `Últimos ${f.since} días`, onRemove: () => f.setSince("") });
   if (f.showLinked) chips.push({ id: "linked", label: "Con anuncios enlazados", onRemove: () => f.setShowLinked(false) });
+  if (f.showOutOfZone) chips.push({ id: "out-of-zone", label: "Con anuncios fuera de zona", onRemove: () => f.setShowOutOfZone(false) });
 
   return chips;
 }
@@ -305,6 +306,7 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   if (f.condition) n++;
   if (f.yearMin || f.yearMax) n++;
   if (f.showLinked) n++;
+  if (f.showOutOfZone) n++;
   if (f.agencies) n++;
   if (f.excludeAgencies) n++;
   if (splitCsv(f.types).length) n++;
