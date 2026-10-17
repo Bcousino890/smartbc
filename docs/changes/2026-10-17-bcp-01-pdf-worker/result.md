@@ -10,7 +10,15 @@ Especificación: [`spec.md`](spec.md). Plan: [`plan.md`](plan.md). Medición: [`
 
 ## Base y commits
 
-- **Base:** `origin/main` = `ab7bbcd` (merge de #324, S0), comprobado con `git ls-remote`.
+- **Base:**
+  - se implementó sobre `ab7bbcd` (merge de #324, S0);
+  - antes de publicar, `main` había avanzado a **`c00509f`**: permisos y roles, middleware de `/api/admin/**`, guardas de la API y las migraciones `0210` y `0211`, todo ajeno a esta tarea;
+  - **sin archivos en común**; la rama se rebasó sin conflictos.
+- **Repetido sobre la rama rebasada:**
+  - `tsc`;
+  - todas las pruebas de la CI (`test:particulares`, `idealista`, `lead-merge`, `zinto-v2`, `catalogs*`, `role-model`, `user-rank`, `api-guards`, `api-session-policy`, `cron-secret`, `infra-action` y `search-term`) y `lint-migrations`;
+  - las pruebas del hilo (27 ✅), las rutas (22 ✅, la del dueño ya con el middleware nuevo) y el navegador (103 ✅);
+  - el build de producción final (10 ✅ + 448 ✅).
 - **Rama:** `fabri/bcp-01-pdf-worker`.
 - **Lleva además, como documentación:**
   - el cierre del PDF de #323: P9/PDF12 aprobados en producción;
@@ -21,15 +29,15 @@ Especificación: [`spec.md`](spec.md). Plan: [`plan.md`](plan.md). Medición: [`
 
 | Commit | Tarea |
 | --- | --- |
-| `20a4940` | Cierre del PDF tras #323, hoja de ruta y borrador de este plan |
-| `526593e`, `4205cd3` | Exploración y hoja de ruta (D-B2, D-I2, D-O1) |
-| `497fd87` | T0: aprobación (O1 = A, S1–S5), base `ab7bbcd` y QA de S0 |
-| `7327a77` | T1: el hilo funciona en el build compilado (puerta) |
-| `4af62ae` | El hilo arranca mientras se descargan las fotos |
-| `cd86d7c` | T3: pruebas del hilo real |
-| `78117db` | T4: el PDF del hilo es el mismo |
-| `d4119ee` | T5: medición y límite del heap del hilo (puerta T5) |
-| (este commit) | T6: D4, regresiones, build final y resultado |
+| `2f2e570` | Cierre del PDF tras #323, hoja de ruta y borrador de este plan |
+| `0b241b9`, `4ea53d3` | Exploración y hoja de ruta (D-B2, D-I2, D-O1) |
+| `5d617ac` | T0: aprobación (O1 = A, S1–S5), base `ab7bbcd` y QA de S0 |
+| `59967dd` | T1: el hilo funciona en el build compilado (puerta) |
+| `2ab7ab4` | El hilo arranca mientras se descargan las fotos |
+| `c95a7a5` | T3: pruebas del hilo real |
+| `bea668a` | T4: el PDF del hilo es el mismo |
+| `d3415b7` | T5: medición y límite del heap del hilo (puerta T5) |
+| `d496a55` y el siguiente | T6: D4, regresiones, build final y resultado |
 
 ## Qué cambia
 
