@@ -4,6 +4,17 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
 import { STAFF_ROLES } from "@/lib/permissions";
 import { countryRolesError, resolveRoleCountries } from "@/lib/auth/role-model";
+import { sendEmailChangedNotice } from "@/lib/email/password-reset";
+
+// PostgREST/Postgres: columna o tabla que aún no existe en este VPS (migraciones
+// antiguas sin aplicar). Solo esos errores justifican reintentar sin la columna
+// o ignorar la tabla; cualquier otro (red, permisos, bloqueo) es un fallo real.
+function isMissingColumn(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "42703" || error?.code === "PGRST204";
+}
+function isMissingTable(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "42P01" || error?.code === "PGRST205";
+}
 import {
   canAssignRole,
   canManageUser,
@@ -250,37 +261,16 @@ export async function PATCH(req: Request) {
   }
 
   // ── Email ────────────────────────────────────────────────────────────────
-  // Se cambia primero en GoTrue: si el correo ya lo usa otro usuario falla
-  // ahí, y así no dejamos el perfil apuntando a un email con el que nadie
-  // puede entrar. `email_confirm` lo da por verificado (lo cambia un admin,
-  // no el propio usuario, así que no hay email de confirmación que abrir).
+  // Aquí solo se valida el formato; el cambio en GoTrue se hace más abajo,
+  // cuando TODO lo demás ya está validado (antes se cambiaba el correo de acceso
+  // y después una petición con países mal formados daba 400, dejando el correo
+  // de acceso cambiado y el del perfil sin cambiar).
   const nextEmail = typeof email === "string" ? email.trim().toLowerCase() : undefined;
-  if (nextEmail !== undefined) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
-      return Response.json({ error: "Email inválido" }, { status: 400 });
-    }
-    if (nextEmail !== (prevProfile?.email ?? "").toLowerCase()) {
-      const { error: authEmailError } = await supabase.auth.admin.updateUserById(userId, {
-        email: nextEmail,
-        email_confirm: true,
-      });
-      if (authEmailError) {
-        return Response.json(
-          { error: `Error cambiando el email: ${authEmailError.message}` },
-          { status: 400 },
-        );
-      }
-      // El correo es a donde llegan los enlaces de contraseña: cambiar el de
-      // otra cuenta deja rastro de quién lo hizo y de qué a qué.
-      await logPermissionEvent({
-        actorId: currentProfile.id,
-        targetUserId: userId,
-        eventType: "email_changed",
-        oldValue: { email: prevProfile?.email ?? null },
-        newValue: { email: nextEmail },
-      });
-    }
+  if (nextEmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+    return Response.json({ error: "Email inválido" }, { status: 400 });
   }
+  const emailChanged =
+    nextEmail !== undefined && nextEmail !== (prevProfile?.email ?? "").toLowerCase();
 
   const updates: Record<string, string | boolean | string[] | null> = {};
   if (firstName !== undefined || lastName !== undefined) {
@@ -301,7 +291,7 @@ export async function PATCH(req: Request) {
   // Al pasar una cuenta a Captadora se limpia lo que la haría seguir siendo otra
   // cosa: el rol personalizado (gana sobre todo) y los roles por país (se borran
   // más abajo, tras guardar el perfil).
-  if (roleBecomesCaptadora && currentCustomRoleId && customRoleId === undefined) {
+  if (captadoraCountries && currentCustomRoleId && customRoleId === undefined) {
     updates.custom_role_id = null;
     hasCustomRoleId = true;
   }
@@ -355,6 +345,43 @@ export async function PATCH(req: Request) {
     if (multiCountry !== undefined) updates.multi_country = !!multiCountry;
   }
 
+  // Se cambia primero en GoTrue: si el correo ya lo usa otro usuario falla
+  // ahí, y así no dejamos el perfil apuntando a un email con el que nadie
+  // puede entrar. `email_confirm` lo da por verificado (lo cambia un admin,
+  // no el propio usuario, así que no hay email de confirmación que abrir).
+  if (emailChanged && nextEmail !== undefined) {
+    const { error: authEmailError } = await supabase.auth.admin.updateUserById(userId, {
+      email: nextEmail,
+      email_confirm: true,
+    });
+    if (authEmailError) {
+      return Response.json(
+        { error: `Error cambiando el email: ${authEmailError.message}` },
+        { status: 400 },
+      );
+    }
+    // El correo es a donde llegan los enlaces de contraseña: cambiar el de otra
+    // cuenta deja rastro de quién lo hizo y de qué a qué, y se avisa al correo
+    // anterior (best-effort).
+    await logPermissionEvent({
+      actorId: currentProfile.id,
+      targetUserId: userId,
+      eventType: "email_changed",
+      oldValue: { email: prevProfile?.email ?? null },
+      newValue: { email: nextEmail },
+    });
+    if (prevProfile?.email && currentProfile.id !== userId) {
+      await Promise.race([
+        sendEmailChangedNotice({
+          oldEmail: prevProfile.email,
+          newEmail: nextEmail,
+          userName: (typeof firstName === "string" && firstName.trim()) || prevProfile.email,
+        }).catch(() => ({ success: false })),
+        new Promise((resolve) => setTimeout(resolve, 8_000)),
+      ]);
+    }
+  }
+
   if (Object.keys(updates).length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let { error } = await (supabase as any)
@@ -365,7 +392,7 @@ export async function PATCH(req: Request) {
     // Escritura defensiva: si `countries` y/o `custom_role_id` aún no existen
     // en el VPS (migraciones 0084/0090 pendientes), reintentamos sin esas
     // columnas para no bloquear el resto de la actualización.
-    if (error && (hasCountries || hasCustomRoleId)) {
+    if (error && (hasCountries || hasCustomRoleId) && isMissingColumn(error)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       const { countries: _omitCountries, custom_role_id: _omitCustomRoleId, ...fallbackUpdates } =
         updates as Record<string, unknown>;
@@ -380,14 +407,24 @@ export async function PATCH(req: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    // Pasó a Captadora: fuera todos sus roles por país (best-effort; si la tabla
-    // aún no existe, no hay nada que borrar).
-    if (roleBecomesCaptadora) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from("profiles_country_roles").delete().eq("user_id", userId);
-      } catch {
-        // profiles_country_roles aún no existe
+    // Una captadora no tiene roles por país: fuera todos los que tuviera (el rol
+    // por país gana sobre el de la cuenta). Se repite en cada guardado suyo, no
+    // solo al pasar a Captadora, para que un fallo aquí se arregle al reintentar.
+    // supabase-js no lanza: devuelve el error, y hay que mirarlo.
+    if (captadoraCountries) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: cleanupError } = await (supabase as any)
+        .from("profiles_country_roles")
+        .delete()
+        .eq("user_id", userId);
+      if (cleanupError && !isMissingTable(cleanupError)) {
+        return Response.json(
+          {
+            error: `La cuenta pasó a Captadora, pero no se pudieron quitar sus roles por país (${cleanupError.message}). Vuelve a guardarla para terminar el cambio.`,
+            code: "partial",
+          },
+          { status: 500 },
+        );
       }
     }
 
@@ -397,25 +434,25 @@ export async function PATCH(req: Request) {
     // silencio: el resto de la actualización ya se aplicó arriba.
     if (countryRoles !== undefined) {
       for (const [c, r] of Object.entries(countryRoles)) {
-        try {
-          if (r === null) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
-              .from("profiles_country_roles")
-              .delete()
-              .eq("user_id", userId)
-              .eq("country", c);
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
-              .from("profiles_country_roles")
-              .upsert(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const table = (supabase as any).from("profiles_country_roles");
+        const { error: countryRoleError } =
+          r === null
+            ? await table.delete().eq("user_id", userId).eq("country", c)
+            : await table.upsert(
                 { user_id: userId, country: c, role: r, created_by: currentProfile.id },
                 { onConflict: "user_id,country" },
               );
-          }
-        } catch {
-          // profiles_country_roles aún no existe: se ignora, sin romper el resto.
+        // Tabla que aún no existe (migración 0090 pendiente): se ignora. Cualquier
+        // otro error es real: no se da por guardado un rol por país que no lo está.
+        if (countryRoleError && !isMissingTable(countryRoleError)) {
+          return Response.json(
+            {
+              error: `Se guardó el resto, pero no el rol por país de ${c.toUpperCase()} (${countryRoleError.message}). Vuelve a guardar.`,
+              code: "partial",
+            },
+            { status: 500 },
+          );
         }
       }
     }

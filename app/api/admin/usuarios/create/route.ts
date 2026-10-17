@@ -76,7 +76,7 @@ async function emailExistsResponse(
 
   return Response.json(
     {
-      error: `Ya existe un usuario con el correo ${email}; no se ha creado otro. Si un intento anterior dio error de conexión, seguramente se creó entonces: búscalo en la lista y edítalo (rol, países, contraseña) en vez de crearlo de nuevo.`,
+      error: `Ya existe un usuario con el correo ${email}; no se ha creado otro. Si un intento anterior dio error de conexión, seguramente se creó entonces: búscalo en la lista y edítalo (rol, países) o envíale el enlace para elegir contraseña, en vez de crearlo de nuevo.`,
       code: "email_exists",
       mayExist: true,
       existingRole: existing?.role ?? null,
@@ -418,12 +418,17 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
   // puede reenviar desde «Editar» → «Enviar enlace para elegir contraseña».
   let staffEmailSent: boolean | undefined;
   if (role !== "client") {
-    const setup = await sendAccountSetupLink({
-      userId,
-      email,
-      firstName,
-      expiresInHours: 24 * 7,
-    });
+    // Con tope de espera: si SES o PostgREST se cuelgan, la cuenta ya está
+    // creada y no debe quedarse el modal esperando; se avisa de que el correo
+    // no salió y se reenvía desde «Editar».
+    const setup = await Promise.race([
+      sendAccountSetupLink({ userId, email, firstName, expiresInHours: 24 * 7 }).catch(() => ({
+        emailSent: false,
+      })),
+      new Promise<{ emailSent: boolean }>((resolve) =>
+        setTimeout(() => resolve({ emailSent: false }), 25_000),
+      ),
+    ]);
     staffEmailSent = setup.emailSent;
   }
 

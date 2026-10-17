@@ -160,6 +160,34 @@ export async function sendInvitationEmail(
 }
 
 /**
+ * Avisa al correo ANTERIOR de una cuenta de que su correo de acceso ha cambiado.
+ * Cambiar el correo de otra cuenta y pedir el enlace de contraseña permitiría
+ * entrar como esa persona: con este aviso, si no esperaba el cambio, se entera.
+ * Best-effort: si el correo anterior no existe o el envío falla, no se bloquea nada.
+ */
+export async function sendEmailChangedNotice(params: {
+  oldEmail: string;
+  newEmail: string;
+  userName: string;
+}): Promise<{ success: boolean }> {
+  const { oldEmail, newEmail, userName } = params;
+  const result = await sendEmail({
+    to: oldEmail,
+    subject: "Se ha cambiado el correo de acceso a tu cuenta - Benjamín Cousiño Propiedades",
+    html: renderEmailLayout({
+      eyebrow: "Aviso de seguridad",
+      title: "Cambió el correo de tu cuenta",
+      bodyHtml: `
+        <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>
+        <p style="margin: 0 0 14px 0;">El correo de acceso a tu cuenta ha pasado de <strong>${escapeHtml(oldEmail)}</strong> a <strong>${escapeHtml(newEmail)}</strong>.</p>
+        <p style="margin: 0 0 14px 0;">Si lo esperabas, no tienes que hacer nada. Si no, avisa cuanto antes al Propietario de la cuenta de la agencia.</p>
+      `,
+    }),
+  });
+  return { success: result.success };
+}
+
+/**
  * Envía a una cuenta YA creada el enlace para que ELLA elija su contraseña
  * (token de un solo uso, 7 días por defecto). Nadie —ni quien crea la cuenta—
  * conoce la contraseña: el enlace llega solo al correo de esa persona y no se

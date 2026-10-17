@@ -57,6 +57,14 @@ export default async function AdminUsuariosPage({
     // Rol real para "client"; cualquier otro valor (viewer, roles raros o
     // futuros) se muestra como "viewer" para no romper el tipado.
     roleKey: (row.role === "client" ? "client" : "viewer") as InternalUserRole,
+    // Sin esto el modal de edición partía del país del árbol desde el que se abre
+    // (/es o /cl) y guardar el teléfono de un cliente chileno desde /es lo pasaba
+    // a España.
+    country: row.country ?? undefined,
+    multiCountry: row.multi_country ?? false,
+    countries:
+      (row as { countries?: string[] | null }).countries ??
+      (row.multi_country ? ["es", "cl"] : [row.country ?? "es"]),
     // `suspended_at` (migración 0211) no está en los tipos generados.
     status: ((row as { suspended_at?: string | null }).suspended_at
       ? "suspended"

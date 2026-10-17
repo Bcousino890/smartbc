@@ -4,9 +4,9 @@ Fecha: 2026-10-17 · Ramas: `fix/rls-cuentas` (urgente) y `feat/permisos-modelo-
 
 Este documento recoge lo que cambia, cómo activarlo, cómo deshacerlo y qué queda pendiente. El modelo de permisos completo (3 roles, rol por país, alcance, motor único) está en `PERMISOS_MODELO_3_ROLES.md` y `PERMISOS_PLAN_IMPLEMENTACION.md`; esos dos ficheros no están en el repositorio. Lo de aquí **manda** sobre ellos donde difieran.
 
-## 0. Lo primero: tres agujeros de seguridad que ya existían (rama `fix/rls-cuentas`)
+## 0. Lo primero: agujeros de seguridad que ya existían (rama `fix/rls-cuentas`)
 
-Los encontró la revisión independiente de los cambios de roles; los confirmé leyendo las migraciones y los reproduje en un Postgres desechable (`scripts/sql-tests/0210_endurecer_cuentas.test.sql`). **Conviene desplegarla antes que nada, aparte del resto.**
+Los encontraron dos revisiones independientes de los cambios de roles; los confirmé leyendo las migraciones y los reproduje en un Postgres desechable (`scripts/sql-tests/0210_endurecer_cuentas.test.sql`: ejecuta cada ataque antes y después). **Conviene desplegarla antes que nada, aparte del resto.**
 
 | # | Qué se podía hacer | Causa | Migración `0210` |
 |---|---|---|---|
@@ -14,9 +14,17 @@ Los encontró la revisión independiente de los cambios de roles; los confirmé 
 | 2 | **Cualquier usuario con sesión, también un cliente, ponerse `role = 'owner'`**, o cambiarse países, rol personalizado, asesor asignado o correo | `profiles_update` (0045) no tiene `WITH CHECK`: Postgres reutiliza el `USING` | Un disparador impide que sesiones de usuario cambien esas columnas o creen perfiles que no sean de cliente. La service role, GoTrue, `handle_new_user` y psql siguen pudiendo |
 | 3 | **Escribir roles por país o excepciones de permisos de cualquier usuario** (el rol por país gana sobre `profiles.role`) | `profiles_country_roles`, `custom_roles`, `user_permission_overrides` y `permission_audit_log` no tenían RLS | RLS sin políticas (la app las usa siempre con la service role) |
 
-La migración es idempotente, toca cada tabla solo si existe, y se probó **antes y después**: antes los tres ataques funcionan; después quedan cerrados y lo legítimo (el cliente editando su nombre y teléfono, reenviar el mismo rol, la service role) sigue funcionando.
+| 4 | **Registrarse como Propietario**: un alta con `data: {"role": "owner"}` en `/auth/v1/signup` creaba un perfil de Propietario (si el registro de GoTrue está abierto) | `handle_new_user` (0044) toma el rol de los metadatos que elige quien se registra | El perfil nace siempre como cliente; ninguna ruta pasa `role` en los metadatos |
+| 5 | **Impedir que se aplique la propia migración, o bloquear todos los despliegues**, con la clave anónima | `schema_migrations` (la tabla de control del runner) se creaba sin RLS: una fila falsa `0210_endurecer_cuentas.sql` la daba por aplicada, y borrar `0001_init.sql` hacía fallar el siguiente despliegue | `scripts/apply-migrations.sh` la deja con RLS y sin privilegios para anon/authenticated en cada ejecución |
+| 6 | Crear perfiles de otra persona, o con rol personalizado / asesor asignado / varios países, con una sesión de usuario | Funciones SECURITY DEFINER ejecutables por cualquiera (`create_user_profile`, `fix_missing_admin_profiles`, `cleanup_password_reset_tokens`) y un disparador de inserción que solo vigilaba `role` | Se les quita EXECUTE a PUBLIC/anon/authenticated y el disparador vigila también esas columnas |
 
-**Qué comprobar tras desplegarla:** `select policyname, roles from pg_policies where tablename = 'password_reset_tokens';` debe devolver 0 filas; entrar en el panel, «Olvidé mi contraseña» con una cuenta de prueba (el correo llega y el enlace funciona), editar el nombre desde «Mi perfil» de un cliente, y crear/editar un usuario desde Usuarios.
+La migración es idempotente, toca cada tabla solo si existe, y se probó **antes y después**: antes los ataques funcionan; después quedan cerrados y lo legítimo (el cliente editando su nombre y teléfono, reenviar el mismo rol, la service role, el alta por disparador) sigue funcionando.
+
+**Dos cosas que solo puedes hacer tú en el servidor:**
+1. **Comprobar si el registro de GoTrue está abierto:** `docker exec supabase-auth printenv GOTRUE_DISABLE_SIGNUP`. Si dice `false` (o nada), cualquiera puede crearse una cuenta de cliente. Con la 0210 ya no obtiene rol de equipo, pero la aplicación no usa el registro público (no hay ningún `signUp` en el código): lo normal es `GOTRUE_DISABLE_SIGNUP=true`. Es una decisión tuya.
+2. **Comprobar que la migración se aplicó de verdad**, no que se dio por aplicada: `select version, applied_at from schema_migrations where version in ('0210_endurecer_cuentas.sql','0211_profiles_suspension.sql');` las fechas deben ser las del despliegue. Si no lo son (alguien pudo insertar la fila antes), aplícala a mano: `docker exec -i supabase-db psql -U postgres -d postgres < supabase/migrations/0210_endurecer_cuentas.sql`
+
+**Qué comprobar tras desplegarla:** `select policyname from pg_policies where tablename = 'password_reset_tokens';` debe devolver 0 filas; entrar en el panel, «Olvidé mi contraseña» con una cuenta de prueba (el correo llega y el enlace funciona), editar el nombre desde «Mi perfil» de un cliente, y crear/editar un usuario desde Usuarios.
 
 **Lo que esta migración NO hace** y sigue abierto: `profiles_select USING (true)` deja que cualquiera con la clave anónima **lea todos los perfiles** (correo, teléfono, rol de cada persona, clientes incluidos). Está marcado como «TODO endurecer» en la propia migración 0045. Arreglarlo exige revisar qué lecturas de perfiles hacen las páginas públicas y el portal del cliente con sesión de usuario; probarlo a ciegas rompería pantallas. **Es lo siguiente más grave.**
 
@@ -85,6 +93,8 @@ Orden recomendado (cada paso se despliega solo al mergear a `main`; **de uno en 
 ## 5. Qué NO está hecho (sigue pendiente)
 
 - **`profiles_select USING (true)`** (ver sección 0): cualquiera con la clave anónima lee todos los perfiles. Lo más urgente que queda.
+- **Otras tablas con datos privados sin RLS en ninguna migración** (la segunda revisión las lista; confírmalo con la consulta 2 del SQL de verificación): `team_messages`, `team_direct_messages`, `team_direct_conversations`, `contact_requests`, `client_shortlists` y `client_shortlist_items`, `zinto_crm_notes`, `property_history`. Mismo patrón que el agujero 3: con los privilegios por defecto de Supabase, cualquiera con la clave anónima podría leerlas o escribirlas. No se han tocado: hay que comprobar antes que ninguna pantalla las lea con una sesión de usuario.
+- **La jerarquía de cuentas** (`canManageUser`, `canSuspendUser`, `canResetPassword`) mira solo `profiles.role`, no el rol por país ni el rol personalizado: una persona con rol por país heredado `agent_admin` la gestiona un Administrador del mismo rango.
 - **Resultado del SQL de verificación** (`PERMISOS_VERIFICACION_BD.sql`): sin él no se sabe quién es Propietario en la base real, y sirve para confirmar que `0210` quedó aplicada tal como se probó.
 - **`ADMIN_EMAILS` y el correo fijo en el login** (`app/(auth)/actions.ts`): al entrar, una cuenta cuyo correo esté en la lista se «asciende» a `admin` si su rol no es ya `admin`, lo que **degradaría a un `owner`** con ese correo; y la lista de roles de staff del login no incluye `owner` ni `captadora` (el middleware lo arregla redirigiendo, pero es frágil). No se ha tocado: hay que confirmar antes quién es Propietario en la base.
 - **Cambiar el correo de una cuenta de rango inferior** lo puede hacer quien la administra y, con el enlace de restablecimiento, entrar como esa persona. Ahora queda en el historial, pero **no se avisa a la persona** (ni al correo anterior).
