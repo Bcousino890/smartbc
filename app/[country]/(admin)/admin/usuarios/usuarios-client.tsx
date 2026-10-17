@@ -1,31 +1,18 @@
 "use client";
 
-import { Check, Eye, EyeOff, Loader2, Mail, Plus, Search, ShieldCheck, UserCog, Users, X } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Mail, Plus, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   InternalUser,
   InternalUserRole,
-  InternalUserStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { requestJson, type RequestJsonFailure } from "@/lib/http/request-json";
-import { EmptyState } from "@/components/ui/empty-state";
+import { UsersDirectory } from "./users-directory";
 import { PermissionsDrawer } from "@/components/admin/permissions/permissions-drawer";
-import { isLegacyRole, roleChoices, roleDetail, roleLabel, staffGroup } from "@/lib/auth/role-model";
+import { isLegacyRole, roleChoices, roleLabel, staffGroup } from "@/lib/auth/role-model";
 import { canManageUser } from "@/lib/auth/user-rank";
-
-const ROLE_BADGE: Record<InternalUserRole, string> = {
-  owner:        "border-violet-200 bg-violet-50 text-violet-700",
-  admin:        "border-emerald-200 bg-emerald-50 text-emerald-700",
-  advisor:      "border-blue-200 bg-blue-50 text-blue-700",
-  client:       "border-amber-200 bg-amber-50 text-amber-700",
-  viewer:       "border-ink/15 bg-ink/5 text-ink/65",
-  agent_junior: "border-sky-200 bg-sky-50 text-sky-700",
-  agent_senior: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  agent_admin:  "border-purple-200 bg-purple-50 text-purple-700",
-  captadora:    "border-rose-200 bg-rose-50 text-rose-700",
-};
 
 // Modelo visible (lib/auth/role-model.ts): Administrador · Asesor · Captadora.
 const ROLE_LABEL: Record<InternalUserRole, string> = {
@@ -38,12 +25,6 @@ const ROLE_LABEL: Record<InternalUserRole, string> = {
   agent_senior: roleLabel("agent_senior"),
   agent_admin:  roleLabel("agent_admin"),
   captadora:    roleLabel("captadora"),
-};
-
-const STATUS_BADGE: Record<InternalUserStatus, string> = {
-  active: "bg-emerald-500",
-  invited: "bg-amber-500",
-  suspended: "bg-ink/30",
 };
 
 // Perfiles que se pueden poner a un usuario al editarlo: ver `roleChoices` en
@@ -61,7 +42,6 @@ const COUNTRY_OPTIONS: { code: string; label: string; flag: string }[] = [
   { code: "cl", label: "Chile", flag: "🇨🇱" },
 ];
 const COUNTRY_FLAG: Record<string, string> = { es: "🇪🇸", cl: "🇨🇱" };
-const COUNTRY_NAME: Record<string, string> = { es: "España", cl: "Chile" };
 
 /**
  * Multi-select de países (🇪🇸/🇨🇱) + selector de país por defecto (landing).
@@ -157,7 +137,7 @@ function CountryPicker({
 
 // ─── Modal crear usuario ──────────────────────────────────────────────────
 
-type ModalType = "admin" | "advisor" | "captadora" | "client";
+export type ModalType = "admin" | "advisor" | "captadora" | "client";
 
 /**
  * Mensaje del modal de alta cuando falla la petición. Si no hubo respuesta
@@ -1005,158 +985,6 @@ function EditUserModal({ user, defaultCountry, currentUserId, currentUserRole, o
   );
 }
 
-// ─── Fila de usuario ─────────────────────────────────────────────────────
-
-interface UserRowProps {
-  user: InternalUser;
-  onEdit?: (user: InternalUser) => void;
-  onPermissions?: (user: InternalUser) => void;
-}
-
-function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
-  const isInvited = user.status === "invited";
-  const isClient = user.roleKey === "client";
-  return (
-    <tr className="bg-white/55 transition hover:bg-white/85">
-      <td className="rounded-l-xl px-3 py-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-cream-50">
-            {user.initials}
-          </span>
-          <div>
-            <p className="font-medium text-ink">
-              {user.firstName} {user.lastName}
-            </p>
-            <p className="text-xs text-ink/55">{user.email}</p>
-          </div>
-        </div>
-      </td>
-      <td className="px-3 py-3">
-        <span
-          className={cn(
-            "rounded-md border px-2.5 py-1 text-xs font-medium",
-            ROLE_BADGE[user.roleKey],
-          )}
-        >
-          {ROLE_LABEL[user.roleKey] ?? user.roleKey}
-        </span>
-        {roleDetail(user.roleKey) && (
-          <p className="mt-1 text-[11px] leading-tight text-ink/45">
-            {roleDetail(user.roleKey)}
-          </p>
-        )}
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex flex-wrap items-center gap-1">
-          {(user.countries ?? (user.country ? [user.country] : [])).map((c) => (
-            <span
-              key={c}
-              title={COUNTRY_NAME[c] ?? c}
-              className="inline-flex items-center rounded-md border border-ink/10 bg-white/70 px-1.5 py-0.5 text-sm leading-none"
-            >
-              {COUNTRY_FLAG[c] ?? c}
-            </span>
-          ))}
-        </div>
-      </td>
-      <td className="px-3 py-3">
-        <span className="flex items-center gap-1.5 text-xs text-ink/75">
-          <span className={cn("h-2 w-2 rounded-full", STATUS_BADGE[user.status])} />
-          {user.status === "active"
-            ? "Activo"
-            : user.status === "invited"
-              ? "Invitado"
-              : "Suspendido"}
-        </span>
-      </td>
-      <td className="px-3 py-3 text-xs text-ink/65">{user.lastLoginText ?? "—"}</td>
-      <td className="px-3 py-3 text-xs text-ink/65">{user.joinedLabel}</td>
-      <td className="rounded-r-xl px-3 py-3 text-right">
-        {isInvited ? (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
-          >
-            <Mail size={12} strokeWidth={1.75} />
-            <span>Reenviar invitación</span>
-          </button>
-        ) : (
-          <div className="inline-flex items-center gap-1.5">
-            {!isClient && (
-              <button
-                type="button"
-                onClick={() => onPermissions?.(user)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
-              >
-                <ShieldCheck size={12} strokeWidth={1.75} />
-                <span>Permisos</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onEdit?.(user)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:bg-white hover:text-ink"
-            >
-              <UserCog size={12} strokeWidth={1.75} />
-              <span>Editar</span>
-            </button>
-          </div>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-// ─── Tabla reutilizable ───────────────────────────────────────────────────
-
-function UsersTable({
-  users,
-  onEdit,
-  onPermissions,
-  emptyIcon,
-  emptyTitle,
-  emptyDescription,
-}: {
-  users: InternalUser[];
-  onEdit: (user: InternalUser) => void;
-  onPermissions: (user: InternalUser) => void;
-  emptyIcon: React.ReactNode;
-  emptyTitle: string;
-  emptyDescription?: string;
-}) {
-  if (users.length === 0) {
-    return (
-      <EmptyState
-        icon={emptyIcon}
-        title={emptyTitle}
-        description={emptyDescription}
-      />
-    );
-  }
-
-  return (
-    <div className="mt-5 overflow-x-auto">
-      <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
-        <thead>
-          <tr className="crm-table-header text-ink/50">
-            <th className="px-3 pb-2">Usuario</th>
-            <th className="px-3 pb-2">Rol</th>
-            <th className="px-3 pb-2">País(es)</th>
-            <th className="px-3 pb-2">Estado</th>
-            <th className="px-3 pb-2">Último acceso</th>
-            <th className="px-3 pb-2">Se unió</th>
-            <th className="px-3 pb-2 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => (
-            <UserRow key={u.id} user={u} onEdit={onEdit} onPermissions={onPermissions} />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 // ─── Componente principal ─────────────────────────────────────────────────
 
@@ -1169,66 +997,11 @@ interface UsuariosClientProps {
 
 export function UsuariosClient({ users, currentUserId, currentUserRole, country }: UsuariosClientProps) {
   const router = useRouter();
-  const [queryAdmins, setQueryAdmins] = useState("");
-  const [queryAdvisors, setQueryAdvisors] = useState("");
-  const [queryCaptadoras, setQueryCaptadoras] = useState("");
-  const [queryClients, setQueryClients] = useState("");
   const [createModal, setCreateModal] = useState<ModalType | null>(null);
   const [editUser, setEditUser] = useState<InternalUser | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<InternalUser | null>(null);
 
-  // Tres grupos de staff (lib/auth/role-model.ts): Administradores, Asesores y
-  // Captadoras. Los perfiles heredados caen en el grupo que les corresponde.
-  const admins = useMemo(() => users.filter((u) => staffGroup(u.roleKey) === "admins"), [users]);
   const advisors = useMemo(() => users.filter((u) => staffGroup(u.roleKey) === "advisors"), [users]);
-  const captadoras = useMemo(() => users.filter((u) => staffGroup(u.roleKey) === "captadoras"), [users]);
-  const clients = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
-  // Resto de usuarios (viewer y cualquier rol no contemplado en las secciones
-  // anteriores): sin esto quedarían ocultos pese a existir en la BD.
-  const others = useMemo(
-    () => users.filter((u) => staffGroup(u.roleKey) === null && u.roleKey !== "client"),
-    [users],
-  );
-
-  const filteredAdmins = useMemo(() => {
-    const q = queryAdmins.trim().toLowerCase();
-    if (!q) return admins;
-    return admins.filter(
-      (u) =>
-        `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q),
-    );
-  }, [admins, queryAdmins]);
-
-  const filteredAdvisors = useMemo(() => {
-    const q = queryAdvisors.trim().toLowerCase();
-    if (!q) return advisors;
-    return advisors.filter(
-      (u) =>
-        `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q),
-    );
-  }, [advisors, queryAdvisors]);
-
-  const filteredCaptadoras = useMemo(() => {
-    const q = queryCaptadoras.trim().toLowerCase();
-    if (!q) return captadoras;
-    return captadoras.filter(
-      (u) =>
-        `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q),
-    );
-  }, [captadoras, queryCaptadoras]);
-
-  const filteredClients = useMemo(() => {
-    const q = queryClients.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter(
-      (u) =>
-        `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q),
-    );
-  }, [clients, queryClients]);
 
   const handleSuccess = useCallback(() => {
     router.refresh();
@@ -1267,174 +1040,14 @@ export function UsuariosClient({ users, currentUserId, currentUserRole, country 
         />
       )}
 
-      {/* Sección 1: Administradores (solo admin) */}
-      {isAdmin && (
-        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 crm-section-title text-ink">
-            Administradores
-          </h2>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
-              <Search size={15} strokeWidth={1.75} className="text-ink/45" />
-              <input
-                type="search"
-                value={queryAdmins}
-                onChange={(e) => setQueryAdmins(e.target.value)}
-                placeholder="Buscar admins..."
-                className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setCreateModal("admin")}
-              className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-800"
-            >
-              <Plus size={14} strokeWidth={1.75} />
-              <span>Crear admin</span>
-            </button>
-          </div>
-
-          <UsersTable
-            users={filteredAdmins}
-            onEdit={setEditUser}
-            onPermissions={setPermissionsUser}
-            emptyIcon={<UserCog size={24} />}
-            emptyTitle={queryAdmins ? "Sin resultados" : "No hay administradores"}
-            emptyDescription={queryAdmins ? "Prueba con otro término de búsqueda." : "Crea el primer administrador con el botón de arriba."}
-          />
-        </section>
-      )}
-
-      {/* Sección 2: Asesores (solo admin) */}
-      {isAdmin && (
-        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 crm-section-title text-ink">Asesores</h2>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
-              <Search size={15} strokeWidth={1.75} className="text-ink/45" />
-              <input
-                type="search"
-                value={queryAdvisors}
-                onChange={(e) => setQueryAdvisors(e.target.value)}
-                placeholder="Buscar asesores..."
-                className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setCreateModal("advisor")}
-              className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/80"
-            >
-              <Plus size={14} strokeWidth={1.75} className="text-gold" />
-              <span>Crear asesor</span>
-            </button>
-          </div>
-
-          <UsersTable
-            users={filteredAdvisors}
-            onEdit={setEditUser}
-            onPermissions={setPermissionsUser}
-            emptyIcon={<Users size={24} />}
-            emptyTitle={queryAdvisors ? "Sin resultados" : "No hay asesores"}
-            emptyDescription={queryAdvisors ? "Prueba con otro término de búsqueda." : "Crea el primer asesor con el botón de arriba."}
-          />
-        </section>
-      )}
-
-      {/* Sección 3: Captadoras (solo Chile; solo admin) */}
-      {isAdmin && (country === "cl" || captadoras.length > 0) && (
-        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="crm-section-title text-ink">Captadoras</h2>
-          <p className="mb-5 mt-1 text-sm text-ink/55">
-            Trabajan solo en Chile y solo ven las captaciones que se les asignan.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
-              <Search size={15} strokeWidth={1.75} className="text-ink/45" />
-              <input
-                type="search"
-                value={queryCaptadoras}
-                onChange={(e) => setQueryCaptadoras(e.target.value)}
-                placeholder="Buscar captadoras..."
-                className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setCreateModal("captadora")}
-              className="flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-800"
-            >
-              <Plus size={14} strokeWidth={1.75} />
-              <span>Crear captadora</span>
-            </button>
-          </div>
-
-          <UsersTable
-            users={filteredCaptadoras}
-            onEdit={setEditUser}
-            onPermissions={setPermissionsUser}
-            emptyIcon={<Users size={24} />}
-            emptyTitle={queryCaptadoras ? "Sin resultados" : "No hay captadoras"}
-            emptyDescription={queryCaptadoras ? "Prueba con otro término de búsqueda." : "Crea la primera captadora con el botón de arriba."}
-          />
-        </section>
-      )}
-
-
-      {/* Sección 4: Clientes */}
-      <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-        <h2 className="mb-5 crm-section-title text-ink">Clientes</h2>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
-            <Search size={15} strokeWidth={1.75} className="text-ink/45" />
-            <input
-              type="search"
-              value={queryClients}
-              onChange={(e) => setQueryClients(e.target.value)}
-              placeholder="Buscar clientes..."
-              className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => setCreateModal("client")}
-            className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/80"
-          >
-            <Plus size={14} strokeWidth={1.75} className="text-gold" />
-            <span>Crear cliente</span>
-          </button>
-        </div>
-
-        <UsersTable
-          users={filteredClients}
-          onEdit={setEditUser}
-          onPermissions={setPermissionsUser}
-          emptyIcon={<Users size={24} />}
-          emptyTitle={queryClients ? "Sin resultados" : "No hay clientes"}
-          emptyDescription={queryClients ? "Prueba con otro término de búsqueda." : "Crea el primer cliente con el botón de arriba."}
-        />
-      </section>
-
-      {/* Sección 5: Otros usuarios (viewer / roles no contemplados arriba) */}
-      {others.length > 0 && (
-        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 crm-section-title text-ink">
-            Otros usuarios
-          </h2>
-
-          <UsersTable
-            users={others}
-            onEdit={setEditUser}
-            onPermissions={setPermissionsUser}
-            emptyIcon={<Users size={24} />}
-            emptyTitle="No hay otros usuarios"
-          />
-        </section>
-      )}
+      <UsersDirectory
+        users={users}
+        isAdmin={isAdmin}
+        country={country}
+        onCreate={setCreateModal}
+        onEdit={setEditUser}
+        onPermissions={setPermissionsUser}
+      />
     </>
   );
 }

@@ -75,7 +75,7 @@ export default async function AdminUsuariosPage({
   const allUsers = [...staffUsers, ...otherUsers];
   const validRoles: InternalUserRole[] = [
     "owner", "admin", "advisor", "client", "viewer",
-    "agent_junior", "agent_senior", "agent_admin",
+    "agent_junior", "agent_senior", "agent_admin", "captadora",
   ];
   const currentUserRole: InternalUserRole = validRoles.includes(
     currentUser?.role as InternalUserRole
