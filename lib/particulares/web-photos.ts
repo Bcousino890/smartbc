@@ -46,44 +46,49 @@ async function loadProperty(db: Db, slug: string): Promise<PropRow | null> {
 type Resolved = { web: AgencyWebSource; particularId: string };
 
 /** Primera web Mobilia leída, VERIFICADA y con fotos entre los anuncios dados; si no, el motivo. */
-async function resolveFromParticulars(db: Db, ids: string[], preCache?: Map<string, CachedWeb> | null): Promise<Resolved | { reason: string }> {
-  if (ids.length === 0) return { reason: "No hay un anuncio de portal enlazado a esta propiedad." };
+async function resolveFromParticulars(db: Db, ids: string[], preCache?: Map<string, CachedWeb> | null): Promise<Resolved | { reason: string; code: string }> {
+  if (ids.length === 0) return { reason: "No hay un anuncio de portal enlazado a esta propiedad.", code: "sin_anuncio" };
   const rows = await db
     .from("particulares")
     .select("id, advertiser_type, owner_name, price, square_meters, bedrooms, bathrooms, reference, agency_url:scraper_extra->>agency_url, agency_reference:scraper_extra->>agency_reference")
     .in("id", ids);
   const members = (rows.data ?? []) as Array<Record<string, unknown> & { id: string; agency_url: string | null }>;
   const withUrl = members.filter((r) => normalizeAgencyUrl(r.agency_url)?.isListing);
-  if (withUrl.length === 0) return { reason: "El anuncio no enlaza ninguna web de la agencia." };
+  if (withUrl.length === 0) return { reason: "El anuncio no enlaza ninguna web de la agencia.", code: "anuncio_sin_web" };
   const cache = preCache ?? (await loadAgencyWebCache(db, withUrl.map((r) => r.agency_url)));
-  if (!cache) return { reason: "La caché de webs de agencia no está disponible." };
+  if (!cache) return { reason: "La caché de webs de agencia no está disponible.", code: "cache_no_disponible" };
   let why = "La web de la agencia aún no se ha leído.";
+  let code = "web_no_leida";
   for (const mem of withUrl) {
     const [w] = buildAgencyWebSources([mem as never], cache);
     if (!w) continue;
     if (!w.read) {
-      why = w.blocked ? "La web de la agencia no permite leerla (robots.txt)." : why;
+      if (w.blocked) (why = "La web de la agencia no permite leerla (robots.txt).", code = "web_bloqueada");
+      else if (w.note) (why = w.note, code = "web_ilegible");
       continue;
     }
     if (w.cms !== "mobilia") {
       why = "Solo se pueden usar las fotos de webs Mobilia (en otras no hay forma segura de saber que no llevan marca).";
+      code = "no_mobilia";
       continue;
     }
     if (w.verdict.state !== "verificada") {
       why = "La ficha de la web no está verificada como este inmueble.";
+      code = "no_verificada";
       continue;
     }
     if (w.photos.length === 0) {
       why = "La ficha de la web no tiene fotos.";
+      code = "web_sin_fotos";
       continue;
     }
     return { web: w, particularId: mem.id };
   }
-  return { reason: why };
+  return { reason: why, code };
 }
 
 /** La web de agencia leída y verificada de esta propiedad (Mobilia, con fotos), o el motivo. */
-async function resolveWeb(db: Db, prop: PropRow): Promise<Resolved | { reason: string }> {
+async function resolveWeb(db: Db, prop: PropRow): Promise<Resolved | { reason: string; code: string }> {
   const ids = new Set<string>();
   const m = await db.from("particulares_agency_matches").select("particular_id").eq("property_id", prop.id).neq("status", "descartado");
   for (const r of m.data ?? []) ids.add(r.particular_id as string);
@@ -242,6 +247,10 @@ export type AutoPhotosSummary = {
   done: number;
   failed: Array<{ slug: string; error: string }>;
   skipped: Record<string, number>;
+  /** Desglose de «sin_web_verificada» por motivo (web_no_leida, no_mobilia, no_verificada, web_sin_fotos, web_bloqueada, web_ilegible, anuncio_sin_web…). */
+  skipped_detail: Record<string, number>;
+  /** Por qué no se hizo nada más (presupuesto, tope por pasada). */
+  notes: string[];
   /** En dry-run: qué propiedades (slug) se reemplazarían. */
   sample?: string[];
 };
@@ -257,7 +266,7 @@ export const AUTO_PHOTOS_PER_RUN = 3;
 export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRun?: boolean; budgetMs?: number } = {}): Promise<AutoPhotosSummary | null> {
   const started = Date.now();
   const limit = opts.limit ?? AUTO_PHOTOS_PER_RUN;
-  const out: AutoPhotosSummary = { candidates: 0, to_replace: 0, done: 0, failed: [], skipped: {} };
+  const out: AutoPhotosSummary = { candidates: 0, to_replace: 0, done: 0, failed: [], skipped: {}, skipped_detail: {}, notes: [] };
   try {
     const mt = await db.from("particulares_agency_matches").select("property_id, particular_id, level, status").neq("status", "descartado").limit(5000);
     if (mt.error) return null; // 0199 sin aplicar
@@ -295,7 +304,8 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
       let web: PhotoPlanInput["web"] = null;
       if (!collab && prop.photos_source !== "restored") {
         const r = await resolveFromParticulars(db, byProp.get(prop.id) ?? [], cache);
-        if (!("reason" in r)) {
+        if ("reason" in r) out.skipped_detail[r.code] = (out.skipped_detail[r.code] ?? 0) + 1;
+        else {
           resolved.set(prop.id, r);
           web = { sig: photosSig(r.web.photos.map((p) => p.url)), n: r.web.photos.length };
         }
@@ -311,8 +321,12 @@ export async function autoReplaceWebPhotos(db: Db, opts: { limit?: number; dryRu
       return out;
     }
     const budget = opts.budgetMs ?? 40_000;
+    if (todo.length > limit) out.notes.push(`tope por pasada: ${limit} de ${todo.length}`);
     for (const it of todo.slice(0, limit)) {
-      if (Date.now() - started > budget) break;
+      if (Date.now() - started > budget) {
+        out.notes.push("presupuesto de tiempo agotado");
+        break;
+      }
       const prop = props.find((p) => p.id === it.property_id) as PropRow;
       const res = await applyResolved(db, prop, resolved.get(it.property_id) as Resolved, null);
       if (res.ok) out.done++;

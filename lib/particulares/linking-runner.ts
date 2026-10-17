@@ -221,7 +221,7 @@ export function runParticularesLinking(opts: { dryRun?: boolean } = {}): Promise
 }
 
 /** Presupuesto duro de una pasada (el enlazado base va primero; los pases de agencias solo si queda tiempo). */
-const BUDGET_MS = Number(process.env.PARTICULARES_LINK_BUDGET_MS) || 60_000;
+const BUDGET_MS = Number(process.env.PARTICULARES_LINK_BUDGET_MS) || 80_000;
 /** Interruptor: PARTICULARES_AGENCY_PASSES=0 apaga los pases de agencias (portal, CRM, webs, fotos). */
 const AGENCY_PASSES = process.env.PARTICULARES_AGENCY_PASSES !== "0";
 type StateMap = Map<string, RowGroupState>;
@@ -393,7 +393,7 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
     let webPhotos: AutoPhotosSummary | null | undefined;
     if (AGENCY_PASSES) {
       await safe("webs", async () => {
-        if (left() < 25_000) return void (skipped.webs = "sin tiempo");
+        if (left() < 15_000) return void (skipped.webs = "sin tiempo");
         // Solo los anuncios con enlace a una web de agencia (~1.000), no las 70.000 filas.
         const wr: Array<{ agency_url: string | null; price: number | null; is_active: boolean | null; reference: string | null; agency_reference: string | null }> = [];
         for (let from = 0; ; from += PAGE) {
@@ -408,10 +408,16 @@ async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingR
           if (!data || data.length < PAGE) break;
         }
         const cache = await loadAgencyWebCache(db, wr.map((r) => r.agency_url));
-        if (cache) webs = await refreshAgencyWebs(db, wr, cache, { dryRun, budgetMs: Math.min(40_000, left() - 15_000) });
-        mark("webs");
-        if (cache && left() > 15_000) webPhotos = await autoReplaceWebPhotos(db, { dryRun, budgetMs: Math.min(40_000, left() - 5_000) });
-        mark("web_photos");
+        // Primero las FOTOS LIMPIAS (rápido de planificar y es lo que más importa): antes iba detrás de la lectura de
+        // webs (25 s) y cuando llegaba quedaban < 15 s de presupuesto, así que NUNCA se ejecutaba.
+        if (cache) {
+          if (left() > 12_000) webPhotos = await autoReplaceWebPhotos(db, { dryRun, budgetMs: Math.min(40_000, left() - 8_000) });
+          else skipped.web_photos = "sin tiempo";
+          mark("web_photos");
+          if (left() > 12_000) webs = await refreshAgencyWebs(db, wr, cache, { dryRun, budgetMs: Math.min(40_000, left() - 8_000) });
+          else skipped.webs_read = "sin tiempo";
+          mark("webs");
+        }
       });
     }
 
