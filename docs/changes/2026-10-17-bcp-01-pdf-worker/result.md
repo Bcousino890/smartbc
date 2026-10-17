@@ -171,4 +171,5 @@ No se pidió revisión adicional de Codex: la aprobación lo excluía.
 
 ## PR, CI y merge
 
-Pendiente de publicar. El merge lo hace Fabricio. **Sin migración**, pero el merge dispara el autodespliegue.
+- PR: https://github.com/Bcousino890/smartbc/pull/325 (rama `fabri/bcp-01-pdf-worker`). La CI se comprueba en el último commit.
+- El merge lo hace Fabricio. **Sin migración propia**, pero el merge dispara el autodespliegue, que incluye lo que haya en `main` sin desplegar.
