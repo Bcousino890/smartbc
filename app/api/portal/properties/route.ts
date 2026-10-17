@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { applyPublicWebFilter } from "@/lib/web/public-contract";
 
 export const revalidate = 300;
 
@@ -20,15 +21,13 @@ function ensureAbsoluteUrl(url: string): string {
 export async function GET() {
   try {
     const admin = createAdminClient();
-    const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
+    const selectStr = "id, slug, bc_reference, property_reference, title, zone, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
 
-    // Mostrar propiedades disponibles o reservadas (scrape + manual)
+    // Destacados de la portada: el mismo contrato de publicación que el
+    // catálogo (lib/web/public-contract.ts). Antes devolvía cualquier vivienda
+    // disponible o reservada, publicada o no, y con su dirección.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (admin as any)
-      .from("properties")
-      .select(selectStr)
-      .in("status", ["available", "reserved"])
-      .is("archived_at", null)
+    const { data, error } = await applyPublicWebFilter((admin as any).from("properties").select(selectStr))
       .order("id", { ascending: false })
       .limit(1000);
 
@@ -88,7 +87,6 @@ export async function GET() {
           ...((p.features as string[]) ?? []),
           ...((p.features_manual as string[]) ?? []),
         ],
-        address: (p.address as string | null) ?? (p.zone as string),
         office,
         phone,
         videos,

@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
+import { applyPublicWebFilter } from "@/lib/web/public-contract";
 
 function formatPrice(price: number, country: string, currency: string | null, operation: string | null): string {
   const config = getCountryConfig(isCountry(country) ? country : "es");
@@ -19,9 +20,9 @@ export async function fetchPortalProperties(): Promise<Property[]> {
   try {
     const admin = createAdminClient();
     const selectStr =
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
+      "id, slug, bc_reference, property_reference, title, zone, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
 
-    // ── EL CONTRATO DE PUBLICACIÓN ──
+    // ── EL CONTRATO DE PUBLICACIÓN (lib/web/public-contract.ts) ──
     // status disponible/reservada + no archivada + published_web = true.
     // Hasta la migración 0143 el interruptor `published_web` se guardaba y no
     // lo leía nadie: 687 propiedades públicas de hecho y 3 de derecho. Ahora
@@ -29,12 +30,7 @@ export async function fetchPortalProperties(): Promise<Property[]> {
     // despublicar desde el panel FUNCIONA. Los SmartLinks, el shortlist y el
     // Private Book no pasan por aquí: siguen viendo la propiedad.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (admin as any)
-      .from("properties")
-      .select(selectStr)
-      .in("status", ["available", "reserved"])
-      .is("archived_at", null)
-      .eq("published_web", true)
+    const { data, error } = await applyPublicWebFilter((admin as any).from("properties").select(selectStr))
       .order("id", { ascending: false })
       .limit(1000);
 
@@ -104,7 +100,6 @@ export async function fetchPortalProperties(): Promise<Property[]> {
           ...((p.features as string[]) ?? []),
           ...((p.features_manual as string[]) ?? []),
         ],
-        address: (p.address as string | null) ?? (p.zone as string),
         office: office as "Madrid" | "Santiago",
         phone,
         videos,
