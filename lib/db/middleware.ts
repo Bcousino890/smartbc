@@ -25,7 +25,11 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  // El resultado ya se pedía (para refrescar la cookie) y se tiraba: se devuelve
+  // para que el middleware pueda exigir sesión en /api/admin sin otra llamada a GoTrue.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return { supabase, response };
+  return { supabase, response, user };
 }
