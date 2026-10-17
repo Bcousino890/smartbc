@@ -1531,3 +1531,72 @@
     font-size: max(12px, 0.7em);
   }
 }
+
+/* ── PDF del catálogo (expediente 2026-10-16-bcp-01-pdf) ─────────────────
+   Índice: enlace discreto bajo el título. Cierre: botón secundario bajo la
+   tarjeta del asesor (la acción principal sigue siendo «Llamar»). */
+
+.pdfIndex,
+.pdfClosing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.pdfIndex {
+  margin-top: var(--s3);
+}
+
+.pdfClosing {
+  margin-top: 1.6em;
+  max-width: 22em;
+}
+
+.pdfLink {
+  min-height: 44px;
+  padding: 0.4em 0.8em;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font: 500 0.82em var(--text);
+  letter-spacing: 0.06em;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+
+.pdfButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.7em 1.5em;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font: 600 0.9em var(--text);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.pdfButton:hover {
+  background: rgba(155, 74, 46, 0.06);
+}
+
+.pdfLink:disabled,
+.pdfButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.pdfHint,
+.pdfError {
+  font: 0.75em/1.5 var(--text);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.pdfError {
+  color: #8a2b1a;
+}

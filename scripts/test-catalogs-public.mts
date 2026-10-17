@@ -59,7 +59,10 @@ import {
 } from "../lib/catalogs/reader-state.ts";
 import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_MAX_WORDS, MAX_JOURNEY_SPREADS, TINY_WORDS } from "../lib/catalogs/journey-layout.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
-import type { PublicCatalog, PublicCatalogState } from "../lib/catalogs/public-contract.ts";
+import type { PublicCatalog, PublicCatalogState, PublicItem } from "../lib/catalogs/public-contract.ts";
+import { captureFixed, captureHash, isUnstableRead, verifyFixed } from "../lib/catalogs/export/capture.ts";
+import { createExportRunner } from "../lib/catalogs/export/runner.ts";
+import { descriptionInSections, contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
 
 let failures = 0;
 
@@ -1200,6 +1203,278 @@ async function liveTests() {
   }
 }
 
+// ── PDF del catálogo · reglas puras (expediente 2026-10-16-bcp-01-pdf) ──────
+function pdfPlanTests() {
+  section("PDF · contenido completo y fotos por vivienda (P2, K4)");
+  const ph = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, src: `/p/x/${i}.webp?f=k${i}`, width: 100, height: 80, orientation: "landscape" as const }));
+  const base = (over: Partial<PublicItem>): PublicItem => ({
+    key: "it", title: "Piso", place: null, operation: "Venta", price: "1 €", reserved: false, bedrooms: null, bathrooms: null, squareMeters: null, floor: "",
+    description: null, features: [], lead: null, highlights: [], sections: [], photos: [], coverIndex: 0, mosaic: [], ...over,
+  });
+  // 12 fotos; apertura = 3; secciones con fotos 5, 3 (repite la apertura), 7 y 5 (repetida).
+  const it = base({
+    photos: ph(12), coverIndex: 3,
+    sections: [
+      { heading: "Uno", text: "a", photo: 5 },
+      { heading: "Dos", text: "b", photo: 3 },
+      { heading: null, text: "c", photo: null },
+      { heading: "Cuatro", text: "d", photo: 7 },
+      { heading: "Cinco", text: "e", photo: 5 },
+    ],
+    description: "Descripción", features: ["Ascensor"],
+  });
+  const x = planItemExport(it);
+  check("apertura = la foto de portada efectiva (3)", x.opening === 3);
+  check("secciones: todas, en orden, con su foto solo si no salió antes", JSON.stringify(x.sections.map((s) => s.photo)) === JSON.stringify([5, null, null, 7, null]) && x.sections.length === 5);
+  check("más fotos: hasta 6, en el orden de la galería, sin las ya usadas", JSON.stringify(x.more) === JSON.stringify([0, 1, 2, 4, 6, 8]) && MORE_PHOTOS_MAX === 6);
+  check("ninguna foto repetida en toda la vivienda", new Set(photosOfExport(x)).size === photosOfExport(x).length && JSON.stringify(photosOfExport(x)) === JSON.stringify([3, 5, 7, 0, 1, 2, 4, 6, 8]));
+  check("descripción y características se conservan", x.description === "Descripción" && JSON.stringify(x.features) === JSON.stringify(["Ascensor"]) && !x.brief);
+  const desc = "Primera parte del texto. Segunda parte, más larga.\n\nTercera parte final.";
+  const split = base({ description: desc, sections: [{ heading: null, text: "Primera parte del texto. Segunda parte, más larga.", photo: null }, { heading: null, text: "Tercera parte final.", photo: null }] });
+  check("secciones = la descripción entera, en orden: no se repite en el detalle", descriptionInSections(split) && planItemExport(split).description === null && planItemExport(split).sections.length === 2);
+  const partial = base({ description: desc, sections: [{ heading: null, text: "Primera parte del texto.", photo: null }] });
+  check("si a las secciones les falta algo, la descripción va entera", !descriptionInSections(partial) && planItemExport(partial).description === desc);
+  const story = base({ description: "Otra cosa distinta.", sections: [{ heading: "La vivienda", text: "Capítulo", photo: null }] });
+  check("historia + descripción distinta: las dos", planItemExport(story).description === "Otra cosa distinta.");
+  const withLead = base({ description: desc, lead: "Primera parte del texto.", sections: [{ heading: null, text: "Segunda parte, más larga.", photo: null }, { heading: null, text: "Tercera parte final.", photo: null }] });
+  check("entrada (primeras frases) + secciones = la descripción: no se repite", descriptionInSections(withLead) && planItemExport(withLead).description === null);
+  const many = base({ sections: Array.from({ length: 12 }, (_, i) => ({ heading: `Capítulo ${i + 1}`, text: `Texto ${i + 1} `.repeat(200), photo: null })) });
+  const xm = planItemExport(many);
+  check("K4: una historia de 12 capítulos sale entera (sin el límite de 3 dobles páginas del lector)", xm.sections.length === 12 && xm.sections[11].heading === "Capítulo 12" && xm.sections.every((s, i) => s.text === many.sections[i].text));
+  const shortLead = "Una entrada breve de diez palabras para la apertura del piso.";
+  const longLead = Array.from({ length: 46 }, (_, i) => `palabra${i}`).join(" ");
+  check("entrada de ≤ 45 palabras: en la apertura", planItemExport(base({ lead: shortLead })).leadInOpening === shortLead && planItemExport(base({ lead: shortLead })).leadInJourney === null);
+  check("entrada de 46 palabras: al principio del recorrido (regla del lector)", planItemExport(base({ lead: longLead })).leadInJourney === longLead && planItemExport(base({ lead: longLead })).leadInOpening === null);
+  check("sin fotos: sin apertura ni más fotos", planItemExport(base({})).opening === null && planItemExport(base({})).more.length === 0);
+  check("sin secciones ni descripción: ficha breve", planItemExport(base({ features: ["Terraza"] })).brief);
+  check("pocas fotos: más fotos = las que queden", JSON.stringify(planItemExport(base({ photos: ph(3), coverIndex: 1 })).more) === JSON.stringify([0, 2]));
+  check("portada fuera de rango (defensa): la primera", planItemExport(base({ photos: ph(2), coverIndex: 9 })).opening === 0);
+
+  section("PDF · nombre, versión y metadatos");
+  const at = new Date("2026-10-16T17:40:00Z");
+  check("versión en hora de Madrid", versionLabel(at) === "16 de octubre de 2026, 19:40", versionLabel(at));
+  check("nombre del archivo, sin caracteres peligrosos", pdfFileName('Áticos / "Retiro" : 2026', at) === "Catálogo · Áticos Retiro 2026 · 16-10-2026.pdf", pdfFileName('Áticos / "Retiro" : 2026', at));
+  const cd = contentDisposition("Catálogo · Áticos · 16-10-2026.pdf");
+  check("Content-Disposition: attachment, UTF-8 y respaldo ASCII", cd.startsWith('attachment; filename="Catalogo - Aticos - 16-10-2026.pdf"; filename*=UTF-8\'\'') && cd.includes("Cat%C3%A1logo"), cd);
+  const meta = pdfMetadata({ title: "Salamanca", intro: null, edition: "", preparedBy: null, phone: null, phoneHref: null, role: "asesor", coverPhoto: null, items: [] });
+  check("metadatos sin nada interno", JSON.stringify(meta) === JSON.stringify({ title: "Salamanca", author: "Benjamín Cousiño Propiedades", subject: "Selección de viviendas", creator: "Benjamín Cousiño Propiedades", producer: "Benjamín Cousiño Propiedades", language: "es-ES" }));
+}
+
+// ── PDF · captura fija (K1) ─────────────────────────────────────────────────
+async function pdfCaptureTests() {
+  section("PDF · captura fija: la huella describe exactamente lo capturado (K1)");
+  type S = { title: string; items: { key: string; price: number; photos: { u: string }[] }[] };
+  const mk = (price: number, u = "a"): S => ({ title: "Cat", items: [{ key: "k1", price, photos: [{ u }] }] });
+  let version = 1;
+  let current: S | null = mk(100);
+  let access = true;
+  let reads = 0;
+  const deps = {
+    checkAccess: async () => access,
+    readMeta: async () => ({ version, operation: "sale" }),
+    readSnapshot: async () => {
+      reads++;
+      return current ? JSON.parse(JSON.stringify(current)) : null;
+    },
+  };
+  const c1 = await captureFixed(deps);
+  check("H1 = hash de la propia S1 y su operación", !!c1 && c1.hash === captureHash(mk(100), "sale") && c1.operation === "sale");
+  check("el orden de las claves no cambia la huella", captureHash({ b: 1, a: [{ y: 2, x: 1 }] }, "sale") === captureHash({ a: [{ x: 1, y: 2 }], b: 1 }, "sale"));
+  check("la operación forma parte de la huella", captureHash(mk(100), "sale") !== captureHash(mk(100), "rent"));
+  // Cambio en una ficha compartida (precio) SIN que suba catalogs.version.
+  current = mk(200);
+  check("cambio de ficha compartida sin subir la versión → «changed»", (await verifyFixed(deps, c1!.hash)) === "changed");
+  // Cambio de versión de una foto (otra URL) sin subir la versión.
+  current = mk(100, "b");
+  check("foto realojada (otra `u`) sin subir la versión → «changed»", (await verifyFixed(deps, c1!.hash)) === "changed");
+  current = mk(100);
+  check("sin cambios → «ok»", (await verifyFixed(deps, c1!.hash)) === "ok");
+  access = false;
+  check("acceso retirado (ya no es dueño) → «gone», sin leer", (await verifyFixed(deps, c1!.hash)) === "gone" && (await captureFixed(deps)) === null);
+  access = true;
+  current = null;
+  check("enlace caducado, revocado o catálogo no disponible → «gone»", (await verifyFixed(deps, c1!.hash)) === "gone");
+  current = mk(100);
+  // La versión cambia entre las dos lecturas de la lectura coherente: reintenta.
+  let flip = 0;
+  const unstable = { ...deps, readMeta: async () => ({ version: flip++ === 0 ? 1 : 2, operation: "sale" }) };
+  const c2 = await captureFixed(unstable);
+  check("versión distinta entre lecturas → se reintenta y se captura una versión estable", !!c2 && c2.hash === captureHash(mk(100), "sale"));
+  // S1 capturada no cambia aunque el origen se modifique después.
+  const shared: S = mk(300);
+  const byRef = { ...deps, readSnapshot: async () => shared };
+  const c3 = await captureFixed(byRef);
+  shared.items[0].price = 999;
+  check("S1 es una copia propia: no cambia si el origen cambia después", !!c3 && c3.snapshot.items[0].price === 300 && c3.hash === captureHash(mk(300), "sale"));
+  check("lecturas hechas", reads > 0);
+  // Nunca estable → «changed»; la base de datos falla → se propaga (503).
+  let n = 0;
+  const neverStable = { ...deps, readMeta: async () => ({ version: n++, operation: "sale" }) };
+  check("lectura que no se estabiliza en la comprobación final → «changed»", (await verifyFixed(neverStable, c1!.hash)) === "changed");
+  const down = { ...deps, readSnapshot: async () => { throw new Error("db caída"); } };
+  let threw = false;
+  try {
+    await verifyFixed(down, c1!.hash);
+  } catch (e) {
+    threw = !isUnstableRead(e);
+  }
+  check("la base de datos falla en la comprobación final → error (no «changed»)", threw);
+}
+
+// ── PDF · generación acotada (K2, K3) ───────────────────────────────────────
+async function pdfRunnerTests() {
+  section("PDF · generación acotada: compartir, comprobación por petición, turno y cola (K2, K3)");
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  type Scope = { key: string; hash: string };
+  const mk = (opts: { buildMs?: number; renderMs?: number; verify?: (s: Scope) => "ok" | "changed" | "gone"; verifyThrows?: boolean; captureError?: Error; changedFirst?: boolean; limits?: Partial<Parameters<typeof createExportRunner>[1]> } = {}) => {
+    const log = { builds: 0, verifies: 0, active: 0, maxActive: 0, aborted: 0, finished: 0 };
+    let changedOnce = !!opts.changedFirst;
+    const runner = createExportRunner<Scope, { scope: Scope }>(
+      {
+        capture: async (sc) => {
+          if (opts.captureError) throw opts.captureError;
+          return { scope: sc, hash: sc.hash };
+        },
+        isUnstable: isUnstableRead,
+        verify: async (sc) => {
+          log.verifies++;
+          if (opts.verifyThrows) throw new Error("db caída");
+          return opts.verify ? opts.verify(sc) : "ok";
+        },
+        build: async (_cap, signal) => {
+          log.builds++;
+          log.active++;
+          log.maxActive = Math.max(log.maxActive, log.active);
+          try {
+            // Fase de fotos: cancelable.
+            for (let t = 0; t < (opts.buildMs ?? 40); t += 10) {
+              if (signal.aborted) { log.aborted++; throw new Error("cancelado"); }
+              await sleep(10);
+            }
+            // Renderizado: NO cancelable.
+            await sleep(opts.renderMs ?? 0);
+            if (changedOnce) { changedOnce = false; return { changed: true as const }; }
+            log.finished++;
+            return { pdf: Buffer.from("PDF") };
+          } finally {
+            log.active--;
+          }
+        },
+        setTimeout: (fn, ms) => setTimeout(fn, ms),
+        clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+      },
+      { maxConcurrent: 1, maxQueue: 4, queueWaitMs: 2000, requestTimeoutMs: 2000, jobBudgetMs: 2000, ...opts.limits },
+    );
+    return { runner, log };
+  };
+  const sig = () => new AbortController();
+
+  {
+    const { runner, log } = mk();
+    const A: Scope = { key: "enlace:t1", hash: "H" };
+    const [r1, r2] = await Promise.all([runner.run(A, A.key, sig().signal), runner.run(A, A.key, sig().signal)]);
+    check("K2: mismo ámbito y misma huella → UN trabajo, dos PDF, dos comprobaciones finales", r1.ok && r2.ok && log.builds === 1 && log.verifies === 2);
+  }
+  {
+    const { runner, log } = mk();
+    const A: Scope = { key: "enlace:t1", hash: "H" }, B: Scope = { key: "enlace:t2", hash: "H" };
+    const [r1, r2] = await Promise.all([runner.run(A, A.key, sig().signal), runner.run(B, B.key, sig().signal)]);
+    check("K2: otro ámbito con el mismo contenido → trabajo propio (nunca se comparte entre enlaces)", r1.ok && r2.ok && log.builds === 2);
+    check("K3: con un turno, nunca dos trabajos a la vez", log.maxActive === 1);
+  }
+  {
+    // Un enlace se revoca mientras se genera: SU petición no recibe nada; la otra, sí.
+    let calls = 0;
+    const { runner } = mk({ verify: () => (++calls === 1 ? "gone" : "ok") });
+    const A: Scope = { key: "dueño:p:c", hash: "H" };
+    const [r1, r2] = await Promise.all([runner.run(A, A.key, sig().signal), runner.run(A, A.key, sig().signal)]);
+    const results = [r1, r2].map((r) => (r.ok ? "ok" : r.error)).sort();
+    check("K2: cada petición pasa su comprobación; la revocada → 404 y la otra recibe su PDF", JSON.stringify(results) === JSON.stringify(["not_found", "ok"]));
+  }
+  {
+    // Tiempo máximo de la petición más corto que el trabajo: la petición se va,
+    // pero el turno sigue ocupado hasta que el trabajo termina (K3).
+    const { runner, log } = mk({ buildMs: 30, renderMs: 250, limits: { requestTimeoutMs: 80 } });
+    const A: Scope = { key: "enlace:a", hash: "H" }, B: Scope = { key: "enlace:b", hash: "H2" };
+    const pa = runner.run(A, A.key, sig().signal);
+    await sleep(15);
+    const pb = runner.run(B, B.key, sig().signal);
+    const ra = await pa;
+    await sleep(5);
+    const busyAfterTimeout = runner.stats().running === 1;
+    const rb = await pb;
+    check("K3: la petición vence («timeout») y el turno sigue ocupado mientras el renderizado continúa", !ra.ok && ra.error === "timeout" && busyAfterTimeout);
+    check("K3: el renderizado ya empezado no se interrumpe; la siguiente espera y no se solapan", log.maxActive === 1 && (rb.ok || (!rb.ok && rb.error === "timeout")));
+    await sleep(400);
+    check("K3: al terminar todo, turno y cola limpios", runner.stats().running === 0 && runner.stats().queued === 0 && runner.stats().jobs === 0);
+  }
+  {
+    // Cancelar la única petición en la fase de fotos cancela el trabajo de verdad.
+    const { runner, log } = mk({ buildMs: 300 });
+    const A: Scope = { key: "enlace:c", hash: "H" };
+    const ctl = sig();
+    const p = runner.run(A, A.key, ctl.signal);
+    await sleep(30);
+    ctl.abort();
+    const r = await p;
+    await sleep(40);
+    check("cancelar la única petición cancela la fase de fotos (señal real) y libera el turno", !r.ok && r.error === "cancelled" && log.aborted === 1 && runner.stats().running === 0);
+  }
+  {
+    // Si se cancela una de dos peticiones, el trabajo sigue para la otra.
+    const { runner, log } = mk({ buildMs: 80 });
+    const A: Scope = { key: "enlace:d", hash: "H" };
+    const c1 = sig();
+    const p1 = runner.run(A, A.key, c1.signal);
+    const p2 = runner.run(A, A.key, sig().signal);
+    await sleep(20);
+    c1.abort();
+    const [r1, r2] = await Promise.all([p1, p2]);
+    check("cancelar una de dos no estropea la otra: la otra recibe su PDF", !r1.ok && r1.error === "cancelled" && r2.ok && log.aborted === 0);
+  }
+  {
+    const { runner } = mk({ buildMs: 150, limits: { maxQueue: 1 } });
+    const s = (k: string): Scope => ({ key: k, hash: k });
+    const rs = await Promise.all(["e:1", "e:2", "e:3"].map((k) => runner.run(s(k), k, sig().signal)));
+    check("cola acotada: con 1 en curso y 1 esperando, la tercera → «busy»", rs.filter((r) => !r.ok && r.error === "busy").length === 1 && rs.filter((r) => r.ok).length === 2);
+  }
+  {
+    const { runner, log } = mk({ changedFirst: true });
+    const A: Scope = { key: "enlace:f", hash: "H" };
+    const r = await runner.run(A, A.key, sig().signal);
+    check("una foto con otra versión → se repite desde la captura una vez y sale bien", r.ok && log.builds === 2);
+  }
+  {
+    const { runner } = mk({ verify: () => "changed" });
+    const A: Scope = { key: "enlace:g", hash: "H" };
+    const r = await runner.run(A, A.key, sig().signal);
+    check("el contenido sigue cambiando en la comprobación final → «changed» (409)", !r.ok && r.error === "changed");
+  }
+  {
+    const runner = createExportRunner<Scope, object>(
+      { capture: async () => null, isUnstable: isUnstableRead, verify: async () => "ok", build: async () => ({ pdf: Buffer.from("x") }), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (t) => clearTimeout(t as ReturnType<typeof setTimeout>) },
+      { maxConcurrent: 1, maxQueue: 1, queueWaitMs: 100, requestTimeoutMs: 100, jobBudgetMs: 100 },
+    );
+    const r = await runner.run({ key: "x", hash: "" }, "x", sig().signal);
+    check("sin acceso en la captura → «not_found» (404), sin generar", !r.ok && r.error === "not_found");
+  }
+  {
+    const { runner, log } = mk({ captureError: new Error("db caída") });
+    const r = await runner.run({ key: "enlace:h", hash: "H" }, "enlace:h", sig().signal);
+    check("la base de datos falla al capturar → «unavailable» (503), sin generar ni reintentar", !r.ok && r.error === "unavailable" && log.builds === 0);
+  }
+  {
+    const { runner, log } = mk({ captureError: new CoherentReadError("catalog_read_unstable", "x") });
+    const r = await runner.run({ key: "enlace:i", hash: "H" }, "enlace:i", sig().signal);
+    check("la lectura nunca se estabiliza → «changed» (409) tras un reintento", !r.ok && r.error === "changed" && log.builds === 0);
+  }
+  {
+    const { runner } = mk({ verifyThrows: true });
+    const r = await runner.run({ key: "enlace:j", hash: "H" }, "enlace:j", sig().signal);
+    check("la base de datos falla en la comprobación final → «unavailable», sin bytes", !r.ok && r.error === "unavailable");
+  }
+}
+
 async function main() {
   section("T6 · contrato público y privacidad");
   {
@@ -1609,6 +1884,9 @@ async function main() {
     check("sin fotos: la galería se cierra", st.gallery === null);
   }
 
+  pdfPlanTests();
+  await pdfCaptureTests();
+  await pdfRunnerTests();
   await liveTests();
 
   console.log(`\n${failures === 0 ? "✅ Todo en verde" : `❌ ${failures} fallo(s)`}`);

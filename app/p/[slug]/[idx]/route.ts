@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/db/admin";
-import { isMobiliaImageUrl, toMobiliaOriginal } from "@/lib/sync/scrapers/mobilia";
 import { contentRange, parseRangeHeader, unsatisfiedContentRange } from "@/lib/http/range";
-import { createHash } from "node:crypto";
-import { isPhotoKey, pickProxyPhoto } from "@/lib/catalogs/photo-selection";
+import { isPhotoKey } from "@/lib/catalogs/photo-selection";
+import { findPropertyPhoto, photoCandidates } from "@/lib/catalogs/photo-resolve";
 
 // Proxy de fotos de propiedad. Sirve la foto en posición `idx` para la
 // propiedad con `slug`, leyéndola desde Supabase Storage en streaming. El
@@ -112,20 +110,6 @@ function snapWidth(raw: string | null): number | null {
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-type PhotoRow = {
-  id: string;
-  url: string;
-  position: number;
-  is_cover: boolean;
-};
-
-type PropertyRow = {
-  id: string;
-  archived_at: string | null;
-  status: string;
-  property_photos: PhotoRow[] | null;
-};
-
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ slug: string; idx: string }> },
@@ -142,28 +126,15 @@ export async function GET(
     return new NextResponse("bad_idx", { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("properties")
-    .select("id, archived_at, status, property_photos(id, url, position, is_cover)")
-    .eq("slug", slug)
-    .maybeSingle();
-
-  const row = data as unknown as PropertyRow | null;
-  if (!row || row.archived_at || row.status === "archived") {
+  // Qué foto (y si la propiedad está disponible): lo decide photo-resolve.ts,
+  // el mismo código que usa el PDF del catálogo. Sin `f`: por posición,
+  // deduplicada por URL. Con `f` (catálogos, E3): la foto de esa clave o
+  // ninguna. Si no hay foto, 404 (sin caché con `f`) para que el cliente no
+  // caiga en un bucle esperando una imagen rota.
+  const photo = await findPropertyPhoto(slug, position, fRaw);
+  if (photo === "unavailable") {
     return new NextResponse("not_found", { status: 404 });
   }
-
-  // Sin `f`: ordenamos por posición y elegimos la foto del índice solicitado.
-  // Si la posición concreta no existe (porque se borró una foto), devolvemos
-  // 404 para que el cliente no caiga en un loop esperando una imagen rota.
-  // Deduplicamos por url (igual que el adapter de la galería): si hay filas
-  // duplicadas en property_photos, los índices del proxy deben casar con los
-  // que ve el cliente, no contar la foto repetida.
-  // Con `f` (catálogos, E3): la foto de esa clave o ninguna.
-  const photo = pickProxyPhoto(row.property_photos ?? [], position, fRaw, (r) =>
-    createHash("md5").update(`catalog-photo:${r.id}`).digest("hex").slice(0, 16),
-  );
   if (!photo) {
     return new NextResponse("not_found", { status: 404, headers: fRaw ? { "Cache-Control": "no-store" } : undefined });
   }
@@ -172,9 +143,7 @@ export async function GET(
   // nuestro storage, o la descarga en segundo plano falló), pedimos primero la
   // variante `-original.jpg` (misma foto SIN marca) y caemos a la original si
   // el origen no la tuviera. Para fotos ya re-alojadas esto es un no-op.
-  const candidates = isMobiliaImageUrl(photo.url)
-    ? [toMobiliaOriginal(photo.url), photo.url]
-    : [photo.url];
+  const candidates = photoCandidates(photo.url);
 
   const rangeHeader = req.headers.get("range");
 
