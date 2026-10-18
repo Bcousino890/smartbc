@@ -15,15 +15,18 @@ export const metadata = { robots: { index: false, follow: false } };
  *  y la página reproduce el marco del admin (barra lateral REAL con datos
  *  sintéticos y el mismo <main>) para probar el aviso al salir y las barras
  *  fijas frente al botón de menú del CRM. «Cerrar sesión» no se usa aquí. */
-export default async function FixtureCatalogPage({ searchParams }: { searchParams: Promise<{ vivo?: string; medir?: string; grande?: string }> }) {
+export default async function FixtureCatalogPage({ searchParams }: { searchParams: Promise<{ vivo?: string; medir?: string; grande?: string; auto?: string }> }) {
   if (!isCatalogFixtureMode()) notFound();
-  const { vivo, medir, grande } = await searchParams;
+  const { vivo, medir, grande, auto } = await searchParams;
   const { fixtureCatalogDetail } = await import("@/lib/catalogs/fixtures");
   const { fixtureLargeCatalogDetail, fixturePropertiesLarge } = await import("@/lib/catalogs/fixtures-selection");
   const { FIXTURE_TOKENS } = await import("@/lib/catalogs/fixture-store");
   const { fixtureHomeState } = await import("@/lib/catalogs/fixture-groups");
   const large = grande === "1";
-  const catalog = large ? fixtureLargeCatalogDetail() : fixtureCatalogDetail;
+  const base = large ? fixtureLargeCatalogDetail() : fixtureCatalogDetail;
+  // BCP-01 P3/P4: ?auto=1 abre el mismo catálogo como AUTOMÁTICO antiguo (con
+  // criterios), para comprobar que su panel no cambia y para la conversión.
+  const catalog = auto === "1" ? { ...base, mode: "auto" as const, criteria: { ...base.criteria, operation: "sale" as const, max: 12 } } : base;
   return (
     <div className="crm-root relative min-h-screen bg-cream-50">
       <div className="relative z-10">

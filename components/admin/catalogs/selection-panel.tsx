@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import {
   AUTO_MAX_MAX,
@@ -126,14 +126,6 @@ export function SelectionPanel({
     setSlot(next);
   };
   const view = previewView(slot, rev);
-  const [modePrev, setModePrev] = useState<{
-    to: "manual" | "auto";
-    entering: CatalogItemView[];
-    leaving: CatalogItemView[];
-    autoTotal: number;
-    manualCount: number;
-  } | null>(null);
-  const [busy, startBusy] = useTransition();
 
   const unit = c.operation === "rent" ? "€/mes" : "€";
   const priceDisabled = c.operation === "any";
@@ -191,38 +183,13 @@ export function SelectionPanel({
     );
   }
 
-  function askMode(to: "manual" | "auto") {
-    setError(null);
-    startBusy(async () => {
-      const r = await actions.previewMode({ catalogId, mode: to });
-      if (r.ok) setModePrev({ to, entering: r.entering, leaving: r.leaving, autoTotal: r.autoTotal, manualCount: r.manualCount });
-      else setError(r.error);
-    });
-  }
-
-  function confirmMode(strategy: "restore" | "convert" | null) {
-    if (!modePrev) return;
-    const to = modePrev.to;
-    run(
-      () => actions.setMode({ catalogId, mode: to, strategy }),
-      to === "auto"
-        ? "Catálogo en modo automático. Tu lista manual queda guardada."
-        : strategy === "convert"
-          ? "La selección automática es ahora tu lista manual."
-          : "Has vuelto a tu lista manual.",
-      () => setModePrev(null),
-      undefined,
-      to === "auto" ? "modo automático" : `modo manual (${strategy === "convert" ? "convertir" : "volver"})`,
-    );
-  }
-
   const barrios = barrioDistrict ? catalogBarrios(barrioDistrict) : [];
 
   return (
     <section className="space-y-4 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="sel-title" data-testid="selection-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="sel-title" className="crm-label-sm text-ink/70">
-          Zonas, precio y modo
+          Criterios del automático
         </h2>
         <span
           className={`rounded-full px-3 py-1 text-xs ${mode === "auto" ? "bg-gold/20 text-ink/85" : "bg-ink/10 text-ink/65"}`}
@@ -416,7 +383,7 @@ export function SelectionPanel({
         <button
           type="button"
           onClick={save}
-          disabled={pending || busy}
+          disabled={pending}
           className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
         >
           Guardar criterios
@@ -424,7 +391,7 @@ export function SelectionPanel({
         <button
           type="button"
           onClick={showPreview}
-          disabled={pending || busy}
+          disabled={pending}
           className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-ink/80 hover:bg-white disabled:opacity-60"
         >
           Ver qué entraría
@@ -458,66 +425,13 @@ export function SelectionPanel({
         </div>
       ) : null}
 
-      <div className="space-y-2 border-t border-gold/15 pt-3">
-        {mode === "manual" ? (
-          <button
-            type="button"
-            onClick={() => askMode("auto")}
-            disabled={pending || busy}
-            className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-ink/80 hover:bg-white disabled:opacity-60"
-          >
-            Pasar a automático…
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => askMode("manual")}
-            disabled={pending || busy}
-            className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-ink/80 hover:bg-white disabled:opacity-60"
-          >
-            Pasar a manual…
-          </button>
-        )}
-        {mode === "auto" ? <p className="text-xs text-ink/50">Tu lista manual guardada tiene {manualCount} vivienda{manualCount === 1 ? "" : "s"}.</p> : null}
-        {modePrev ? (
-          <div className="space-y-3 rounded-lg border border-gold/30 bg-white p-3" data-testid="mode-preview">
-            <p className="text-sm text-ink/80">
-              {modePrev.to === "auto"
-                ? `En automático entran ${modePrev.entering.length} y salen ${modePrev.leaving.length} (coinciden ${modePrev.autoTotal} en total). Tu lista manual no se borra.`
-                : "Al volver a manual puedes recuperar tu lista anterior o quedarte con la selección actual."}
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="mb-1 text-xs font-semibold text-emerald-800">Entran ({modePrev.entering.length})</p>
-                <MiniList items={modePrev.entering} empty="Ninguna." />
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-semibold text-red-800">Salen ({modePrev.leaving.length})</p>
-                <MiniList items={modePrev.leaving} empty="Ninguna." />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {modePrev.to === "auto" ? (
-                <button type="button" onClick={() => confirmMode(null)} disabled={pending} className="rounded-lg bg-gold/90 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                  Pasar a automático
-                </button>
-              ) : (
-                <>
-                  <button type="button" onClick={() => confirmMode("restore")} disabled={pending} className="rounded-lg bg-gold/90 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                    Volver a mi lista anterior ({modePrev.manualCount})
-                  </button>
-                  <button type="button" onClick={() => confirmMode("convert")} disabled={pending} className="rounded-lg border border-gold/40 px-3 py-2 text-sm text-ink/80 disabled:opacity-60">
-                    Convertir la selección actual en lista manual
-                  </button>
-                </>
-              )}
-              <button type="button" onClick={() => setModePrev(null)} className="rounded-lg px-3 py-2 text-sm text-ink/60">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      {/* BCP-01 P4: sin cambio de modo. Un automático antiguo se convierte en
+          selección fija desde el aviso de arriba («Ver conversión»). */}
+      {mode === "auto" ? (
+        <p className="border-t border-gold/15 pt-3 text-xs text-ink/55">
+          Tu lista manual de antes tiene {manualCount} vivienda{manualCount === 1 ? "" : "s"} guardada{manualCount === 1 ? "" : "s"}. Para elegir viviendas a mano, usa «Ver conversión».
+        </p>
+      ) : null}
     </section>
   );
 }

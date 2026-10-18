@@ -147,6 +147,57 @@ $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 "$PAR"
 rm -f "$PAR"
 
+echo "== 2p. 0212 (P2): buscador del catálogo, máximo de 24 y operación (aplicada dos veces, concurrencia y reversión)"
+M10=supabase/migrations/0212_catalog_search.sql
+RB10=docs/changes/2026-10-18-bcp-01-buscar-e-importar/rollback-0212.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M10 $S/test-catalog-search.sql
+# Dos altas simultáneas cuando solo queda una plaza: entra una, la otra «catalog_full».
+$R sql $S/test-catalog-search-conc-setup.sql
+$R sql $S/test-catalog-search-conc-a.sql &
+CONC_A=$!
+sleep 0.5
+$R sql $S/test-catalog-search-conc-b.sql
+wait $CONC_A
+$R sql $S/test-catalog-search-conc-check.sql
+$R sql $RB10 $S/test-rollback-0212.sql $M10
+$R sql $S/test-util.sql
+echo "   0212 se vuelve a aplicar tras su reversión"
+
+echo "== 2q. 0212 sobre la selección (2k), los automáticos (0195/0196) y la paridad TS ↔ SQL"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $S/test-catalog-operations.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $S/test-catalog-auto-pre.sql $M5 $M6 $M10 $S/test-catalog-auto.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $S/test-catalog-adjust-pre.sql $M6 $M7 $M10 $S/test-catalog-adjust.sql
+PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")
+node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-catalog-parity.mts > "$PAR" 2>/dev/null
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 "$PAR"
+rm -f "$PAR"
+# Paridad TS ↔ SQL de la normalización de los filtros del buscador.
+PAR=$(mktemp "${TMPDIR:-/tmp}/bcp-parity.XXXXXX")
+node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-catalog-search-parity.mts > "$PAR" 2>/dev/null
+$R sql "$PAR"
+rm -f "$PAR"
+
+echo "== 2r. 0213 (P4): conversión de automáticos (vista previa, revalidación, registro, concurrencia, deshacer y reversión)"
+M11=supabase/migrations/0213_catalog_conversion.sql
+D13=docs/changes/2026-10-18-bcp-01-buscar-e-importar
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M11 $S/test-catalog-conversion.sql
+$R sql $S/test-catalog-conversion-undo-run.sql $S/test-catalog-conversion-undo.sql
+# Dos pestañas convierten a la vez con la misma vista previa: una sola conversión.
+$R sql $S/test-catalog-conversion-conc-a.sql &
+CONC_A=$!
+sleep 0.5
+$R sql $S/test-catalog-conversion-conc-b.sql
+wait $CONC_A
+$R sql $D13/rollback-0213.sql $S/test-rollback-0213.sql $M11
+$R sql $S/test-util.sql
+echo "   0213 se vuelve a aplicar tras su reversión"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

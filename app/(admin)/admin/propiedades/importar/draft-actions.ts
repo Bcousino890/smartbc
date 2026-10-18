@@ -15,6 +15,8 @@ import {
   findDraftDuplicates,
   getDraft,
   listDrafts,
+  listOwnedExplicitCatalogs,
+  propertySlugOf,
   ownedExplicitCatalog,
   retryPhotoStep,
   runCatalogStep,
@@ -51,13 +53,18 @@ export async function listImportDraftsAction(country: Country): Promise<{ ok: tr
   return { ok: true, drafts: (await listDrafts(g.actor)).filter((d) => d.country === country) };
 }
 
-export async function getImportDraftAction(country: Country, id: string): Promise<{ ok: true; draft: DraftRow; agencies: Awaited<ReturnType<typeof allowedAgencies>>; catalogTitle: string | null } | Err> {
+export async function getImportDraftAction(country: Country, id: string): Promise<
+  | { ok: true; draft: DraftRow; agencies: Awaited<ReturnType<typeof allowedAgencies>>; catalogTitle: string | null; catalogs: { id: string; title: string }[]; propertySlug: string | null }
+  | Err
+> {
   const g = await gate(country);
   if (!g.ok) return g.error;
   const d = await getDraft(g.actor, id);
   if (!d || d.country !== country) return err("draft_not_found");
   const cat = d.catalog_id ? await ownedExplicitCatalog(g.actor, d.catalog_id) : null;
-  return { ok: true, draft: d, agencies: await allowedAgencies(), catalogTitle: cat?.title ?? null };
+  // Solo el dueño de la HOME ve sus catálogos; para el resto del staff, lista vacía (I-16).
+  const catalogs = country === "es" ? await listOwnedExplicitCatalogs(g.actor) : [];
+  return { ok: true, draft: d, agencies: await allowedAgencies(), catalogTitle: cat?.title ?? null, catalogs, propertySlug: d.property_id ? await propertySlugOf(d.property_id) : null };
 }
 
 export async function createLinkDraftAction(input: {

@@ -35,7 +35,8 @@ export function TagFilterMenu({
   tags: PropertyTag[];
   selected: string[];
   onChange: (ids: string[]) => void;
-  onManage: () => void;
+  /** Opcional (BCP-01, P1): sin él no se ofrece «Gestionar etiquetas…». */
+  onManage?: () => void;
 }) {
   const { open, setOpen, ref } = usePopover();
   return (
@@ -86,16 +87,18 @@ export function TagFilterMenu({
               );
             })}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onManage();
-            }}
-            className="w-full border-t border-gold/10 px-3.5 py-2.5 text-left text-xs font-medium text-gold-dark transition hover:bg-gold/10"
-          >
-            Gestionar etiquetas…
-          </button>
+          {onManage && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onManage();
+              }}
+              className="w-full border-t border-gold/10 px-3.5 py-2.5 text-left text-xs font-medium text-gold-dark transition hover:bg-gold/10"
+            >
+              Gestionar etiquetas…
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -6,7 +6,11 @@ import { criteriaSummary, type CatalogCriteria } from "@/lib/catalogs/criteria";
 import { zoneRedundancies } from "@/lib/catalogs/explain";
 import type { CriteriaRaw } from "@/lib/catalogs/manager-state";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
+import { CatalogSearch, type CatalogSearchActions } from "../catalog-search";
+import { ConversionPanel, type ConversionActions } from "../conversion-panel";
 import { PropertySearch, type SearchAction } from "../property-search";
+import type { CatalogOperation } from "@/lib/catalogs/criteria";
+import type { SearchResultRow } from "@/lib/catalogs/search";
 import { SelectionPanel, type SelectionActions } from "../selection-panel";
 import { draftsStore, useDraftsVersion } from "./drafts-store";
 import { SidePanel, SidePanelFooter } from "./side-panel";
@@ -62,7 +66,15 @@ export interface HomesSectionProps {
   reference: string;
   setReference: (v: string) => void;
   addByReference: (e: React.FormEvent) => void;
+  /** BCP-01 P3 · selección explícita: buscador nuevo, alta desde él y operación del catálogo. */
+  catalogSearch: CatalogSearchActions;
+  addFromSearch: (row: SearchResultRow) => Promise<boolean>;
+  setOperation: (op: CatalogOperation) => void;
+  /** BCP-01 P4 · conversión de un automático antiguo en selección fija. */
+  conversion: ConversionActions;
 }
+
+const OPERATION_LABEL: Record<CatalogOperation, string> = { sale: "Venta", rent: "Alquiler", any: "Venta y alquiler" };
 
 export function HomesSection(props: HomesSectionProps) {
   const { catalog, items, auto, archived, pending, openId, onOpen, criteriaForm, message } = props;
@@ -113,7 +125,11 @@ export function HomesSection(props: HomesSectionProps) {
 
   const listCol = (
     <div className={`min-w-0 space-y-3 ${openId ? "hidden xl:block" : ""}`}>
-      {/* Criterios resumidos y su editor */}
+      {/* BCP-01 P3: la selección explícita no tiene criterios ni modo; solo
+          la operación del catálogo (qué precio ve el cliente). Los
+          automáticos antiguos conservan su barra de criterios tal cual. */}
+      {auto ? <ConversionPanel catalogId={catalog.id} actions={props.conversion} run={props.run} pending={pending} archived={archived} /> : null}
+      {auto ? (
       <div className="rounded-xl border border-gold/20 bg-white/60" data-testid="criteria-bar">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
           <span className={`rounded-full px-2.5 py-0.5 text-xs ${auto ? "bg-gold/20 text-ink/85" : "bg-ink/10 text-ink/65"}`}>{auto ? "Automático" : "Manual"}</span>
@@ -153,6 +169,28 @@ export function HomesSection(props: HomesSectionProps) {
         </div>
       </div>
 
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-gold/20 bg-white/60 px-3 py-2" data-testid="operation-bar">
+          <label htmlFor="cm-operation" className="text-sm text-ink/80">
+            Operación del catálogo
+          </label>
+          <select
+            id="cm-operation"
+            value={catalog.criteria.operation}
+            disabled={archived || pending}
+            onChange={(e) => props.setOperation(e.target.value as CatalogOperation)}
+            className="rounded-lg border border-gold/30 bg-white px-2 py-1 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-60"
+          >
+            {(["sale", "rent", "any"] as const).map((op) => (
+              <option key={op} value={op}>
+                {OPERATION_LABEL[op]}
+              </option>
+            ))}
+          </select>
+          <p className="min-w-0 basis-full text-xs text-ink/55 sm:basis-auto sm:flex-1">Decide qué precio ve el cliente (en las que se venden y se alquilan). Eliges las viviendas tú: máximo 24.</p>
+        </div>
+      )}
+
       {/* Vistas */}
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Vista de la lista" className="flex min-w-0 flex-1 gap-1 rounded-lg bg-ink/5 p-1 sm:flex-none">
@@ -162,7 +200,7 @@ export function HomesSection(props: HomesSectionProps) {
                 tabBtn("coincidencias", `Coincidencias · ${catalog.autoMatched ?? catalog.autoTotal ?? items.length}`, "view-coincidencias"),
                 tabBtn("excluidas", `Excluidas · ${nExcluded}`, "view-excluidas"),
               ]
-            : [tabBtn("catalogo", `En el catálogo · ${items.length}`, "view-catalogo"), tabBtn("anadir", "Añadir", "view-anadir")]}
+            : [tabBtn("catalogo", `En el catálogo · ${items.length}`, "view-catalogo"), tabBtn("anadir", "Añadir viviendas", "view-anadir")]}
         </div>
         <span className="text-xs text-ink/55" data-testid="items-count">
           {props.countLabel}
@@ -184,7 +222,7 @@ export function HomesSection(props: HomesSectionProps) {
       ) : null}
       {!auto && adj.included + adj.unavailable.length + nExcluded > 0 ? (
         <p className="text-xs text-ink/55" data-testid="stored-adjustments">
-          Ajustes del modo automático guardados ({adj.included + adj.unavailable.length} inclusiones, {nExcluded} exclusiones): se vuelven a aplicar si pasas a automático.
+          Ajustes guardados de cuando el catálogo era automático ({adj.included + adj.unavailable.length} inclusiones, {nExcluded} exclusiones): no cambian esta selección y se conservan.
         </p>
       ) : null}
 
@@ -286,7 +324,23 @@ export function HomesSection(props: HomesSectionProps) {
 
       {view === "anadir" ? (
         <div className="space-y-2">
-          <PropertySearch catalogId={catalog.id} criteria={props.searchCriteria} search={props.search} disabled={archived || pending} onAdd={props.addById} uiKey="search-manual" autoRun={!!draftsStore.ui<string>(catalog.id, "search-manual:text")} />
+          <CatalogSearch
+            catalogId={catalog.id}
+            catalogOperation={catalog.criteria.operation}
+            actions={props.catalogSearch}
+            disabled={archived || pending}
+            onAdd={props.addFromSearch}
+            refreshKey={items.map((x) => x.propertyId).join()}
+          />
+          {!archived ? (
+            <p className="flex flex-wrap items-center gap-2 rounded-xl border border-gold/20 bg-white/60 px-3 py-2 text-sm text-ink/70">
+              ¿No está en Propiedades?
+              <a href={`/es/admin/propiedades/importar?catalogo=${encodeURIComponent(catalog.id)}`} className="font-medium text-ink underline" data-testid="import-from-link">
+                Añadir desde un enlace
+              </a>
+              <span className="text-xs text-ink/50">Se crea un borrador privado; al confirmarlo, la ficha se añade a este catálogo.</span>
+            </p>
+          ) : null}
           <form onSubmit={props.addByReference} className="flex flex-col gap-2 rounded-xl border border-gold/20 bg-white/60 p-3 sm:flex-row sm:items-center">
             <label className="sr-only" htmlFor="cm-ref">
               Referencia BC, slug o URL de la ficha
