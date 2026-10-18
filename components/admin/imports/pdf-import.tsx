@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Crop, FileText, Loader2, Scissors, Trash2, Undo2, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cropToBlob, errorDetail, imageToBlob, type LoadedPdf, PdfReadError, readPdfInBrowser, renderPageCanvas } from "@/lib/imports/pdf/browser";
 import { pdfAssetBase } from "@/lib/imports/pdf/ocr";
 import { planPdfDrafts, type PlanPage } from "@/lib/imports/pdf/plan";
@@ -50,7 +50,7 @@ const euros = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
 const groupOf = (groups: Groups, page: number) => groups.findIndex((g) => g.includes(page));
 
-export function PdfImport({
+function PdfImportInner({
   country,
   catalogId,
   actions = REAL_IMPORT_ACTIONS,
@@ -126,10 +126,15 @@ export function PdfImport({
     (async () => {
       for (const p of pdf.pages) {
         if (!alive) return;
-        const c = await renderPageCanvas(pdf.doc, p.page, 220);
-        if (!alive) return;
-        const url = c.toDataURL("image/jpeg", 0.7);
-        setThumbs((t) => ({ ...t, [p.page]: url }));
+        try {
+          const c = await renderPageCanvas(pdf.doc, p.page, 220);
+          if (!alive) return;
+          const url = c.toDataURL("image/jpeg", 0.7);
+          setThumbs((t) => ({ ...t, [p.page]: url }));
+        } catch (e) {
+          // Sin miniatura de esta página: se sigue con las demás.
+          console.error("[importar PDF] miniatura", p.page, e);
+        }
       }
     })();
     return () => {
@@ -481,6 +486,51 @@ export function PdfImport({
   );
 }
 
+type PdfImportProps = Parameters<typeof PdfImportInner>[0];
+
+/**
+ * Barrera de errores: si algo falla al pintar (un PDF que las reglas no
+ * esperaban), se enseña el error con su detalle y «Empezar de nuevo» en vez de
+ * dejar la página en blanco («Application error»).
+ */
+class ImportBoundary extends Component<{ children: ReactNode; onReset: () => void }, { error: unknown }> {
+  state: { error: unknown } = { error: null };
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+  componentDidCatch(error: unknown) {
+    console.error("[importar PDF] fallo al pintar", error);
+  }
+  render() {
+    if (this.state.error === null) return this.props.children;
+    return (
+      <div role="alert" className="space-y-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="pdf-crash">
+        <p>Algo ha fallado al preparar este PDF. No se ha creado nada.</p>
+        <p className="break-all font-mono text-xs text-red-800/80">Detalle técnico: {errorDetail(this.state.error)}</p>
+        <button
+          type="button"
+          onClick={() => {
+            this.setState({ error: null });
+            this.props.onReset();
+          }}
+          className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm text-red-800"
+        >
+          Empezar de nuevo
+        </button>
+      </div>
+    );
+  }
+}
+
+export function PdfImport(props: PdfImportProps) {
+  const [epoch, setEpoch] = useState(0);
+  return (
+    <ImportBoundary onReset={() => setEpoch((e) => e + 1)}>
+      <PdfImportInner key={epoch} {...props} />
+    </ImportBoundary>
+  );
+}
+
 /** Recorte rectangular de una página escaneada (arrastrar sobre la página). */
 function CropDialog({ pdf, page, onClose, onCrop }: { pdf: LoadedPdf; page: number; onClose: () => void; onCrop: (b: Blob) => void }) {
   const holder = useRef<HTMLDivElement>(null);
@@ -491,14 +541,16 @@ function CropDialog({ pdf, page, onClose, onCrop }: { pdf: LoadedPdf; page: numb
 
   useEffect(() => {
     let alive = true;
-    void renderPageCanvas(pdf.doc, page, 1600).then((c) => {
-      if (!alive) return;
-      c.style.width = "100%";
-      c.style.height = "auto";
-      c.style.display = "block";
-      holder.current?.replaceChildren(c);
-      setCanvas(c);
-    });
+    renderPageCanvas(pdf.doc, page, 1600)
+      .then((c) => {
+        if (!alive) return;
+        c.style.width = "100%";
+        c.style.height = "auto";
+        c.style.display = "block";
+        holder.current?.replaceChildren(c);
+        setCanvas(c);
+      })
+      .catch((e) => alive && setErr(`No se pudo pintar la página: ${errorDetail(e)}`));
     return () => {
       alive = false;
     };

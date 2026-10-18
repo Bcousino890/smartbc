@@ -12,7 +12,7 @@ import { createWorker } from "tesseract.js";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { openPdf, pageTextFromItems, readPage, sha256HexSync, toRgba, type ExtractedPage } from "../lib/imports/pdf/extract.ts";
 import { createHash } from "node:crypto";
-import { extractPdfFields, parseAmount } from "../lib/imports/pdf/fields.ts";
+import { extractPdfFields, normalizeLayout, parseAmount } from "../lib/imports/pdf/fields.ts";
 import { acceptOcr, PDF_ASSET_FILES, resolvePdfAsset } from "../lib/imports/pdf/ocr.ts";
 import { planPdfDrafts, type PlanPage } from "../lib/imports/pdf/plan.ts";
 import { stripContacts } from "../lib/imports/pdf/sanitize.ts";
@@ -126,6 +126,55 @@ await t("nada inventado: un texto sin datos deja todo vacío", () => {
 });
 await t("características por palabra clave, «sin ascensor» no cuenta", () => {
   assert.deepEqual(one("Terraza, garaje y sin ascensor").fields.features, ["Terraza", "Garaje"]);
+});
+
+console.log("\n· Fichas de agencia (formato de los colaboradores)");
+await t("letras espaciadas y palabras partidas con guion", () => {
+  assert.equal(normalizeLayout("D O R M I T O R I O S\n3"), "DORMITORIOS\n3");
+  assert.equal(normalizeLayout("2 + 1 ASEO"), "2 + 1 ASEO", "rachas cortas no se tocan");
+  assert.equal(normalizeLayout("BARRIO DE SALAMANCA - CASTEL-\nLANA"), "BARRIO DE SALAMANCA - CASTELLANA");
+});
+await t("etiqueta → valor manda; «GARAJE: NO» no añade Garaje; «RATIO €/M²» no es precio", () => {
+  const r = one("P R E C I O\n\n2.190.000 €\n\nR A T I O € / M ²\n\n10.330 €\n\nD O R M I T O R I O S\n\n3\n\nB A Ñ O S\n\n2 + 1 ASEO\n\nM E T R O S C A T A S T R A L E S\n\n212 M²\n\nG A R A J E\n\nNO\n\nA S C E N S O R\n\nSÍ\n\nP L A N T A\n\nENTREPLANTA");
+  assert.equal(r.fields.price, 2190000);
+  assert.equal(r.evidence.price.status, "seguro");
+  assert.equal(r.fields.bedrooms, 3);
+  assert.equal(r.fields.bathrooms, 2);
+  assert.equal(r.fields.squareMeters, 212);
+  assert.ok(r.fields.features.includes("Ascensor") && !r.fields.features.includes("Garaje"), JSON.stringify(r.fields.features));
+  assert.equal(r.fields.floor, "", "entreplanta no es un número de planta");
+  assert.ok(r.fields.features.includes("Entreplanta"));
+});
+await t("el mismo valor con distinto peso no rompe la elección (fallo real de producción)", () => {
+  // Antes: «155 m²» suelto (peso 1) y luego «construida de 155 m²» (peso 2) → sin candidato → TypeError.
+  const r = extractPdfFields([{ page: 1, text: "Piso\n155 m²" }, { page: 2, text: "superficie construida de 155 m²" }]);
+  assert.equal(r.fields.squareMeters, 155);
+  assert.equal(r.evidence.squareMeters.status, "seguro");
+});
+await t("referencia pegada a mayúsculas («…TÉCNICOSREF:1178») sí; «preferencia» no", () => {
+  assert.equal(one("D A T O S T É C N I C O S R E F : 1 1 7 8").evidence.reference?.snippet, "1178");
+  assert.equal(one("Sin preferencia: A123 de nada").evidence.reference, undefined);
+});
+await t("la descripción son los párrafos, sin títulos de ficha ni aviso legal", () => {
+  const prosa = "Espectacular piso en el Barrio de Salamanca, una de las zonas residenciales más exclusivas de Madrid, con tres dormitorios, dos baños y una cocina reformada con acabados de primera calidad y mucha luz.";
+  const r = extractPdfFields([
+    { page: 1, text: "P R E C I O\n\n900.000 €" },
+    { page: 2, text: `C O Q U E T O P I S O\n\n${prosa}` },
+    { page: 3, text: "Información legal obligatoria (art. 60 y ss. TRLGDCU – RDL 1/2007): Los datos, medidas y superficies son meramente informativos y no tienen carácter contractual, pueden ser modificados sin previo aviso alguno." },
+  ]);
+  assert.equal(r.fields.description, prosa);
+});
+await t("título con tilde inicial («Ático…») y nunca un trozo de párrafo", () => {
+  const r = one("Ático Luminoso En Chamberí\n\nMagnífico ático en el barrio, a pocos minutos de la Castellana. La vivienda cuenta con terraza.");
+  assert.equal(r.fields.title, "Ático Luminoso En Chamberí");
+});
+await t("ligaduras y trozos pegados no parten palabras («super fi cie»)", () => {
+  const t1 = pageTextFromItems([
+    { str: "super", transform: [1, 0, 0, 1, 0, 100], width: 30, height: 10 },
+    { str: "\ufb01", transform: [1, 0, 0, 1, 30, 100], width: 6, height: 10 },
+    { str: "cie construida", transform: [1, 0, 0, 1, 36, 100], width: 70, height: 10 },
+  ]);
+  assert.equal(t1, "superficie construida");
 });
 
 console.log("\n· Separar viviendas");
@@ -344,6 +393,29 @@ await t("varias: tres viviendas, fotos asignadas a su vivienda, una dual dudosa 
   assert.equal(c.fields.squareMeters, 40, plan[3].text);
   assert.equal(c.part, 3);
   assert.ok(!/655/.test(c.fields.description));
+});
+
+console.log("\n· Ficha de agencia (PDF sintético con el formato de los colaboradores)");
+await t("ficha-agencia: una vivienda, datos de la ficha, sin Garaje, descripción en prosa", async () => {
+  const { plan } = await read("ficha-agencia.pdf");
+  const groups = proposeGroups(plan.map((p) => pageSignals(p.page, p.text)));
+  assert.deepEqual(groups, [[1, 2, 3, 4]]);
+  const [d] = planPdfDrafts(plan, groups);
+  assert.equal(d.fields.title, "Ático Luminoso En Chamberí");
+  assert.equal(d.fields.price, 1450000);
+  assert.equal(d.evidence.price.status, "seguro");
+  assert.equal(d.fields.squareMeters, 155);
+  assert.equal(d.fields.bedrooms, 4);
+  assert.equal(d.fields.bathrooms, 3);
+  assert.equal(d.fields.zone, "Chamberí");
+  assert.equal(d.fields.subzone, "Almagro");
+  assert.equal(d.fields.floor, "");
+  assert.ok(d.fields.features.includes("Entreplanta") && d.fields.features.includes("Trastero") && d.fields.features.includes("Ascensor"));
+  assert.ok(!d.fields.features.includes("Garaje"), JSON.stringify(d.fields.features));
+  assert.equal(d.evidence.reference?.snippet, "2204");
+  assert.ok(d.fields.description.startsWith("Magnífico ático en el barrio de Almagro"), d.fields.description.slice(0, 80));
+  assert.ok(!/legal|TRLGDCU|info@/.test(d.fields.description));
+  assert.equal(d.photos.length, 3);
 });
 
 await worker.terminate();

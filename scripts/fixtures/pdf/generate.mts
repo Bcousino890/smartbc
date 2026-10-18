@@ -91,4 +91,21 @@ await pdf(page, `${pageA(a1)}<div class="p two"><img src="${a2}"><img src="${a3}
 <div class="p"><h1>Piso en Goya, Salamanca</h1><p class="big">Venta 650.000 € · Alquiler 2.800 €/mes</p>
 <p>80 m² · 2 dormitorios · 2 baños · Exterior</p><img class="f" src="${b1}"></div>${scanEstudio}`, "varias.pdf");
 
+// Ficha de agencia (formato habitual de los colaboradores): etiquetas con letras
+// espaciadas y el valor debajo, palabra partida con guion, «RATIO €/M²», «GARAJE
+// NO», «ENTREPLANTA», la superficie repetida en el texto y aviso legal al final.
+const sp = (t: string) => t.split("").join(" ").replace(/ {3}/g, "   ");
+const pair = (k: string, v: string) => `<p class="lbl">${sp(k)}</p><p class="val">${v}</p>`;
+const [f1, f2, f3] = await Promise.all([30, 190, 250].map(photo));
+await pdf(page, `<style>.lbl{font-size:11px;letter-spacing:1px;color:#666;margin:10px 0 0}.val{font-size:15px;font-weight:bold;margin:2px 0}</style>
+<div class="p"><h1>Ático Luminoso En Chamberí</h1><p class="lbl">${sp("ALMAGRO")}</p><p class="big">1.450.000 €</p>
+<p class="lbl">${sp("DATOS TÉCNICOS")}  ${sp("REF: 2204")}</p>
+${pair("ZONA", "BARRIO DE CHAMBERÍ - ALMA-<br>GRO")}${pair("PRECIO", "1.450.000 €")}${pair("RATIO €/M²", "9.355 €")}
+${pair("METROS CONSTRUIDOS", "155 M²")}${pair("DORMITORIOS", "4")}${pair("BAÑOS", "3 + 1 ASEO")}${pair("PLANTA", "ENTREPLANTA")}
+${pair("GARAJE", "NO")}${pair("TRASTERO", "SÍ")}${pair("ASCENSOR", "SÍ")}<img class="f" src="${f1}" style="width:60%"></div>
+<div class="p"><p class="lbl">${sp("ÁTICO LUMINOSO EN CHAMBERÍ")}</p>
+<p>Magnífico ático en el barrio de Almagro, a pocos minutos de la Castellana y de las mejores calles del distrito. La vivienda cuenta con una superficie construida de 155 m², cuatro dormitorios y tres baños, con terraza y acabados de primera calidad. Contacto: info@agencia-sintetica.es</p></div>
+<div class="p two"><img src="${f2}"><img src="${f3}"></div>
+<div class="p"><p>Información legal obligatoria (art. 60 y ss. TRLGDCU – RDL 1/2007): Los datos, medidas y superficies son meramente informativos y no tienen carácter contractual. Pueden ser modificados sin previo aviso. El precio no incluye impuestos ni gastos de transmisión (ITP/AJD o IVA).</p></div>`, "ficha-agencia.pdf");
+
 await browser.close();

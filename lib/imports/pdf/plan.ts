@@ -1,7 +1,7 @@
 // De páginas leídas + separación en viviendas → un borrador por vivienda
 // (BCP-01 P7, I-18/I-19). Puro: lo usa la interfaz de P8 y las pruebas.
 
-import type { DraftFields, FieldEvidence } from "../draft-model";
+import { type DraftFields, EMPTY_FIELDS, type FieldEvidence } from "../draft-model";
 import { extractPdfFields } from "./fields";
 import type { RemovedContact } from "./sanitize";
 import type { Groups } from "./split";
@@ -33,7 +33,19 @@ export function planPdfDrafts(pages: PlanPage[], groups: Groups): PlannedDraft[]
   const byPage = new Map(pages.map((p) => [p.page, p]));
   return groups.map((g, i) => {
     const ps = g.map((n) => byPage.get(n)).filter((p): p is PlanPage => Boolean(p));
-    const r = extractPdfFields(ps.map((p) => ({ page: p.page, text: p.text })));
+    // Si las reglas fallan con un PDF raro, la vivienda sale igual con los campos
+    // vacíos para rellenarlos a mano: nunca se pierde la importación por esto.
+    let r: ReturnType<typeof extractPdfFields>;
+    try {
+      r = extractPdfFields(ps.map((p) => ({ page: p.page, text: p.text })));
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      r = {
+        fields: { ...EMPTY_FIELDS, features: [] },
+        evidence: { title: { status: "falta", snippet: `No se pudieron leer los datos automáticamente (${why.slice(0, 120)}). Rellénalos a mano.` } },
+        removedContacts: [],
+      };
+    }
     const ocrPages = ps.filter((p) => p.source === "ocr").map((p) => p.page);
     // Lo leído por OCR nunca es «seguro»: los números pueden estar mal leídos.
     for (const ev of Object.values(r.evidence)) if (ev.page && ocrPages.includes(ev.page) && ev.status === "seguro") ev.status = "dudoso";

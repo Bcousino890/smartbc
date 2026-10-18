@@ -47,6 +47,12 @@ export function parseAmount(raw: string): number | null {
 }
 
 // «2.800», «1.250.000» (toLocaleString("es-ES") no agrupa las de cuatro cifras).
+/** «REFORMADO» → «Reformado», «A REFORMAR» → «A reformar». */
+function titleCase(s: string): string {
+  const t = s.trim().toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 const fmt = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
 // ── Precio ──────────────────────────────────────────────────────────────────
@@ -55,7 +61,7 @@ type PriceKind = "sale" | "rent";
 const PRICE_RE =
   /(?:(€|eur)\s*)?(\d{1,3}(?:[.\s ]\d{3})+|\d{3,9})(?:,\d{1,2})?\s*(€|eur(?:os)?\b)?(\s*(?:\/\s*mes|al mes|mensuales|\/mensual|€\s*\/\s*mes))?/gi;
 // Importes que no son el precio del inmueble.
-const NOT_PRICE_BEFORE = /(comunidad|ibi|fianza|gastos|dep[oó]sito|honorarios|tasa|basura|suministros|garaje opcional|plaza de garaje|trastero opcional|reserva|aval)[^\n€]{0,25}$/i;
+const NOT_PRICE_BEFORE = /(comunidad|ibi|fianza|gastos|ratio|dep[oó]sito|honorarios|tasa|basura|suministros|garaje opcional|plaza de garaje|trastero opcional|reserva|aval)[^\n€]{0,25}$/i;
 const PER_AREA_AFTER = /^\s*(?:€|eur)?\s*\/\s*(?:m2|m²|m\b)/i;
 
 function priceHits(p: PageText): Hit<{ amount: number; kind: PriceKind }>[] {
@@ -68,6 +74,10 @@ function priceHits(p: PageText): Hit<{ amount: number; kind: PriceKind }>[] {
     const before = p.text.slice(Math.max(0, idx - 60), idx);
     const after = p.text.slice(idx + m[0].length, idx + m[0].length + 12);
     if (NOT_PRICE_BEFORE.test(before) || PER_AREA_AFTER.test(after) || /\/\s*(?:m2|m²)/i.test(m[0])) continue;
+    // «RATIO €/M²» o «Precio/m²» en la línea anterior: es un precio por metro.
+    const lineStart = p.text.lastIndexOf("\n", idx);
+    const prevLines = lineStart < 0 ? [] : p.text.slice(0, lineStart).split("\n").map((l) => l.trim()).filter(Boolean);
+    if (/ratio|€\s*\/\s*m(?!es)|precio\s*\/\s*m(?!es)|eur\s*\/\s*m(?!es)/i.test(prevLines[prevLines.length - 1] ?? "")) continue;
     const line = p.text.slice(p.text.lastIndexOf("\n", idx) + 1, idx);
     let kind: PriceKind;
     if (m[4]) kind = "rent";
@@ -115,10 +125,21 @@ function countHits(p: PageText, nouns: string): Hit<number>[] {
 const BEDROOMS = "dormitorios?|habitaciones?|hab\\.|dorm\\.?|dorms\\.?";
 const BATHROOMS = "baños?|banos?";
 
-// Señales para separar viviendas (split.ts).
-export const pageHasPrice = (text: string) => priceHits({ page: 1, text }).length > 0;
-export const pageHasArea = (text: string) => areaHits({ page: 1, text }).length > 0;
-export const pageHasRooms = (text: string) => countHits({ page: 1, text }, BEDROOMS).length > 0;
+// Señales para separar viviendas (split.ts). Leen también las fichas de
+// agencia («PRECIO» / «DORMITORIOS» con el valor en la línea siguiente).
+const signalText = (text: string) => ({ page: 1, text: normalizeLayout(text) });
+export const pageHasPrice = (text: string) => {
+  const p = signalText(text);
+  return priceHits(p).length > 0;
+};
+export const pageHasArea = (text: string) => {
+  const p = signalText(text);
+  return areaHits(p).length > 0 || labelPairs(p).some((l) => l.kind === "area");
+};
+export const pageHasRooms = (text: string) => {
+  const p = signalText(text);
+  return countHits(p, BEDROOMS).length > 0 || labelPairs(p).some((l) => l.kind === "bedrooms");
+};
 
 // ── Zona (taxonomía de los catálogos) ───────────────────────────────────────
 
@@ -167,11 +188,109 @@ function zoneHits(p: PageText): ZoneHit[] {
   return out;
 }
 
+// ── Maquetado de las fichas de agencia ─────────────────────────────────────
+
+/**
+ * Deshace dos cosas del maquetado que estorban a las reglas:
+ *  · títulos con letras espaciadas («D O R M I T O R I O S», «R E F : 1 1 7 8»):
+ *    una racha de 4 o más caracteres sueltos separados por un espacio se junta;
+ *  · palabras partidas con guion a final de línea («CASTEL-\nLANA», «ofre-\nciendo»).
+ */
+export function normalizeLayout(text: string): string {
+  const dehyphen = text.replace(/(\p{L})-\n(\p{L})/gu, "$1$2");
+  return dehyphen
+    .split("\n")
+    .map((line) => {
+      const tokens = line.split(" ");
+      const out: string[] = [];
+      let run: string[] = [];
+      const flush = () => {
+        if (run.length >= 4) out.push(run.join(""));
+        else out.push(...run);
+        run = [];
+      };
+      for (const t of tokens) {
+        if ([...t].length === 1) run.push(t);
+        else {
+          flush();
+          out.push(t);
+        }
+      }
+      flush();
+      return out.join(" ");
+    })
+    .join("\n");
+}
+
+type LabelKind = "bedrooms" | "bathrooms" | "area" | "price" | "zone" | "floor" | "reference" | "situation" | "state" | "orientation" | "flag";
+// Etiquetas sin espacios ni tildes (tras normalizeLayout las de letras espaciadas quedan juntas).
+const LABELS: [RegExp, LabelKind][] = [
+  [/^(dormitorios?|habitaciones?|hab\.?)$/, "bedrooms"],
+  [/^(banos?|banoscompletos)$/, "bathrooms"],
+  [/^(superficie|superficieconstruida|metros|metroscuadrados|metrosconstruidos|metroscatastrales|m2|m2construidos|superficieutil)$/, "area"],
+  [/^(precio|preciodeventa|preciodealquiler|renta|alquiler|precioalquiler|precioventa)$/, "price"],
+  [/^(zona|barrio|distrito|ubicacion|localizacion)$/, "zone"],
+  [/^(planta|altura)$/, "floor"],
+  [/^(ref|referencia)$/, "reference"],
+  [/^(situacion|exterior\/interior)$/, "situation"],
+  [/^(estado|estadodeconservacion|conservacion)$/, "state"],
+  [/^(orientacion)$/, "orientation"],
+  [/^(ascensor|garaje|parking|plazadegaraje|trastero|terraza|piscina|airea?condicionado|calefaccion|amueblado|portero|conserje|jardin|balcon|balcones)$/, "flag"],
+];
+const FLAG_FEATURE: Record<string, string> = {
+  ascensor: "Ascensor", garaje: "Garaje", parking: "Garaje", plazadegaraje: "Garaje", trastero: "Trastero", terraza: "Terraza", piscina: "Piscina",
+  aireacondicionado: "Aire acondicionado", airecondicionado: "Aire acondicionado", calefaccion: "Calefacción", amueblado: "Amueblado",
+  portero: "Portero", conserje: "Portero", jardin: "Jardín", balcon: "Balcón", balcones: "Balcón",
+};
+const foldKey = (s: string) => catalogFold(s).replace(/[\s:.·]+/g, "");
+
+interface LabelHit {
+  kind: LabelKind;
+  label: string;
+  value: string;
+  page: number;
+  snippet: string;
+}
+
+/** Pares «ETIQUETA» → valor en la línea siguiente (o «Etiqueta: valor» en la misma). */
+function labelPairs(p: PageText): LabelHit[] {
+  const lines = p.text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const out: LabelHit[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const inline = lines[i].match(/^([^:]{2,30}):\s*(.{1,80})$/);
+    const candidates: [string, string | undefined][] = [[lines[i], lines[i + 1]]];
+    if (inline) candidates.unshift([inline[1], inline[2]]);
+    for (const [rawLabel, rawValue] of candidates) {
+      if (!rawValue) continue;
+      const key = foldKey(rawLabel);
+      if (key.length > 30) continue;
+      const hit = LABELS.find(([re]) => re.test(key));
+      if (!hit) continue;
+      // El valor no puede ser otra etiqueta conocida.
+      if (LABELS.some(([re]) => re.test(foldKey(rawValue)))) continue;
+      out.push({ kind: hit[1], label: key, value: rawValue.trim(), page: p.page, snippet: `${rawLabel.trim()}: ${rawValue.trim()}`.slice(0, 120) });
+      break;
+    }
+  }
+  return out;
+}
+
+/** Primer número entero de un valor («2 + 1 ASEO» → 2, «tres» → 3, «212 M²» → 212, «1.250.000 €» → 1250000). */
+function firstNumber(s: string): number | null {
+  const m = s.match(/\d{1,3}(?:\.\d{3})+|\d+/);
+  if (m) return Number(m[0].replace(/\./g, ""));
+  const w = catalogFold(s).match(new RegExp(`(?:^|\\s)(${Object.keys(WORD_NUM).join("|")})(?:\\s|$)`));
+  return w ? WORD_NUM[w[1]] : null;
+}
+const YES = /^(s[ií]|yes|x|✓|✔|incluid[oa]|con\b)/i;
+const NO = /^(no\b|sin\b|[—–-]+$)/i;
+
 // ── Otros campos ────────────────────────────────────────────────────────────
 
 // Sin flag «i»: con él \p{Lu} casaría cualquier letra; el tipo de vía admite mayúscula inicial.
 const ADDRESS_RE = /(?<![\p{L}])(?:[Cc]alle|[Cc]\/|[Aa]vda\.?|[Aa]venida|[Pp]aseo|[Pp][ºo]\.|[Pp]laza|[Pp]za\.?|[Rr]onda|[Gg]lorieta|[Cc]amino|[Tt]raves[ií]a)\s+(?:de(?:l| la| los| las)?\s+)?\p{Lu}[\p{L}'.]*(?:\s+(?:de(?:l| la)?\s+)?\p{Lu}[\p{L}'.]*){0,4}(?:,?\s*(?:n[ºo°]\.?\s*)?\d{1,4})?/gu;
-const REF_RE = /\bref(?:erencia)?\.?\s*(?:interna)?\s*[:#º]?\s*([A-Z0-9][A-Z0-9\-/]{2,19})\b/gi;
+// Sin flag «i» para que «…TÉCNICOSREF:1178» (mayúsculas pegadas) valga y «preferencia» no.
+const REF_RE = /(?<![a-záéíóúñ])(?:[Rr]ef(?:erencia)?|REF(?:ERENCIA)?)\.?\s*(?:[Ii]nterna|INTERNA)?\s*[:#º]?\s*([A-Za-z0-9][A-Za-z0-9\-/]{2,19})\b/g;
 const STAY_LONG = /larga (?:estancia|duraci[oó]n)|vivienda habitual|contrato (?:de )?(?:1|un|5|cinco) años?/i;
 const STAY_SHORT = /temporada|corta (?:estancia|duraci[oó]n)|media estancia|alquiler temporal|por meses|m[ií]nimo \d+ meses/i;
 const FEATURES: [RegExp, string][] = [
@@ -189,7 +308,8 @@ const FEATURES: [RegExp, string][] = [
   [/(?<!sin\s|no\s)\bamueblad[oa]\b/i, "Amueblado"],
   [/\bsin amueblar\b/i, "Sin amueblar"],
 ];
-const TITLE_HINT = /\b(piso|[áa]tico|chalet|casa|apartamento|estudio|d[úu]plex|local|loft|vivienda|bajo|villa|tr[ií]plex|[áa]tico)\b/i;
+// Con límites de palabra Unicode: «\b» de JS no ve la «Á» de «Ático».
+const TITLE_HINT = /(?<![\p{L}])(piso|[áa]tico|chalet|casa|apartamento|estudio|d[úu]plex|local|loft|vivienda|bajo|villa|tr[ií]plex|[áa]tico|[áa]tico)(?![\p{L}])/iu;
 
 function firstPageWith<T>(pages: PageText[], fn: (p: PageText) => T | null): { value: T; page: PageText } | null {
   for (const p of pages) {
@@ -202,8 +322,14 @@ function firstPageWith<T>(pages: PageText[], fn: (p: PageText) => T | null): { v
 /** Elige un valor y dice si es seguro: un único valor distinto (o el de más peso sin empate). */
 function choose<T>(hits: Hit<T>[], key: (v: T) => string, label: (v: T) => string): { hit: Hit<T>; ev: FieldEvidence } | null {
   if (!hits.length) return null;
+  // Por cada valor, su aparición de más peso (antes se quedaba con la primera y,
+  // si la de más peso repetía un valor ya visto, no quedaba candidato: fallo).
   const distinct = new Map<string, Hit<T>>();
-  for (const h of hits) if (!distinct.has(key(h.value))) distinct.set(key(h.value), h);
+  for (const h of hits) {
+    const k = key(h.value);
+    const cur = distinct.get(k);
+    if (!cur || (h.weight ?? 1) > (cur.weight ?? 1)) distinct.set(k, h);
+  }
   const best = Math.max(...hits.map((h) => h.weight ?? 1));
   const top = [...distinct.values()].filter((h) => (h.weight ?? 1) === best);
   const hit = top[0];
@@ -212,14 +338,45 @@ function choose<T>(hits: Hit<T>[], key: (v: T) => string, label: (v: T) => strin
   return { hit, ev: { status: sure ? "seguro" : "dudoso", page: hit.page, snippet: hit.snippet, ...(others.length && !sure ? { alternatives: others.slice(0, 5) } : {}) } };
 }
 
+/**
+ * La descripción de una página: sus párrafos de texto corrido (25 palabras o más),
+ * sin el aviso legal ni los bloques de ficha («PRECIO», «2.190.000 €»…), con las
+ * líneas de cada párrafo unidas. Si la página no tiene ninguno, su texto tal cual.
+ */
+const LEGAL = /informaci[oó]n legal|car[aá]cter contractual|TRLGDCU|RDL\s*\d|ITP\/AJD|protecci[oó]n de datos|RGPD/i;
+function proseOf(text: string): { prose: string; rest: string } {
+  const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  // Las palabras se cuentan sin letras espaciadas («C O Q U E T O» es una, no seis).
+  const prose = blocks.filter((b) => normalizeLayout(b).split(/\s+/).length >= 25 && !LEGAL.test(b));
+  return {
+    prose: prose.map((b) => b.replace(/([^.!?:;])\n(?=\S)/g, "$1 ")).join("\n\n"),
+    rest: blocks.filter((b) => !LEGAL.test(b)).join("\n\n"),
+  };
+}
+
 export function extractPdfFields(pages: PageText[]): PdfFieldsResult {
   const fields: DraftFields = { ...EMPTY_FIELDS, features: [] };
   const evidence: Record<string, FieldEvidence> = {};
-  const ordered = [...pages].sort((a, b) => a.page - b.page).map((p) => ({ page: p.page, text: p.text.normalize("NFC") }));
+  const sorted = [...pages].sort((a, b) => a.page - b.page);
+  // Para las reglas, el texto sin letras espaciadas ni palabras partidas; para la
+  // descripción, el original solo sin las palabras partidas.
+  const ordered = sorted.map((p) => ({ page: p.page, text: normalizeLayout(p.text.normalize("NFC")) }));
+  const readable = sorted.map((p) => ({ page: p.page, text: p.text.normalize("NFC").replace(/(\p{L})-\n(\p{L})/gu, "$1$2") }));
   const all = ordered.map((p) => p.text).join("\n");
+  // Fichas de agencia: «ETIQUETA» → valor. Mandan sobre el texto libre (peso 3).
+  const labels = ordered.flatMap(labelPairs);
+  const ofKind = (k: LabelKind) => labels.filter((l) => l.kind === k);
+  const fromLabel = <T,>(k: LabelKind, parse: (l: LabelHit) => T | null): Hit<T>[] =>
+    ofKind(k).flatMap((l) => {
+      const v = parse(l);
+      return v === null ? [] : [{ value: v, page: l.page, snippet: l.snippet, weight: 3 }];
+    });
 
   // Precio y operación. Venta y alquiler a la vez → dudoso: V1 no crea duales (I-12a).
-  const prices = ordered.flatMap(priceHits);
+  const prices = [
+    ...ordered.flatMap(priceHits),
+    ...ofKind("price").flatMap((l) => priceHits({ page: l.page, text: `${l.label.includes("alquiler") || l.label === "renta" ? "Alquiler: " : ""}${l.value}` }).map((h) => ({ ...h, snippet: l.snippet, weight: 3 }))),
+  ];
   const pc = choose(prices, (v) => `${v.kind}:${v.amount}`, (v) => `${fmt(v.amount)} €${v.kind === "rent" ? "/mes" : ""}`);
   if (pc) {
     fields.price = pc.hit.value.amount;
@@ -237,39 +394,59 @@ export function extractPdfFields(pages: PageText[]): PdfFieldsResult {
     }
   }
 
-  const area = choose(ordered.flatMap(areaHits), String, (v) => `${v} m²`);
+  const area = choose(
+    [...ordered.flatMap(areaHits), ...fromLabel("area", (l) => {
+      const n = firstNumber(l.value);
+      return n !== null && n >= 10 && n <= FIELD_LIMITS.area ? n : null;
+    })],
+    String,
+    (v) => `${v} m²`,
+  );
   if (area) {
     fields.squareMeters = area.hit.value;
     evidence.squareMeters = area.ev;
   }
-  const beds = choose(ordered.flatMap((p) => countHits(p, BEDROOMS)), String, String);
+  const smallCount = (l: LabelHit) => {
+    const n = firstNumber(l.value);
+    return n !== null && n <= FIELD_LIMITS.rooms ? n : null;
+  };
+  const beds = choose([...ordered.flatMap((p) => countHits(p, BEDROOMS)), ...fromLabel("bedrooms", smallCount)], String, String);
   if (beds) {
     fields.bedrooms = beds.hit.value;
     evidence.bedrooms = beds.ev;
   }
-  const baths = choose(ordered.flatMap((p) => countHits(p, BATHROOMS)), String, String);
+  const baths = choose([...ordered.flatMap((p) => countHits(p, BATHROOMS)), ...fromLabel("bathrooms", smallCount)], String, String);
   if (baths) {
     fields.bathrooms = baths.hit.value;
     evidence.bathrooms = baths.ev;
   }
 
-  // Planta: el mismo parser que la ficha (lib/floor.ts), página a página.
-  const floors = ordered
-    .map((p) => ({ p, n: extractFloor(null, p.text) }))
+  // Planta: la etiqueta manda; si no, el mismo parser que la ficha (lib/floor.ts).
+  const floorLabel = ofKind("floor")[0];
+  const labelFloor = floorLabel ? extractFloor(null, `planta ${floorLabel.value}`) : null;
+  const extraFeatures: string[] = [];
+  // «ENTREPLANTA», «SEMISÓTANO», «PRINCIPAL»: no son un número de planta; van como característica.
+  const odd = floorLabel ? /entreplanta|semis[oó]tano|principal|entresuelo/i.test(floorLabel.value) : false;
+  if (floorLabel && (labelFloor === null || odd)) extraFeatures.push(titleCase(floorLabel.value));
+  const floors = (floorLabel && labelFloor !== null && labelFloor >= 0 ? [{ p: { page: floorLabel.page, text: floorLabel.snippet }, n: labelFloor }] : [])
+    .concat(ordered.map((p) => ({ p, n: extractFloor(null, p.text) })) as { p: PageText; n: number }[])
     .filter((x): x is { p: PageText; n: number } => x.n !== null && x.n >= 0);
-  if (floors.length) {
+  const ignored = Boolean(floorLabel && (labelFloor === null || odd));
+  if (floors.length && !ignored) {
     const n = floors[0].n;
     fields.floor = n === ATICO_FLOOR ? "ático" : n === 0 ? "bajo" : String(n);
     const m = floors[0].p.text.match(/planta|piso|[áa]tico|bajo/i);
     evidence.floor = {
-      status: new Set(floors.map((f) => f.n)).size === 1 ? "seguro" : "dudoso",
+      status: new Set(floors.map((f) => f.n)).size === 1 || (floorLabel && labelFloor === n) ? "seguro" : "dudoso",
       page: floors[0].p.page,
       ...(m ? { snippet: snippetAt(floors[0].p.text, m.index ?? 0, m[0].length) } : {}),
     };
   }
-
   // Zona: distrito y barrio de la taxonomía de los catálogos.
-  const zones = ordered.flatMap(zoneHits);
+  const zones = [
+    ...ofKind("zone").flatMap((l) => zoneHits({ page: l.page, text: l.value }).map((z) => ({ ...z, strong: true, snippet: l.snippet }))),
+    ...ordered.flatMap(zoneHits),
+  ];
   const districts = new Set(zones.map((z) => z.district));
   const supported = zones.filter((z) => z.strong || (z.barrio !== null && zones.some((o) => o.barrio === null && o.district === z.district)));
   const usable = supported.length ? supported : [];
@@ -308,23 +485,53 @@ export function extractPdfFields(pages: PageText[]): PdfFieldsResult {
     evidence.address = { status: "dudoso", page: addr.page.page, snippet: snippetAt(addr.page.text, addr.value.index ?? 0, addr.value[0].length) };
   }
 
+  const refLabel = ofKind("reference").find((l) => /\d/.test(l.value));
   const ref = firstPageWith(ordered, (p) => [...p.text.matchAll(REF_RE)].find((m) => /\d/.test(m[1])) ?? null);
-  if (ref) evidence.reference = { status: "seguro", page: ref.page.page, snippet: ref.value[1] };
+  if (refLabel) evidence.reference = { status: "seguro", page: refLabel.page, snippet: refLabel.value.replace(/\s+/g, "").slice(0, 20) };
+  else if (ref) evidence.reference = { status: "seguro", page: ref.page.page, snippet: ref.value[1] };
 
+  // Características: las etiquetas «SÍ/NO» mandan sobre las palabras sueltas
+  // («GARAJE: NO» no puede acabar como «Garaje»).
+  const flagYes = new Set<string>();
+  const flagNo = new Set<string>();
+  for (const l of ofKind("flag")) {
+    const f = FLAG_FEATURE[l.label];
+    if (!f) continue;
+    if (NO.test(l.value.trim())) flagNo.add(f);
+    else if (YES.test(l.value.trim()) || /\d/.test(l.value)) flagYes.add(f);
+  }
+  const push = (f: string) => {
+    if (fields.features.length < FIELD_LIMITS.features && !fields.features.includes(f) && !flagNo.has(f)) fields.features.push(f);
+  };
+  for (const f of flagYes) push(f);
+  for (const l of ofKind("situation")) {
+    if (/exterior/i.test(l.value)) push("Exterior");
+    else if (/interior/i.test(l.value)) push("Interior");
+  }
+  for (const l of ofKind("state")) if (l.value.length <= 40) push(titleCase(l.value));
+  for (const l of ofKind("orientation")) if (l.value.length <= 30) push(`Orientación ${l.value.toLowerCase()}`);
+  for (const f of extraFeatures) push(f);
   for (const [re, label] of FEATURES) {
     const f = firstPageWith(ordered, (p) => p.text.match(re));
-    if (f && fields.features.length < FIELD_LIMITS.features) {
+    if (f) {
       if (label === "Amueblado" && fields.features.includes("Sin amueblar")) continue;
-      fields.features.push(label);
+      push(label);
     }
   }
   if (fields.features.length) evidence.features = { status: "seguro", page: ordered[0]?.page };
 
   // Título: una línea del propio documento (nunca redactada), siempre «dudoso».
-  const lines = ordered.flatMap((p) => p.text.split("\n").map((l) => ({ l: l.replace(/\s+/g, " ").trim(), p })));
+  const lines = readable.flatMap((p) => p.text.split("\n").map((l) => ({ l: l.replace(/\s+/g, " ").trim(), p })));
+  // Un título es una línea corta, no un trozo de párrafo (sin punto a mitad ni coma final).
   const candidate = (x: { l: string }) =>
-    x.l.length >= 8 && x.l.length <= 140 && /\p{L}{3}/u.test(x.l) && !/€|@|https?:|www\.|\d{3}[\s.-]?\d{3}[\s.-]?\d{3}|p[áa]gina \d/i.test(x.l);
-  const t = lines.find((x) => candidate(x) && TITLE_HINT.test(x.l)) ?? lines.find(candidate);
+    x.l.length >= 8 &&
+    x.l.length <= 90 &&
+    /\p{L}{3}/u.test(x.l) &&
+    !/[.,;]\s+\p{Ll}|[,;]$/u.test(x.l) &&
+    !/€|@|https?:|www\.|\d{3}[\s.-]?\d{3}[\s.-]?\d{3}|p[áa]gina \d/i.test(x.l);
+  // Primero entre las primeras líneas del documento; luego en cualquier sitio.
+  const head = lines.slice(0, 12);
+  const t = head.find((x) => candidate(x) && TITLE_HINT.test(x.l)) ?? head.find(candidate) ?? lines.find((x) => candidate(x) && TITLE_HINT.test(x.l)) ?? lines.find(candidate);
   if (t) {
     fields.title = t.l.slice(0, FIELD_LIMITS.title);
     evidence.title = { status: "dudoso", page: t.p.page, snippet: t.l.slice(0, 120) };
@@ -332,8 +539,12 @@ export function extractPdfFields(pages: PageText[]): PdfFieldsResult {
 
   // Descripción: el texto del documento sin los contactos del colaborador.
   const removedContacts: RemovedContact[] = [];
-  const parts = ordered.map((p) => {
-    const s = stripContacts(p.text, p.page);
+  // Si el documento tiene párrafos de texto corrido, la descripción son esos; si
+  // no (fichas solo de datos), el texto de las páginas sin el aviso legal.
+  const split = readable.map((p) => ({ page: p.page, ...proseOf(p.text) }));
+  const useProse = split.some((x) => x.prose);
+  const parts = split.map((x) => {
+    const s = stripContacts(useProse ? x.prose : x.rest, x.page);
     removedContacts.push(...s.removed);
     return s.text;
   });
@@ -341,8 +552,8 @@ export function extractPdfFields(pages: PageText[]): PdfFieldsResult {
   if (description) {
     fields.description = description;
     evidence.description = removedContacts.length
-      ? { status: "dudoso", page: ordered[0]?.page, snippet: `Se han quitado ${removedContacts.length} dato(s) de contacto del colaborador` }
-      : { status: "seguro", page: ordered[0]?.page };
+      ? { status: "dudoso", page: readable[0]?.page, snippet: `Se han quitado ${removedContacts.length} dato(s) de contacto del colaborador` }
+      : { status: "seguro", page: readable[0]?.page };
   }
 
   return { fields, evidence, removedContacts };

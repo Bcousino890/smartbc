@@ -119,6 +119,17 @@ await page.getByTestId("draft-review").waitFor();
 ok("vivienda escaneada: datos «Dudoso · pág. 4» (del OCR)", (await page.getByText(/Dudoso · pág\. 4/).count()) >= 3);
 ok("la descripción no lleva el teléfono del colaborador", !(await page.locator('[data-field="description"]').inputValue()).includes("655"));
 
+console.log("\n· Ficha de agencia (letras espaciadas, valor debajo, aviso legal)");
+const p4 = await browser.newPage({ viewport: { width: 1300, height: 1000 } });
+p4.on("pageerror", (e) => errors.push(e.message));
+await p4.goto(`${BASE}/dev-fixtures/importar-pdf`, { waitUntil: "networkidle" });
+await p4.getByTestId("pdf-file").setInputFiles(join(FIX, "ficha-agencia.pdf"));
+await p4.getByTestId("pdf-split").waitFor({ timeout: 120000 });
+const fsum = await p4.getByTestId("pdf-group-summary").allInnerTexts();
+ok("una vivienda con título, precio, m² y zona de la ficha", fsum.length === 1 && /Ático Luminoso En Chamberí · 1\.450\.000 € · 155 m² · Chamberí/.test(fsum[0]), fsum.join(" | "));
+ok("sin pantalla de error", (await p4.getByTestId("pdf-crash").count()) === 0);
+await p4.close();
+
 console.log("\n· Fallos del entorno: el OCR no arranca / el lector no carga");
 const p2 = await browser.newPage({ viewport: { width: 1300, height: 1000 } });
 await p2.route("**/tesseract-worker.min.js", (r) => r.abort());
