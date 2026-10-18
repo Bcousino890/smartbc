@@ -57,12 +57,12 @@ jobs:
       # conflictos, material y filtros). Puro, sin BD.
       - name: "Catálogos (gestor: borradores y diagnósticos, offline)"
         run: npm run test:catalogs-manager
-      - name: "Propiedades: filtro de la lista (caracterización) y búsqueda por referencia (offline)"
-        run: npm run test:admin-properties
-      - name: "Catálogos: buscador (filtros, URL, texto y planta, paginación; offline)"
-        run: npm run test:catalog-search
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
+      - name: "Catálogos: buscador (filtros, URL, texto y planta, paginación; offline)"
+        run: npm run test:catalog-search
+      - name: "Propiedades: filtro de la lista (caracterización) y búsqueda por referencia (offline)"
+        run: npm run test:admin-properties
 
       # Permisos y cuentas del equipo. Son las reglas que impiden que alguien
       # escale privilegios (rango entre roles, quién crea qué rol, quién fija
