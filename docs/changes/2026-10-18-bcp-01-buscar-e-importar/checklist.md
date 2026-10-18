@@ -10,12 +10,12 @@ Se actualiza en cada PR. Leyenda:
 
 | PR | Estado | Rama / PR | Nota |
 |---|---|---|---|
-| P0 · Expediente | 🟡 | `fabri/bcp-01-expediente-buscar-importar` | — |
-| P1 · Controles compartidos | ⬜ | — | — |
-| P2 · Motor de búsqueda (0212) | ⬜ | — | — |
+| P0 · Expediente | 🟡 | #326 | — |
+| P1 · Controles compartidos | 🟡 | #327 | Caracterización 31/31 (también contra el código original); navegador: DOM y estado idénticos a `main` |
+| P2 · Motor de búsqueda (0212) | 🟡 | #328 | SQL 86, paridad 400 + 14, TS 50, concurrencia del máximo |
 | P3 · Selección explícita | ⬜ | — | Depende de P1 y P2 |
 | P4 · Conversión de automáticos (0213) | ⬜ | — | Depende de P2 y P3 |
-| P5 · Base de la importación (0214) | ⬜ | — | — |
+| P5 · Base de la importación (0214) | 🟡 | #329 | SQL 82, flujo de punta a punta 47, TS 68, build de producción |
 | P6 · Importar por enlace con borrador | ⬜ | — | Depende de P3 y P5 |
 | P7 · Motor de extracción de PDF | ⬜ | — | Depende de P5 |
 | P8 · Importar desde PDF | ⬜ | — | Depende de P6 y P7 |
