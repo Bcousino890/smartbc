@@ -118,6 +118,24 @@ await page.getByTestId("draft-review").waitFor();
 ok("vivienda escaneada: datos «Dudoso · pág. 4» (del OCR)", (await page.getByText(/Dudoso · pág\. 4/).count()) >= 3);
 ok("la descripción no lleva el teléfono del colaborador", !(await page.locator('[data-field="description"]').inputValue()).includes("655"));
 
+console.log("\n· Fallos del entorno: el OCR no arranca / el lector no carga");
+const p2 = await browser.newPage({ viewport: { width: 1300, height: 1000 } });
+await p2.route("**/tesseract-worker.min.js", (r) => r.abort());
+await p2.goto(`${BASE}/dev-fixtures/importar-pdf`, { waitUntil: "networkidle" });
+await p2.getByTestId("pdf-file").setInputFiles(join(FIX, "escaneado.pdf"));
+await p2.getByTestId("pdf-split").waitFor({ timeout: 120000 });
+ok("sin OCR el PDF se abre igual y lo avisa con el detalle", (await p2.getByTestId("pdf-ocr-error").count()) === 1 && (await p2.getByTestId("pdf-crop-open").count()) === 1);
+await p2.close();
+const p3 = await browser.newPage();
+p3.on("console", () => {});
+await p3.route("**/pdf.worker.min.mjs", (r) => r.abort());
+await p3.goto(`${BASE}/dev-fixtures/importar-pdf`, { waitUntil: "networkidle" });
+await p3.getByTestId("pdf-file").setInputFiles(join(FIX, "digital.pdf"));
+await p3.getByTestId("pdf-error").waitFor({ timeout: 60000 });
+const msg = await p3.getByTestId("pdf-error").innerText();
+ok("si el lector no carga lo dice (no «no es un PDF») y enseña el detalle técnico", /lector de PDF/.test(msg) && (await p3.getByTestId("pdf-error-detail").count()) === 1, msg);
+await p3.close();
+
 ok("ninguna petición fuera del servidor (sin CDN; el PDF no sale)", external.length === 0, external.join(" | "));
 ok("sin errores de página", errors.length === 0, errors.join(" | "));
 await browser.close();

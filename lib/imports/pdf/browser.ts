@@ -14,6 +14,8 @@ export const PHOTO_MAX_SIDE = 2560;
 export interface BrowserPage extends ExtractedPage {
   textSource: "text" | "ocr" | "none";
   ocrConfidence: number | null;
+  /** La página no se pudo leer (o su OCR falló): se sigue con las demás. */
+  error: string | null;
 }
 
 export interface LoadedPdf {
@@ -22,12 +24,22 @@ export interface LoadedPdf {
   hash: string;
   doc: PdfDoc;
   pages: BrowserPage[];
+  /** El OCR no pudo arrancar: las páginas escaneadas quedan sin texto (se recortan y se escriben a mano). */
+  ocrError: string | null;
+}
+
+/** Texto técnico de un error, para enseñarlo junto al mensaje y poder diagnosticar. */
+export function errorDetail(e: unknown): string {
+  if (e instanceof PdfReadError && e.detail) return e.detail;
+  const err = e as { name?: string; message?: string } | null;
+  const msg = err?.message ?? String(e);
+  return `${err?.name && err.name !== "Error" ? `${err.name}: ` : ""}${msg}`.slice(0, 300);
 }
 
 export type PdfProgress = { stage: "leer" | "ocr"; done: number; total: number };
 
 export class PdfReadError extends Error {
-  code: "too_large" | "too_many_pages" | "not_a_pdf" | "encrypted";
+  code: "too_large" | "too_many_pages" | "not_a_pdf" | "encrypted" | "reader_unavailable" | "no_pages";
   detail: string | null;
   constructor(code: PdfReadError["code"], detail: string | null = null) {
     super(detail ? `${code}: ${detail}` : code);
@@ -110,14 +122,24 @@ export async function readPdfInBrowser(
   if (file.size > MAX_PDF_BYTES) throw new PdfReadError("too_large");
   const data = new Uint8Array(await file.arrayBuffer());
   if (!(data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46)) throw new PdfReadError("not_a_pdf"); // %PDF
-  const pdfjs = await loadPdfjs(opts.assetBase);
+  let pdfjs: PdfjsModule;
+  try {
+    pdfjs = await loadPdfjs(opts.assetBase);
+  } catch (e) {
+    pdfjsPromise = null; // que el siguiente intento vuelva a cargarlo
+    throw new PdfReadError("reader_unavailable", errorDetail(e));
+  }
   const hash = await sha256Hex(data);
   let doc: PdfDoc;
   try {
-    doc = await openPdf(pdfjs, data);
+    const dir = `${opts.assetBase}/`;
+    doc = await openPdf(pdfjs, data, { wasmUrl: dir, standardFontDataUrl: dir, cMapUrl: dir, iccUrl: dir });
   } catch (e) {
+    // Solo «no es un PDF» si pdf.js lo dice; cualquier otro fallo (su hilo no
+    // cargó, red…) es del lector, no del documento.
     const detail = `${(e as Error)?.name ?? "Error"}: ${(e as Error)?.message ?? String(e)}`;
-    throw new PdfReadError(/password/i.test(detail) ? "encrypted" : "not_a_pdf", detail);
+    const name = (e as Error)?.name ?? "";
+    throw new PdfReadError(/Password/.test(name) ? "encrypted" : /InvalidPDF|FormatError/.test(name) ? "not_a_pdf" : "reader_unavailable", detail);
   }
   if (doc.numPages > MAX_PDF_PAGES) {
     await doc.destroy();
@@ -125,35 +147,58 @@ export async function readPdfInBrowser(
   }
   const pages: BrowserPage[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
-    const p = await readPage(pdfjs, doc, n);
-    pages.push({ ...p, textSource: p.kind === "text" ? "text" : "none", ocrConfidence: null });
+    try {
+      const p = await readPage(pdfjs, doc, n);
+      pages.push({ ...p, textSource: p.kind === "text" ? "text" : "none", ocrConfidence: null, error: null });
+    } catch (e) {
+      // Una página ilegible no tumba el documento: queda vacía y avisada.
+      pages.push({ page: n, width: 595, height: 842, text: "", kind: "empty", images: [], textSource: "none", ocrConfidence: null, error: errorDetail(e) });
+    }
     opts.onProgress?.({ stage: "leer", done: n, total: doc.numPages });
   }
+  if (pages.every((p) => p.error)) {
+    const detail = pages[0]?.error ?? null;
+    await doc.destroy();
+    throw new PdfReadError("no_pages", detail);
+  }
+  let ocrError: string | null = null;
   const scans = pages.filter((p) => p.kind === "scan");
   if (opts.ocr !== false && scans.length) {
-    const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker([...OCR_LANGS], 1, {
-      workerPath: `${opts.assetBase}/tesseract-worker.min.js`,
-      corePath: opts.assetBase,
-      langPath: opts.assetBase,
-      gzip: true,
-      workerBlobURL: false,
-    });
+    let worker: Awaited<ReturnType<typeof import("tesseract.js")["createWorker"]>> | null = null;
     try {
-      let done = 0;
-      for (const p of scans) {
-        const canvas = await renderPageCanvas(doc, p.page, 2000);
-        const r = await worker.recognize(canvas);
-        p.ocrConfidence = r.data.confidence;
-        if (acceptOcr(r.data)) {
-          p.text = r.data.text.trim();
-          p.textSource = "ocr";
+      const { createWorker } = await import("tesseract.js");
+      worker = await createWorker([...OCR_LANGS], 1, {
+        workerPath: `${opts.assetBase}/tesseract-worker.min.js`,
+        corePath: opts.assetBase,
+        langPath: opts.assetBase,
+        gzip: true,
+        workerBlobURL: false,
+      });
+    } catch (e) {
+      // Sin OCR se puede seguir: las páginas escaneadas se recortan y los datos se escriben a mano.
+      ocrError = errorDetail(e);
+    }
+    if (worker) {
+      try {
+        let done = 0;
+        for (const p of scans) {
+          try {
+            const canvas = await renderPageCanvas(doc, p.page, 2000);
+            const r = await worker.recognize(canvas);
+            p.ocrConfidence = r.data.confidence;
+            if (acceptOcr(r.data)) {
+              p.text = r.data.text.trim();
+              p.textSource = "ocr";
+            }
+          } catch (e) {
+            p.error = `OCR: ${errorDetail(e)}`;
+          }
+          opts.onProgress?.({ stage: "ocr", done: ++done, total: scans.length });
         }
-        opts.onProgress?.({ stage: "ocr", done: ++done, total: scans.length });
+      } finally {
+        await worker.terminate().catch(() => {});
       }
-    } finally {
-      await worker.terminate();
     }
   }
-  return { name: file.name ?? "documento.pdf", size: file.size, hash, doc, pages };
+  return { name: file.name ?? "documento.pdf", size: file.size, hash, doc, pages, ocrError };
 }

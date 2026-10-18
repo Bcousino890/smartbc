@@ -2,7 +2,7 @@
 
 import { ArrowRight, Crop, FileText, Loader2, Scissors, Trash2, Undo2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cropToBlob, imageToBlob, type LoadedPdf, PdfReadError, readPdfInBrowser, renderPageCanvas } from "@/lib/imports/pdf/browser";
+import { cropToBlob, errorDetail, imageToBlob, type LoadedPdf, PdfReadError, readPdfInBrowser, renderPageCanvas } from "@/lib/imports/pdf/browser";
 import { pdfAssetBase } from "@/lib/imports/pdf/ocr";
 import { planPdfDrafts, type PlanPage } from "@/lib/imports/pdf/plan";
 import { type Groups, mergeWithPrevious, movePage, pageSignals, proposeGroups, removePage, splitBefore } from "@/lib/imports/pdf/split";
@@ -34,6 +34,8 @@ const READ_ERRORS: Record<PdfReadError["code"], string> = {
   too_many_pages: "El PDF tiene demasiadas páginas (máximo 200).",
   not_a_pdf: "Eso no parece un PDF, o está dañado.",
   encrypted: "El PDF está protegido con contraseña. Quítasela y vuelve a probar.",
+  reader_unavailable: "No se pudo cargar el lector de PDF en el navegador. Recarga la página y vuelve a probar.",
+  no_pages: "No se pudo leer ninguna página del PDF.",
 };
 
 /** Clave estable por documento, vivienda y páginas: reintentar o hacer doble clic da el MISMO borrador. */
@@ -65,6 +67,7 @@ export function PdfImport({
 }) {
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorTech, setErrorTech] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [groups, setGroups] = useState<Groups>([]);
   const [removedPages, setRemovedPages] = useState<number[]>([]);
@@ -82,6 +85,7 @@ export function PdfImport({
 
   async function onFile(file: File) {
     setError(null);
+    setErrorTech(null);
     setCreated(null);
     setPdf(null);
     setProgress("Leyendo el PDF…");
@@ -106,7 +110,10 @@ export function PdfImport({
       setPhotos(ph);
       setPdf(loaded);
     } catch (e) {
+      // El detalle técnico se enseña siempre: sin él no hay forma de saber qué falló.
+      console.error("[importar PDF]", e);
       setError(e instanceof PdfReadError ? READ_ERRORS[e.code] : "No se pudo leer el PDF.");
+      setErrorTech(errorDetail(e));
     } finally {
       setProgress(null);
     }
@@ -286,9 +293,14 @@ export function PdfImport({
           </p>
         ) : null}
         {error ? (
-          <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="pdf-error">
-            {error}
-          </p>
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="pdf-error">
+            <p>{error}</p>
+            {errorTech ? (
+              <p className="mt-1 break-all font-mono text-xs text-red-800/80" data-testid="pdf-error-detail">
+                Detalle técnico: {errorTech}
+              </p>
+            ) : null}
+          </div>
         ) : null}
       </div>
     );
@@ -307,6 +319,20 @@ export function PdfImport({
           Elegir otro PDF
         </button>
       </div>
+      {pdf.ocrError ? (
+        <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="pdf-ocr-error">
+          No se pudo leer el texto de las páginas escaneadas (OCR). Puedes seguir: recorta sus fotos y escribe los datos en la revisión. Detalle técnico: {pdf.ocrError}
+        </p>
+      ) : null}
+      {pdf.pages.some((p) => p.error) ? (
+        <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="pdf-page-errors">
+          Algunas páginas no se pudieron leer del todo:{" "}
+          {pdf.pages
+            .filter((p) => p.error)
+            .map((p) => `pág. ${p.page} (${p.error})`)
+            .join(" · ")}
+        </p>
+      ) : null}
       <p className="text-xs text-ink/60">
         Revisa la separación: cada bloque será un borrador. «Dividir aquí» empieza una vivienda nueva en esa página; las fotos siguen a su página salvo que las muevas. Las páginas escaneadas se han leído con OCR: revisa sus números.
       </p>
