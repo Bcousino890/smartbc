@@ -16,6 +16,7 @@ import { extractPdfFields, parseAmount } from "../lib/imports/pdf/fields.ts";
 import { acceptOcr, PDF_ASSET_FILES, resolvePdfAsset } from "../lib/imports/pdf/ocr.ts";
 import { planPdfDrafts, type PlanPage } from "../lib/imports/pdf/plan.ts";
 import { stripContacts } from "../lib/imports/pdf/sanitize.ts";
+import { installReadableStreamAsyncIterator } from "../lib/imports/pdf/polyfills.ts";
 import { mergeWithPrevious, movePage, pageSignals, proposeGroups, removePage, splitBefore, validGroups } from "../lib/imports/pdf/split.ts";
 import { existsSync } from "node:fs";
 
@@ -179,6 +180,40 @@ await t("recursos de pdf.js (wasm, fuentes, CMap, ICC): lista cerrada por nombre
     assert.ok(r && existsSync(join("node_modules", r.pkg, r.path)), ok);
   }
   for (const bad of ["../package.json", "cmaps/UniJIS-UCS2-H.bcmap", "quickjs-eval.wasm", "quickjs-eval.js", ".env", "..bcmap", "x\\y.pfb", "pdf.mjs"]) assert.equal(resolvePdfAsset(bad), null, bad);
+});
+
+await t("Safari: recorrido asíncrono de ReadableStream (lo usa pdf.js para el texto)", async () => {
+  // Un «ReadableStream» sin [Symbol.asyncIterator], como el de Safari.
+  class FakeStream {
+    cancelled = false;
+    released = false;
+    chunks: number[];
+    constructor(chunks: number[]) {
+      this.chunks = chunks;
+    }
+    getReader() {
+      return {
+        read: async () => (this.chunks.length ? { done: false, value: this.chunks.shift() } : { done: true, value: undefined }),
+        cancel: async () => {
+          this.cancelled = true;
+        },
+        releaseLock: () => {
+          this.released = true;
+        },
+      };
+    }
+  }
+  assert.equal(installReadableStreamAsyncIterator(FakeStream), true);
+  assert.equal(installReadableStreamAsyncIterator(FakeStream), false, "no se instala dos veces");
+  const all = new FakeStream([1, 2, 3]) as unknown as AsyncIterable<number> & FakeStream;
+  const got: number[] = [];
+  for await (const v of all) got.push(v);
+  assert.deepEqual(got, [1, 2, 3]);
+  assert.ok(all.released && !all.cancelled);
+  const cut = new FakeStream([1, 2, 3]) as unknown as AsyncIterable<number> & FakeStream;
+  for await (const v of cut) if (v === 1) break;
+  assert.ok(cut.cancelled && cut.released, "cortar el recorrido cancela el stream");
+  assert.equal(installReadableStreamAsyncIterator(globalThis.ReadableStream), false, "si el navegador ya lo tiene, no se toca");
 });
 
 // ── Los cuatro PDF sintéticos de punta a punta ────────────────────────────────
