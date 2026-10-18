@@ -70,6 +70,8 @@ export async function POST(req: Request) {
         country: row.profiles?.country ?? undefined,
         limit: 5,
         createdAfter: row.new_listing_alerts_last_sent_at ?? undefined,
+        // Fichas importadas sin «Avisar por correo»: nunca en el correo (BCP-01 P5).
+        forAlerts: true,
         supabase: db,
       });
 

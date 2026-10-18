@@ -129,7 +129,7 @@ const CANDIDATE_LIMIT = 400;
 export async function getSuggestedProperties(
   clientId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  opts?: { country?: string; limit?: number; createdAfter?: string; supabase?: any },
+  opts?: { country?: string; limit?: number; createdAfter?: string; forAlerts?: boolean; supabase?: any },
 ): Promise<SuggestedPropertiesResult> {
   // El cron de property-alerts no tiene sesión de usuario (server-to-server,
   // sin cookies) — con el cliente normal, RLS bloquea todo. Le pasa su propio
@@ -191,6 +191,11 @@ export async function getSuggestedProperties(
 
   if (opts?.country) query = query.eq("country", opts.country);
   if (opts?.createdAfter) query = query.gt("created_at", opts.createdAfter);
+  // Solo el cron de alertas pasa `forAlerts` (también en el primer envío, sin
+  // `createdAfter`): ahí se saltan las fichas importadas sin «Avisar por
+  // correo» (BCP-01 P5, migración 0214). El panel, el portal del cliente y
+  // «Enviar por correo» no lo pasan y no cambian.
+  if (opts?.forAlerts) query = query.eq("new_listing_alerts_suppressed", false);
 
   // Todas las condiciones con OR van en UN solo filtro lógico,
   // `or=(and(or(…),or(…)))`, en vez de encadenar varios `.or()`.
