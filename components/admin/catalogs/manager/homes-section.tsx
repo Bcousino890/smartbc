@@ -332,6 +332,15 @@ export function HomesSection(props: HomesSectionProps) {
             onAdd={props.addFromSearch}
             refreshKey={items.map((x) => x.propertyId).join()}
           />
+          {!archived ? (
+            <p className="flex flex-wrap items-center gap-2 rounded-xl border border-gold/20 bg-white/60 px-3 py-2 text-sm text-ink/70">
+              ¿No está en Propiedades?
+              <a href={`/es/admin/propiedades/importar?catalogo=${encodeURIComponent(catalog.id)}`} className="font-medium text-ink underline" data-testid="import-from-link">
+                Añadir desde un enlace
+              </a>
+              <span className="text-xs text-ink/50">Se crea un borrador privado; al confirmarlo, la ficha se añade a este catálogo.</span>
+            </p>
+          ) : null}
           <form onSubmit={props.addByReference} className="flex flex-col gap-2 rounded-xl border border-gold/20 bg-white/60 p-3 sm:flex-row sm:items-center">
             <label className="sr-only" htmlFor="cm-ref">
               Referencia BC, slug o URL de la ficha

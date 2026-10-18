@@ -115,6 +115,18 @@ export async function ownedExplicitCatalog(actor: string, catalogId: string | nu
   return { id: data.id, title: data.title };
 }
 
+/** Selecciones explícitas activas del dueño de la HOME (para elegir dónde añadir). */
+export async function listOwnedExplicitCatalogs(actor: string): Promise<{ id: string; title: string }[]> {
+  if (!(await isHomeOwner(actor))) return [];
+  const { data } = await db().from("catalogs").select("id, title").eq("owner_id", actor).eq("mode", "manual").eq("status", "active").order("updated_at", { ascending: false }).limit(200);
+  return (data ?? []) as { id: string; title: string }[];
+}
+
+export async function propertySlugOf(propertyId: string): Promise<string | null> {
+  const { data } = await db().from("properties").select("slug").eq("id", propertyId).maybeSingle();
+  return (data?.slug as string | undefined) ?? null;
+}
+
 // ── Lectura ─────────────────────────────────────────────────────────────────
 
 export async function getDraft(actor: string, id: string): Promise<DraftRow | null> {

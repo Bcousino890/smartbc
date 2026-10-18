@@ -163,7 +163,7 @@ export async function importPortalLink(
   const preview = extracted.preview;
   const title = preview.title?.trim();
   const zone = preview.zone?.trim();
-  // Mismas validaciones mínimas que confirmByLink: si el scraping no trajo lo
+  // Mismas validaciones mínimas que el antiguo confirmByLink (retirado en BCP-01 P6): si el scraping no trajo lo
   // imprescindible, mejor dejarlo pendiente que crear una ficha coja.
   if (!title || !zone || !preview.price || preview.price <= 0) {
     return fail("faltan datos básicos (título, zona o precio) en el anuncio");
