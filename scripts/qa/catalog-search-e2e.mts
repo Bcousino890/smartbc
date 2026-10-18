@@ -123,6 +123,32 @@ ok("la cabecera avisa «Automático (antiguo)»", (await page.getByTestId("manag
 ok("sin barra de operación nueva", (await page.getByTestId("operation-bar").count()) === 0);
 await shot(page, "4-automatico");
 
+console.log("\n· Conversión de un automático antiguo (P4)");
+await page.getByText("Modificar criterios").click();
+ok("sin «Pasar a manual…» (no hay cambio de modo)", (await page.getByText("Pasar a manual").count()) === 0 && (await page.getByText("Pasar a automático").count()) === 0);
+await page.getByTestId("conversion-open").click();
+await page.getByTestId("conversion-confirm").waitFor();
+const prevItems = await page.getByTestId("conversion-preview").locator("ol li").allInnerTexts();
+ok("vista previa con la lista y su orden", prevItems.length > 0, String(prevItems.length));
+ok("explica lo que se conserva", (await page.getByText("Se conservan los textos, las fotos elegidas, la portada").count()) === 1);
+// La lista cambia entre la vista previa y la confirmación.
+await page.evaluate(() => (window as unknown as { __fxChangeAuto: () => void }).__fxChangeAuto());
+await page.getByTestId("conversion-confirm").click();
+await page.getByTestId("conversion-refreshed").waitFor({ timeout: 10000 });
+ok("si cambió: NO convierte, avisa y recarga la vista previa", (await page.getByTestId("criteria-bar").count()) === 1 && (await page.getByTestId("conversion-refreshed").count()) === 1);
+const prev2 = await page.getByTestId("conversion-preview").locator("ol li").allInnerTexts();
+ok("la vista previa nueva es la lista de ahora", prev2.length === prevItems.length - 1 || prev2.join() !== prevItems.join(), `${prevItems.length} → ${prev2.length}`);
+await shot(page, "6-conversion-recargada");
+await page.getByTestId("conversion-confirm").click();
+await page.getByTestId("operation-bar").waitFor({ timeout: 10000 });
+ok("convertido: selección fija (barra de operación, sin criterios)", (await page.getByTestId("criteria-bar").count()) === 0 && (await page.getByTestId("legacy-auto").count()) === 0);
+const rows = await page.getByTestId("home-row").allInnerTexts();
+const title = (t: string) => t.replace(/^\d+\.\s*/, "").split("\n").find((x) => /\S/.test(x) && !/^\d+$/.test(x.trim())) ?? "";
+ok("mismas viviendas y mismo orden que la vista previa", rows.length === prev2.length && rows.every((r, i) => r.includes(prev2[i].replace(/^\d+\.\s*/, "").split(/\s{2,}|\t|\n/)[0].replace(/\s*[\d.]+ €.*$/, "").trim().slice(-12))), `${rows.length} vs ${prev2.length}`);
+ok("la cabecera ya no avisa de automático", !(await page.getByTestId("manager-status").innerText()).includes("Automático"));
+await shot(page, "7-convertido");
+void title;
+
 console.log("\n· Las demás secciones abren");
 for (const s of ["Contenido", "Diseño", "Compartir"]) {
   await page.getByRole("tab", { name: new RegExp(s) }).click();

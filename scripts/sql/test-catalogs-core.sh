@@ -182,6 +182,22 @@ node --experimental-strip-types --import ./scripts/node-ts-loader.mjs $S/gen-cat
 $R sql "$PAR"
 rm -f "$PAR"
 
+echo "== 2r. 0213 (P4): conversión de automáticos (vista previa, revalidación, registro, concurrencia, deshacer y reversión)"
+M11=supabase/migrations/0213_catalog_conversion.sql
+D13=docs/changes/2026-10-18-bcp-01-buscar-e-importar
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M11 $S/test-catalog-conversion.sql
+$R sql $S/test-catalog-conversion-undo-run.sql $S/test-catalog-conversion-undo.sql
+# Dos pestañas convierten a la vez con la misma vista previa: una sola conversión.
+$R sql $S/test-catalog-conversion-conc-a.sql &
+CONC_A=$!
+sleep 0.5
+$R sql $S/test-catalog-conversion-conc-b.sql
+wait $CONC_A
+$R sql $D13/rollback-0213.sql $S/test-rollback-0213.sql $M11
+$R sql $S/test-util.sql
+echo "   0213 se vuelve a aplicar tras su reversión"
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

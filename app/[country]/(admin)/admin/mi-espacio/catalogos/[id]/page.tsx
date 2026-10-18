@@ -31,6 +31,8 @@ import {
   searchCatalogV2Action,
   catalogSearchOptionsAction,
   setCatalogOperationAction,
+  previewConversionAction,
+  convertCatalogAction,
   searchSavedListingsAction,
   setCatalogCriteriaAction,
   setCatalogModeAction,
@@ -114,6 +116,7 @@ export default async function CatalogPage({
           search: searchCatalogPropertiesAction,
           catalogSearch: { search: searchCatalogV2Action, options: catalogSearchOptionsAction },
           setOperation: setCatalogOperationAction,
+          conversion: { preview: previewConversionAction, convert: convertCatalogAction },
           selection: {
             setCriteria: setCatalogCriteriaAction,
             previewAuto: previewAutoSelectionAction,

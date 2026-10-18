@@ -11,6 +11,7 @@ import type { ShareActions, ShareView } from "./share-panel";
 import type { SelectionActions } from "./selection-panel";
 import type { SearchAction } from "./property-search";
 import type { CatalogSearchActions } from "./catalog-search";
+import type { ConversionActions } from "./conversion-panel";
 import type { SearchResultRow } from "@/lib/catalogs/search";
 import { managerPriceFields } from "@/lib/catalogs/operation-price";
 import type { CatalogOperation } from "@/lib/catalogs/criteria";
@@ -91,6 +92,8 @@ export interface CatalogManagerActions {
   /** BCP-01 P3 · buscador nuevo y operación del catálogo (selección explícita). */
   catalogSearch: CatalogSearchActions;
   setOperation: (i: { catalogId: string; operation: CatalogOperation } & M) => Promise<Res>;
+  /** BCP-01 P4 · conversión de automáticos antiguos. */
+  conversion: ConversionActions;
 }
 
 export function CatalogManager({
@@ -165,6 +168,7 @@ export function CatalogManager({
       adjust: (i: Parameters<CatalogManagerActions["adjust"]>[0]) => actions.adjust({ ...i, ...mo }),
       clearAdjustment: (i: Parameters<CatalogManagerActions["clearAdjustment"]>[0]) => actions.clearAdjustment({ ...i, ...mo }),
       setOperation: (i: Parameters<CatalogManagerActions["setOperation"]>[0]) => actions.setOperation({ ...i, ...mo }),
+      conversion: { ...actions.conversion, convert: (i: Parameters<ConversionActions["convert"]>[0]) => actions.conversion.convert({ ...i, ...mo }) } satisfies ConversionActions,
       selection: {
         ...actions.selection,
         setCriteria: (i: Parameters<SelectionActions["setCriteria"]>[0]) => actions.selection.setCriteria({ ...i, ...mo }),
@@ -518,6 +522,7 @@ export function CatalogManager({
           setReference={setReference}
           addByReference={add}
           catalogSearch={actions.catalogSearch}
+          conversion={wrapped.conversion}
           addFromSearch={(row) =>
             new Promise<boolean>((resolve) => {
               run(
