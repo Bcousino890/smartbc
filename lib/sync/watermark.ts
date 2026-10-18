@@ -28,12 +28,27 @@ export type WatermarkResult =
   | { ok: true; photo: WatermarkedPhoto }
   | { ok: false; error: string };
 
-export async function downloadAndWatermark(params: {
-  sourceUrl: string;
-  agencySlug: string;
-  externalId: string;
-  position: number;
-}): Promise<WatermarkResult> {
+/** Descarga mínima que necesita downloadAndWatermark. Por defecto, fetch;
+ *  la importación con borrador (BCP-01 P5) pasa safeFetch (guarda SSRF). */
+export type PhotoFetch = (
+  url: string,
+  init: { headers: Record<string, string>; signal: AbortSignal },
+) => Promise<{ ok: boolean; arrayBuffer(): Promise<ArrayBuffer> }>;
+
+const defaultFetch: PhotoFetch = (url, init) => fetch(url, { ...init, cache: "no-store" });
+
+export async function downloadAndWatermark(
+  params: {
+    sourceUrl: string;
+    agencySlug: string;
+    externalId: string;
+    position: number;
+    /** Ruta en el bucket. Por defecto synced/<agencia>/<ref>/<posición>.webp. */
+    storagePath?: string;
+  },
+  deps: { fetchImpl?: PhotoFetch } = {},
+): Promise<WatermarkResult> {
+  const doFetch = deps.fetchImpl ?? defaultFetch;
   try {
     // Timeout por foto: si el servidor de origen se cuelga, no queremos que el
     // import entero se quede esperando indefinidamente (era una causa de que
@@ -65,11 +80,10 @@ export async function downloadAndWatermark(params: {
     try {
       for (const candidate of sourceCandidates) {
         try {
-          const res = await fetch(candidate, {
+          const res = await doFetch(candidate, {
             headers: {
               "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)",
             },
-            cache: "no-store",
             signal: ctrl.signal,
           });
           if (!res.ok) continue;
@@ -105,7 +119,7 @@ export async function downloadAndWatermark(params: {
       .webp({ quality: WEBP_QUALITY })
       .toBuffer();
 
-    const storagePath = `synced/${params.agencySlug}/${params.externalId}/${params.position}.webp`;
+    const storagePath = params.storagePath ?? `synced/${params.agencySlug}/${params.externalId}/${params.position}.webp`;
     const supabase = createAdminClient();
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
