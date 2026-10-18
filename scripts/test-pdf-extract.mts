@@ -10,9 +10,10 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { createWorker } from "tesseract.js";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { openPdf, pageTextFromItems, readPage, toRgba, type ExtractedPage } from "../lib/imports/pdf/extract.ts";
+import { openPdf, pageTextFromItems, readPage, sha256HexSync, toRgba, type ExtractedPage } from "../lib/imports/pdf/extract.ts";
+import { createHash } from "node:crypto";
 import { extractPdfFields, parseAmount } from "../lib/imports/pdf/fields.ts";
-import { acceptOcr, PDF_ASSET_FILES } from "../lib/imports/pdf/ocr.ts";
+import { acceptOcr, PDF_ASSET_FILES, resolvePdfAsset } from "../lib/imports/pdf/ocr.ts";
 import { planPdfDrafts, type PlanPage } from "../lib/imports/pdf/plan.ts";
 import { stripContacts } from "../lib/imports/pdf/sanitize.ts";
 import { mergeWithPrevious, movePage, pageSignals, proposeGroups, removePage, splitBefore, validGroups } from "../lib/imports/pdf/split.ts";
@@ -166,6 +167,18 @@ await t("OCR: se acepta con confianza y letras suficientes", () => {
 });
 await t("los recursos de la lista cerrada existen en node_modules", () => {
   for (const [name, f] of Object.entries(PDF_ASSET_FILES)) assert.ok(existsSync(join("node_modules", f.pkg, f.path)), name);
+});
+
+await t("SHA-256 sin crypto.subtle (http:// o por IP) = el de crypto", () => {
+  for (const buf of [new Uint8Array(0), new TextEncoder().encode("abc"), new Uint8Array(1000).fill(7), new Uint8Array(readFileSync("scripts/fixtures/pdf/varias.pdf"))])
+    assert.equal(sha256HexSync(buf), createHash("sha256").update(buf).digest("hex"));
+});
+await t("recursos de pdf.js (wasm, fuentes, CMap, ICC): lista cerrada por nombre y carpeta", () => {
+  for (const ok of ["openjpeg.wasm", "jbig2.wasm", "qcms_bg.wasm", "openjpeg_nowasm_fallback.js", "FoxitSerif.pfb", "LiberationSans-Regular.ttf", "UniJIS-UCS2-H.bcmap", "CGATS001Compat-v2-micro.icc"]) {
+    const r = resolvePdfAsset(ok);
+    assert.ok(r && existsSync(join("node_modules", r.pkg, r.path)), ok);
+  }
+  for (const bad of ["../package.json", "cmaps/UniJIS-UCS2-H.bcmap", "quickjs-eval.wasm", "quickjs-eval.js", ".env", "..bcmap", "x\\y.pfb", "pdf.mjs"]) assert.equal(resolvePdfAsset(bad), null, bad);
 });
 
 // ── Los cuatro PDF sintéticos de punta a punta ────────────────────────────────

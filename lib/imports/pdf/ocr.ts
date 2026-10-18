@@ -3,7 +3,7 @@
 // desde un CDN, y el PDF no sale del navegador.
 
 /** Cambia con las versiones de pdfjs-dist, tesseract.js(-core) y los datos: invalida la caché del navegador. */
-export const PDF_ASSET_VERSION = "pdfjs-5.7.284l.tess-7.0.0.data-4.0.0bi";
+export const PDF_ASSET_VERSION = "pdfjs-5.7.284l2.tess-7.0.0.data-4.0.0bi";
 
 /** Ficheros servidos (nombre público → paquete y ruta dentro de node_modules). */
 export const PDF_ASSET_FILES: Readonly<Record<string, { pkg: string; path: string; type: string }>> = {
@@ -17,6 +17,26 @@ export const PDF_ASSET_FILES: Readonly<Record<string, { pkg: string; path: strin
   "spa.traineddata.gz": { pkg: "@tesseract.js-data/spa", path: "4.0.0_best_int/spa.traineddata.gz", type: "application/octet-stream" },
   "eng.traineddata.gz": { pkg: "@tesseract.js-data/eng", path: "4.0.0_best_int/eng.traineddata.gz", type: "application/octet-stream" },
 };
+
+/** Recursos de pdf.js 5 que pide por nombre dentro de un «directorio» (los
+ *  decodificadores en WebAssembly de JPEG 2000 / JBIG2 —frecuentes en PDF
+ *  escaneados—, los perfiles de color, las fuentes estándar y los CMap). Lista
+ *  cerrada por patrón de nombre y carpeta: nunca una ruta con «/». */
+const PDFJS_DIR_ASSETS: { re: RegExp; dir: string; type: string }[] = [
+  { re: /^(openjpeg|jbig2|qcms_bg)\.wasm$/, dir: "wasm", type: "application/wasm" },
+  { re: /^(openjpeg|jbig2)_nowasm_fallback\.js$/, dir: "wasm", type: "text/javascript; charset=utf-8" },
+  { re: /^[A-Za-z0-9_-]+\.(pfb|ttf)$/, dir: "standard_fonts", type: "application/octet-stream" },
+  { re: /^[A-Za-z0-9_.-]+\.bcmap$/, dir: "cmaps", type: "application/octet-stream" },
+  { re: /^[A-Za-z0-9_.-]+\.icc$/, dir: "iccs", type: "application/vnd.iccprofile" },
+];
+
+/** Fichero público → paquete y ruta, o null si no está en la lista cerrada. */
+export function resolvePdfAsset(file: string): { pkg: string; path: string; type: string } | null {
+  if (Object.prototype.hasOwnProperty.call(PDF_ASSET_FILES, file)) return PDF_ASSET_FILES[file];
+  if (file.includes("/") || file.includes("\\") || file.startsWith(".")) return null;
+  const hit = PDFJS_DIR_ASSETS.find((a) => a.re.test(file));
+  return hit ? { pkg: "pdfjs-dist", path: `${hit.dir}/${file}`, type: hit.type } : null;
+}
 
 /** Base de las rutas de recursos: /api/admin/import-assets/<versión> (o la de fixtures). */
 export function pdfAssetBase(prefix = "/api/admin/import-assets"): string {
