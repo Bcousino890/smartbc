@@ -14,11 +14,11 @@ import { importErrorMessage } from "@/lib/imports/errors";
 // fotos por tandas; fallos provocables (window.__fxFail = {photos, catalog}).
 // Contadores en window.__fxImport para las aserciones.
 
-type Fx = { confirms: number; created: number; catalogAdds: number; lastRequestKeys: string[] };
+type Fx = { confirms: number; created: number; catalogAdds: number; lastRequestKeys: string[]; pdfDrafts?: number; uploads?: number };
 declare global {
   interface Window {
     __fxImport?: Fx;
-    __fxFail?: { photos?: number; catalog?: number; link?: number };
+    __fxFail?: { photos?: number; catalog?: number; link?: number; upload?: number };
   }
 }
 
@@ -34,11 +34,12 @@ const svg = (n: number) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="hsl(${n * 70},40%,70%)"/><text x="20" y="110" font-size="40">Foto ${n + 1}</text></svg>`)}`;
 
 const drafts = new Map<string, DraftRow>();
+const uploads = new Map<string, string>();
 let seq = 0;
 const now = () => new Date().toISOString();
 const fx = (): Fx => (window.__fxImport ??= { confirms: 0, created: 0, catalogAdds: 0, lastRequestKeys: [] });
 const err = (code: string, missing?: string[]) => ({ ok: false as const, code, error: importErrorMessage(code), ...(missing ? { missing } : {}) });
-const failOnce = (k: "photos" | "catalog" | "link") => {
+const failOnce = (k: "photos" | "catalog" | "link" | "upload") => {
   const f = window.__fxFail;
   if (f && f[k]) {
     f[k]! -= 1;
@@ -141,7 +142,46 @@ export const FIXTURE_IMPORT_ACTIONS: ImportDraftActions = {
     drafts.set(d.id, d);
     return { ok: true, draft: d };
   },
-  createPdf: async () => err("invalid_request"),
+  createPdf: async ({ requestKey, sourceName, sourceHash, part, fields, evidence, catalogId }) => {
+    fx().lastRequestKeys.push(requestKey);
+    const same = [...drafts.values()].find((d) => d.request_key === requestKey);
+    if (same) return { ok: true, draft: same };
+    const f = normalizeFields(fields);
+    if (!f.ok) return err(f.error);
+    const id = `draft-${++seq}`;
+    const d: DraftRow = {
+      ...makeDraft("", requestKey, catalogId ?? null, null),
+      id,
+      source_kind: "pdf",
+      source_url: null,
+      source_name: sourceName,
+      source_hash: sourceHash,
+      source_part: part,
+      extracted: { evidence: evidence as Record<string, unknown> },
+      fields: f.fields,
+      photos: [],
+    };
+    drafts.set(id, d);
+    fx().pdfDrafts = (fx().pdfDrafts ?? 0) + 1;
+    return { ok: true, draft: d };
+  },
+  uploadPhoto: async (_c, draftId, file, page) => {
+    const d = drafts.get(draftId);
+    if (!d || d.source_kind !== "pdf") return { ok: false, error: "No encuentro ese borrador." };
+    if (failOnce("upload")) return { ok: false, error: "Se cortó la conexión al subir la foto." };
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    const sha = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const pid = `u-${sha.slice(0, 16)}`;
+    const existing = d.photos.find((p) => p.id === pid);
+    if (existing) return { ok: true, photo: existing };
+    uploads.set(pid, URL.createObjectURL(file));
+    const photo: DraftPhoto = { id: pid, kind: "upload", sha, path: `fx/${d.id}/${sha}.webp`, ...(page ? { page } : {}), selected: true };
+    drafts.set(d.id, { ...d, photos: [...d.photos, photo] });
+    fx().uploads = (fx().uploads ?? 0) + 1;
+    return { ok: true, photo };
+  },
+  photoSrc: (_draftId, _c, p) => (p.kind === "remote" ? p.url : (uploads.get(p.id) ?? "")),
   update: async (input) => {
     const d = drafts.get(input.id);
     if (!d) return err("draft_not_found");

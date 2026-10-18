@@ -4,6 +4,7 @@ import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Loader2 } from "lucide-r
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { REAL_IMPORT_ACTIONS, type ImportDraftActions } from "./import-actions";
+export { draftPhotoSrc } from "./import-actions";
 import type { Country } from "@/lib/country-config";
 import {
   activationEffects,
@@ -44,20 +45,17 @@ const FIELD_LABELS: Partial<Record<keyof DraftFields | "reference", string>> = {
 
 const input = "w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none disabled:opacity-60";
 
-export function draftPhotoSrc(draftId: string, country: Country, p: DraftPhoto): string {
-  return p.kind === "remote" ? p.url : `/api/admin/import-drafts/${draftId}/photos/${encodeURIComponent(p.id)}?country=${country}`;
-}
 
 function EvidenceBadge({ ev, empty }: { ev?: FieldEvidence; empty: boolean }) {
-  if (empty && (!ev || ev.status !== "dudoso")) return <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">Falta</span>;
+  if (empty && (!ev || ev.status !== "dudoso")) return <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">Falta</span>;
   if (!ev) return null;
   if (ev.status === "dudoso")
     return (
-      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900" title={ev.snippet ?? undefined}>
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" title={ev.snippet ?? undefined}>
         Dudoso{ev.page ? ` · pág. ${ev.page}` : ""}
       </span>
     );
-  if (ev.status === "seguro" && ev.page) return <span className="text-[11px] text-ink/45" title={ev.snippet ?? undefined}>pág. {ev.page}</span>;
+  if (ev.status === "seguro" && ev.page) return <span className="text-xs text-ink/45" title={ev.snippet ?? undefined}>pág. {ev.page}</span>;
   return null;
 }
 
@@ -251,7 +249,7 @@ export function DraftReview({
             data-field={k}
           />
         )}
-        {evidence[k]?.snippet && evidence[k]?.status !== "seguro" ? <span className="block text-[11px] text-ink/50">«{evidence[k]!.snippet}»</span> : null}
+        {evidence[k]?.snippet && evidence[k]?.status !== "seguro" ? <span className="block text-xs text-ink/50">«{evidence[k]!.snippet}»</span> : null}
       </label>
     );
   };
@@ -285,7 +283,7 @@ export function DraftReview({
             <option value="sale">Venta</option>
             <option value="rent">Alquiler</option>
           </select>
-          {evidence.price?.alternatives?.length ? <span className="block text-[11px] text-amber-800">Otro precio en el documento: {evidence.price.alternatives.join(" · ")} (elige uno: no se crean fichas de venta y alquiler a la vez).</span> : null}
+          {evidence.price?.alternatives?.length ? <span className="block text-xs text-amber-800">Otro precio en el documento: {evidence.price.alternatives.join(" · ")} (elige uno: no se crean fichas de venta y alquiler a la vez).</span> : null}
         </label>
         {fields.operation === "rent" ? (
           <label className="block space-y-1">
@@ -331,8 +329,8 @@ export function DraftReview({
             return (
               <li key={p.id} className={cn("relative overflow-hidden rounded-lg border", pos >= 0 ? "border-gold" : "border-ink/10 opacity-50")}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={draftPhotoSrc(d.id, country, p)} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
-                <div className="flex items-center justify-between gap-1 bg-white/90 px-1 py-0.5 text-[11px]">
+                <img src={actions.photoSrc(d.id, country, p)} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                <div className="flex items-center justify-between gap-1 bg-white/90 px-1 py-0.5 text-xs">
                   <label className="inline-flex items-center gap-1">
                     <input type="checkbox" checked={pos >= 0} onChange={() => togglePhoto(p.id)} disabled={!inReview} />
                     {pos === 0 ? "Portada" : pos > 0 ? `${pos + 1}` : "Fuera"}
@@ -405,7 +403,7 @@ export function DraftReview({
             {dups.map((m) => (
               <li key={m.propertyId} className="rounded-lg bg-white/80 p-3 text-xs" data-testid="duplicate">
                 <p className="text-sm text-ink">
-                  <span className={cn("mr-2 rounded-full px-2 py-0.5 text-[11px] font-semibold", m.level === "clave" || m.level === "cierto" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900")}>
+                  <span className={cn("mr-2 rounded-full px-2 py-0.5 text-xs font-semibold", m.level === "clave" || m.level === "cierto" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900")}>
                     {m.level === "clave" ? "Mismo anuncio" : m.level === "cierto" ? "Casi seguro" : m.level === "probable" ? "Probable" : "Posible"}
                   </span>
                   {m.bcReference ? <span className="mr-1 text-ink/50">{m.bcReference}</span> : null}
