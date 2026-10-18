@@ -59,6 +59,8 @@ jobs:
         run: npm run test:catalogs-manager
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
+      - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
+        run: npm run test:pdf-extract
 
       # Permisos y cuentas del equipo. Son las reglas que impiden que alguien
       # escale privilegios (rango entre roles, quién crea qué rol, quién fija
