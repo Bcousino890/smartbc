@@ -57,6 +57,8 @@ jobs:
       # conflictos, material y filtros). Puro, sin BD.
       - name: "Catálogos (gestor: borradores y diagnósticos, offline)"
         run: npm run test:catalogs-manager
+      - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
+        run: npm run test:import-drafts
 
       # Permisos y cuentas del equipo. Son las reglas que impiden que alguien
       # escale privilegios (rango entre roles, quién crea qué rol, quién fija

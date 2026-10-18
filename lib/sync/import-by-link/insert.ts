@@ -111,6 +111,88 @@ async function rehostPhotosInBackground(params: {
     .eq("id", propertyId);
 }
 
+/** Vídeos del anuncio → property_media (tipo 'video', source 'imported').
+ *  Best-effort: nunca rompe el alta. Lo comparten la importación por enlace y
+ *  la importación con borrador (BCP-01 P5). */
+export async function insertImportedVideos(
+  supabase: ReturnType<typeof createAdminClient>,
+  propertyId: string,
+  videos: string[],
+): Promise<void> {
+  // Vídeos extraídos del anuncio → property_media (tipo 'video'). Se guarda el
+  // ENLACE directo (YouTube/Vimeo/mp4), no se re-aloja. Deduplicamos por
+  // IDENTIDAD (no por URL exacta): los mp4 de Idealista llevan token/calidad en
+  // la query que cambia en cada fetch, así que comparar por URL exacta creaba
+  // duplicados al re-importar. Además saltamos los que ya tenga la propiedad.
+  const videoUrls = dedupeVideos(videos);
+  if (videoUrls.length > 0) {
+    const existingIdents = new Set<string>();
+    try {
+      const { data: existingVideos } = await (
+        supabase.from("property_media") as unknown as {
+          select: (c: string) => {
+            eq: (c: string, v: string) => {
+              eq: (c: string, v: string) => Promise<{ data: Array<{ url: string }> | null }>;
+            };
+          };
+        }
+      )
+        .select("url")
+        .eq("property_id", propertyId)
+        .eq("type", "video");
+      for (const r of existingVideos ?? []) existingIdents.add(videoIdentity(r.url));
+    } catch {
+      /* si falla la lectura, seguimos: el upsert por storage_path aún protege */
+    }
+
+    const seenIdent = new Set(existingIdents);
+    const videoRows: Array<Record<string, unknown>> = [];
+    for (const url of videoUrls) {
+      const ident = videoIdentity(url);
+      if (seenIdent.has(ident)) continue; // ya existe (o repetido en esta tanda)
+      seenIdent.add(ident);
+      let host = "video";
+      try {
+        host = new URL(url).hostname;
+      } catch {
+        /* host por defecto */
+      }
+      videoRows.push({
+        property_id: propertyId,
+        type: "video",
+        // 'imported': vídeo del anuncio de origen, NO nuestro. Sin esto, el
+        // default 'manual' de la columna lo hacía hero-eligible y un mp4 de
+        // Idealista con la marca de agua de otra agencia acababa de portada
+        // del SmartLink (caso real BC-1397). Los importados se muestran en la
+        // sección de vídeos, nunca como hero (decisión D4).
+        source: "imported",
+        file_name: host,
+        storage_path: url,
+        url,
+      });
+    }
+    if (videoRows.length > 0) {
+    const mediaTbl = supabase.from("property_media") as unknown as {
+      upsert: (
+        rows: Array<Record<string, unknown>>,
+        opts: { onConflict: string; ignoreDuplicates: boolean },
+      ) => Promise<{ error: { message: string } | null }>;
+    };
+    // best-effort: un vídeo que no se guarde NO debe romper la creación de la
+    // propiedad. `await` + try/catch (el builder de Supabase no es Promise real,
+    // no tiene `.catch`).
+      try {
+        await mediaTbl.upsert(videoRows, {
+          onConflict: "storage_path",
+          ignoreDuplicates: true,
+        });
+      } catch {
+        /* se ignora: la propiedad ya está creada */
+      }
+    }
+  }
+}
+
 export async function insertImportedProperty(
   input: InsertImportInput,
 ): Promise<InsertImportResult> {
@@ -293,78 +375,7 @@ export async function insertImportedProperty(
     }
   }
 
-  // Vídeos extraídos del anuncio → property_media (tipo 'video'). Se guarda el
-  // ENLACE directo (YouTube/Vimeo/mp4), no se re-aloja. Deduplicamos por
-  // IDENTIDAD (no por URL exacta): los mp4 de Idealista llevan token/calidad en
-  // la query que cambia en cada fetch, así que comparar por URL exacta creaba
-  // duplicados al re-importar. Además saltamos los que ya tenga la propiedad.
-  const videoUrls = dedupeVideos(preview.videos ?? []);
-  if (videoUrls.length > 0) {
-    const existingIdents = new Set<string>();
-    try {
-      const { data: existingVideos } = await (
-        supabase.from("property_media") as unknown as {
-          select: (c: string) => {
-            eq: (c: string, v: string) => {
-              eq: (c: string, v: string) => Promise<{ data: Array<{ url: string }> | null }>;
-            };
-          };
-        }
-      )
-        .select("url")
-        .eq("property_id", propertyId)
-        .eq("type", "video");
-      for (const r of existingVideos ?? []) existingIdents.add(videoIdentity(r.url));
-    } catch {
-      /* si falla la lectura, seguimos: el upsert por storage_path aún protege */
-    }
-
-    const seenIdent = new Set(existingIdents);
-    const videoRows: Array<Record<string, unknown>> = [];
-    for (const url of videoUrls) {
-      const ident = videoIdentity(url);
-      if (seenIdent.has(ident)) continue; // ya existe (o repetido en esta tanda)
-      seenIdent.add(ident);
-      let host = "video";
-      try {
-        host = new URL(url).hostname;
-      } catch {
-        /* host por defecto */
-      }
-      videoRows.push({
-        property_id: propertyId,
-        type: "video",
-        // 'imported': vídeo del anuncio de origen, NO nuestro. Sin esto, el
-        // default 'manual' de la columna lo hacía hero-eligible y un mp4 de
-        // Idealista con la marca de agua de otra agencia acababa de portada
-        // del SmartLink (caso real BC-1397). Los importados se muestran en la
-        // sección de vídeos, nunca como hero (decisión D4).
-        source: "imported",
-        file_name: host,
-        storage_path: url,
-        url,
-      });
-    }
-    if (videoRows.length > 0) {
-    const mediaTbl = supabase.from("property_media") as unknown as {
-      upsert: (
-        rows: Array<Record<string, unknown>>,
-        opts: { onConflict: string; ignoreDuplicates: boolean },
-      ) => Promise<{ error: { message: string } | null }>;
-    };
-    // best-effort: un vídeo que no se guarde NO debe romper la creación de la
-    // propiedad. `await` + try/catch (el builder de Supabase no es Promise real,
-    // no tiene `.catch`).
-      try {
-        await mediaTbl.upsert(videoRows, {
-          onConflict: "storage_path",
-          ignoreDuplicates: true,
-        });
-      } catch {
-        /* se ignora: la propiedad ya está creada */
-      }
-    }
-  }
+  await insertImportedVideos(supabase, propertyId, preview.videos ?? []);
 
   // Re-alojado en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En pm2 el
   // proceso sigue vivo y completa la descarga/optimización de las fotos.
