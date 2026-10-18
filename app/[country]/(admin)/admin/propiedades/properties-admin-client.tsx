@@ -13,8 +13,6 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
-  Search,
-  SlidersHorizontal,
   Tag as TagIcon,
   X,
 } from "lucide-react";
@@ -28,12 +26,26 @@ import {
   NewPropertyModal,
 } from "@/components/admin/new-property-modal";
 import { BatchTagMenu, TagFilterMenu } from "@/components/admin/property-tags/tag-menus";
+import {
+  ActiveChips,
+  ADMIN_STATUS_OPTIONS,
+  BATHROOM_OPTIONS,
+  BEDROOM_OPTIONS,
+  bedroomsChipLabel,
+  type FilterChip,
+  FilterSelect,
+  FLOOR_OPTIONS,
+  MoreFiltersToggle,
+  OPERATION_OPTIONS,
+  RangeChip,
+  SearchBox,
+  STAY_OPTIONS,
+} from "@/components/admin/property-search";
 import { TagChip } from "@/components/admin/property-tags/tag-chip";
 import { TagManagerDialog } from "@/components/admin/property-tags/tag-manager-dialog";
 import { assignTags } from "@/components/admin/property-tags/tag-api";
 import {
   applyTagChange,
-  matchesTagFilter,
   type PropertyTag,
 } from "@/lib/properties/tags";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
@@ -43,7 +55,7 @@ import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { useT } from "@/lib/i18n/provider";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { canAccess } from "@/lib/permissions";
-import { matchesPropertySearch } from "@/lib/properties/admin-search";
+import { type AdminPropertyFilters, matchesAdminPropertyFilters } from "@/lib/properties/admin-filter";
 import { PORTAL_URL } from "@/lib/portal-url";
 import type { AdminProperty, AdminPropertyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -194,51 +206,24 @@ export function PropertiesAdminClient({
   }, [menuOpen]);
 
   const filtered = useMemo(() => {
-    return properties.filter((p) => {
-      if (
-        !matchesPropertySearch(
-          {
-            ...p,
-            tagNames: (p.tagIds ?? [])
-              .map((id) => tagById.get(id)?.name)
-              .filter((n): n is string => Boolean(n)),
-          },
-          query,
-        )
-      )
-        return false;
-      if (!matchesTagFilter(p.tagIds, tagFilter)) return false;
-      if (
-        operationFilter &&
-        p.operation !== operationFilter &&
-        !(p.isDualOperation && operationFilter === "alquiler")
-      ) {
-        return false;
-      }
-      if (statusFilter && p.status !== statusFilter) return false;
-      if (zoneFilter && p.zone !== zoneFilter) return false;
-      if (subzoneFilter && p.subzone !== subzoneFilter) return false;
-      if (agencyFilter && p.agencyId !== agencyFilter) return false;
-      if (stayFilter && p.stayType !== stayFilter) return false;
-      if (bedroomsFilter) {
-        // "3" = exactamente 3 · "3plus" = 3 o más
-        if (bedroomsFilter.endsWith("plus")) {
-          if (p.bedrooms < Number(bedroomsFilter.replace("plus", ""))) return false;
-        } else if (p.bedrooms !== Number(bedroomsFilter)) {
-          return false;
-        }
-      }
-      if (bathroomsFilter && p.bathrooms < Number(bathroomsFilter)) return false;
-      // Planta mínima: sin dato de planta no se puede garantizar el mínimo
-      // que exige el cliente, así que esos anuncios quedan fuera.
-      if (floorFilter && (p.floor == null || p.floor < Number(floorFilter)))
-        return false;
-      if (minPrice && p.price < Number(minPrice)) return false;
-      if (maxPrice && p.price > Number(maxPrice)) return false;
-      if (minM2 && p.squareMeters < Number(minM2)) return false;
-      if (maxM2 && p.squareMeters > Number(maxM2)) return false;
-      return true;
-    });
+    const f: AdminPropertyFilters = {
+      query,
+      tagIds: tagFilter,
+      operation: operationFilter,
+      status: statusFilter,
+      zone: zoneFilter,
+      subzone: subzoneFilter,
+      agency: agencyFilter,
+      stay: stayFilter,
+      bedrooms: bedroomsFilter,
+      bathrooms: bathroomsFilter,
+      floor: floorFilter,
+      minPrice,
+      maxPrice,
+      minM2,
+      maxM2,
+    };
+    return properties.filter((p) => matchesAdminPropertyFilters(p, f, (id) => tagById.get(id)?.name));
   }, [
     properties,
     tagById,
@@ -444,7 +429,7 @@ export function PropertiesAdminClient({
   };
 
   // Chips de filtros activos (cada uno se quita con su ×).
-  const activeChips: { key: string; label: string; clear: () => void }[] = [];
+  const activeChips: FilterChip[] = [];
   for (const id of tagFilter) {
     const t = tagById.get(id);
     if (t)
@@ -496,9 +481,7 @@ export function PropertiesAdminClient({
   if (bedroomsFilter)
     activeChips.push({
       key: "dorm",
-      label: bedroomsFilter.endsWith("plus")
-        ? `${bedroomsFilter.replace("plus", "")}+ dormitorios`
-        : `${bedroomsFilter} dormitorio${bedroomsFilter === "1" ? "" : "s"}`,
+      label: bedroomsChipLabel(bedroomsFilter),
       clear: () => setBedroomsFilter(""),
     });
   if (bathroomsFilter)
@@ -576,16 +559,11 @@ export function PropertiesAdminClient({
     <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-4 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm sm:p-5 md:p-6">
       {/* Fila 1: buscador + alta */}
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-ink/10 bg-white/90 px-3.5 py-2.5 text-sm transition focus-within:border-gold/55">
-          <Search size={15} strokeWidth={1.75} className="shrink-0 text-ink/45" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por título, ref. BC (BC-1766), ref. de portal, zona o etiqueta…"
-            className="crm-input w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
-          />
-        </label>
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          placeholder="Buscar por título, ref. BC (BC-1766), ref. de portal, zona o etiqueta…"
+        />
         <button
           type="button"
           onClick={() => setTagManagerOpen(true)}
@@ -655,24 +633,13 @@ export function PropertiesAdminClient({
           label="Operación"
           value={operationFilter}
           onChange={(v) => setOperationFilter(v as typeof operationFilter)}
-          options={[
-            { value: "", label: "Todas" },
-            { value: "alquiler", label: "Alquiler" },
-            { value: "venta", label: "Venta" },
-          ]}
+          options={OPERATION_OPTIONS}
         />
         <FilterSelect
           label="Estado"
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as typeof statusFilter)}
-          options={[
-            { value: "", label: "Todos" },
-            { value: "available", label: "Disponible" },
-            { value: "reserved", label: "Reservado" },
-            { value: "sold", label: "Vendido" },
-            { value: "rented", label: "Alquilado" },
-            { value: "draft", label: "Borrador" },
-          ]}
+          options={ADMIN_STATUS_OPTIONS}
         />
         <FilterSelect
           label="Distrito"
@@ -701,20 +668,7 @@ export function PropertiesAdminClient({
           onChange={setTagFilter}
           onManage={() => setTagManagerOpen(true)}
         />
-        <button
-          type="button"
-          onClick={() => setMoreOpen((o) => !o)}
-          aria-expanded={moreOpen}
-          className={cn(
-            "crm-button inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 transition",
-            moreOpen || advancedCount > 0
-              ? "border-gold/50 bg-gold/10 text-gold-dark"
-              : "border-ink/10 bg-white/85 text-ink/70 hover:border-gold/55",
-          )}
-        >
-          <SlidersHorizontal size={12} strokeWidth={1.75} />
-          <span>Más filtros{advancedCount > 0 ? ` (${advancedCount})` : ""}</span>
-        </button>
+        <MoreFiltersToggle open={moreOpen} count={advancedCount} onToggle={() => setMoreOpen((o) => !o)} />
         <span className="ml-auto text-xs font-semibold text-ink/60">
           {hasActiveFilters
             ? `${filtered.length} resultado${filtered.length === 1 ? "" : "s"} de ${properties.length}`
@@ -739,83 +693,33 @@ export function PropertiesAdminClient({
             label="Estancia"
             value={stayFilter}
             onChange={(v) => setStayFilter(v as typeof stayFilter)}
-            options={[
-              { value: "", label: "Todas" },
-              { value: "larga", label: "Larga" },
-              { value: "corta", label: "Corta" },
-            ]}
+            options={STAY_OPTIONS}
           />
           <FilterSelect
             label="Dormitorios"
             value={bedroomsFilter}
             onChange={setBedroomsFilter}
-            options={[
-              { value: "", label: "Todos" },
-              { value: "1", label: "Exacto 1" },
-              { value: "2", label: "Exacto 2" },
-              { value: "3", label: "Exacto 3" },
-              { value: "4", label: "Exacto 4" },
-              { value: "1plus", label: "1 o más" },
-              { value: "2plus", label: "2 o más" },
-              { value: "3plus", label: "3 o más" },
-              { value: "4plus", label: "4 o más" },
-              { value: "5plus", label: "5 o más" },
-            ]}
+            options={BEDROOM_OPTIONS}
           />
           <FilterSelect
             label="Baños"
             value={bathroomsFilter}
             onChange={setBathroomsFilter}
-            options={[
-              { value: "", label: "Todos" },
-              { value: "1", label: "1+" },
-              { value: "2", label: "2+" },
-              { value: "3", label: "3+" },
-            ]}
+            options={BATHROOM_OPTIONS}
           />
           <FilterSelect
             label="Planta"
             value={floorFilter}
             onChange={setFloorFilter}
-            options={[
-              { value: "", label: "Todas" },
-              { value: "1", label: "1ª o más" },
-              { value: "2", label: "2ª o más" },
-              { value: "3", label: "3ª o más" },
-              { value: "4", label: "4ª o más" },
-              { value: "5", label: "5ª o más" },
-              { value: "6", label: "6ª o más" },
-            ]}
+            options={FLOOR_OPTIONS}
           />
-          <PriceRange min={minPrice} max={maxPrice} onMin={setMinPrice} onMax={setMaxPrice} />
+          <RangeChip label="Precio" min={minPrice} max={maxPrice} onMin={setMinPrice} onMax={setMaxPrice} />
           <RangeChip label="M²" min={minM2} max={maxM2} onMin={setMinM2} onMax={setMaxM2} />
         </div>
       )}
 
       {/* Chips de filtros activos + limpiar */}
-      {activeChips.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {activeChips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={c.clear}
-              title="Quitar este filtro"
-              className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-gold-dark transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
-            >
-              <span>{c.label}</span>
-              <X size={12} strokeWidth={2} />
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="ml-1 text-xs font-medium text-ink/55 underline-offset-2 transition hover:text-rose-700 hover:underline"
-          >
-            Limpiar todo
-          </button>
-        </div>
-      )}
+      <ActiveChips chips={activeChips} onClearAll={clearFilters} />
 
       {/* Barra de selección: copiar URLs para enviar a clientes */}
       {selected.size > 0 && (
@@ -1280,117 +1184,5 @@ function SelectCheckbox({
     >
       {checked && <Check size={12} strokeWidth={3} />}
     </button>
-  );
-}
-
-// Chip de rango numérico genérico (mismo estilo que PriceRange).
-function RangeChip({
-  label,
-  min,
-  max,
-  onMin,
-  onMax,
-}: {
-  label: string;
-  min: string;
-  max: string;
-  onMin: (v: string) => void;
-  onMax: (v: string) => void;
-}) {
-  const sanitize = (v: string) => v.replace(/[^\d]/g, "");
-  return (
-    <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="crm-label-sm text-ink/45">
-        {label}
-      </span>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={min}
-        onChange={(e) => onMin(sanitize(e.target.value))}
-        placeholder="mín"
-        className="w-12 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
-      />
-      <span className="text-ink/35">–</span>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={max}
-        onChange={(e) => onMax(sanitize(e.target.value))}
-        placeholder="máx"
-        className="w-14 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
-      />
-    </div>
-  );
-}
-
-// Rango de precio: dos inputs numéricos (min – max €) con el mismo estilo de
-// chip que FilterSelect. Vacío = sin límite por ese lado.
-function PriceRange({
-  min,
-  max,
-  onMin,
-  onMax,
-}: {
-  min: string;
-  max: string;
-  onMin: (v: string) => void;
-  onMax: (v: string) => void;
-}) {
-  const sanitize = (v: string) => v.replace(/[^\d]/g, "");
-  return (
-    <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="crm-label-sm text-ink/45">
-        Precio
-      </span>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={min}
-        onChange={(e) => onMin(sanitize(e.target.value))}
-        placeholder="mín"
-        className="w-12 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
-      />
-      <span className="text-ink/35">–</span>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={max}
-        onChange={(e) => onMax(sanitize(e.target.value))}
-        placeholder="máx"
-        className="w-14 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
-      />
-    </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <label className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="crm-label-sm text-ink/45">
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-transparent text-xs text-ink focus:outline-none"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
