@@ -13,7 +13,7 @@ import {
 } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { Toggle } from "./toggle";
-import { isIdlePermission, permissionDetail } from "./permission-details";
+import { isIdlePermission, permissionDetail, permissionScope } from "./permission-details";
 import {
   areaCounts,
   isSensitiveAction,
@@ -75,6 +75,10 @@ function DetailList({
   effective: CellMatrix;
 }) {
   return (
+    <div>
+      <p className="mb-2 rounded-lg bg-gold/10 px-2.5 py-1.5 text-xs text-ink/75">
+        <span className="font-semibold text-ink">Alcance:</span> {permissionScope(resource)}
+      </p>
     <ul className="space-y-1.5">
       {PERMISSION_ACTIONS.map((a) => {
         const text = permissionDetail(resource, a);
@@ -95,6 +99,7 @@ function DetailList({
         );
       })}
     </ul>
+    </div>
   );
 }
 

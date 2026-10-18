@@ -107,6 +107,36 @@ export const PERMISSION_DETAILS: Record<PermissionResource, Details> = {
   },
 };
 
+/**
+ * A quién alcanza cada sección, según el perfil. Lo que no se pudo comprobar en
+ * la auditoría dice «no verificado» en vez de inventar una regla.
+ */
+export const PERMISSION_SCOPE: Partial<Record<PermissionResource, string>> = {
+  properties:
+    "Toda la cartera de la agencia, para cualquier perfil de staff. El alcance no se restringe por asesor.",
+  clientes:
+    "Asesor de toda la cartera y Administrador: todos los clientes. Asesor de solo su cartera: solo los suyos.",
+  captaciones:
+    "Solo Chile. Propietario, Administrador y Asesor de toda la cartera: todas. Asesor de solo su cartera: las confirmadas y las suyas. Captadora: solo las que se le asignan.",
+  solicitudes:
+    "Alcance por asesor no verificado en la auditoría. Revisar antes de dar edición.",
+  viewing_collections:
+    "Sigue al cliente: quien puede ver la ficha de un cliente ve sus colecciones de visitas.",
+  mensajes:
+    "Alcance por conversación no verificado en la auditoría.",
+  calendario:
+    "Alcance por evento no verificado en la auditoría.",
+  usuarios:
+    "Solo Propietario y Administrador gestionan cuentas. Nunca pueden tocar a un perfil de rango superior.",
+  agencias: "Solo España. Sin escritura en la aplicación hoy.",
+  particulares: "Solo España.",
+  sindicacion: "Solo España.",
+};
+
+export function permissionScope(resource: PermissionResource): string {
+  return PERMISSION_SCOPE[resource] ?? "Alcance no verificado en la auditoría.";
+}
+
 export function permissionDetail(resource: PermissionResource, action: PermissionAction): string {
   return PERMISSION_DETAILS[resource]?.[action] ?? NO_USE;
 }
