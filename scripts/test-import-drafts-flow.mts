@@ -116,6 +116,11 @@ ok(!isFail(cs) && cs.status === "ok", "añadida al catálogo del dueño");
 cs = await drafts.runCatalogStep(FAB, d1.id);
 ok(!isFail(cs) && cs.status === "ok" && (await q1(`SELECT count(*)::int AS c FROM catalog_items WHERE catalog_id = '${cat}'`)).c === 1, "repetir no la añade dos veces");
 
+const mine = await drafts.listOwnedExplicitCatalogs(FAB);
+ok(mine.some((c) => c.id === cat), "el dueño ve su catálogo fijo para elegirlo en la revisión (P6)");
+ok((await drafts.listOwnedExplicitCatalogs(OTHER)).length === 0, "otro miembro del staff no ve ningún catálogo (P6)");
+ok((await drafts.propertySlugOf(pid)) === (await q1(`SELECT slug FROM properties WHERE id = '${pid}'`)).slug, "slug de la ficha creada para los enlaces finales (P6)");
+
 console.log("\n· Usar la existente / actualizarla");
 const d2 = await drafts.createLinkDraft({ actor: FAB, country: "es", url: URL1, html, requestKey: "flow-link-0002" });
 assert.ok(!isFail(d2));
