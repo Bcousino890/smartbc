@@ -400,6 +400,35 @@ export async function modePreview(
   };
 }
 
+/** BCP-01 P4 · vista previa de convertir un automático antiguo en selección
+ *  fija: la lista efectiva que se queda (en orden), la versión que hay que
+ *  devolver al confirmar, las inclusiones que hoy no aparecen y las viviendas
+ *  de la lista manual vieja que se archivan en el registro. Solo lectura. */
+export interface ConversionPreview {
+  version: number;
+  ids: string[];
+  items: CatalogItemView[];
+  droppedInclusions: CatalogItemView[];
+  archivedManual: CatalogItemView[];
+  adjustments: number;
+}
+export async function conversionPreview(ownerId: string, catalogId: string): Promise<ConversionPreview> {
+  const { data, error } = await db().rpc("catalog_conversion_preview", { p_actor: ownerId, p_catalog: catalogId });
+  if (error) throw new Error(`catalog_conversion_preview: ${error.message}`);
+  const d = data as any;
+  const { data: cat } = await db().from("catalogs").select("criteria").eq("id", catalogId).eq("owner_id", ownerId).maybeSingle();
+  const op = criteriaOf(cat?.criteria).operation;
+  const ids = ((d?.items ?? []) as any[]).map((x) => String(x.property_id));
+  return {
+    version: Number(d?.version ?? 0),
+    ids,
+    items: await withThumbs(catalogId, await propertyViews(ids, op)),
+    droppedInclusions: await propertyViews((d?.dropped_inclusions ?? []) as string[], op),
+    archivedManual: await propertyViews((d?.archived_manual ?? []) as string[], op),
+    adjustments: Number(d?.adjustments ?? 0),
+  };
+}
+
 /** Anuncios de origen de unos catálogos (interno; nunca llega al lector). */
 export async function listCatalogAds(catalogIds: string[]): Promise<Map<string, CatalogAdView[]>> {
   const out = new Map<string, CatalogAdView[]>();

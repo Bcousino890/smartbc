@@ -18,7 +18,7 @@ import { withHomeAccess, type ActionResult } from "@/lib/catalogs/access";
 import { validateCatalogContact } from "@/lib/catalogs/contact";
 import { catalogErrorMessage, CREATE_IN_GROUP_FAILED } from "@/lib/catalogs/errors";
 import { isHomeOwner } from "@/lib/catalogs/owner";
-import { findPropertyId } from "@/lib/catalogs/queries";
+import { conversionPreview, findPropertyId, type ConversionPreview } from "@/lib/catalogs/queries";
 import { normalizeCriteria, type CatalogCriteria, type CatalogOperation } from "@/lib/catalogs/criteria";
 import { searchCatalog, type SearchResult } from "@/lib/catalogs/search";
 import { normalizeSearchFilters } from "@/lib/catalogs/search-filters";
@@ -420,6 +420,44 @@ export async function searchCatalogPropertiesAction(input: {
     } catch (err) {
       return fail({ message: err instanceof Error ? err.message.replace(/^[^:]+:\s*/, "") : null });
     }
+  }));
+}
+
+// ── Conversión de automáticos antiguos (BCP-01 P4, 0213) ───────────────────
+
+/** Vista previa de la conversión (solo lectura). */
+export async function previewConversionAction(input: { catalogId: string }): Promise<ActionResult<{ preview: ConversionPreview }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    try {
+      return { ok: true as const, preview: await conversionPreview(profile.id, input.catalogId) };
+    } catch (err) {
+      return fail({ message: err instanceof Error ? err.message.replace(/^[^:]+:\s*/, "") : null });
+    }
+  }));
+}
+
+/** Convierte con lo que se vio: si la versión o la lista ya no son esas, NO
+ *  convierte y responde selection_changed (la interfaz recarga la vista previa). */
+export async function convertCatalogAction(input: {
+  catalogId: string;
+  expectedVersion: number;
+  expectedIds: string[];
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (!Number.isInteger(input.expectedVersion) || !Array.isArray(input.expectedIds) || input.expectedIds.length > 24 || !input.expectedIds.every(isUuid)) {
+      return fail("selection_changed");
+    }
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_convert_explicit", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_expected_version: input.expectedVersion,
+      p_expected_ids: input.expectedIds,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, (data as { version?: number } | null)?.version ?? 0, before, input);
   }));
 }
 

@@ -149,6 +149,12 @@ export function FixtureCatalogManager({
       __fxExternalText?: (i: number, body: string) => void;
     };
     x.__fxExternalMeta = (title) => setCat((c) => ({ ...c, title }));
+    // BCP-01 P4: cambia la lista automática entre la vista previa y la confirmación.
+    (x as unknown as { __fxChangeAuto?: () => void }).__fxChangeAuto = () => {
+      const first = autoItems(catRef.current.criteria).items[0];
+      if (first) adjRef.current.set(first.propertyId, "exclude");
+      refresh();
+    };
     x.__fxExternalContact = (name) => setCat((c) => ({ ...c, contact: { ...c.contact, name } }));
     x.__fxExternalText = (i, body) => {
       const it = catRef.current.items[i];
@@ -314,6 +320,37 @@ export function FixtureCatalogManager({
         return { ok: true as const, result };
       },
       options: async () => ({ ok: true as const, agencies: FIXTURE_AGENCIES, tags: FIXTURE_TAGS }),
+    },
+    // BCP-01 P4 · conversión (como 0213): vista previa y revalidación al
+    // confirmar. window.__fxChangeAuto() cambia la lista entre medias.
+    conversion: {
+      preview: async () => {
+        if (cat.mode !== "auto") return { ok: false as const, error: "Este catálogo ya es una selección fija." };
+        const a = autoItems(cat.criteria);
+        const ids = a.items.map((x) => x.propertyId);
+        const incl = [...adjRef.current].filter(([, k]) => k === "include").map(([id]) => id).filter((id) => !ids.includes(id));
+        return {
+          ok: true as const,
+          preview: {
+            version: ids.length,
+            ids,
+            items: a.items,
+            droppedInclusions: incl.map((id) => explained(id, cat.criteria, 0)),
+            archivedManual: manualRef.current.filter((x) => !ids.includes(x.propertyId)),
+            adjustments: adjRef.current.size,
+          },
+        };
+      },
+      convert: async ({ expectedIds }) => {
+        if (cat.mode !== "auto") return { ok: false as const, error: "Este catálogo ya es una selección fija." };
+        const now = autoItems(cat.criteria).items;
+        if (JSON.stringify(now.map((x) => x.propertyId)) !== JSON.stringify(expectedIds)) {
+          return { ok: false as const, error: "La lista ha cambiado desde la vista previa (se ha vendido, cambiado o editado algo). No se ha convertido: revisa la vista previa nueva y confirma otra vez." };
+        }
+        manualRef.current = now.map((x, i) => ({ ...x, position: (i + 1) * 100, via: undefined, explain: undefined }));
+        refresh({ mode: "manual" });
+        return unchanged();
+      },
     },
     setOperation: async ({ operation, skipNotify }) => {
       if (cat.mode === "auto") return { ok: false as const, error: "Este catálogo es automático (antiguo): su operación es un criterio." };

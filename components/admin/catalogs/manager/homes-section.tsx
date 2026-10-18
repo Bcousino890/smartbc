@@ -7,6 +7,7 @@ import { zoneRedundancies } from "@/lib/catalogs/explain";
 import type { CriteriaRaw } from "@/lib/catalogs/manager-state";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { CatalogSearch, type CatalogSearchActions } from "../catalog-search";
+import { ConversionPanel, type ConversionActions } from "../conversion-panel";
 import { PropertySearch, type SearchAction } from "../property-search";
 import type { CatalogOperation } from "@/lib/catalogs/criteria";
 import type { SearchResultRow } from "@/lib/catalogs/search";
@@ -69,6 +70,8 @@ export interface HomesSectionProps {
   catalogSearch: CatalogSearchActions;
   addFromSearch: (row: SearchResultRow) => Promise<boolean>;
   setOperation: (op: CatalogOperation) => void;
+  /** BCP-01 P4 · conversión de un automático antiguo en selección fija. */
+  conversion: ConversionActions;
 }
 
 const OPERATION_LABEL: Record<CatalogOperation, string> = { sale: "Venta", rent: "Alquiler", any: "Venta y alquiler" };
@@ -125,6 +128,7 @@ export function HomesSection(props: HomesSectionProps) {
       {/* BCP-01 P3: la selección explícita no tiene criterios ni modo; solo
           la operación del catálogo (qué precio ve el cliente). Los
           automáticos antiguos conservan su barra de criterios tal cual. */}
+      {auto ? <ConversionPanel catalogId={catalog.id} actions={props.conversion} run={props.run} pending={pending} archived={archived} /> : null}
       {auto ? (
       <div className="rounded-xl border border-gold/20 bg-white/60" data-testid="criteria-bar">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
