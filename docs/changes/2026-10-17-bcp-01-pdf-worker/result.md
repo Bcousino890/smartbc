@@ -157,6 +157,14 @@ Resumen. El detalle está en [`medicion.md`](medicion.md).
    - cada PDF deja `[catalogos] pdf hilo: …`;
    - si apareciera `[catalogos] pdf hilo no disponible: …`, el PDF salió por el camino anterior y hay que avisar.
 
+### Resultado de la QA (anotado el 18-10-2026)
+
+- **Fabricio informa** de que hizo la QA en producción tras el merge (`2e2631b`) y salió bien.
+- Es lo único que se anota. **No** se deduce de ese aviso:
+  - que se revisaran en producción los logs del hilo (`[catalogos] pdf hilo: …`, o la ausencia de `… no disponible`);
+  - ninguna medición de D13 en vivo, ni de rendimiento o memoria en el VPS.
+- Esos puntos siguen como están en «Pendiente o no demostrado».
+
 ## Revisión
 
 No se pidió revisión adicional de Codex: la aprobación lo excluía.
