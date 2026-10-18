@@ -5,7 +5,7 @@
 //   BASE=http://127.0.0.1:3163 OUT=<carpeta> node --experimental-strip-types scripts/qa/catalog-search-e2e.mts
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { chromium, type Page } from "playwright";
+import { chromium, webkit, type Page } from "playwright";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:3163";
 const OUT = process.env.OUT ?? "catalog-search-e2e";
@@ -23,7 +23,8 @@ const settle = async (p: Page) => {
 };
 const select = (p: Page, label: string) => p.getByTestId("catalog-search").locator("label", { hasText: label }).locator("select");
 
-const browser = await chromium.launch();
+// BROWSER=webkit para probar el motor de Safari.
+const browser = await (process.env.BROWSER === "webkit" ? webkit : chromium).launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 const errors: string[] = [];
 page.on("pageerror", (e) => errors.push(e.message));

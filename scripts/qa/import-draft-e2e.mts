@@ -5,7 +5,7 @@
 //   BASE=http://127.0.0.1:3166 OUT=<carpeta> node --experimental-strip-types scripts/qa/import-draft-e2e.mts
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { chromium, type Page } from "playwright";
+import { chromium, webkit, type Page } from "playwright";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:3166";
 const OUT = process.env.OUT ?? "import-draft-e2e";
@@ -22,7 +22,8 @@ const stepStatus = (p: Page, k: string) => p.getByTestId(`step-${k}`).getAttribu
 const waitSteps = (p: Page) => p.getByTestId("draft-steps").waitFor({ timeout: 15000 });
 const waitIdle = (p: Page) => p.waitForFunction(() => !document.body.innerText.match(/Guardando fotos|Añadiendo al catálogo|Creando la ficha|Reintentando/), null, { timeout: 15000 });
 
-const browser = await chromium.launch();
+// BROWSER=webkit para probar el motor de Safari.
+const browser = await (process.env.BROWSER === "webkit" ? webkit : chromium).launch();
 const page = await browser.newPage({ viewport: { width: 1300, height: 1000 } });
 const errors: string[] = [];
 page.on("pageerror", (e) => errors.push(e.message));

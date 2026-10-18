@@ -2,7 +2,7 @@
 // SINTÉTICOS: pdf.js y tesseract.js cargados desde la ruta de recursos propia
 // (sin CDN), OCR en el navegador, separación y campos.
 //   BASE=http://127.0.0.1:3167 node --experimental-strip-types scripts/qa/pdf-engine-e2e.mts
-import { chromium, type Page } from "playwright";
+import { chromium, webkit, type Page } from "playwright";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:3167";
 let fails = 0;
@@ -11,7 +11,8 @@ const ok = (name: string, cond: boolean, detail = "") => {
   if (!cond) fails++;
 };
 
-const browser = await chromium.launch();
+// BROWSER=webkit para probar el motor de Safari.
+const browser = await (process.env.BROWSER === "webkit" ? webkit : chromium).launch();
 const page = await browser.newPage();
 const errors: string[] = [];
 const external: string[] = [];

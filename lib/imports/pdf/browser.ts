@@ -5,6 +5,7 @@
 
 import { MIN_PHOTO_SIDE, openPdf, readPage, sha256Hex, type ExtractedPage, type PdfDoc, type PdfImageRef, type PdfjsModule } from "./extract";
 import { acceptOcr, OCR_LANGS } from "./ocr";
+import { installReadableStreamAsyncIterator } from "./polyfills";
 
 export const MAX_PDF_BYTES = 80 * 1024 * 1024;
 export const MAX_PDF_PAGES = 200;
@@ -50,6 +51,8 @@ export class PdfReadError extends Error {
 
 let pdfjsPromise: Promise<PdfjsModule> | null = null;
 function loadPdfjs(assetBase: string): Promise<PdfjsModule> {
+  // Safari: recorrido asíncrono de ReadableStream, que pdf.js usa y su build «legacy» no trae.
+  installReadableStreamAsyncIterator();
   // Build «legacy» (con polyfills), el mismo que el worker servido (ocr.ts).
   pdfjsPromise ??= import("pdfjs-dist/legacy/build/pdf.mjs").then((m) => {
     m.GlobalWorkerOptions.workerSrc = `${assetBase}/pdf.worker.min.mjs`;
