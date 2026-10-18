@@ -369,6 +369,17 @@ export async function addUploadedPhoto(actor: string, id: string, buf: Buffer, p
   return { ok: true, photo: data as DraftPhoto };
 }
 
+/** Bytes de una foto SUBIDA de un borrador propio (bucket privado), para verla en la revisión. */
+export async function readDraftPhoto(actor: string, id: string, photoId: string): Promise<{ ok: true; data: Buffer } | Fail> {
+  const d = await getDraft(actor, id);
+  if (!d) return fail("draft_not_found");
+  const p = d.photos.find((x) => x.id === photoId);
+  if (!p || p.kind !== "upload") return fail("invalid_photo");
+  const dl = await db().storage.from(DRAFT_BUCKET).download(p.path);
+  if (dl.error || !dl.data) return fail("draft_photo_missing");
+  return { ok: true, data: Buffer.from(await (dl.data as Blob).arrayBuffer()) };
+}
+
 // ── Duplicados ──────────────────────────────────────────────────────────────
 
 const CAND_COLS = "id, slug, title, bc_reference, external_id, agency_id, source_url, zone, subzone, address, operation, operations, price, rent_price, bedrooms, square_meters, description, status, archived_at, updated_at";

@@ -686,7 +686,10 @@ const es: Strings = {
     "Rellena los datos paso a paso en un formulario.",
   "adminProps.add.byLink": "Importar por link",
   "adminProps.add.byLink.help":
-    "Pega la URL de la propiedad (Idealista, Fotocasa…) y la importamos.",
+    "Pega la URL del anuncio (Idealista, Fotocasa…): preparamos un borrador para revisarlo.",
+  "adminProps.add.byPdf": "Importar desde PDF",
+  "adminProps.add.byPdf.help":
+    "Sube el PDF de un colaborador: sale un borrador por vivienda para revisarlo.",
   "adminProps.import.title": "Importar propiedad por link",
   "adminProps.import.subtitle":
     "Pega el enlace público de la propiedad y la traemos automáticamente.",
@@ -2171,7 +2174,10 @@ const en: Strings = {
   "adminProps.add.manual.help": "Fill in the details step by step in a form.",
   "adminProps.add.byLink": "Import by link",
   "adminProps.add.byLink.help":
-    "Paste the property URL (Idealista, Fotocasa…) and we import it.",
+    "Paste the listing URL (Idealista, Fotocasa…): we prepare a draft for you to review.",
+  "adminProps.add.byPdf": "Import from PDF",
+  "adminProps.add.byPdf.help":
+    "Upload a partner's PDF: you get one draft per home to review.",
   "adminProps.import.title": "Import property from link",
   "adminProps.import.subtitle":
     "Paste the public URL of the property and we'll pull it in automatically.",
@@ -3622,7 +3628,10 @@ const fr: Strings = {
     "Remplis les détails étape par étape dans un formulaire.",
   "adminProps.add.byLink": "Importer par lien",
   "adminProps.add.byLink.help":
-    "Colle l'URL de la propriété (Idealista, Fotocasa…) et nous l'importons.",
+    "Colle l'URL de l'annonce (Idealista, Fotocasa…) : nous préparons un brouillon à vérifier.",
+  "adminProps.add.byPdf": "Importer depuis un PDF",
+  "adminProps.add.byPdf.help":
+    "Téléverse le PDF d'un partenaire : un brouillon par logement, à vérifier.",
   "adminProps.import.title": "Importer une propriété depuis un lien",
   "adminProps.import.subtitle":
     "Colle l'URL publique de la propriété et nous la récupérons automatiquement.",

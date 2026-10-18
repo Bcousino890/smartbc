@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Copy,
   Eye,
+  FileText,
   Image as ImageIcon,
   Link as LinkIcon,
   Loader2,
@@ -622,6 +623,22 @@ export function PropertiesAdminClient({
                   <p className="text-xs text-ink/55">{t("adminProps.add.byLink.help")}</p>
                 </div>
               </Link>
+              {/* Importar desde PDF (BCP-01 P8): España V1. Se lee en el navegador
+                  y sale un borrador por vivienda para revisar. */}
+              {country === "es" ? (
+                <Link
+                  href={`${config.prefix}/propiedades/importar/pdf`}
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex w-full items-start gap-3 border-t border-gold/10 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
+                >
+                  <FileText size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold-dark" />
+                  <div>
+                    <p className="font-medium">{t("adminProps.add.byPdf")}</p>
+                    <p className="text-xs text-ink/55">{t("adminProps.add.byPdf.help")}</p>
+                  </div>
+                </Link>
+              ) : null}
             </div>
           )}
         </div>
