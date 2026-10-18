@@ -28,6 +28,9 @@ import {
   previewModeAction,
   removeCatalogAdAction,
   searchCatalogPropertiesAction,
+  searchCatalogV2Action,
+  catalogSearchOptionsAction,
+  setCatalogOperationAction,
   searchSavedListingsAction,
   setCatalogCriteriaAction,
   setCatalogModeAction,
@@ -109,6 +112,8 @@ export default async function CatalogPage({
           setContact: setCatalogContactAction,
           addPropertyById: addPropertyByIdAction,
           search: searchCatalogPropertiesAction,
+          catalogSearch: { search: searchCatalogV2Action, options: catalogSearchOptionsAction },
+          setOperation: setCatalogOperationAction,
           selection: {
             setCriteria: setCatalogCriteriaAction,
             previewAuto: previewAutoSelectionAction,

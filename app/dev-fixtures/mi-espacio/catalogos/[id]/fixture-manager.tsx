@@ -19,6 +19,8 @@ import { explainProperty, INCLUDED_UNAVAILABLE } from "@/lib/catalogs/explain";
 import { fixtureMaterial, fixturePhotoUrl, fixtureProperties, fixtureSavedListings, fixtureView, type FixtureProperty } from "@/lib/catalogs/fixtures-selection";
 import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { createFixtureTexts } from "./fixture-texts";
+import { FIXTURE_AGENCIES, FIXTURE_TAGS, fixtureCatalogSearch } from "@/lib/catalogs/fixture-search";
+import { normalizeSearchFilters } from "@/lib/catalogs/search-filters";
 
 // SOLO DESARROLLO LOCAL (BCP-01, E7): acciones falsas, para revisar el gestor
 // sin base de datos ni sistemas reales. Reproducen los mismos mensajes de
@@ -259,6 +261,11 @@ export function FixtureCatalogManager({
       );
       return { ...c, items, autoTotal: a ? a.total : null, autoMatched: a ? a.matched : null, adjustments: adjustmentsOf(c.criteria), cover: coverOf(items), material };
     });
+  // ?auto=1 (P3/P4): un automático antiguo calcula su lista al abrir.
+  useEffect(() => {
+    if (catalog.mode === "auto") refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   let n = 0;
   const actions: CatalogManagerActions = {
     // E2: como el servidor, lo guardado pasa a ser el valor del catálogo.
@@ -279,9 +286,40 @@ export function FixtureCatalogManager({
       return live({ op: "contact", name: name.trim(), phone: e164, role, skipNotify });
     },
     addPropertyById: async ({ propertyId, skipNotify }) => {
+      // Como catalog_add_property (0212): máximo de 24 visibles.
+      if (manualRef.current.filter((x) => x.status === "available" || x.status === "reserved").length >= 24) {
+        return { ok: false as const, error: "El catálogo ya tiene 24 viviendas, el máximo. Quita una antes de añadir otra." };
+      }
+      if (manualRef.current.some((x) => x.propertyId === propertyId)) return { ok: false as const, error: "Esa propiedad ya está en este catálogo." };
       const p = byId.get(propertyId);
       if (p) manualRef.current = [...manualRef.current, fixtureView(p, 100, catRef.current.criteria.operation)];
       return live({ op: "add", title: p?.title ?? "Propiedad de prueba", skipNotify });
+    },
+    // BCP-01 P3 · buscador nuevo (sobre el universo sintético) y operación.
+    catalogSearch: {
+      search: async ({ filters, page }) => {
+        const n = normalizeSearchFilters(filters);
+        if (!n.ok) return { ok: false as const, error: "Revisa los filtros: zonas reconocidas, precio con venta o alquiler, mínimos ≤ máximos." };
+        const inCat = new Set((cat.mode === "auto" ? autoItems(cat.criteria).items : manualRef.current).map((x) => x.propertyId));
+        const visible = manualRef.current.filter((x) => x.status === "available" || x.status === "reserved").length;
+        const result = await fixtureCatalogSearch({
+          pool,
+          inCatalog: inCat,
+          catalog: { mode: cat.mode, status: cat.status, visible: cat.mode === "auto" ? autoItems(cat.criteria).items.length : visible },
+          filters: n.filters,
+          page,
+          catalogOperation: cat.criteria.operation,
+          photoUrl: (id) => thumbOf(id),
+        });
+        return { ok: true as const, result };
+      },
+      options: async () => ({ ok: true as const, agencies: FIXTURE_AGENCIES, tags: FIXTURE_TAGS }),
+    },
+    setOperation: async ({ operation, skipNotify }) => {
+      if (cat.mode === "auto") return { ok: false as const, error: "Este catálogo es automático (antiguo): su operación es un criterio." };
+      if (operation === cat.criteria.operation) return unchanged();
+      refresh({ criteria: { ...cat.criteria, operation, ...(operation === "any" ? { price_min: null, price_max: null } : {}) } });
+      return live({ op: "operation", operation, skipNotify });
     },
     search: async ({ criteria, text, offset = 0 }) => {
       const n = normalizeCriteria(criteria);

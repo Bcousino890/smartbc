@@ -189,8 +189,13 @@ export function ManagerHeader({
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink/60" data-testid="manager-status">
           <span className={`rounded-full px-2.5 py-0.5 ${archived ? "bg-ink/10 text-ink/60" : "bg-gold/15 text-ink/80"}`}>{archived ? "Archivado" : "Activo"}</span>
-          <span>{mode === "auto" ? "Automático" : "Manual"}</span>
-          <span aria-hidden="true">·</span>
+          {/* BCP-01 P3: sin modos; solo se avisa de los automáticos antiguos. */}
+          {mode === "auto" ? (
+            <>
+              <span>Automático (antiguo)</span>
+              <span aria-hidden="true">·</span>
+            </>
+          ) : null}
           <span data-testid="header-count">
             {count} vivienda{count === 1 ? "" : "s"}
           </span>
