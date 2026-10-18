@@ -5,7 +5,7 @@ import { isCatalogFixtureMode } from "@/lib/catalogs/fixture-mode";
 // SOLO DESARROLLO LOCAL (BCP-01 P7): los PDF SINTÉTICOS de
 // scripts/fixtures/pdf para la página de pruebas. Lista cerrada.
 export const dynamic = "force-dynamic";
-const NAMES = new Set(["digital.pdf", "escaneado.pdf", "mixto.pdf", "varias.pdf"]);
+const NAMES = new Set(["digital.pdf", "escaneado.pdf", "mixto.pdf", "varias.pdf", "ficha-agencia.pdf"]);
 
 export async function GET(_req: Request, { params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;

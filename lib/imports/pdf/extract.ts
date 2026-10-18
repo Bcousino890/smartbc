@@ -25,7 +25,7 @@ export interface PdfDoc {
 }
 export interface PdfPage {
   getViewport(o: { scale: number }): { width: number; height: number };
-  getTextContent(): Promise<{ items: Array<{ str?: string; hasEOL?: boolean; transform?: number[]; height?: number }> }>;
+  getTextContent(): Promise<{ items: Array<{ str?: string; hasEOL?: boolean; transform?: number[]; height?: number; width?: number }> }>;
   getOperatorList(): Promise<{ fnArray: number[]; argsArray: unknown[][] }>;
   objs: { has(id: string): boolean; get(id: string): unknown };
   commonObjs: { has(id: string): boolean; get(id: string): unknown };
@@ -66,25 +66,36 @@ export const MIN_TEXT_LETTERS = 25;
 const letters = (s: string) => (s.match(/\p{L}/gu) ?? []).length;
 
 /** Texto de la página con los saltos de línea del PDF (o por cambio de línea). */
-export function pageTextFromItems(items: Array<{ str?: string; hasEOL?: boolean; transform?: number[]; height?: number }>): string {
+export function pageTextFromItems(items: Array<{ str?: string; hasEOL?: boolean; transform?: number[]; height?: number; width?: number }>): string {
   let out = "";
   let lastY: number | null = null;
+  let lastEnd: number | null = null;
   for (const it of items) {
-    const str = it.str ?? "";
+    const str = (it.str ?? "").replace(LIGATURES, (c) => LIGATURE_MAP[c] ?? c);
+    const x = it.transform?.[4];
     const y = it.transform?.[5];
     if (lastY !== null && y !== undefined && Math.abs(y - lastY) > Math.max(2, (it.height ?? 10) * 0.6) && !out.endsWith("\n")) out += "\n";
-    else if (str && out && !out.endsWith("\n") && !out.endsWith(" ") && !str.startsWith(" ")) out += " ";
+    else if (str && out && !out.endsWith("\n") && !out.endsWith(" ") && !str.startsWith(" ")) {
+      // Espacio solo si hay hueco entre un trozo y el siguiente: una ligadura
+      // («fi») o un cambio de fuente parten palabras en trozos pegados.
+      const gap = x !== undefined && lastEnd !== null ? x - lastEnd : null;
+      if (gap === null || gap > Math.max(0.5, (it.height ?? 10) * 0.12)) out += " ";
+    }
     out += str;
     if (it.hasEOL) out += "\n";
     if (y !== undefined) lastY = y;
+    lastEnd = x !== undefined && typeof it.width === "number" ? x + it.width : null;
   }
   return out
     .split("\n")
-    .map((l) => l.replace(/[ \t ]+/g, " ").trim())
+    .map((l) => l.replace(/[ \t\u00a0]+/g, " ").trim())
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+const LIGATURE_MAP: Record<string, string> = { "\ufb00": "ff", "\ufb01": "fi", "\ufb02": "fl", "\ufb03": "ffi", "\ufb04": "ffl", "\ufb05": "st", "\ufb06": "st" };
+const LIGATURES = /[\ufb00-\ufb06]/g;
 
 /** RGBA de los datos de una imagen de pdf.js (kind 1 = 1 bit gris, 2 = RGB, 3 = RGBA). */
 export function toRgba(img: { width: number; height: number; kind?: number; data?: Uint8Array | Uint8ClampedArray }): Uint8ClampedArray | null {
