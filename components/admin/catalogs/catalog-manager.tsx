@@ -10,6 +10,10 @@ import { useHomeMeasure } from "./measure-panel";
 import type { ShareActions, ShareView } from "./share-panel";
 import type { SelectionActions } from "./selection-panel";
 import type { SearchAction } from "./property-search";
+import type { CatalogSearchActions } from "./catalog-search";
+import type { SearchResultRow } from "@/lib/catalogs/search";
+import { managerPriceFields } from "@/lib/catalogs/operation-price";
+import type { CatalogOperation } from "@/lib/catalogs/criteria";
 import type { AdActions } from "./ads-panel";
 import type { CoverActions } from "./cover-picker";
 import type { PhotoActions } from "./manager/catalog-photos-block";
@@ -84,6 +88,9 @@ export interface CatalogManagerActions {
   photos: PhotoActions;
   /** Ampliación C2 */
   texts: TextActions;
+  /** BCP-01 P3 · buscador nuevo y operación del catálogo (selección explícita). */
+  catalogSearch: CatalogSearchActions;
+  setOperation: (i: { catalogId: string; operation: CatalogOperation } & M) => Promise<Res>;
 }
 
 export function CatalogManager({
@@ -157,6 +164,7 @@ export function CatalogManager({
       addPropertyById: (i: Parameters<CatalogManagerActions["addPropertyById"]>[0]) => actions.addPropertyById({ ...i, ...mo }),
       adjust: (i: Parameters<CatalogManagerActions["adjust"]>[0]) => actions.adjust({ ...i, ...mo }),
       clearAdjustment: (i: Parameters<CatalogManagerActions["clearAdjustment"]>[0]) => actions.clearAdjustment({ ...i, ...mo }),
+      setOperation: (i: Parameters<CatalogManagerActions["setOperation"]>[0]) => actions.setOperation({ ...i, ...mo }),
       selection: {
         ...actions.selection,
         setCriteria: (i: Parameters<SelectionActions["setCriteria"]>[0]) => actions.selection.setCriteria({ ...i, ...mo }),
@@ -356,7 +364,8 @@ export function CatalogManager({
   // Formularios con cambios sin guardar (D-QA9), con su sitio.
   const textTitle = (pid: string) => texts.find((t) => t.propertyId === pid)?.title ?? "una vivienda que ya no está";
   const unsaved: Array<UnsavedEntry & { section: Section }> = [];
-  if (criteriaForm.edited) unsaved.push({ key: "criteria", label: "Criterios", section: "viviendas", go: () => go("viviendas") });
+  // P3: los criterios solo existen en los automáticos antiguos.
+  if (auto && criteriaForm.edited) unsaved.push({ key: "criteria", label: "Criterios", section: "viviendas", go: () => go("viviendas") });
   if (metaForm.edited) unsaved.push({ key: "meta", label: "Título e introducción", section: "diseno", go: () => go("diseno", "cm-title") });
   if (coverForm.edited) unsaved.push({ key: "cover", label: "Portada", section: "diseno", go: () => go("diseno", "cp-title") });
   if (contactForm.edited) unsaved.push({ key: "contact", label: "Contacto", section: "compartir", go: () => go("compartir", "cm-contact-name") });
@@ -477,7 +486,7 @@ export function CatalogManager({
           auto={auto}
           archived={archived}
           pending={pending}
-          countLabel={auto ? autoCount() : `${items.length} en el catálogo`}
+          countLabel={auto ? autoCount() : `${items.length} en el catálogo · máximo 24`}
           openId={section === "viviendas" ? vivienda : null}
           onOpen={(pid) => navigate({ seccion: "viviendas", vivienda: pid })}
           onEditText={(pid) => navigate({ seccion: "contenido", vivienda: pid })}
@@ -508,6 +517,30 @@ export function CatalogManager({
           reference={reference}
           setReference={setReference}
           addByReference={add}
+          catalogSearch={actions.catalogSearch}
+          addFromSearch={(row) =>
+            new Promise<boolean>((resolve) => {
+              run(
+                () => wrapped.addPropertyById({ catalogId: catalog.id, propertyId: row.id }),
+                "Propiedad añadida.",
+                () => {
+                  if (onLocalAdd) setItems((xs) => [...xs, viewFromRow(row, catalog.criteria.operation, (xs.length + 1) * 100)]);
+                  resolve(true);
+                },
+                () => resolve(false),
+                "alta",
+              );
+            })
+          }
+          setOperation={(operation) =>
+            run(
+              () => wrapped.setOperation({ catalogId: catalog.id, operation }),
+              "Operación del catálogo guardada: los precios se ven con ella.",
+              undefined,
+              undefined,
+              "operación",
+            )
+          }
         />
       </section>
 
@@ -570,4 +603,23 @@ export function CatalogManager({
       </section>
     </div>
   );
+}
+
+/** Vista de gestión de una fila del buscador (solo para la prueba local, que
+ *  no recarga la página tras añadir). */
+function viewFromRow(r: SearchResultRow, op: CatalogOperation, position: number): CatalogItemView {
+  return {
+    propertyId: r.id,
+    position,
+    slug: r.slug,
+    bcReference: r.bcReference,
+    title: r.title,
+    zone: [r.subzone, r.zone].filter(Boolean).join(", ") || null,
+    status: r.status,
+    ...managerPriceFields({ operation: r.operation, operations: r.operations, price: r.price, rent_price: r.rentPrice, currency: r.currency }, op),
+    bedrooms: r.bedrooms,
+    bathrooms: r.bathrooms,
+    squareMeters: r.squareMeters,
+    photoUrl: r.coverUrl,
+  };
 }

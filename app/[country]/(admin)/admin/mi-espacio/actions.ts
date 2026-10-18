@@ -19,7 +19,10 @@ import { validateCatalogContact } from "@/lib/catalogs/contact";
 import { catalogErrorMessage, CREATE_IN_GROUP_FAILED } from "@/lib/catalogs/errors";
 import { isHomeOwner } from "@/lib/catalogs/owner";
 import { findPropertyId } from "@/lib/catalogs/queries";
-import { normalizeCriteria, type CatalogCriteria } from "@/lib/catalogs/criteria";
+import { normalizeCriteria, type CatalogCriteria, type CatalogOperation } from "@/lib/catalogs/criteria";
+import { searchCatalog, type SearchResult } from "@/lib/catalogs/search";
+import { normalizeSearchFilters } from "@/lib/catalogs/search-filters";
+import type { PropertyTag } from "@/lib/properties/tags";
 import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { getCatalogFingerprint } from "@/lib/catalogs/public-data";
 import {
@@ -417,6 +420,66 @@ export async function searchCatalogPropertiesAction(input: {
     } catch (err) {
       return fail({ message: err instanceof Error ? err.message.replace(/^[^:]+:\s*/, "") : null });
     }
+  }));
+}
+
+// ── Buscador del catálogo y operación (BCP-01 P3, 0212) ────────────────────
+
+/** Buscador nuevo del catálogo (como Propiedades): filtros normalizados como en
+ *  SQL, paginación en el servidor y motivo de no elegible (solo lectura). */
+export async function searchCatalogV2Action(input: {
+  catalogId: string;
+  filters: unknown;
+  page?: number;
+}): Promise<ActionResult<{ result: SearchResult }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const n = normalizeSearchFilters(input.filters);
+    if (!n.ok) return fail(n.error);
+    const { data: cat } = await db().from("catalogs").select("criteria, owner_id").eq("id", input.catalogId).maybeSingle();
+    if (!cat || cat.owner_id !== profile.id) return fail("forbidden");
+    const op = (["sale", "rent", "any"].includes(cat.criteria?.operation) ? cat.criteria.operation : "any") as CatalogOperation;
+    const page = Number.isInteger(input.page) && (input.page as number) > 0 ? (input.page as number) : 1;
+    try {
+      const result = await searchCatalog((fn, args) => db().rpc(fn, args), { actor: profile.id, catalogId: input.catalogId, filters: n.filters, page, catalogOperation: op });
+      return { ok: true as const, result };
+    } catch (err) {
+      return fail({ message: err instanceof Error ? err.message : null });
+    }
+  }));
+}
+
+/** Opciones de los filtros: agencias con viviendas en España y etiquetas. */
+export async function catalogSearchOptionsAction(input: {
+  catalogId: string;
+}): Promise<ActionResult<{ agencies: { id: string; name: string }[]; tags: PropertyTag[] }>> {
+  return finish(await withHomeAccess(ownerDeps, async () => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const [{ data: agencies }, { data: tags }] = await Promise.all([
+      db().from("agencies").select("id, name").order("name"),
+      db().from("property_tags").select("id, name, color, country").eq("country", "es").order("name"),
+    ]);
+    return { ok: true as const, agencies: (agencies ?? []) as { id: string; name: string }[], tags: (tags ?? []) as PropertyTag[] };
+  }));
+}
+
+/** «Operación del catálogo» (I-7): qué precio ven el lector y el PDF. Solo en
+ *  la selección explícita; cambia solo criteria.operation. */
+export async function setCatalogOperationAction(input: {
+  catalogId: string;
+  operation: string;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (!["sale", "rent", "any"].includes(input.operation)) return fail("invalid_criteria");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_set_operation", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_operation: input.operation,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
   }));
 }
 
