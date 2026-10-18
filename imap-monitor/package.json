@@ -1,0 +1,17 @@
+{
+  "name": "imap-monitor",
+  "version": "1.0.0",
+  "description": "IMAP monitor for Idealista lead notifications → Zinto webhook",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "imapflow": "^1.0.162",
+    "mailparser": "^3.7.1"
+  }
+}

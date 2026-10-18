@@ -1,0 +1,97 @@
+{
+  "exportDate": "2026-06-07T14:00:00.000Z",
+  "version": "1.0",
+  "flows": [
+    {
+      "name": "Leads Idealista → CRM",
+      "description": "Recibe leads del monitor IMAP. Crea contacto con notas y etiquetas, y responde al lead automáticamente por WhatsApp.",
+      "status": "active",
+      "nodes": [
+        {
+          "id": "node_wh",
+          "data": {
+            "label": "Nuevo Lead Idealista",
+            "webhookToken": null,
+            "useCustomPath": false,
+            "contactMapping": { "strategy": "system" },
+            "responseConfig": {
+              "mode": "async",
+              "headers": {},
+              "statusCode": 200,
+              "bodyTemplate": "{\"success\": true}"
+            },
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "filterConditions": []
+          },
+          "type": "webhookTrigger",
+          "width": 280,
+          "height": 152,
+          "position": { "x": 340, "y": 60 },
+          "positionAbsolute": { "x": 340, "y": 60 }
+        },
+        {
+          "id": "node_contact",
+          "data": {
+            "label": "Crear / Actualizar Contacto",
+            "operation": "create_contact",
+            "showAdvanced": true,
+            "updateFields": {
+              "name": "{{webhook.contact_name}}",
+              "phone": "{{webhook.contact_phone}}",
+              "notes": "{{webhook.contact_notes}}",
+              "tags": ["Idealista", "{{webhook.property_type}}", "{{webhook.property_price}}"]
+            },
+            "errorHandling": "continue",
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "skipEmptyValues": true,
+            "deleteConfirmation": false
+          },
+          "type": "manage_contact",
+          "width": 380,
+          "height": 200,
+          "position": { "x": 300, "y": 280 },
+          "positionAbsolute": { "x": 300, "y": 280 }
+        },
+        {
+          "id": "node_msg",
+          "data": {
+            "label": "WhatsApp → Lead",
+            "phoneNumber": "{{webhook.contact_phone}}",
+            "messageContent": "Hola {{webhook.contact_name}} qué tal? 👋 Nos consultaste por el inmueble en *{{webhook.property_neighborhood}}* ({{webhook.property_type}}). ¿Cuándo te gustaría visitarlo? ¿Te puedo llamar por teléfono?\n\n¡Un saludo! 😊",
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "channelConnectionId": null
+          },
+          "type": "contactNotification",
+          "width": 380,
+          "height": 200,
+          "position": { "x": 300, "y": 550 },
+          "positionAbsolute": { "x": 300, "y": 550 }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "type": "smoothstep",
+          "source": "node_wh",
+          "target": "node_contact",
+          "animated": true,
+          "targetHandle": "flow-in"
+        },
+        {
+          "id": "e2",
+          "type": "smoothstep",
+          "source": "node_contact",
+          "target": "node_msg",
+          "animated": true,
+          "targetHandle": "flow-in"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-06-07T14:00:00.000Z",
+      "updatedAt": "2026-06-07T14:00:00.000Z"
+    }
+  ]
+}
