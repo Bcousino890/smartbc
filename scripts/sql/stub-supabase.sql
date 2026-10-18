@@ -149,3 +149,35 @@ ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS ai_confidence  numeric;
 ALTER TABLE property_photos ADD COLUMN IF NOT EXISTS class_override text;
 REVOKE ALL ON property_story_versions, property_story_blocks FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON property_story_versions, property_story_blocks TO service_role;
+
+-- ── BCP-01 P2 (0212): columnas y tablas que lee el buscador del catálogo ──
+-- Solo pruebas locales. En producción ya existen (0001, 0005, 0020, 0201).
+CREATE TABLE IF NOT EXISTS agencies (
+  id   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  slug text NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS agency_feeds (
+  id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency_id uuid NOT NULL UNIQUE REFERENCES agencies(id) ON DELETE CASCADE
+);
+DO $$ BEGIN
+  CREATE TYPE property_stay AS ENUM ('short', 'long');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS agency_id          uuid REFERENCES agencies(id) ON DELETE SET NULL;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS external_id        text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS property_reference text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS stay               property_stay;
+CREATE TABLE IF NOT EXISTS property_tags (
+  id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  country text NOT NULL DEFAULT 'es',
+  name    text NOT NULL,
+  color   text NOT NULL DEFAULT '#B8913E'
+);
+CREATE TABLE IF NOT EXISTS property_tag_links (
+  property_id uuid NOT NULL REFERENCES properties(id)    ON DELETE CASCADE,
+  tag_id      uuid NOT NULL REFERENCES property_tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (property_id, tag_id)
+);
+REVOKE ALL ON agencies, agency_feeds, property_tags, property_tag_links FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON agencies, agency_feeds, property_tags, property_tag_links TO service_role;

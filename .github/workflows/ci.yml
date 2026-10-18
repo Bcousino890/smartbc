@@ -59,6 +59,8 @@ jobs:
         run: npm run test:catalogs-manager
       - name: "Propiedades: filtro de la lista (caracterización) y búsqueda por referencia (offline)"
         run: npm run test:admin-properties
+      - name: "Catálogos: buscador (filtros, URL, texto y planta, paginación; offline)"
+        run: npm run test:catalog-search
 
       # Permisos y cuentas del equipo. Son las reglas que impiden que alguien
       # escale privilegios (rango entre roles, quién crea qué rol, quién fija
