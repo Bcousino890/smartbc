@@ -62,6 +62,7 @@
     "test:mailbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-mailbox.mts",
     "test:catalogs": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs.mts",
     "test:catalogs-public": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-public.mts",
+    "test:catalog-search": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalog-search.mts",
     "test:catalogs-manager": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-manager.mts"
   },
   "dependencies": {
