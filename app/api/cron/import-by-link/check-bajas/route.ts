@@ -13,6 +13,13 @@ import { getProxyUrl } from "@/lib/sync/proxy-config";
 // Por qué solo `source='manual'`: las propiedades de sindicación
 // (source='scrape', p.ej. Level) las maneja el cron de sync, no este. Las
 // altas manuales escritas a mano (sin source_url) tampoco aplican.
+//
+// Los enlaces de Idealista YA NO pasan por aquí (2026-10-19): Idealista bloquea el
+// `curl` directo, así que cada pasada devolvía `uncertain: 30` y, como lo incierto no
+// mueve `updated_at`, repetía siempre las mismas 30 y nunca llegaba al resto. Los vigila
+// el crawler (`link-watch`, abre la ficha por Crawio) y decide la función SQL
+// `apply_portal_link_verdict` (migración 0215): dos bajas seguidas para archivar, y
+// desarchiva sola si el anuncio vuelve. Este cron sigue para los demás portales.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +66,7 @@ async function checkImportedListings(supabase: SupabaseLike) {
     .select("id, source_url, slug, updated_at")
     .eq("source", "manual")
     .not("source_url", "is", null)
+    .not("source_url", "ilike", "%idealista.com%")
     .is("archived_at", null)
     .neq("status", "archived")
     .order("updated_at", { ascending: true })

@@ -298,7 +298,19 @@ export async function insertImportedProperty(
     };
     // Reimportar = "quiero esta propiedad activa": la desarchivamos siempre y, si
     // estaba archivada, la devolvemos a 'available' (respeta reserved/sold).
-    const reactivate: Record<string, unknown> = { archived_at: null };
+    //
+    // Vigilante de enlaces (0215): quien reimporta decide que la ficha esté activa, así que se borra la marca de
+    // «archivada por el vigilante» y se reinicia el veredicto. NO se da el enlace por vivo: el HTML puede venir de
+    // Wayback o pegado a mano, y eso no prueba que el anuncio siga publicado; el vigilante lo comprueba solo.
+    const reactivate: Record<string, unknown> = {
+      archived_at: null,
+      archived_reason: null,
+      archived_auto_at: null,
+      portal_link_state: null,
+      portal_link_checked_at: null,
+      portal_link_first_gone_at: null,
+      portal_link_gone_at: null,
+    };
     if (existing.data.status === "archived" || existing.data.status === null) {
       reactivate.status = "available";
     }
