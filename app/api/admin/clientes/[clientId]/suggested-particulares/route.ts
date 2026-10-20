@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSuggestedParticulares } from "@/lib/db/queries/suggested-particulares";
 import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,9 @@ export async function GET(
     if (!gate2.ok) return gate2.response;
 
     const { clientId } = await params;
+    if (!(await canActOnClient(clientId, "clientes", "view"))) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     // Los anuncios scrapeados son solo de España: a un cliente de otro país
     // no se le cruzan (vacío explícito, no un error).

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { checkPermission } from "@/lib/auth/guard";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { createAdminClient } from "@/lib/db/admin";
 import { getPropertyForOffer } from "@/lib/db/queries/suggested-properties";
 import { sendPropertyOfferEmail } from "@/lib/email/property-offer";
@@ -24,6 +25,9 @@ export async function offerPropertyToClient(
 ): Promise<ActionResult> {
   const gate = await checkPermission("clientes", "edit");
   if (!gate.ok) return gate;
+  if (!(await canActOnClient(clientId, "clientes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
+  }
 
   const db = createAdminClient() as any;
 
@@ -67,6 +71,9 @@ export async function setNewListingAlertsEnabled(
 ): Promise<ActionResult> {
   const gate = await checkPermission("clientes", "edit");
   if (!gate.ok) return gate;
+  if (!(await canActOnClient(clientId, "clientes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
+  }
 
   const db = createAdminClient() as any;
 

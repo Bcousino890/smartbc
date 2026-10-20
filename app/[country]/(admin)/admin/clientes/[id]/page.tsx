@@ -2,6 +2,7 @@ import { briefSuggestMissing } from "@/lib/clients/brief";
 import { notFound } from "next/navigation";
 import { clientRowToAdminClient } from "@/lib/db/adapters";
 import { getClientById } from "@/lib/db/queries/clients";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { checkPermission, guardPage } from "@/lib/auth/guard";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
@@ -59,6 +60,9 @@ export default async function ClientCommandCenterPage({
   const { id, country: rawCountry } = await params;
   const country: Country = isCountry(rawCountry) ? rawCountry : "es";
   await guardPage("clientes", country);
+
+  // Alcance por sección: con "solo su cartera" un cliente ajeno no existe.
+  if (!(await canActOnClient(id, "clientes", "view", country))) notFound();
 
   const rowData = await getClientById(id);
   if (!rowData) notFound();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSuggestedProperties } from "@/lib/db/queries/suggested-properties";
 import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export async function GET(
     if (!gate.ok) return gate.response;
 
     const { clientId } = await params;
+    if (!(await canActOnClient(clientId, "clientes", "view"))) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     // El país del cliente aísla el catálogo: sin esto un cliente de España
     // recibía sugerencias de Chile y viceversa.

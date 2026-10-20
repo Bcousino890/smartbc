@@ -26,7 +26,7 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
   // Scope de datos (own/team/all) para el recurso "clientes". Un cliente es
   // "propio" si su `assigned_advisor_id` es el usuario actual. team ≈ own
   // (sin modelo formal de equipos, ver ViewRestriction).
-  const { restriction, userId } = await resolveViewScope("clientes");
+  const { restriction, userId } = await resolveViewScope("clientes", "view", country);
   if (restriction === "none") return []; // p.ej. captadora: no ve clientes
   // own_only / team / assigned_only → filtra por asesor asignado. Si por lo
   // que sea no hay userId, NO filtramos (preferimos mostrar de más a ocultar).

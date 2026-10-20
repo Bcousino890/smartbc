@@ -18,6 +18,7 @@
 import { revalidatePath } from "next/cache";
 import { assertPermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { isCountry } from "@/lib/country-config";
 import {
   buildPreferencesPayload,
@@ -55,6 +56,9 @@ export async function updateClientIdentity(
     await assertPermission("clientes", "edit");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
+  }
+  if (!(await canActOnClient(input.clientId, "clientes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
   }
 
   const fullName = input.fullName.trim();
@@ -99,6 +103,9 @@ export async function assignClientAdvisor(
     await assertPermission("clientes", "edit");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
+  }
+  if (!(await canActOnClient(clientId, "clientes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
   }
 
   if (advisorId) {
@@ -172,6 +179,9 @@ export async function saveClientPreferencesFull(
     staffId = me.id ?? null;
   } catch (e) {
     return { ok: false, error: (e as Error).message };
+  }
+  if (!(await canActOnClient(input.clientId, "clientes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
   }
 
   const valid = validateBrief(input.brief);

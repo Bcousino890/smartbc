@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { ClientsStatsBlock } from "@/components/admin/clientes/clients-stats";
 import { PageFooter } from "@/components/ui/page-footer";
@@ -11,8 +10,8 @@ import {
 } from "@/lib/db/queries/portal-links";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getViewingCollectionsSettings } from "@/lib/db/queries/viewing-collections";
-import { canAccess } from "@/lib/permissions";
-import { getCountryConfig, type Country } from "@/lib/country-config";
+import { guardPage } from "@/lib/auth/guard";
+import { type Country } from "@/lib/country-config";
 import { ClientesAdminClient } from "./clientes-admin-client";
 
 export default async function AdminClientesPage({
@@ -21,10 +20,8 @@ export default async function AdminClientesPage({
   params: Promise<{ country: Country }>;
 }) {
   const { country } = await params;
+  await guardPage("clientes", country);
   const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "clientes", "view")) {
-    redirect(getCountryConfig(country).prefix);
-  }
   const [rows, stats, staff, vcSettings, perms] = await Promise.all([
     getClients(country),
     getClientStats(country),
