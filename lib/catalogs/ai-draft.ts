@@ -100,7 +100,7 @@ Usa SOLO los hechos que te doy. Reglas estrictas:
 - Tono sobrio y elegante, sin superlativos vacíos ni exclamaciones.
 - "title": un título breve para el catálogo (máximo 80 caracteres), con el tipo de vivienda y la zona si se conocen; sin precio ni adjetivos vacíos.
 - "lead": una entrada de una o dos frases (máximo 40 palabras).
-- "body": de 3 a 6 párrafos cortos, separados por una línea en blanco.
+- "body": de 3 a 6 párrafos cortos, separados por una línea en blanco. Si los hechos lo permiten, dedica párrafos distintos al salón y la luz, a la cocina y el comedor, a los acabados y el confort, a la finca (edificio, ascensor, portería, zonas comunes) y al barrio. Si no hay hechos sobre una parte, no la menciones.
 - Si hay pocos hechos, escribe poco: es mejor un texto corto que uno inventado.
 Responde en JSON conforme al esquema pedido.`;
 }

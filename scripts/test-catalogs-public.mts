@@ -989,8 +989,9 @@ async function liveTests() {
     const flat = (c: Array<{ heading: string | null; text: string }>) => c.map((b) => `${b.heading ? b.heading + ": " : ""}${b.text}`).join(" | ");
     // Texto propio con entrada aparte y párrafos.
     const t = deriveEditorial(baseIn({ text: { b: "Primer párrafo del catálogo.\n\nSegundo párrafo, con más detalle.", l: "Entrada propia.", h: [] }, cleanDescription: "Limpia." }));
+    // DE4: sin temas, todo queda en la introducción (un bloque, en párrafos).
     check("texto del catálogo: entrada propia + párrafos, en orden; la limpia no se repite",
-      t.level === "text" && flat(t.copy) === "Entrada propia. | Primer párrafo del catálogo. | Segundo párrafo, con más detalle.", flat(t.copy));
+      t.level === "text" && flat(t.copy) === "Entrada propia.\n\nPrimer párrafo del catálogo.\n\nSegundo párrafo, con más detalle.", flat(t.copy));
     const t2 = deriveEditorial(baseIn({ text: { b: "Entrada que ya está dentro. Y más texto.", l: "Entrada que ya está dentro.", h: [] } }));
     check("una entrada que ya está dentro del texto no se repite", flat(t2.copy) === "Entrada que ya está dentro. Y más texto.", flat(t2.copy));
     // Historia aprobada: entrada y capítulos con su título; la limpia distinta no se añade.
@@ -999,13 +1000,15 @@ async function liveTests() {
       const source = Array.from({ length: n }, (_, i) => ({ c: CH[i % CH.length], t: `Capítulo aprobado ${i + 1} de ${n}: ${W(70 + i * 7, "texto")}` }));
       const ed = deriveEditorial(baseIn({ cleanDescription: "Una descripción limpia distinta de la historia.", cleanFeatures: ["Ascensor"],
         story: { h: storySourceHash(facts), p: "Entrada de la historia.", b: [...source, { c: "building", t: "Portería." }] } }));
-      const missing = source.filter((c) => !ed.copy.some((b) => b.text === c.t)).length;
-      check(`historia de ${n} capítulos: todos en la descripción, con título; entrada primero; la limpia no se repite; «Portería» en características`,
-        ed.level === "story" && missing === 0 && ed.copy[0].text === "Entrada de la historia." && ed.copy.slice(1).every((b) => !!b.heading)
+      // DE7: capítulos compatibles con su título; overview/private/outdoor en la introducción.
+      const all = ed.copy.map((b) => b.text).join("\n\n");
+      const missing = source.filter((c) => !all.includes(c.t)).length;
+      check(`historia de ${n} capítulos: todos en la descripción (compatibles con título, el resto en la introducción); entrada primero; la limpia no se repite; «Portería» en características`,
+        ed.level === "story" && missing === 0 && ed.copy[0].heading === null && ed.copy[0].text.startsWith("Entrada de la historia.") && ed.copy.slice(1).every((b) => !!b.heading)
           && !flat(ed.copy).includes("limpia distinta") && ed.features.includes("Portería"), `faltan ${missing}`);
     }
     const c = deriveEditorial(baseIn({ cleanDescription: "Párrafo uno.\n\nPárrafo dos." }));
-    check("descripción limpia: sus párrafos, sin títulos", c.level === "clean" && flat(c.copy) === "Párrafo uno. | Párrafo dos.");
+    check("descripción limpia sin temas: sus párrafos en la introducción, sin títulos inventados", c.level === "clean" && flat(c.copy) === "Párrafo uno.\n\nPárrafo dos.", flat(c.copy));
     const f = deriveEditorial(baseIn({}));
     check("solo datos: sin descripción", f.level === "facts" && f.copy.length === 0);
     // Texto largo (1.500 palabras) llega entero.
@@ -1014,7 +1017,7 @@ async function liveTests() {
     check("texto de 1.500 palabras: llega entero a la descripción (sin recortes)", lg.copy.map((b) => b.text).join(" ") === long);
     // Proyección pública: el contrato lleva `copy` y el título propio.
     const pub = toPublicItem(item({ key: "kT", slug: "t", title: "Título propio del catálogo", text: { b: "Uno.\n\nDos.", l: null, h: [] } }));
-    check("contrato: `copy` con los párrafos y el título que llega en la instantánea", pub.title === "Título propio del catálogo" && pub.copy.length === 2 && !("lead" in pub) && !("description" in pub));
+    check("contrato: `copy` organizado y el título que llega en la instantánea", pub.title === "Título propio del catálogo" && pub.copy.length === 1 && pub.copy[0].text === "Uno.\n\nDos." && !("lead" in pub) && !("description" in pub));
   }
 
   section("T10 · medición correlacionada");

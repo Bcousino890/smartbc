@@ -61,6 +61,9 @@ jobs:
       # sintético, dos clientes, reintentos, caducado/revocado). Sin BD.
       - name: "Catálogos (opiniones de clientes, offline)"
         run: npm run test:catalogs-feedback
+      # Descripción estructurada (DE1–DE9): organizador determinista, sin IA.
+      - name: "Catálogos (descripción estructurada, offline)"
+        run: npm run test:catalogs-structure
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
