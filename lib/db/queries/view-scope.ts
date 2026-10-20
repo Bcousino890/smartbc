@@ -7,6 +7,7 @@ import {
   type ViewRestriction,
 } from "@/lib/permissions";
 import {
+  isLeadAllowedForScope,
   isScopedResource,
   resolveRestriction,
   type ScopedResource,
@@ -138,20 +139,30 @@ export async function canActOnClient(
  * está asignado a él o no está asignado a nadie (los sin asignar son de todos).
  */
 export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boolean> {
+  return (await canActOnLeads([leadId], kind)).length === 1;
+}
+
+/**
+ * Versión masiva de `canActOnLead`: devuelve los ids permitidos con UNA sola
+ * consulta (los ids inexistentes se descartan).
+ */
+export async function canActOnLeads(leadIds: string[], kind: ScopeKind): Promise<string[]> {
+  const unique = [...new Set(leadIds)];
+  if (unique.length === 0) return [];
   const { restriction, userId } = await resolveViewScope("solicitudes", kind);
-  if (restriction === "none") return false;
-  if (restriction === "all" || !userId) return true;
+  if (restriction === "none") return [];
+  if (restriction === "all" || !userId) return unique;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (createAdminClient() as any)
       .from("lead_inbox_facts")
-      .select("assigned_to")
-      .eq("id", leadId)
-      .maybeSingle();
-    if (error || !data) return false;
-    const assignedTo = (data as { assigned_to: string | null }).assigned_to;
-    return assignedTo == null || assignedTo === userId;
+      .select("id, assigned_to")
+      .in("id", unique);
+    if (error || !data) return [];
+    return (data as { id: string; assigned_to: string | null }[])
+      .filter((r) => isLeadAllowedForScope(restriction, userId, r.assigned_to))
+      .map((r) => r.id);
   } catch {
-    return false;
+    return [];
   }
 }

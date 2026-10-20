@@ -16,6 +16,7 @@ import {
   scopesEqual,
   defaultScopes,
   isEscalation,
+  isLeadAllowedForScope,
   normalizeCell,
   planScopeChanges,
   resolveCaptacionRestriction,
@@ -263,6 +264,16 @@ t("countScopeDiffs / scopeCellDiffers / scopesEqual / cloneScopes", () => {
   assert.equal(scopesEqual(c, s), true);
   c.clientes.view = "all";
   assert.equal(s.clientes.view, "own", "clon independiente");
+});
+
+t("isLeadAllowedForScope: own ve propios y sin asignar", () => {
+  assert.equal(isLeadAllowedForScope("own_only", "u1", "u1"), true);
+  assert.equal(isLeadAllowedForScope("own_only", "u1", null), true);
+  assert.equal(isLeadAllowedForScope("own_only", "u1", "u2"), false);
+  assert.equal(isLeadAllowedForScope("team", "u1", "u2"), false);
+  assert.equal(isLeadAllowedForScope("all", "u1", "u2"), true);
+  assert.equal(isLeadAllowedForScope("none", "u1", null), false);
+  assert.equal(isLeadAllowedForScope("own_only", null, "u2"), true);
 });
 
 console.log(`\n${n} pruebas OK`);

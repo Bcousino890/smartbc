@@ -269,7 +269,7 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
     return { items: [], groups: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
   }
 
-  const scopeRaw = await resolveViewScope("solicitudes");
+  const scopeRaw = await resolveViewScope("solicitudes", "view");
   const scope: InboxScope = {
     restriction: scopeRaw.restriction as InboxScope["restriction"],
     userId: scopeRaw.userId,
@@ -518,7 +518,7 @@ export async function getInboxCounts(): Promise<InboxCounts> {
   if (!gate.ok) {
     return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0 };
   }
-  const scopeRaw = await resolveViewScope("solicitudes");
+  const scopeRaw = await resolveViewScope("solicitudes", "view");
   const scope: InboxScope = {
     restriction: scopeRaw.restriction as InboxScope["restriction"],
     userId: scopeRaw.userId,
@@ -672,7 +672,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
 
   // El alcance también protege el DETALLE: sin esto, una URL directa saltaría
   // la cartera aunque la lista sí la respete.
-  const scopeRaw = await resolveViewScope("solicitudes");
+  const scopeRaw = await resolveViewScope("solicitudes", "view");
   if (
     scopeRaw.restriction !== "all" &&
     scopeRaw.userId &&

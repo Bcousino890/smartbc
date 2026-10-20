@@ -20,12 +20,26 @@ import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canActOnLead, canActOnLeads } from "@/lib/db/queries/view-scope";
 import { confirmPrepareVisits, lookupPrepareVisits } from "./prepare-visits-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const db = () => createAdminClient() as any;
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
+
+const NO_ACCESS = "No tienes acceso a esta solicitud.";
+
+/** Filtra a los leads editables por el alcance; error si no queda ninguno. */
+async function allowedBulkIds(
+  leadIds: string[],
+): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
+  const ids = leadIds.slice(0, BULK_MAX);
+  if (ids.length === 0) return { ok: false, error: "Nada seleccionado." };
+  const allowed = await canActOnLeads(ids, "edit");
+  if (allowed.length === 0) return { ok: false, error: NO_ACCESS };
+  return { ok: true, ids: allowed };
+}
 
 function refresh() {
   revalidatePath("/es/admin/solicitudes");
@@ -59,6 +73,7 @@ export async function assignLead(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
 
   if (advisorId) {
     const { data } = await db()
@@ -113,6 +128,7 @@ export async function logContact(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
   if (kind !== "call" && opts.outcome) {
     return { ok: false, error: "El resultado solo aplica a llamadas." };
   }
@@ -147,6 +163,7 @@ export async function setFollowUp(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
 
   if (at && Number.isNaN(new Date(at).getTime())) {
     return { ok: false, error: "Fecha no válida." };
@@ -172,6 +189,7 @@ export async function snoozeFollowUp(
   leadId: string,
   days: number,
 ): Promise<ActionResult> {
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
   const { data } = await db()
     .from("idealista_leads")
     .select("next_action_at, next_action_note")
@@ -195,6 +213,7 @@ export async function setLeadDiscarded(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
   const { error } = await db()
     .from("idealista_leads")
     .update({
@@ -242,6 +261,7 @@ export async function convertLeadToClient(input: {
 }): Promise<ConvertResult> {
   const gate = await checkPermission("solicitudes", "edit");
   if (!gate.ok) return { ok: false, error: gate.error };
+  if (!(await canActOnLead(input.leadId, "edit"))) return { ok: false, error: NO_ACCESS };
 
   const { data: lead } = await db()
     .from("idealista_leads")
@@ -315,6 +335,7 @@ export async function matchLeadProperty(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
   const { error } = await db()
     .from("idealista_leads")
     .update({ matched_property_id: propertyId, updated_at: new Date().toISOString() })
@@ -341,8 +362,9 @@ export async function bulkAssign(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
-  const ids = leadIds.slice(0, BULK_MAX);
-  if (ids.length === 0) return { ok: false, error: "Nada seleccionado." };
+  const scoped = await allowedBulkIds(leadIds);
+  if (!scoped.ok) return scoped;
+  const ids = scoped.ids;
 
   const { error } = await db()
     .from("idealista_leads")
@@ -375,8 +397,9 @@ export async function bulkDiscard(leadIds: string[]): Promise<ActionResult> {
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
-  const ids = leadIds.slice(0, BULK_MAX);
-  if (ids.length === 0) return { ok: false, error: "Nada seleccionado." };
+  const scoped = await allowedBulkIds(leadIds);
+  if (!scoped.ok) return scoped;
+  const ids = scoped.ids;
 
   const { error } = await db()
     .from("idealista_leads")
@@ -403,8 +426,9 @@ export async function bulkSetLeadType(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
-  const ids = leadIds.slice(0, BULK_MAX);
-  if (ids.length === 0) return { ok: false, error: "Nada seleccionado." };
+  const scoped = await allowedBulkIds(leadIds);
+  if (!scoped.ok) return scoped;
+  const ids = scoped.ids;
   const { error } = await db()
     .from("idealista_leads")
     .update({ lead_type: leadType, updated_at: new Date().toISOString() })
@@ -423,8 +447,9 @@ export async function bulkSetFollowUp(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
-  const ids = leadIds.slice(0, BULK_MAX);
-  if (ids.length === 0) return { ok: false, error: "Nada seleccionado." };
+  const scoped = await allowedBulkIds(leadIds);
+  if (!scoped.ok) return scoped;
+  const ids = scoped.ids;
   if (Number.isNaN(new Date(at).getTime())) {
     return { ok: false, error: "Fecha no válida." };
   }

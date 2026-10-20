@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { assertPermission } from "@/lib/auth/guard";
+import { canActOnClient, canActOnLead } from "@/lib/db/queries/view-scope";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 import { detectLanguage } from "@/lib/lang-detect";
 
@@ -35,6 +36,9 @@ export async function updateIdealistaLeadStatus(
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
+  if (!(await canActOnLead(id, "edit"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -62,6 +66,9 @@ export async function setIdealistaLeadType(
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
+  if (!(await canActOnLead(id, "edit"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -86,6 +93,9 @@ export async function assignIdealistaLead(id: string, advisorId: string | null) 
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
+  if (!(await canActOnLead(id, "edit"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -119,6 +129,9 @@ export async function setIdealistaLeadMatchedProperty(
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
+  if (!(await canActOnLead(id, "edit"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -150,6 +163,9 @@ export async function updateIdealistaLeadContactStatus(
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
+  if (!(await canActOnLead(id, "edit"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -290,6 +306,16 @@ export async function updateVisitStatus(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
+
+  // El dueño efectivo de una visita es el asesor de su cliente.
+  const { data: visit } = await supabase
+    .from("visit_requests")
+    .select("client_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (visit?.client_id && !(await canActOnClient(visit.client_id, "solicitudes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
   const { error } = await supabase
     .from("visit_requests")
     .update({ status, updated_at: new Date().toISOString() })
