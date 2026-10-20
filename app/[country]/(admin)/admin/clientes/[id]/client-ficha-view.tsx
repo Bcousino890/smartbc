@@ -67,6 +67,8 @@ import { BRIEF_KINDS, NextActionCard } from "./_components/next-action-card";
 import { MatchesCard } from "./_components/matches-card";
 import { ShortlistStatusCard, ViewingDayCard } from "./_components/overview-cards";
 import { PortalLinksCard } from "./_components/portal-links-card";
+import { CatalogFeedbackBlock, CatalogFeedbackCard } from "@/components/admin/clientes/catalog-feedback-block";
+import type { ClientCatalogFeedback } from "@/lib/catalogs/feedback-rules";
 import { PropertiesJumpBar } from "./_components/properties-jump-bar";
 import {
   FavoritesBlock,
@@ -122,6 +124,7 @@ export function ClientFichaView({
   visits,
   portalLinks,
   viewingCollections,
+  catalogFeedback = null,
   cc,
 }: {
   client: AdminClient;
@@ -132,6 +135,8 @@ export function ClientFichaView({
   portalLinks: PortalLinksProps | null;
   /** null cuando el módulo está apagado o el agente no tiene acceso. */
   viewingCollections: ViewingCollectionsProps | null;
+  /** 0218 · opiniones de catálogos y enlaces personales (null: no disponible). */
+  catalogFeedback?: ClientCatalogFeedback | null;
   cc: CommandCenterProps;
 }) {
   const t = useT();
@@ -329,6 +334,13 @@ export function ClientFichaView({
                     onGo={() => goTab("properties", "portal-links")}
                   />
                 )}
+                {catalogFeedback && (
+                  <CatalogFeedbackCard
+                    data={catalogFeedback}
+                    locale={config.locale}
+                    onGo={() => goTab("properties", "catalog-feedback")}
+                  />
+                )}
                 <ShortlistStatusCard
                   shortlists={shortlists}
                   locale={config.locale}
@@ -390,6 +402,9 @@ export function ClientFichaView({
                       },
                     ]
                   : []),
+                ...(catalogFeedback && (catalogFeedback.feedback.length || catalogFeedback.links.length)
+                  ? [{ id: "catalog-feedback", label: "Opiniones de catálogos", count: catalogFeedback.feedback.length }]
+                  : []),
                 { id: "cc-suggested", label: t("cc.properties.section.suggested"), count: null },
                 { id: "cc-suggested-portales", label: "Encontradas en portales", count: null },
                 {
@@ -446,6 +461,10 @@ export function ClientFichaView({
                 </div>
               </>
             )}
+
+            {catalogFeedback && (catalogFeedback.feedback.length || catalogFeedback.links.length) ? (
+              <CatalogFeedbackBlock data={catalogFeedback} locale={config.locale} />
+            ) : null}
 
             <div id="cc-suggested" className="scroll-mt-28">
               <SuggestedPropertiesBlock

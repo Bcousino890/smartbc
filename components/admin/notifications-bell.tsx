@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, CalendarClock, MessageSquare } from "lucide-react";
+import { Bell, CalendarClock, MessageSquare, Star } from "lucide-react";
 import { useT } from "@/lib/i18n/provider";
 import type { NotificationItem } from "@/app/api/admin/notifications/route";
 
@@ -29,7 +29,23 @@ const ICON_MAP: Record<NotificationItem["type"], React.ReactNode> = {
       <MessageSquare size={15} className="text-ink/65" strokeWidth={1.75} />
     </span>
   ),
+  catalog_feedback: (
+    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/10">
+      <Star size={15} className="text-gold" strokeWidth={1.75} />
+    </span>
+  ),
 };
+
+/** 0218 · al abrir un aviso de opinión se marca como leído (solo ese tipo). */
+function markRead(noticeId: string | undefined) {
+  if (!noticeId) return;
+  void fetch("/api/admin/notifications", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "mark_read", ids: [noticeId] }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 export function NotificationsBell() {
   const t = useT();
@@ -122,7 +138,13 @@ export function NotificationsBell() {
                   <li key={n.id}>
                     <Link
                       href={n.href}
-                      onClick={() => setOpen(false)}
+                      onClick={() => {
+                        setOpen(false);
+                        if (n.noticeId) {
+                          markRead(n.noticeId);
+                          setNotifications((all) => all.filter((x) => x.id !== n.id));
+                        }
+                      }}
                       className="flex items-start gap-3 px-4 py-3 transition hover:bg-gold/5"
                     >
                       {ICON_MAP[n.type]}

@@ -93,7 +93,10 @@ export default async function AdminLayout({
       .from("crm_notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", profile.id)
-      .eq("read", false);
+      .eq("read", false)
+      // 0218: los avisos de opiniones de catálogos van en la campana, no en
+      // el contador de Captaciones.
+      .neq("type", "catalog_feedback");
     unreadNotifications = count ?? 0;
   } catch {
     // Migration 0050 may not be applied yet
