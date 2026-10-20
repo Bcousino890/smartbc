@@ -51,6 +51,7 @@
 #   conflicto    par VPS/GitHub del conflicto ya avisado (no se repite el aviso).
 #   lock.md5     package-lock.json con el que se instaló node_modules.
 #   PAUSA        si existe, no se hace nada.
+#   gitconfig    gitconfig SOLO de este script (GIT_CONFIG_GLOBAL, ver más abajo): sin la regla https de /root/.gitconfig.
 #
 # ── Cómo despliega, y por qué así ────────────────────────────────────────────
 #
@@ -84,6 +85,11 @@ BRANCH=main
 PM2_APP=smartbc-portal
 HEALTH_URL=http://localhost:3000/
 export GIT_SSH_COMMAND=${GIT_SSH_COMMAND:-"ssh -i /root/.ssh/github-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"}
+# Trae y sube por SSH con la clave de despliegue. /root/.gitconfig tiene una regla global (url.https://github.com/.insteadOf=
+# git@github.com:, añadida el 2026-10-18) que convierte el remoto en HTTPS y rompía TODOS los push ("could not read Username").
+# Este script usa un gitconfig propio ($STATE/gitconfig): sin esa regla, pero con safe.directory (el dueño de $APP es un uid sin
+# nombre y git se niega a trabajar en él sin esa excepción). Sin el fichero, todo se comporta como antes.
+[ -f "$STATE/gitconfig" ] && export GIT_CONFIG_GLOBAL=${GIT_CONFIG_GLOBAL:-$STATE/gitconfig}
 export GIT_EDITOR=true GIT_TERMINAL_PROMPT=0
 
 log() {

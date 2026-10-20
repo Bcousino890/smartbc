@@ -116,3 +116,20 @@ Simulación sobre los datos reales del 2026-10-19: la primera pasada abre 196 an
   ya están (`archived_reason`, `archived_auto_at`, `portal_link_gone_at`).
 - Otros portales (Fotocasa, pisos.com, Habitaclia): el cron antiguo los sigue cubriendo.
 - Las 3 archivadas con anuncio vivo que parecen hechas a mano (BC-0893, BC-0991, BC-1499) no se tocan: decide el equipo.
+
+## Incidencia encontrada al desplegar: el autodeploy no podía subir a GitHub (2026-10-20)
+
+Tras fusionar, producción corría `a3886ff9` pero `origin/main` seguía en `fe49ae5c`. El log decía «push rechazado (¿alguien subió algo a
+la vez?)», pero el error real era `could not read Username for 'https://github.com'`:
+
+- `/root/.gitconfig` tiene `url.https://github.com/.insteadOf=git@github.com:` (modificado el 2026-10-18 16:17, después del último push
+  bueno del 17-10 18:16; no se sabe qué herramienta lo añadió). Convierte el remoto SSH en HTTPS, y el autodeploy sube con SSH y la clave
+  `/root/.ssh/github-key` (comprobada: autentica contra `Bcousino890/smartbc`).
+- `git -c url.https://github.com/.insteadOf= …` **no** lo neutraliza (la URL efectiva sigue siendo HTTPS). Sí lo hace sustituir el
+  gitconfig global. `GIT_CONFIG_GLOBAL=/dev/null` **no sirve**: el dueño de `/opt/smartbc-app` es un uid sin nombre y git se niega a
+  trabajar en él sin `safe.directory`.
+- **Arreglo:** `/opt/vps-autodeploy.sh` exporta `GIT_CONFIG_GLOBAL=$STATE/gitconfig` si ese fichero existe. El fichero
+  (`/opt/smartbc-deploy/gitconfig`, copia de referencia en `scripts/vps-autodeploy.gitconfig`) solo tiene `safe.directory`. No se tocó
+  `/root/.gitconfig`: la regla sigue ahí para el resto de herramientas. Copia del script anterior:
+  `/opt/smartbc-deploy/vps-autodeploy.sh.antes-20261020`.
+- Si el autodeploy vuelve a avisar de «push rechazado», mirar el texto real justo encima del aviso en `/var/log/smartbc-autodeploy.log`.

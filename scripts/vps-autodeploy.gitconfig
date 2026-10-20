@@ -1,0 +1,7 @@
+# gitconfig SOLO para /opt/vps-autodeploy.sh (lo usa vía GIT_CONFIG_GLOBAL; no afecta a nadie más).
+# El autodeploy sube a GitHub por SSH con /root/.ssh/github-key. La regla global
+# `url.https://github.com/.insteadOf=git@github.com:` de /root/.gitconfig (añadida el 2026-10-18) convertía ese remoto
+# en HTTPS y todos los push fallaban con «could not read Username». Aquí no está esa regla.
+# safe.directory es imprescindible: el dueño de /opt/smartbc-app es un uid sin nombre ("dubious ownership").
+[safe]
+	directory = /opt/smartbc-app
