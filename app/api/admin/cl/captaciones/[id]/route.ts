@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { canAccess } from "@/lib/permissions";
+import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
+import { actorHasEditReach } from "@/lib/captaciones/access";
 
 // DELETE: elimina la captación completa. Fotos, logs, contactos y avisos de
 // corredoras caen en cascada (FK ON DELETE CASCADE). Solo roles con permiso
@@ -20,7 +22,7 @@ export async function DELETE(
     const db = createAdminClient() as any;
     const { data: captacion } = await db
       .from("captaciones")
-      .select("id, created_by, converted_to_property_id")
+      .select("id, created_by, assigned_to, converted_to_property_id")
       .eq("id", id)
       .single();
 
@@ -34,6 +36,15 @@ export async function DELETE(
     if (!canDelete) {
       return NextResponse.json(
         { error: "No tienes permisos para eliminar captaciones" },
+        { status: 403 }
+      );
+    }
+
+    // Alcance de Editar: con «Solo lo suyo», solo las asignadas/creadas por la persona.
+    const actor = await getCaptacionActor(profile);
+    if (!actorHasEditReach(actor, captacion)) {
+      return NextResponse.json(
+        { error: "No tienes permisos para eliminar esta captación" },
         { status: 403 }
       );
     }

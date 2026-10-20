@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import {
   PERMISSIONS_BY_ROLE,
+  getCaptacionViewRestriction,
   getViewRestriction,
   type PermissionResource,
 } from "../lib/permissions.ts";
@@ -27,7 +28,12 @@ import {
   validateScopeOverrides,
   type ScopeOverride,
 } from "../lib/permissions-scope.ts";
-import { canWorkCaptacion, captacionMatchesView } from "../lib/captaciones/access.ts";
+import {
+  actorCanManageCaptacion,
+  actorHasEditReach,
+  canWorkCaptacion,
+  captacionMatchesView,
+} from "../lib/captaciones/access.ts";
 import {
   STAFF_EXPORT,
   STAFF_READ,
@@ -322,6 +328,47 @@ t("captaciones: captacionMatchesView replica las reglas del listado", () => {
   assert.equal(captacionMatchesView("confirmed_and_own", "c", cap), true);
   assert.equal(captacionMatchesView("confirmed_and_own", "z", { ...cap, owner_confirmed: true }), true);
   assert.equal(captacionMatchesView("confirmed_and_own", "z", cap), false);
+});
+
+t("captaciones: defaults de Editar por rol", () => {
+  for (const r of ["agent_senior", "agent_junior", "captadora"]) {
+    assert.equal(defaultScopes(r).captaciones.edit, "own", r);
+  }
+  for (const r of ["advisor", "agent_admin", "admin", "owner"]) {
+    assert.equal(defaultScopes(r).captaciones.edit, "all", r);
+  }
+});
+
+t("captaciones: override edit own sobre advisor y resolveCaptacionRestriction", () => {
+  const ov: ScopeOverride[] = [{ resource: "captaciones", kind: "edit", scope: "own", country: null } as never];
+  assert.equal(applyScopeOverrides(defaultScopes("advisor"), ov, "cl").captaciones.edit, "own");
+  assert.equal(resolveCaptacionRestriction("advisor", [], "cl"), "all");
+  assert.equal(resolveCaptacionRestriction("advisor", [], "cl"), getCaptacionViewRestriction("advisor"));
+  const ovView: ScopeOverride[] = [{ resource: "captaciones", kind: "view", scope: "own", country: null } as never];
+  assert.equal(resolveCaptacionRestriction("advisor", ovView, "cl"), "own_only");
+});
+
+t("captaciones: captacionMatchesView con confirmada null/undefined o restricción desconocida", () => {
+  assert.equal(captacionMatchesView("confirmed_and_own", "z", { owner_confirmed: null }), false);
+  assert.equal(captacionMatchesView("confirmed_and_own", "z", {}), false);
+  assert.equal(captacionMatchesView("nope" as never, "z", { assigned_to: "z" }), false);
+});
+
+t("captaciones: actorHasEditReach / actorCanManageCaptacion", () => {
+  const own = { id: "u", editScope: "own", viewRestriction: "confirmed_and_own" } as const;
+  const all = { id: "u", editScope: "all", viewRestriction: "all" } as const;
+  assert.equal(actorHasEditReach(all, { assigned_to: "x" }), true);
+  assert.equal(actorHasEditReach(own, { assigned_to: "x", created_by: "y" }), false);
+  assert.equal(actorHasEditReach(own, { created_by: "u" }), true);
+  assert.equal(actorHasEditReach(own, { assigned_to: "u" }), true);
+  // status/convert: senior mueve confirmadas ajenas, pero no las no confirmadas ajenas
+  assert.equal(actorCanManageCaptacion(own, { assigned_to: "x", owner_confirmed: true }), true);
+  assert.equal(actorCanManageCaptacion(own, { assigned_to: "x", owner_confirmed: false }), false);
+  assert.equal(actorCanManageCaptacion(own, { assigned_to: "x" }), false);
+  assert.equal(actorCanManageCaptacion(all, { assigned_to: "x" }), true);
+  // confirmada ajena fuera de lo que puede ver (own_only) no vale
+  const ownOnly = { id: "u", editScope: "own", viewRestriction: "own_only" } as const;
+  assert.equal(actorCanManageCaptacion(ownOnly, { assigned_to: "x", owner_confirmed: true }), false);
 });
 
 console.log(`\n${n} pruebas OK`);

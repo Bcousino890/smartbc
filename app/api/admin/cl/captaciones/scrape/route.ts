@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
 import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
 import {
@@ -22,6 +23,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { url, captacion_id: cid } = body as { url: string; captacion_id?: string };
     captacion_id = cid;
+
+    // Re-scrape de una captación existente: alcance de Editar antes de tocar
+    // nada. Sin captacion_id (flujo de creación) no aplica.
+    if (captacion_id) {
+      const gate = await requireCaptacionWork(captacion_id);
+      if (!gate.ok) return gate.response;
+    }
 
     if (!url) {
       return NextResponse.json({ error: "URL requerida" }, { status: 400 });

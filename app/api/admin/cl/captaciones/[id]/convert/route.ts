@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditableFields } from "@/lib/permissions";
 import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
+import { actorCanManageCaptacion } from "@/lib/captaciones/access";
 import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 // Convierte una captación CONFIRMADA en una propiedad real del catálogo de
@@ -44,6 +45,12 @@ export async function POST(
 
     if (fetchError || !captacion) {
       return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
+    }
+    if (!actorCanManageCaptacion(actor, captacion)) {
+      return NextResponse.json(
+        { error: "No tienes acceso a esta captación" },
+        { status: 403 }
+      );
     }
 
     let convertedStageId: string | null = null;

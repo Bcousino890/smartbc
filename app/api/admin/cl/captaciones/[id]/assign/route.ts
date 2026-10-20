@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
 import { getCaptacionEditableFields, STAFF_ROLES } from "@/lib/permissions";
+import { actorHasEditReach } from "@/lib/captaciones/access";
 import { applyCaptacionAssignment } from "@/lib/captaciones/assign";
 
 export async function POST(
@@ -49,6 +50,12 @@ export async function POST(
       return NextResponse.json(
         { error: "Captación no encontrada" },
         { status: 404 }
+      );
+    }
+    if (!actorHasEditReach(actor, captacion)) {
+      return NextResponse.json(
+        { error: "No tienes permisos para asignar esta captación" },
+        { status: 403 }
       );
     }
 

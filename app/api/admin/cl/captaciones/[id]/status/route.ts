@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditableFields } from "@/lib/permissions";
 import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
+import { actorCanManageCaptacion } from "@/lib/captaciones/access";
 import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 // Mueve una captación a otra etapa de su mismo pipeline. Las etapas son
@@ -40,7 +41,7 @@ export async function POST(
 
     const { data: captacion, error: fetchError } = await db
       .from("captaciones")
-      .select("id, pipeline_id, stage_id, assigned_to, created_by, title")
+      .select("id, pipeline_id, stage_id, assigned_to, created_by, owner_confirmed, title")
       .eq("id", id)
       .single();
 
@@ -69,6 +70,11 @@ export async function POST(
     }
     if (!canManageStatus) {
       return NextResponse.json({ error: "No tienes permisos para cambiar el estado" }, { status: 403 });
+    }
+    // Alcance de Editar: el gate de rol no salta el «Solo lo suyo» (salvo
+    // confirmadas visibles, que un senior puede mover para convertirlas).
+    if (!actorCanManageCaptacion(actor, captacion)) {
+      return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
 
     const { data: targetStage } = await db

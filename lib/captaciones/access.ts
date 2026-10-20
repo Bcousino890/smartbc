@@ -90,3 +90,37 @@ export function captacionMatchesView(
       return false;
   }
 }
+
+/** Actor mínimo para decidir el alcance de Editar / Ver sobre una captación. */
+export type CaptacionScopeActor = {
+  id: string;
+  editScope: ScopeValue;
+  viewRestriction: CaptacionViewRestriction;
+};
+
+/**
+ * Alcance de Editar para acciones de mando que ya tienen su gate de rol/permiso
+ * (asignar, borrar): con alcance "all" vale cualquiera; con "own", solo las
+ * captaciones asignadas a la persona o creadas por ella.
+ */
+export function actorHasEditReach(
+  actor: CaptacionScopeActor,
+  c: CaptacionAccessRef,
+): boolean {
+  if (!actor?.id) return false;
+  if (actor.editScope === "all") return true;
+  return c.assigned_to === actor.id || c.created_by === actor.id;
+}
+
+/**
+ * Mover de etapa / convertir (además del gate de rol/permiso): alcance de
+ * Editar completo, captación propia, o la excepción «un senior mueve/convierte
+ * confirmadas ajenas» (confirmada y dentro de lo que puede VER).
+ */
+export function actorCanManageCaptacion(
+  actor: CaptacionScopeActor,
+  c: CaptacionAccessRef,
+): boolean {
+  if (actorHasEditReach(actor, c)) return true;
+  return c.owner_confirmed === true && captacionMatchesView(actor.viewRestriction, actor.id, c);
+}

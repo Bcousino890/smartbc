@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
+import { getCaptacionActor, requireCaptacionWork } from "@/lib/db/queries/captacion-access";
 import { captacionMatchesView } from "@/lib/captaciones/access";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
 
@@ -83,6 +83,11 @@ export async function POST(
     if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
+
+    // Alcance de Editar (rol efectivo en Chile): antes de leer o escribir nada.
+    const gate = await requireCaptacionWork(id);
+    if (!gate.ok) return gate.response;
+
 
     const body = await request.json();
     const url = typeof body.url === "string" ? body.url.trim() : "";
