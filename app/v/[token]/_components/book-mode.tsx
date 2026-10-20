@@ -15,7 +15,8 @@
 // sombra de lomo, ver globals.css), ~700ms y la portada más marcada (~850ms).
 // Sin librerías de flipbook. prefers-reduced-motion lo degrada a un fundido.
 // Las páginas viven en nodos con key estable que sobreviven al giro: la
-// fotografía nunca se remonta al aterrizar (sin pestañeo).
+// fotografía nunca se remonta al aterrizar (sin pestañeo). La mecánica
+// (giro, capas y barra) vive en book-stage.tsx y la comparte el catálogo.
 //
 // Entradas: clic, teclado ←/→ (invertido en RTL), y swipe en tablet. No se
 // secuestra el scroll del navegador: dentro de una página con poco alto, el
@@ -28,6 +29,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { BookNav, BookStage, useBookTurn } from "./book-stage";
 import type {
   PublicViewingCollection,
   PublicViewingStop,
@@ -92,12 +94,7 @@ export function BookMode({
   // Giro en curso: mantiene la hoja saliente montada mientras la nueva página
   // se asienta debajo. La navegación queda BLOQUEADA durante el giro — pulsar
   // "siguiente" en ráfaga no apila animaciones ni salta páginas.
-  const [turn, setTurn] = useState<{
-    from: number;
-    dir: 1 | -1;
-    cover: boolean;
-  } | null>(null);
-  const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { turn, begin, opened } = useBookTurn();
 
   // La galería vive AQUÍ, no dentro de la página. Si viviera dentro, la hoja
   // saliente seguiría montada durante el giro y el lector vería las fotos del
@@ -107,9 +104,6 @@ export function BookMode({
     startIndex: number | null;
   } | null>(null);
   const closeGallery = useCallback(() => setGallery(null), []);
-  // El fundido de entrada solo aplica al primer montaje; tras el primer giro
-  // la página aterrizada no debe volver a fundirse (pestañeo).
-  const opened = useRef(false);
 
   const go = useCallback(
     (target: number) => {
@@ -120,18 +114,10 @@ export function BookMode({
       // sobrevolando la página nueva. Vale para siguiente, anterior, salto
       // desde el índice y vuelta al índice — todos pasan por aquí.
       setGallery(null);
-      opened.current = true;
-      const dir: 1 | -1 = next > current ? 1 : -1;
-      const cover = current === 0 && dir === 1;
-      setTurn({ from: current, dir, cover });
+      begin(current, next, current === 0 && next > current);
       setCurrent(next);
-      if (turnTimer.current) clearTimeout(turnTimer.current);
-      turnTimer.current = setTimeout(
-        () => setTurn(null),
-        cover ? 870 : 720,
-      );
     },
-    [pages.length, current, turn, setGallery],
+    [pages.length, current, turn, setGallery, begin],
   );
 
   // Cinturón y tirantes: si por cualquier vía la página cambia con la galería
@@ -155,13 +141,6 @@ export function BookMode({
       }
     }
   }, [current, pages]);
-
-  useEffect(
-    () => () => {
-      if (turnTimer.current) clearTimeout(turnTimer.current);
-    },
-    [],
-  );
 
   const goToResidence = useCallback(
     (order: number) => {
@@ -219,7 +198,6 @@ export function BookMode({
 
   const page = pages[current];
   const isDark = page.kind === "cover" || page.kind === "colophon";
-  const rtlClass = rtl ? "vc-rtl" : "";
 
   // La residencia de la galería se resuelve por `order`, no por índice de
   // página: si el orden cambiara, la galería no puede quedar apuntando a otra.
@@ -269,35 +247,8 @@ export function BookMode({
 
   // Fondo de la hoja saliente: debe ser opaco (una hoja no es transparente),
   // del color de la página que se lleva.
-  const sheetBg = (p: Page) =>
-    p.kind === "cover" || p.kind === "colophon" ? "bg-ink" : "bg-cream-50";
-
-  // Una capa del escenario. TODAS las capas comparten esta estructura exacta
-  // (página + hueco de sombra, aunque sea null): si el número o la posición
-  // de los hijos cambiara entre estados, React remontaría el contenido al
-  // aterrizar — y la fotografía pestañearía.
-  const pageLayer = (
-    idx: number,
-    cls: string,
-    opts?: { shade?: "turn" | "under"; hidden?: boolean },
-  ) => (
-    <div
-      key={`page-${idx}`}
-      aria-hidden={opts?.hidden || undefined}
-      className={cn("absolute inset-0", cls)}
-    >
-      {renderPage(pages[idx])}
-      {opts?.shade ? (
-        <div
-          className={cn(
-            opts.shade === "turn" ? "vc-turn-shade" : "vc-under-shade",
-            rtlClass,
-          )}
-          aria-hidden
-        />
-      ) : null}
-    </div>
-  );
+  const sheetBg = (idx: number) =>
+    pages[idx].kind === "cover" || pages[idx].kind === "colophon" ? "bg-ink" : "bg-cream-50";
 
   return (
     <div
@@ -311,116 +262,31 @@ export function BookMode({
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Las capas se renderizan como ARRAY con key por índice de página y
-          estructura de hijos IDÉNTICA en todos los estados (página + hueco de
-          sombra): React reconcilia por key y posición, así que una página que
-          sobrevive al cambio de estado (girando ↔ reposo) conserva su nodo
-          DOM — la fotografía no se remonta ni repinta al aterrizar la hoja.
-          Solo cambian las clases. El orden del array es el orden de apilado
-          (la última queda encima). */}
-      <div className="vc-book-stage relative min-h-0 flex-1">
-        {turn
-          ? turn.dir === 1
-            ? [
-                // ── AVANZAR: la nueva página se asienta debajo; la hoja que
-                //    dejamos (mismo nodo que tenía en reposo) gira encima.
-                pageLayer(current, cn("vc-sheet-settle", rtlClass), {
-                  shade: "turn",
-                }),
-                pageLayer(
-                  turn.from,
-                  cn(
-                    "pointer-events-none vc-sheet-edge",
-                    sheetBg(pages[turn.from]),
-                    turn.cover ? "vc-sheet-out-cover" : "vc-sheet-out-next",
-                    rtlClass,
-                  ),
-                  { hidden: true },
-                ),
-              ]
-            : [
-                // ── RETROCEDER: la página que dejamos (mismo nodo) queda
-                //    quieta debajo; la hoja anterior vuelve a posarse encima.
-                pageLayer(turn.from, "pointer-events-none", {
-                  shade: "under",
-                  hidden: true,
-                }),
-                pageLayer(
-                  current,
-                  cn(
-                    "vc-sheet-in-prev vc-sheet-edge",
-                    sheetBg(pages[current]),
-                    rtlClass,
-                  ),
-                ),
-              ]
-          : [pageLayer(current, !opened.current ? "vc-page-in" : "")]}
-      </div>
+      {/* Las capas y el giro viven en book-stage.tsx (compartido con el
+          catálogo): una página que sobrevive al cambio de estado conserva su
+          nodo DOM y la fotografía no pestañea al aterrizar la hoja. */}
+      <BookStage
+        count={pages.length}
+        current={current}
+        turn={turn}
+        renderPage={(idx) => renderPage(pages[idx])}
+        sheetBg={sheetBg}
+        rtl={rtl}
+        opened={opened.current}
+      />
 
       {/* Navegación editorial. Oculta en la portada: allí manda "Comenzar". */}
       {current > 0 && (
-        <nav
-          aria-label="Book navigation"
-          className={cn(
-            "flex shrink-0 items-center justify-between border-t px-4 py-3 sm:px-8 sm:py-3.5 lg:px-12",
-            isDark
-              ? "border-cream-50/15 text-cream-50"
-              : "border-ink/10 text-ink",
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => go(current - 1)}
-            disabled={current === 0}
-            className="vc-focus group flex items-center gap-2 px-2 py-1.5 font-display text-[10px] font-medium uppercase vc-tracked opacity-60 transition-opacity duration-300 hover:opacity-100 disabled:opacity-20 sm:gap-3"
-          >
-            <span
-              aria-hidden
-              className="inline-block transition-transform duration-300 group-hover:-translate-x-0.5 rtl:rotate-180"
-            >
-              &larr;
-            </span>
-            <span className="hidden sm:inline">{dict.previous}</span>
-          </button>
-
-          <div className="flex items-center gap-4 sm:gap-6">
-            <button
-              type="button"
-              onClick={() => go(1)}
-              className={cn(
-                "vc-focus font-display text-[10px] font-medium uppercase vc-tracked-sm transition-opacity duration-300",
-                current === 1
-                  ? "opacity-90"
-                  : "opacity-45 hover:opacity-90",
-              )}
-            >
-              {dict.contents}
-            </button>
-            <span
-              className="font-display text-[10.5px] font-medium vc-nums opacity-70"
-              aria-label={`${current + 1} ${dict.pageOf} ${pages.length}`}
-            >
-              {String(current + 1).padStart(2, "0")}
-              <span className="mx-1.5 opacity-50">/</span>
-              {String(pages.length).padStart(2, "0")}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => go(current + 1)}
-            disabled={current === pages.length - 1}
-            className="vc-focus group flex items-center gap-2 px-2 py-1.5 font-display text-[10px] font-medium uppercase vc-tracked opacity-60 transition-opacity duration-300 hover:opacity-100 disabled:opacity-20 sm:gap-3"
-          >
-            <span className="hidden sm:inline">{dict.next}</span>
-            <span
-              aria-hidden
-              className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 rtl:rotate-180"
-            >
-              &rarr;
-            </span>
-          </button>
-        </nav>
+        <BookNav
+          current={current}
+          total={pages.length}
+          isDark={isDark}
+          labels={dict}
+          onPrev={() => go(current - 1)}
+          onNext={() => go(current + 1)}
+          onContents={() => go(1)}
+          contentsActive={current === 1}
+        />
       )}
 
       {/* Private Gallery Mode, por encima de todo el libro (nunca dentro de una

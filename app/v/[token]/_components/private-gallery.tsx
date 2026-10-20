@@ -28,9 +28,15 @@
 //
 // El estado vive FUERA de la página (lo iza book-mode / residence-chapter),
 // para que una navegación de libro pueda cerrarla ANTES de empezar el giro.
+//
+// El catálogo (enmienda visual 2026-10-20, DV8) la reutiliza con props
+// OPCIONALES: índice controlado (su estado del lector decide la lámina para
+// conservar la identidad de la foto en las actualizaciones en vivo),
+// miniaturas propias, un aviso y su componente de imagen con estados de carga
+// y error. Sin esas props se comporta exactamente como aquí.
 // ============================================================================
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 /**
  * Los CUATRO rótulos que necesita la galería, y ninguno más. Así la usan tanto
@@ -45,23 +51,60 @@ export type GalleryDictionary = {
 };
 import { cn } from "@/lib/utils";
 
+export type GalleryImageProps = {
+  src: string;
+  alt: string;
+  className: string;
+  loading?: "eager" | "lazy";
+  decoding: "async";
+};
+
+/** La imagen de serie: un <img> sin más (el catálogo pone la suya). */
+function PlainImage({ src, alt, className, loading, decoding }: GalleryImageProps) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img referrerPolicy="no-referrer" src={src} alt={alt} loading={loading} decoding={decoding} className={className} />;
+}
+
 export function PrivateGallery({
   title,
   photos,
+  thumbs,
   dict,
   rtl = false,
   /** Índice inicial: null abre en mosaico; un número abre esa lámina. */
   startIndex = null,
+  index: controlledIndex,
+  onIndexChange,
+  notice,
+  imageComponent: Img = PlainImage,
   onClose,
 }: {
   title: string;
   photos: string[];
+  /** Miniaturas del mosaico (por defecto, las mismas fotos). */
+  thumbs?: string[];
   dict: GalleryDictionary;
   rtl?: boolean;
   startIndex?: number | null;
+  /** Lámina controlada desde fuera (null = mosaico). Si se da, manda sobre el
+   *  estado interno y cada cambio se avisa por onIndexChange. */
+  index?: number | null;
+  onIndexChange?: (index: number | null) => void;
+  /** Aviso bajo la cabecera (p. ej. «Esa foto ya no forma parte del catálogo»). */
+  notice?: ReactNode;
+  imageComponent?: ComponentType<GalleryImageProps>;
   onClose: () => void;
 }) {
-  const [index, setIndex] = useState<number | null>(startIndex);
+  const [localIndex, setLocalIndex] = useState<number | null>(startIndex);
+  const index = controlledIndex === undefined ? localIndex : controlledIndex;
+  const setIndex = useCallback(
+    (next: number | null) => {
+      setLocalIndex(next);
+      onIndexChange?.(next);
+    },
+    [onIndexChange],
+  );
+  const thumbUrls = thumbs ?? photos;
   const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const total = photos.length;
@@ -81,9 +124,9 @@ export function PrivateGallery({
 
   const step = useCallback(
     (delta: number) => {
-      setIndex((i) => (i === null ? null : (i + delta + total) % total));
+      if (index !== null) setIndex((index + delta + total) % total);
     },
-    [total],
+    [index, total, setIndex],
   );
 
   /** Esc: desde la lámina se vuelve al mosaico (si se vino de él); desde el
@@ -91,7 +134,7 @@ export function PrivateGallery({
   const escape = useCallback(() => {
     if (index !== null && !openedOnPlate.current) setIndex(null);
     else onClose();
-  }, [index, onClose]);
+  }, [index, onClose, setIndex]);
 
   // Teclado propio, en fase de captura: mientras la galería está abierta las
   // flechas mueven fotografías y NUNCA pasan página por detrás. Se tragan
@@ -204,6 +247,7 @@ export function PrivateGallery({
           {dict.closeGallery}
         </button>
       </header>
+      {notice}
 
       {index === null ? (
         /* ── MOSAICO ─────────────────────────────────────────────────────── */
@@ -217,10 +261,8 @@ export function PrivateGallery({
                 className="vc-focus group relative block overflow-hidden bg-cream-50/5"
                 aria-label={`${title} — ${i + 1} / ${total}`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                referrerPolicy="no-referrer"
-                  src={url}
+                <Img
+                  src={thumbUrls[i] ?? url}
                   alt={`${title} — ${i + 1}`}
                   loading={i < 6 ? "eager" : "lazy"}
                   decoding="async"
@@ -242,9 +284,8 @@ export function PrivateGallery({
             }}
           >
             <div className="pointer-events-none flex h-full items-center justify-center px-4 lg:px-16">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                referrerPolicy="no-referrer"
+              <Img
+                key={photos[index]}
                 src={photos[index]}
                 alt={`${title} — ${index + 1}`}
                 decoding="async"
