@@ -11,9 +11,18 @@ import {
   type PermissionAction,
   type PermissionResource,
 } from "@/lib/permissions";
+import {
+  SCOPE_LABELS,
+  isScopedResource,
+  scopeCellDiffers,
+  type ScopeKind,
+  type ScopeMatrix,
+  type ScopeValue,
+  type ScopedResource,
+} from "@/lib/permissions-scope";
 import { cn } from "@/lib/utils";
 import { Toggle } from "./toggle";
-import { isIdlePermission, permissionDetail } from "./permission-details";
+import { isIdlePermission, permissionDetail, scopeDetail } from "./permission-details";
 import {
   areaCounts,
   isSensitiveAction,
@@ -35,6 +44,9 @@ export interface PermissionMatrixProps {
   areas: PermissionArea[];
   effective: CellMatrix;
   defaults: CellMatrix;
+  /** Alcance efectivo y del perfil; null si el API no lo devuelve (sin chips). */
+  scopes: ScopeMatrix | null;
+  scopeDefaults: ScopeMatrix | null;
   canEdit: boolean;
   /** Filtro de texto ya normalizado (minúsculas). */
   query: string;
@@ -44,26 +56,91 @@ export interface PermissionMatrixProps {
   onCell: (resource: PermissionResource, action: PermissionAction, value: boolean) => void;
   onRow: (resource: PermissionResource, value: boolean) => void;
   onArea: (area: PermissionArea, value: boolean) => void;
+  onScope: (resource: ScopedResource, kind: ScopeKind, value: ScopeValue) => void;
 }
 
 const rowAllOn = (m: CellMatrix, r: PermissionResource) => PERMISSION_ACTIONS.every((a) => m[r][a]);
 
-function rowIsModified(e: CellMatrix, d: CellMatrix, r: PermissionResource) {
-  return PERMISSION_ACTIONS.some((a) => e[r][a] !== d[r][a]);
+function rowIsModified(
+  e: CellMatrix,
+  d: CellMatrix,
+  r: PermissionResource,
+  scopes: ScopeMatrix | null,
+  scopeDefaults: ScopeMatrix | null,
+) {
+  if (PERMISSION_ACTIONS.some((a) => e[r][a] !== d[r][a])) return true;
+  return !!scopes && !!scopeDefaults && isScopedResource(r) && scopeCellDiffers(scopes, scopeDefaults, r);
 }
+
+/** Acción cuyo interruptor lleva debajo el chip de alcance. */
+const SCOPE_KIND_BY_ACTION: Partial<Record<PermissionAction, ScopeKind>> = {
+  view: "view",
+  edit: "edit",
+};
 
 function matches(resource: PermissionResource, query: string) {
   if (!query) return true;
   return `${RESOURCE_LABELS[resource]} ${RESOURCE_DESCRIPTIONS[resource]}`.toLowerCase().includes(query);
 }
 
-function ModifiedDot({ was }: { was: boolean }) {
+function ModifiedDot({ was, title }: { was?: boolean; title?: string }) {
   return (
     <span
       aria-hidden
-      title={`Modificado: el perfil lo tiene ${was ? "permitido" : "denegado"}`}
+      title={title ?? `Modificado: el perfil lo tiene ${was ? "permitido" : "denegado"}`}
       className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-cream-50"
     />
+  );
+}
+
+/**
+ * Chip «Todo» / «Solo lo suyo» bajo el interruptor Ver o Editar. «Solo lo
+ * suyo» lleva un tinte dorado suave; el de Editar queda bloqueado mientras Ver
+ * sea «Solo lo suyo» (no se edita lo que no se ve).
+ */
+function ScopeChip({
+  resource,
+  kind,
+  value,
+  profileValue,
+  locked,
+  canEdit,
+  onScope,
+}: {
+  resource: ScopedResource;
+  kind: ScopeKind;
+  value: ScopeValue;
+  profileValue: ScopeValue;
+  locked: boolean;
+  canEdit: boolean;
+  onScope: PermissionMatrixProps["onScope"];
+}) {
+  const own = value === "own";
+  const kindLabel = kind === "view" ? "Ver" : "Editar";
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        disabled={!canEdit || locked}
+        onClick={() => {
+          if (!canEdit || locked) return;
+          onScope(resource, kind, own ? "all" : "own");
+        }}
+        title={locked ? "Si solo ve lo suyo, solo puede editar lo suyo" : `Cambiar el alcance de ${kindLabel}`}
+        aria-label={`Alcance de ${kindLabel} en ${RESOURCE_LABELS[resource]}: ${SCOPE_LABELS[value]}`}
+        className={cn(
+          "whitespace-nowrap rounded-full border px-1.5 py-0.5 text-xs font-medium leading-4 transition",
+          own ? "border-gold/50 bg-gold/15 text-ink" : "border-ink/15 bg-white/70 text-ink/60",
+          locked && "opacity-50",
+          (!canEdit || locked) ? "cursor-default" : "hover:border-ink/30 hover:text-ink",
+        )}
+      >
+        {SCOPE_LABELS[value]}
+      </button>
+      {value !== profileValue && (
+        <ModifiedDot title={`Modificado: el perfil lo tiene en «${SCOPE_LABELS[profileValue]}»`} />
+      )}
+    </span>
   );
 }
 
@@ -94,6 +171,12 @@ function DetailList({
           </li>
         );
       })}
+      {isScopedResource(resource) && (
+        <li className="flex items-start gap-2.5 text-xs leading-relaxed">
+          <span className="w-[96px] shrink-0 pt-px font-semibold text-ink">Alcance</span>
+          <span className="min-w-0 flex-1 text-ink/70">{scopeDetail(resource)}</span>
+        </li>
+      )}
     </ul>
   );
 }
@@ -102,6 +185,8 @@ export function PermissionMatrix({
   areas,
   effective,
   defaults,
+  scopes,
+  scopeDefaults,
   canEdit,
   query,
   onlyModified,
@@ -110,7 +195,25 @@ export function PermissionMatrix({
   onCell,
   onRow,
   onArea,
+  onScope,
 }: PermissionMatrixProps) {
+  // Chip de una celda (Ver/Editar) de una sección escalable, solo con el interruptor encendido.
+  const scopeChipFor = (resource: PermissionResource, action: PermissionAction) => {
+    const kind = SCOPE_KIND_BY_ACTION[action];
+    if (!kind || !scopes || !scopeDefaults || !isScopedResource(resource)) return null;
+    if (!effective[resource][action]) return null;
+    return (
+      <ScopeChip
+        resource={resource}
+        kind={kind}
+        value={scopes[resource][kind]}
+        profileValue={scopeDefaults[resource][kind]}
+        locked={kind === "edit" && scopes[resource].view === "own"}
+        canEdit={canEdit}
+        onScope={onScope}
+      />
+    );
+  };
   const [detailOpen, setDetailOpen] = useState<ReadonlySet<string>>(new Set());
   const toggleDetail = (r: string) =>
     setDetailOpen((prev) => {
@@ -123,7 +226,7 @@ export function PermissionMatrix({
     .map((area) => ({
       area,
       rows: area.resources.filter(
-        (r) => matches(r, query) && (!onlyModified || rowIsModified(effective, defaults, r)),
+        (r) => matches(r, query) && (!onlyModified || rowIsModified(effective, defaults, r, scopes, scopeDefaults)),
       ),
     }))
     .filter((x) => x.rows.length > 0);
@@ -231,7 +334,7 @@ export function PermissionMatrix({
                                 />
                                 <span>
                                   <span className="block text-sm font-semibold text-ink">{RESOURCE_LABELS[resource]}</span>
-                                  <span className="block max-w-[230px] truncate text-xs text-ink/50" title={RESOURCE_DESCRIPTIONS[resource]}>
+                                  <span className="block max-w-[180px] truncate text-xs text-ink/50" title={RESOURCE_DESCRIPTIONS[resource]}>
                                     {RESOURCE_DESCRIPTIONS[resource]}
                                   </span>
                                 </span>
@@ -252,6 +355,9 @@ export function PermissionMatrix({
                                     />
                                     {on !== def && <ModifiedDot was={def} />}
                                   </span>
+                                  {scopeChipFor(resource, action) && (
+                                    <div className="mt-1.5 flex justify-center">{scopeChipFor(resource, action)}</div>
+                                  )}
                                 </td>
                               );
                             })}
@@ -324,9 +430,10 @@ export function PermissionMatrix({
                           {PERMISSION_ACTIONS.map((action) => {
                             const on = effective[resource][action];
                             const def = defaults[resource][action];
+                            const chip = scopeChipFor(resource, action);
                             return (
+                              <div key={action} className="flex flex-col gap-1.5">
                               <label
-                                key={action}
                                 className={cn(
                                   "flex min-h-[44px] items-center justify-between gap-2 rounded-xl border px-3 py-2",
                                   on !== def ? "border-gold/50 bg-gold/10" : "border-ink/10 bg-white/70",
@@ -348,6 +455,8 @@ export function PermissionMatrix({
                                   aria-label={`${ACTION_LABELS[action]} ${RESOURCE_LABELS[resource]}`}
                                 />
                               </label>
+                              {chip && <div className="px-1">{chip}</div>}
+                              </div>
                             );
                           })}
                         </div>

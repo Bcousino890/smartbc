@@ -1,4 +1,5 @@
 import type { PermissionAction, PermissionResource } from "@/lib/permissions";
+import type { ScopedResource } from "@/lib/permissions-scope";
 
 /**
  * Qué hace de verdad cada permiso (sección × acción), en lenguaje llano.
@@ -44,7 +45,7 @@ export const PERMISSION_DETAILS: Record<PermissionResource, Details> = {
     delete: "Borrar captaciones.",
   },
   clientes: {
-    view: "Ver el listado y la ficha de clientes. Si ve todos o solo los suyos lo fija el perfil.",
+    view: "Ver el listado y la ficha de clientes.",
     create: "Sin efecto hoy: los clientes se crean desde Usuarios y Solicitudes con reglas de perfil.",
     edit: "Editar la ficha del cliente, su encargo y su asignación.",
   },
@@ -114,4 +115,27 @@ export function permissionDetail(resource: PermissionResource, action: Permissio
 /** ¿El texto avisa de que el interruptor no hace (casi) nada? */
 export function isIdlePermission(text: string): boolean {
   return text === NO_USE || text.startsWith("Sin efecto") || text.startsWith("Poco efecto");
+}
+
+/**
+ * Línea «Alcance» del desplegable de cada sección escalable: qué cambia entre
+ * «Todo» y «Solo lo suyo» en esa sección concreta.
+ */
+const SCOPE_DETAILS: Record<ScopedResource, string> = {
+  clientes:
+    "«Todo» llega a toda la cartera de clientes; «Solo lo suyo», únicamente a los clientes asignados a esta persona.",
+  solicitudes:
+    "«Todo» llega a todas las solicitudes; «Solo lo suyo», únicamente a las asignadas a esta persona o de sus clientes.",
+  documentacion:
+    "«Todo» llega a la documentación de todos los clientes; «Solo lo suyo», únicamente a la de los clientes de esta persona.",
+  viewing_collections:
+    "«Todo» llega a las colecciones de visitas de todos los clientes; «Solo lo suyo», únicamente a las de sus clientes.",
+  captaciones:
+    "«Todo» llega a todas las captaciones; «Solo lo suyo», únicamente a las asignadas o creadas por esta persona.",
+};
+
+const SCOPE_RULE = " Si solo ve lo suyo, solo puede editar lo suyo.";
+
+export function scopeDetail(resource: ScopedResource): string {
+  return SCOPE_DETAILS[resource] + SCOPE_RULE;
 }

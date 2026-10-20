@@ -9,6 +9,11 @@ import {
 import {
   SCOPED_RESOURCES,
   applyScopeOverrides,
+  buildScopeOverrides,
+  cloneScopes,
+  countScopeDiffs,
+  scopeCellDiffers,
+  scopesEqual,
   defaultScopes,
   isEscalation,
   normalizeCell,
@@ -221,6 +226,43 @@ t("planScopeChanges normaliza contra el perfil", () => {
   // perfil own/own, view=own explícito: sin filas redundantes
   r = planScopeChanges(defs, actor, [], [{ resource: "clientes", kind: "view", scope: "own" }]);
   assert.deepEqual(r.toStore, []);
+});
+
+t("buildScopeOverrides: vacío si coincide con el perfil", () => {
+  const d = defaultScopes("advisor");
+  assert.deepEqual(buildScopeOverrides(d, d), []);
+});
+
+t("buildScopeOverrides: envía el conjunto COMPLETO de celdas que difieren", () => {
+  const d = defaultScopes("advisor");
+  let s = setScopeCell(d, "clientes", "view", "own"); // fuerza edit own
+  s = setScopeCell(s, "solicitudes", "edit", "own");
+  assert.deepEqual(buildScopeOverrides(s, d), [
+    { resource: "clientes", kind: "view", scope: "own" },
+    { resource: "clientes", kind: "edit", scope: "own" },
+    { resource: "solicitudes", kind: "edit", scope: "own" },
+  ]);
+});
+
+t("buildScopeOverrides: quitar una excepción la elimina del conjunto", () => {
+  const d = defaultScopes("advisor");
+  const s = setScopeCell(d, "clientes", "view", "own");
+  const back = setScopeCell(setScopeCell(s, "clientes", "view", "all"), "clientes", "edit", "all");
+  assert.deepEqual(buildScopeOverrides(back, d), []);
+});
+
+t("countScopeDiffs / scopeCellDiffers / scopesEqual / cloneScopes", () => {
+  const d = defaultScopes("advisor");
+  const s = setScopeCell(d, "clientes", "view", "own");
+  assert.equal(countScopeDiffs(s, d), 2);
+  assert.equal(countScopeDiffs(d, d), 0);
+  assert.equal(scopeCellDiffers(s, d, "clientes"), true);
+  assert.equal(scopeCellDiffers(s, d, "solicitudes"), false);
+  assert.equal(scopesEqual(s, d), false);
+  const c = cloneScopes(s);
+  assert.equal(scopesEqual(c, s), true);
+  c.clientes.view = "all";
+  assert.equal(s.clientes.view, "own", "clon independiente");
 });
 
 console.log(`\n${n} pruebas OK`);

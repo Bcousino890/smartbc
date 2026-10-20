@@ -235,3 +235,45 @@ export function planScopeChanges(
   const escalation = toStore.find((o) => !wasStored(o) && isEscalation(actor, o)) ?? null;
   return { toStore, escalation };
 }
+
+// ── Helpers de la UI (panel de permisos) ─────────────────────────────────────
+
+export function cloneScopes(m: ScopeMatrix): ScopeMatrix {
+  const out = {} as ScopeMatrix;
+  for (const r of SCOPED_RESOURCES) out[r] = { ...m[r] };
+  return out;
+}
+
+/** ¿La fila (Ver o Editar) de esta sección difiere de la referencia? */
+export function scopeCellDiffers(a: ScopeMatrix, b: ScopeMatrix, r: ScopedResource): boolean {
+  return a[r].view !== b[r].view || a[r].edit !== b[r].edit;
+}
+
+/** Número de celdas (sección × Ver/Editar) que difieren de la referencia. */
+export function countScopeDiffs(a: ScopeMatrix, b: ScopeMatrix): number {
+  let n = 0;
+  for (const r of SCOPED_RESOURCES) {
+    if (a[r].view !== b[r].view) n++;
+    if (a[r].edit !== b[r].edit) n++;
+  }
+  return n;
+}
+
+export function scopesEqual(a: ScopeMatrix, b: ScopeMatrix): boolean {
+  return countScopeDiffs(a, b) === 0;
+}
+
+/**
+ * Conjunto COMPLETO de excepciones a enviar al API (semántica de reemplazo):
+ * todas las celdas, de todas las secciones, que difieren del perfil.
+ * Nunca un subconjunto: lo que no se envía se borra.
+ */
+export function buildScopeOverrides(scopes: ScopeMatrix, defaults: ScopeMatrix): ScopeOverrideInput[] {
+  const out: ScopeOverrideInput[] = [];
+  for (const r of SCOPED_RESOURCES) {
+    for (const kind of ["view", "edit"] as const) {
+      if (scopes[r][kind] !== defaults[r][kind]) out.push({ resource: r, kind, scope: scopes[r][kind] });
+    }
+  }
+  return out;
+}

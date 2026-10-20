@@ -26,6 +26,17 @@ import {
   type PermissionResource,
 } from "@/lib/permissions";
 import { roleDetail, roleLabel } from "@/lib/auth/role-model";
+import {
+  buildScopeOverrides,
+  cloneScopes,
+  countScopeDiffs,
+  scopesEqual,
+  setScopeCell,
+  type ScopeKind,
+  type ScopeMatrix,
+  type ScopeValue,
+  type ScopedResource,
+} from "@/lib/permissions-scope";
 import type { InternalUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PermissionMatrix } from "./permission-matrix";
@@ -186,6 +197,11 @@ export function PermissionsDrawer({
   // Lo último que hay GUARDADO en el servidor: para saber si hay cambios sin
   // guardar (distinto de "excepciones", que se cuentan contra el perfil).
   const [saved, setSaved] = useState<CellMatrix | null>(null);
+  // Alcance (Todo / Solo lo suyo) de las secciones escalables. null si el API
+  // no lo devuelve: entonces la matriz no pinta chips y no se envía nada.
+  const [scopes, setScopes] = useState<ScopeMatrix | null>(null);
+  const [scopeDefaults, setScopeDefaults] = useState<ScopeMatrix | null>(null);
+  const [savedScopes, setSavedScopes] = useState<ScopeMatrix | null>(null);
   const [viewRole, setViewRole] = useState<string | null>(null);
 
   // ── Filtros de la matriz ───────────────────────────────────────────────────
@@ -246,6 +262,15 @@ export function PermissionsDrawer({
         setEffective(eff);
         setDefaults(def);
         setSaved(cloneMatrix(eff));
+        if (data.scopes && data.scopeDefaults) {
+          setScopes(cloneScopes(data.scopes as ScopeMatrix));
+          setScopeDefaults(cloneScopes(data.scopeDefaults as ScopeMatrix));
+          setSavedScopes(cloneScopes(data.scopes as ScopeMatrix));
+        } else {
+          setScopes(null);
+          setScopeDefaults(null);
+          setSavedScopes(null);
+        }
         setLoadState("ready");
       } catch (err) {
         if (cancelled) return;
@@ -297,12 +322,18 @@ export function PermissionsDrawer({
     }
     return out;
   }, [effective, defaults]);
-  const overrideCount = overrides.length;
-
-  const dirty = useMemo(
-    () => (effective && saved ? !sameMatrix(effective, saved) : false),
-    [effective, saved],
+  // Las excepciones de alcance cuentan como excepciones del perfil.
+  const scopeOverrideCount = useMemo(
+    () => (scopes && scopeDefaults ? countScopeDiffs(scopes, scopeDefaults) : 0),
+    [scopes, scopeDefaults],
   );
+  const overrideCount = overrides.length + scopeOverrideCount;
+
+  const dirty = useMemo(() => {
+    const permsDirty = effective && saved ? !sameMatrix(effective, saved) : false;
+    const scopesDirty = scopes && savedScopes ? !scopesEqual(scopes, savedScopes) : false;
+    return permsDirty || scopesDirty;
+  }, [effective, saved, scopes, savedScopes]);
   const summary = useMemo(() => (effective ? summarizePermissions(effective) : null), [effective]);
 
   // ── Cierre con aviso si hay cambios sin guardar ────────────────────────────
@@ -372,17 +403,24 @@ export function PermissionsDrawer({
     touch();
   }, []);
 
+  const setScope = useCallback((r: ScopedResource, k: ScopeKind, v: ScopeValue) => {
+    setScopes((prev) => (prev ? setScopeCell(prev, r, k, v) : prev));
+    touch();
+  }, []);
+
   const resetToRole = useCallback(() => {
     if (!defaults) return;
     setEffective(cloneMatrix(defaults));
+    if (scopeDefaults) setScopes(cloneScopes(scopeDefaults));
     touch();
-  }, [defaults]);
+  }, [defaults, scopeDefaults]);
 
   const discardChanges = useCallback(() => {
     if (!saved) return;
     setEffective(cloneMatrix(saved));
+    if (savedScopes) setScopes(cloneScopes(savedScopes));
     touch();
-  }, [saved]);
+  }, [saved, savedScopes]);
 
   const toggleArea = useCallback((id: string) => {
     setCollapsed((prev) => {
@@ -402,9 +440,15 @@ export function PermissionsDrawer({
       const res = await fetch(`/api/admin/usuarios/${user.id}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          isMultiCountry ? { overrides, country: activeCountry } : { overrides },
-        ),
+        // `scopeOverrides` va SIEMPRE (también `[]`): el API reemplaza el
+        // conjunto entero, así que quitar una excepción es enviar la lista sin ella.
+        body: JSON.stringify({
+          overrides,
+          ...(scopes && scopeDefaults
+            ? { scopeOverrides: buildScopeOverrides(scopes, scopeDefaults) }
+            : {}),
+          ...(isMultiCountry ? { country: activeCountry } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -413,6 +457,7 @@ export function PermissionsDrawer({
         return;
       }
       setSaved(cloneMatrix(effective));
+      if (scopes) setSavedScopes(cloneScopes(scopes));
       setSaveState("success");
       onSaved?.();
       setHistoryReload((n) => n + 1);
@@ -421,7 +466,7 @@ export function PermissionsDrawer({
       setSaveError(err instanceof Error ? err.message : "Error de red");
       setSaveState("error");
     }
-  }, [canEdit, effective, overrides, user.id, onSaved, isMultiCountry, activeCountry]);
+  }, [canEdit, effective, overrides, scopes, scopeDefaults, user.id, onSaved, isMultiCountry, activeCountry]);
 
   const fullName = `${user.firstName} ${user.lastName}`.trim();
   const headerRole = viewRole ?? user.roleKey;
@@ -566,8 +611,11 @@ export function PermissionsDrawer({
                 El perfil <span className="font-medium text-ink/75">{roleName(headerRole)}</span> da unos permisos
                 base. Los interruptores son <span className="font-medium text-ink/75">excepciones de esta persona</span>{" "}
                 sobre ese perfil; las que difieren llevan un punto{" "}
-                <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-gold align-middle" /> dorado. El
-                alcance de los datos (toda la cartera o solo la suya) lo fija el perfil.
+                <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-gold align-middle" /> dorado. En las
+                secciones con datos de personas, el botón bajo <span className="font-medium text-ink/75">Ver</span> y{" "}
+                <span className="font-medium text-ink/75">Editar</span> elige si alcanza{" "}
+                <span className="font-medium text-ink/75">Todo</span> o{" "}
+                <span className="font-medium text-ink/75">Solo lo suyo</span>.
               </p>
 
               {/* Barra de herramientas */}
@@ -612,6 +660,9 @@ export function PermissionsDrawer({
                   areas={areas}
                   effective={effective}
                   defaults={defaults}
+                  scopes={scopes}
+                  scopeDefaults={scopeDefaults}
+                  onScope={setScope}
                   canEdit={canEdit}
                   query={normalizedQuery}
                   onlyModified={onlyModified}
