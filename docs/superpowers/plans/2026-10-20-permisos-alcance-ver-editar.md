@@ -45,7 +45,7 @@
 
 ---
 
-### Tarea 1: Modelo puro de alcance
+### Task 1: Modelo puro de alcance
 
 **Files:** Create `lib/permissions-scope.ts`, `scripts/test-permission-scope.mts`. Modify `lib/permissions.ts` (en `getViewRestriction`, añadir `documentacion` a `isScopedBusinessData`), `package.json`, `.github/workflows/ci.yml`.
 
@@ -93,7 +93,7 @@ export function isEscalation(actor: ScopeMatrix, o: ScopeOverrideInput): boolean
 
 ---
 
-### Tarea 2: Tabla `user_scope_overrides`
+### Task 2: Tabla `user_scope_overrides`
 
 **Files:** Create `supabase/migrations/0216_user_scope_overrides.sql`, `scripts/sql-tests/0216_user_scope_overrides.test.sql`.
 
@@ -104,7 +104,7 @@ export function isEscalation(actor: ScopeMatrix, o: ScopeOverrideInput): boolean
 
 ---
 
-### Tarea 3: Carga y resolución en servidor
+### Task 3: Carga y resolución en servidor
 
 **Files:** Modify `lib/db/queries/permissions.ts`, `lib/db/queries/view-scope.ts`.
 
@@ -125,7 +125,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 4: API de permisos (GET/POST)
+### Task 4: API de permisos (GET/POST)
 
 **Files:** Modify `app/api/admin/usuarios/[id]/permissions/route.ts`.
 
@@ -136,7 +136,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 5: Panel
+### Task 5: Panel
 
 **Files:** Modify `components/admin/permissions/permission-matrix.tsx`, `permissions-drawer.tsx`, `permission-details.ts`.
 
@@ -150,7 +150,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 6: Clientes
+### Task 6: Clientes
 
 **Files:** Modify `app/[country]/(admin)/admin/clientes/page.tsx`, `clientes/[id]/page.tsx`, `clientes/[id]/actions.ts`, `clientes/shortlist-actions.ts`, `clientes/property-offer-actions.ts`, `app/api/admin/clientes/[clientId]/suggested-properties/route.ts`, `.../suggested-particulares/route.ts`, `lib/db/queries/clients.ts`.
 
@@ -161,7 +161,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 7: Solicitudes y visitas (bandeja de leads)
+### Task 7: Solicitudes y visitas (bandeja de leads)
 
 **Files:** Modify `lib/db/queries/sales-inbox.ts`, `app/[country]/(admin)/admin/solicitudes/inbox-actions.ts`, `solicitudes/actions.ts`, `app/api/admin/visitas/[id]/sync-calendar/route.ts`.
 
@@ -172,7 +172,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 8: Documentación como permiso real
+### Task 8: Documentación como permiso real
 
 **Files:** Modify `app/[country]/(admin)/admin/solicitudes-documentacion/page.tsx` (y `app/(admin)/admin/solicitudes-documentacion/page.tsx` si sigue enrutado), `lib/db/queries/property-applications.ts`, `app/api/property-applications/route.ts`, `app/api/property-applications/[id]/route.ts`, `app/api/property-application-documents/[id]/verify/route.ts`, `.../analyze/route.ts`, `app/api/property-applications/[id]/export-summary/route.ts` (+ `/send`), `components/admin/permissions/permission-details.ts`.
 
@@ -184,7 +184,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 9: Colecciones de visitas y enlaces de portales
+### Task 9: Colecciones de visitas y enlaces de portales
 
 **Files:** Modify `lib/db/queries/viewing-collections.ts`, `lib/db/queries/portal-links.ts`, `app/[country]/(admin)/admin/clientes/viewing-collections-actions.ts`, `portal-links-actions.ts`.
 
@@ -194,7 +194,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 10: Captaciones
+### Task 10: Captaciones
 
 **Files:** Modify `lib/captaciones/access.ts`, `lib/db/queries/captacion-access.ts`, `app/[country]/(admin)/admin/captaciones/page.tsx`, `captaciones/[id]/page.tsx`; añadir `getCaptacionesOwn(userId: string)` junto a `getCaptacionesForAgent` (captaciones con `assigned_to` o `created_by` = userId).
 
@@ -205,7 +205,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 
 ---
 
-### Tarea 11: Documento, comprobación previa y cierre
+### Task 11: Documento, comprobación previa y cierre
 
 **Files:** Create `docs/PERMISOS_ALCANCE.md`.
 
