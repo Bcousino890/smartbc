@@ -43,7 +43,7 @@ if (port) {
         }
         const photos = new Map<string, PdfPhoto>();
         for (const ph of req.photos) photos.set(ph.id, ph.ok ? { ok: true, data: Buffer.from(ph.data), width: ph.width, height: ph.height } : { ok: false });
-        const { pdf, passes } = await renderCatalogPdf({ catalog: req.catalog, capturedAt: new Date(req.capturedAt), logo: req.logo, photos }, { root: data.root });
+        const { pdf, passes } = await renderCatalogPdf({ catalog: req.catalog, capturedAt: new Date(req.capturedAt), logo: req.logo, logoWhite: req.logoWhite ?? null, photos }, { root: data.root });
         const heap = getHeapStatistics();
         const out = pdf.byteOffset === 0 && pdf.byteLength === pdf.buffer.byteLength ? (pdf.buffer as ArrayBuffer) : pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength);
         post({ type: "done", pdf: out as ArrayBuffer, passes, ms: Math.round(performance.now() - t0), heapUsedMB: MB(heap.used_heap_size), heapTotalMB: MB(heap.total_heap_size) }, [out as ArrayBuffer]);

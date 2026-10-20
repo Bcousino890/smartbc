@@ -1,28 +1,35 @@
 import { createElement as h, type ReactElement, type ReactNode } from "react";
-import { Document, Image, Link, Page, Path, Svg, Text, View, type DocumentProps } from "@react-pdf/renderer";
+import { Defs, Document, Image, LinearGradient, Link, Page, Path, Rect, Stop, Svg, Text, View, type DocumentProps } from "@react-pdf/renderer";
 import type { PublicCatalog, PublicItem } from "@/lib/catalogs/public-contract";
 import { planItemExport, pdfMetadata, versionLabel, type ItemExport } from "@/lib/catalogs/export/plan";
-import { DISPLAY, TEXT, noHyphens, splitOrdinals } from "./fonts";
+import { DISPLAY, LABEL, TEXT, noHyphens } from "./fonts";
 
 // ============================================================================
-// PDF del catálogo · documento (dirección C · Boutique, D17; P1–P10). A4
-// vertical, una página por hoja. El CONTENIDO es la proyección pública (la del
-// lector) repartida por planItemExport (todas las secciones, K4; fotos P2).
-// Sin la dirección del enlace ni QR (P3): el único enlace externo es `tel:`.
-// Índice con números de página correctos en dos pasadas (P7): la primera
-// anota la página de cada vivienda (onPage) y la segunda los escribe.
-// Escrito con createElement (sin JSX) para poder generarlo también desde los
-// scripts de verificación con Node.
+// PDF del catálogo · documento (enmienda visual 2026-10-20, DV10; P1–P10). A4
+// vertical, una página por hoja, con la identidad de la publicación del
+// itinerario: portada oscura a sangre con la marca en blanco, páginas marfil
+// con filetes finos, Playfair (titulares y cifras), Cinzel (etiquetas en
+// versalitas) e Inter (texto), y un colofón oscuro al final. El CONTENIDO es
+// la proyección pública (la del lector) repartida por planItemExport (todas
+// las secciones, K4; fotos P2). Sin la dirección del enlace ni QR (P3): el
+// único enlace externo es `tel:`. Índice con números de página correctos en
+// dos pasadas (P7): la primera anota la página de cada vivienda (onPage) y
+// la segunda los escribe. Escrito con createElement (sin JSX) para poder
+// generarlo también desde los scripts de verificación con Node.
 // ============================================================================
 
-export const PAPER = "#f4ede1";
-export const INK = "#2b2118";
-export const ACCENT = "#9b4a2e";
-export const MAT = "#fbf7f0";
-export const SOFT = "#6b5a48";
-const LINE = "#d9c3ad";
+export const PAPER = "#fbf8f3";
+export const INK = "#0a0a0a";
+export const GOLD = "#c9a96e";
+export const GOLD_DARK = "#a88a52";
+export const CREAM = "#fbf8f3";
+/** Tinta rebajada (sobre marfil). */
+export const SOFT = "#6b6b68";
+const MUTED = "#8f8d88";
+const LINE = "#e2dfd9";
 
 const A4_W = 595.28;
+const A4_H = 841.89;
 const MARGIN = 51; // 18 mm
 const CONTENT_W = A4_W - 2 * MARGIN;
 
@@ -34,6 +41,9 @@ export interface CatalogPdfInput {
   capturedAt: Date;
   /** Logo oficial como data URI (loadLogoDataUri), o null. */
   logo: string | null;
+  /** El mismo logo en blanco (loadWhiteLogoDataUri) para la portada y el
+   *  colofón sobre tinta; si falta, esas páginas van sin marca. */
+  logoWhite?: string | null;
   /** Fotos ya leídas: `cover` y `${itemKey}#${índice}`. Ausente = sin leer. */
   photos: Map<string, PdfPhoto>;
   /** 2.ª pasada: página de cada vivienda (por su clave). */
@@ -48,25 +58,33 @@ export const photoId = (itemKey: string, index: number) => `${itemKey}#${index}`
 
 type Style = Record<string, unknown>;
 
-/** Texto sin partición silábica; en Karla, «º» y «ª» con Fraunces (T1). */
+/** Texto sin partición silábica. */
 function T(style: Style, s: string, extra: Record<string, unknown> = {}): ReactElement {
-  const karla = !style.fontFamily || style.fontFamily === TEXT;
-  const children: ReactNode[] = karla && /[ºª]/.test(s)
-    ? splitOrdinals(s).map(([t, o], i) => (o ? h(Text, { key: i, style: { fontFamily: DISPLAY } }, t) : t))
-    : [s];
-  return h(Text, { style: { fontFamily: TEXT, ...style }, hyphenationCallback: noHyphens, ...extra }, ...children);
+  return h(Text, { style: { fontFamily: TEXT, ...style }, hyphenationCallback: noHyphens, ...extra }, s);
 }
 
 const S = {
-  kicker: { fontFamily: TEXT, fontSize: 7.5, letterSpacing: 1.8, color: ACCENT },
-  h1: { fontFamily: DISPLAY, fontStyle: "italic", fontSize: 28, lineHeight: 1.12, color: INK },
-  h2: { fontFamily: DISPLAY, fontStyle: "italic", fontSize: 19, lineHeight: 1.18, color: INK },
-  h3: { fontFamily: DISPLAY, fontStyle: "italic", fontSize: 13.5, lineHeight: 1.25, color: INK },
-  body: { fontFamily: TEXT, fontSize: 10.5, lineHeight: 1.5, color: INK },
-  lead: { fontFamily: DISPLAY, fontStyle: "italic", fontSize: 12, lineHeight: 1.45, color: INK },
-  cap: { fontFamily: DISPLAY, fontStyle: "italic", fontSize: 8, color: SOFT },
-  soft: { fontFamily: TEXT, fontSize: 9.5, color: SOFT },
+  /** Etiqueta en versalitas (Cinzel, tracking amplio). */
+  label: { fontFamily: LABEL, fontWeight: 500, fontSize: 7, letterSpacing: 1.9, color: SOFT },
+  labelGold: { fontFamily: LABEL, fontWeight: 500, fontSize: 7, letterSpacing: 1.9, color: GOLD_DARK },
+  h1: { fontFamily: DISPLAY, fontSize: 30, lineHeight: 1.05, color: INK },
+  h2: { fontFamily: DISPLAY, fontSize: 21, lineHeight: 1.12, color: INK },
+  h3: { fontFamily: DISPLAY, fontSize: 13.5, lineHeight: 1.25, color: INK },
+  price: { fontFamily: DISPLAY, fontSize: 15, color: INK },
+  body: { fontFamily: TEXT, fontSize: 10, lineHeight: 1.55, color: INK },
+  lead: { fontFamily: TEXT, fontSize: 10.5, lineHeight: 1.55, color: INK },
+  cap: { fontFamily: LABEL, fontWeight: 500, fontSize: 6.5, letterSpacing: 1.4, color: MUTED },
+  /** Pies de foto y avisos de foto: sin tracking, para que el texto se extraiga
+   *  tal cual («Foto 3 de 12», «Foto no disponible»). */
+  photoCap: { fontFamily: LABEL, fontWeight: 500, fontSize: 6.5, color: MUTED },
+  /** Pie de página y cabecera de continuación: tampoco llevan tracking (al
+   *  extraer el texto, cada letra espaciada contaría como una palabra). */
+  runner: { fontFamily: LABEL, fontWeight: 500, fontSize: 6.5, color: MUTED },
+  soft: { fontFamily: TEXT, fontSize: 9, color: SOFT },
+  serifNum: { fontFamily: DISPLAY, fontSize: 11, color: INK },
 };
+
+const up = (s: string) => s.toUpperCase();
 
 function paragraphs(text: string, style: Style = S.body): ReactElement[] {
   return text
@@ -78,7 +96,40 @@ function paragraphs(text: string, style: Style = S.body): ReactElement[] {
 
 const n2 = (i: number) => String(i + 1).padStart(2, "0");
 
-// ── Fotos ───────────────────────────────────────────────────────────────────
+/** «Cuatro viviendas» */
+const ES_WORDS = ["", "Una", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve", "Diez", "Once", "Doce"];
+function countLabel(n: number): string {
+  return `${ES_WORDS[n] ?? n} ${n === 1 ? "vivienda" : "viviendas"}`;
+}
+
+// ── Piezas ──────────────────────────────────────────────────────────────────
+
+/** Filete horizontal (el único «borde» de la publicación). */
+function rule(width: number | string = "100%", color = LINE, top = 0): ReactElement {
+  return h(View, { style: { width, borderBottomWidth: 0.6, borderBottomColor: color, marginTop: top } });
+}
+
+/** Filete corto centrado: el ornamento de la referencia. El color va en
+ *  hexadecimal y la transparencia en `opacity`: PDFKit no entiende rgba en
+ *  los bordes (los pintaba de verde). */
+function ornament(color = GOLD, top = 0, opacity = 1): ReactElement {
+  return h(View, { style: { width: 30, borderBottomWidth: 0.8, borderBottomColor: color, alignSelf: "center", marginTop: top, opacity } });
+}
+
+/** «01 / 04» con su filete hasta el margen. */
+function chapterMark(index: number, total: number): ReactElement {
+  return h(
+    View,
+    { style: { flexDirection: "row", alignItems: "center" } },
+    T({ ...S.label, color: MUTED }, `${n2(index)}  /  ${String(total).padStart(2, "0")}`),
+    h(View, { style: { flexGrow: 1, marginLeft: 12, borderBottomWidth: 0.6, borderBottomColor: LINE } }),
+  );
+}
+
+/** Dato tipográfico: etiqueta minúscula arriba, valor en serif debajo. */
+function dataPoint(label: string, value: string): ReactElement {
+  return h(View, { key: label, style: { flexGrow: 1, flexBasis: 0 } }, T(S.label, up(label)), T({ fontFamily: DISPLAY, fontSize: 14, color: INK, marginTop: 3 }, value));
+}
 
 /** Tamaño de la foto dentro de una caja, sin recortar ni deformar. */
 function fit(p: { width: number; height: number }, maxW: number, maxH: number): { w: number; h: number } {
@@ -89,63 +140,85 @@ function fit(p: { width: number; height: number }, maxW: number, maxH: number): 
 function missing(text: string, w: number, height: number): ReactElement {
   return h(
     View,
-    { style: { width: w, height, backgroundColor: "#ece2d3", borderWidth: 0.6, borderColor: LINE, alignItems: "center", justifyContent: "center" } },
-    T({ ...S.cap, fontSize: 10 }, text),
+    { style: { width: w, height, backgroundColor: "#f0ede6", alignItems: "center", justifyContent: "center" } },
+    T({ ...S.photoCap, fontSize: 7.5 }, text),
   );
 }
 
-/** Foto enmarcada; si no se pudo leer, «Foto no disponible» (nunca otra). */
-function framed(photo: PdfPhoto | undefined, maxW: number, maxH: number, fallbackRatio = 0.66): ReactElement {
+/** Fotografía entera (sin recortar); si no se pudo leer, «Foto no disponible». */
+function photoBlock(photo: PdfPhoto | undefined, maxW: number, maxH: number, fallbackRatio = 0.66): ReactElement {
   if (!photo || !photo.ok) return missing("Foto no disponible", maxW, Math.min(maxH, maxW * fallbackRatio));
-  const { w, h: hh } = fit(photo, maxW - 10, maxH - 10);
-  return h(
-    View,
-    { style: { alignSelf: "center", padding: 5, backgroundColor: MAT, borderWidth: 0.5, borderColor: "#e4d6c3" } },
-    h(Image, { src: { data: photo.data, format: "jpg" }, style: { width: w, height: hh } }),
-  );
+  const { w, h: hh } = fit(photo, maxW, maxH);
+  return h(View, { style: { alignSelf: "center" } }, h(Image, { src: { data: photo.data, format: "jpg" }, style: { width: w, height: hh } }));
 }
-
-// ── Páginas ─────────────────────────────────────────────────────────────────
 
 function footer(catalog: PublicCatalog): ReactElement {
   return h(
     View,
-    { fixed: true, style: { position: "absolute", left: MARGIN, right: MARGIN, bottom: 22, flexDirection: "row", justifyContent: "space-between", borderTopWidth: 0.6, borderTopColor: LINE, paddingTop: 4 } },
-    T(S.cap, catalog.title || "Catálogo"),
-    T(S.cap, "", { render: ({ pageNumber }: { pageNumber: number }) => String(pageNumber) }),
+    { fixed: true, style: { position: "absolute", left: MARGIN, right: MARGIN, bottom: 22, flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", borderTopWidth: 0.6, borderTopColor: LINE, paddingTop: 5 } },
+    T(S.runner, up(catalog.title || "Catálogo")),
+    T({ fontFamily: DISPLAY, fontSize: 8.5, color: SOFT }, "", { render: ({ pageNumber }: { pageNumber: number }) => String(pageNumber) }),
   );
 }
 
-function logoBlock(logo: string | null, width: number, top: number): ReactElement | null {
+function logoBlock(logo: string | null | undefined, width: number, top: number): ReactElement | null {
   if (!logo) return null;
   return h(Image, { src: logo, style: { width, height: (width * 519) / 3282, alignSelf: "center", marginTop: top } });
 }
 
+// ── Portada ─────────────────────────────────────────────────────────────────
+
 function coverPage(input: CatalogPdfInput): ReactElement {
   const { catalog } = input;
-  const archW = CONTENT_W * 0.62;
-  const archH = archW * 1.25;
   const photo = input.photos.get("cover");
-  const radius = (archW + 12) / 2;
-  const arch = h(
-    View,
-    { style: { marginTop: 22, width: archW + 12, height: archH + 12, padding: 6, backgroundColor: MAT, borderTopLeftRadius: radius, borderTopRightRadius: radius, borderBottomLeftRadius: 4, borderBottomRightRadius: 4, alignSelf: "center" } },
-    photo && photo.ok
-      ? h(Image, { src: { data: photo.data, format: "jpg" }, style: { width: archW, height: archH, objectFit: "cover", borderTopLeftRadius: archW / 2, borderTopRightRadius: archW / 2, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 } })
-      : h(View, { style: { width: archW, height: archH, backgroundColor: "#e9dccb", borderTopLeftRadius: archW / 2, borderTopRightRadius: archW / 2, alignItems: "center", justifyContent: "center" } }, T(S.cap, photo ? "Foto no disponible" : "")),
-  );
+  const cream = (a: number) => `rgba(251, 248, 243, ${a})`;
+  const layers: ReactNode[] = [];
+  if (photo && photo.ok) {
+    layers.push(h(Image, { key: "ph", src: { data: photo.data, format: "jpg" }, style: { position: "absolute", top: 0, left: 0, width: A4_W, height: A4_H - 1, objectFit: "cover" } }));
+    // Doble velo: uno vertical para el texto, otro plano para el contraste.
+    layers.push(
+      h(
+        Svg,
+        { key: "veil", width: A4_W, height: A4_H - 1, style: { position: "absolute", top: 0, left: 0 } },
+        h(Defs, null, h(LinearGradient, { id: "veil", x1: 0, y1: 0, x2: 0, y2: 1 }, h(Stop, { offset: "0", stopColor: INK, stopOpacity: 0.85 }), h(Stop, { offset: "0.5", stopColor: INK, stopOpacity: 0.65 }), h(Stop, { offset: "1", stopColor: INK, stopOpacity: 0.92 }))),
+        h(Rect, { x: 0, y: 0, width: A4_W, height: A4_H, fill: "url('#veil')" }),
+      ),
+    );
+    layers.push(h(View, { key: "veil2", style: { position: "absolute", top: 0, left: 0, width: A4_W, height: A4_H - 1, backgroundColor: INK, opacity: 0.25 } }));
+  }
+  // La página va sin márgenes y el contenido en una vista propia: las capas
+  // a sangre miden la página entera y, con márgenes, react-pdf las tomaba por
+  // desbordamiento y las mandaba a hojas nuevas (la portada acababa en la 3.ª).
   return h(
     Page,
-    { size: "A4", style: { backgroundColor: PAPER, paddingHorizontal: MARGIN, paddingTop: 44, paddingBottom: 40 } },
-    logoBlock(input.logo, CONTENT_W * 0.44, 0),
-    T({ ...S.kicker, textAlign: "center", marginTop: 16 }, `SELECCIÓN PRIVADA · ${catalog.edition}`.toUpperCase()),
-    arch,
-    T({ ...S.h1, textAlign: "center", marginTop: 20 }, catalog.title || "Catálogo"),
-    catalog.preparedBy ? T({ ...S.soft, textAlign: "center", marginTop: 6 }, `Preparada por ${catalog.preparedBy}`) : null,
-    h(View, { style: { flexGrow: 1 } }),
-    T({ ...S.cap, textAlign: "center" }, `Versión del ${versionLabel(input.capturedAt)}`),
+    { size: "A4", style: { backgroundColor: INK, padding: 0 } },
+    ...layers,
+    h(
+      View,
+      { style: { height: A4_H, paddingHorizontal: MARGIN, paddingTop: 52, paddingBottom: 40 } },
+      h(
+        View,
+        { style: { alignItems: "center" } },
+        logoBlock(input.logoWhite, CONTENT_W * 0.3, 0),
+        T({ ...S.label, color: cream(0.55), marginTop: 10 }, "PRIVATE CLIENT SERVICES"),
+      ),
+      h(
+        View,
+        { style: { flexGrow: 1, justifyContent: "center", alignItems: "center", paddingVertical: 30 } },
+        T({ ...S.label, fontSize: 7.5, color: cream(0.7) }, "SELECCIÓN PRIVADA"),
+        T({ ...S.h1, fontSize: 40, color: CREAM, textAlign: "center", marginTop: 16, maxWidth: CONTENT_W * 0.9 }, catalog.title || "Catálogo"),
+        ornament(CREAM, 22, 0.35),
+        catalog.preparedBy ? T({ ...S.label, color: cream(0.55), marginTop: 22 }, "PREPARADA POR") : null,
+        catalog.preparedBy ? T({ fontFamily: DISPLAY, fontStyle: "italic", fontSize: 19, color: CREAM, marginTop: 6, textAlign: "center" }, catalog.preparedBy) : null,
+        T({ ...S.label, fontSize: 8, letterSpacing: 1.4, color: cream(0.85), marginTop: 30 }, up(catalog.edition)),
+        T({ ...S.soft, color: cream(0.55), marginTop: 6 }, countLabel(catalog.items.length)),
+      ),
+      T({ ...S.soft, fontSize: 7.5, color: cream(0.35), textAlign: "center" }, `Versión del ${versionLabel(input.capturedAt)}`),
+    ),
   );
 }
+
+// ── Introducción e índice ───────────────────────────────────────────────────
 
 function introAndIndexPage(input: CatalogPdfInput): ReactElement {
   const { catalog } = input;
@@ -155,57 +228,72 @@ function introAndIndexPage(input: CatalogPdfInput): ReactElement {
       { key: it.key, src: `#viv-${i}`, style: { textDecoration: "none", color: INK } },
       h(
         View,
-        { wrap: false, style: { flexDirection: "row", paddingVertical: 5, borderBottomWidth: 0.5, borderBottomColor: LINE, borderBottomStyle: "dotted" } },
-        T({ fontFamily: DISPLAY, fontStyle: "italic", fontSize: 10.5, color: ACCENT, width: 26 }, n2(i)),
+        { wrap: false, style: { paddingVertical: 7, borderBottomWidth: 0.6, borderBottomColor: LINE } },
         h(
           View,
-          { style: { flexGrow: 1, flexShrink: 1, paddingRight: 8 } },
+          { style: { flexDirection: "row", alignItems: "flex-start" } },
+          T({ ...S.label, color: MUTED, width: 28, marginTop: 2 }, n2(i)),
           h(
             View,
-            { style: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" } },
-            T({ fontFamily: TEXT, fontWeight: 600, fontSize: 10, color: INK }, it.title),
-            it.reserved ? T({ fontFamily: TEXT, fontWeight: 600, fontSize: 6.5, letterSpacing: 1.2, color: "#fff", backgroundColor: ACCENT, paddingHorizontal: 4, paddingVertical: 1.5, marginLeft: 6 }, "RESERVADA") : null,
+            // Anchos explícitos: con flexShrink solo, el título no partía y se
+            // montaba sobre el precio. Sin tracking por lo mismo (react-pdf no
+            // cuenta el letterSpacing al partir las líneas).
+            { style: { width: CONTENT_W - 28 - 130, paddingRight: 10 } },
+            T({ fontFamily: LABEL, fontWeight: 500, fontSize: 8, color: INK }, up(it.title)),
+            T({ ...S.soft, fontSize: 8, marginTop: 2 }, it.place ?? "Zona · sin dato"),
+            it.reserved ? T({ ...S.label, fontSize: 6, color: GOLD_DARK, marginTop: 3 }, "RESERVADA") : null,
           ),
-          T({ ...S.soft, fontSize: 8.5, marginTop: 1.5 }, `${it.place ?? "Zona · sin dato"} · ${it.price}`),
+          h(View, { style: { alignItems: "flex-end", width: 130 } }, T({ ...S.serifNum, fontSize: 12, textAlign: "right" }, it.price)),
         ),
-        T({ fontFamily: DISPLAY, fontStyle: "italic", fontSize: 10.5, color: INK }, input.pageOf?.get(it.key) != null ? String(input.pageOf.get(it.key)) : "··"),
+        // El folio (números de página reales, P7) en su propia línea bajo la
+        // entrada: al extraer el texto no comparte base con nada.
+        h(View, { style: { flexDirection: "row", justifyContent: "flex-end", marginTop: 3 } }, T({ ...S.serifNum, fontSize: 9.5, color: SOFT }, input.pageOf?.get(it.key) != null ? String(input.pageOf.get(it.key)) : "··")),
       ),
     ),
   );
   return h(
     Page,
     { size: "A4", style: { backgroundColor: PAPER, paddingHorizontal: MARGIN, paddingTop: MARGIN, paddingBottom: 56 } },
-    T({ ...S.cap, position: "absolute", top: 26, left: MARGIN }, "", { fixed: true, render: ({ subPageNumber }: { subPageNumber: number }) => (subPageNumber > 1 ? "Índice (continuación)" : "") }),
+    T({ ...S.runner, position: "absolute", top: 26, left: MARGIN }, "", { fixed: true, render: ({ subPageNumber }: { subPageNumber: number }) => (subPageNumber > 1 ? "ÍNDICE (CONTINUACIÓN)" : "") }),
     catalog.intro
       ? h(
           View,
-          { style: { marginBottom: 22 } },
-          T(S.kicker, "UNA SELECCIÓN PENSADA PARA TI"),
-          T({ ...S.h2, marginTop: 4, marginBottom: 6 }, catalog.title || "Catálogo"),
-          ...paragraphs(catalog.intro),
-          catalog.preparedBy ? T({ ...S.lead, fontSize: 10.5, marginTop: 8 }, "Un saludo,") : null,
-          catalog.preparedBy ? T({ fontFamily: TEXT, fontWeight: 600, fontSize: 10.5 }, catalog.preparedBy) : null,
+          { style: { marginBottom: 26 } },
+          T(S.labelGold, "UNA SELECCIÓN PENSADA PARA TI"),
+          T({ ...S.h2, marginTop: 6, marginBottom: 8 }, catalog.title || "Catálogo"),
+          ...paragraphs(catalog.intro, S.lead),
+          catalog.preparedBy ? T({ ...S.soft, marginTop: 10 }, "Un saludo,") : null,
+          catalog.preparedBy ? T({ fontFamily: DISPLAY, fontStyle: "italic", fontSize: 13, color: INK, marginTop: 2 }, catalog.preparedBy) : null,
         )
       : null,
-    T(S.kicker, "ÍNDICE"),
-    T({ ...S.h2, fontSize: 16, marginTop: 3, marginBottom: 6 }, "En esta selección"),
-    catalog.items.length === 0 ? T(S.soft, "Esta selección no tiene viviendas ahora mismo.") : null,
+    h(View, { style: { alignItems: "center" } }, T(S.labelGold, "ÍNDICE"), T({ ...S.h2, fontSize: 19, marginTop: 5 }, "En esta selección"), ornament(GOLD, 10)),
+    h(View, { style: { marginTop: 14, borderTopWidth: 0.6, borderTopColor: LINE } }),
+    catalog.items.length === 0 ? T({ ...S.soft, marginTop: 10 }, "Esta selección no tiene viviendas ahora mismo.") : null,
     ...lines,
     footer(catalog),
   );
 }
 
+// ── Vivienda ────────────────────────────────────────────────────────────────
+
 function facts(item: PublicItem): ReactElement {
-  const f = (v: string, label: string) =>
-    h(View, { key: label, style: { flexGrow: 1, flexBasis: 0, alignItems: "center" } }, T({ fontFamily: TEXT, fontWeight: 600, fontSize: 12.5, color: INK }, v), T({ ...S.soft, fontSize: 7.5 }, label));
+  const floor = item.floor.endsWith("sin dato") ? "—" : item.floor.replace(/^Planta /, "");
   return h(
     View,
-    { wrap: false, style: { flexDirection: "row", marginTop: 8, paddingVertical: 6, borderTopWidth: 0.6, borderBottomWidth: 0.6, borderColor: LINE } },
-    f(item.squareMeters != null ? String(item.squareMeters) : "—", "m²"),
-    f(item.bedrooms != null ? String(item.bedrooms) : "—", "dormitorios"),
-    f(item.bathrooms != null ? String(item.bathrooms) : "—", "baños"),
-    // La planta ya se nombra sola («Planta 2», «Bajo», «Planta · sin dato»).
-    f(item.floor || "Planta · sin dato", ""),
+    { wrap: false, style: { flexDirection: "row", marginTop: 12, paddingVertical: 9, borderTopWidth: 0.6, borderBottomWidth: 0.6, borderColor: LINE } },
+    dataPoint("Superficie", item.squareMeters != null ? `${item.squareMeters.toLocaleString("es-ES")} m²` : "—"),
+    dataPoint("Dormitorios", item.bedrooms != null ? String(item.bedrooms) : "—"),
+    dataPoint("Baños", item.bathrooms != null ? String(item.bathrooms) : "—"),
+    dataPoint("Planta", floor),
+  );
+}
+
+function dotLine(text: string, style: Style, key: number): ReactElement {
+  return h(
+    View,
+    { key, style: { flexDirection: "row", alignItems: "flex-start", marginBottom: 2 } },
+    h(View, { style: { width: 3, height: 3, borderRadius: 2, backgroundColor: GOLD, marginTop: 5, marginRight: 7 } }),
+    h(View, { style: { flexGrow: 1, flexShrink: 1 } }, T(style, text)),
   );
 }
 
@@ -224,51 +312,52 @@ function itemPage(input: CatalogPdfInput, item: PublicItem, i: number): ReactEle
       T({ fontSize: 1, color: PAPER }, " ", { render: ({ pageNumber }: { pageNumber: number }) => { input.onPage?.(item.key, pageNumber); return " "; } }),
     ),
   );
+  parts.push(h(View, { key: "mark" }, chapterMark(i, input.catalog.items.length)));
   if (x.opening !== null) {
-    parts.push(h(View, { key: "op", wrap: false }, framed(ph(x.opening), CONTENT_W, 300), T({ ...S.cap, marginTop: 3 }, `Foto de apertura · ${x.opening + 1} de ${total}`)));
+    parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, photoBlock(ph(x.opening), CONTENT_W, 300), T({ ...S.photoCap, marginTop: 5 }, `Foto ${x.opening + 1} de ${total}`)));
   } else {
-    parts.push(h(View, { key: "op", wrap: false }, missing("Sin fotos", CONTENT_W, 190)));
+    parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, missing("Sin fotos", CONTENT_W, 180)));
   }
   parts.push(
     h(
       View,
-      { key: "head", wrap: false, style: { marginTop: 10 } },
-      T(S.kicker, `${`Nº ${n2(i)}`} · ${item.operation} · ${item.place ?? "Zona · sin dato"}`.toUpperCase()),
+      { key: "head", wrap: false, style: { marginTop: 14 } },
+      T(S.labelGold, up(`Nº ${n2(i)} · ${item.operation} · ${item.place ?? "Zona · sin dato"}`)),
+      T({ ...S.h2, marginTop: 5 }, item.title),
       h(
         View,
-        { style: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 3 } },
-        T(S.h2, item.title),
-        item.reserved ? T({ fontFamily: TEXT, fontWeight: 600, fontSize: 7, letterSpacing: 1.2, color: "#fff", backgroundColor: ACCENT, paddingHorizontal: 5, paddingVertical: 2, marginLeft: 8 }, "RESERVADA") : null,
+        { style: { flexDirection: "row", alignItems: "baseline", marginTop: 6 } },
+        T(S.price, item.price),
+        item.reserved ? T({ ...S.label, color: GOLD_DARK, marginLeft: 12 }, "RESERVADA") : null,
       ),
-      T({ fontFamily: DISPLAY, fontStyle: "italic", fontSize: 14, color: ACCENT, marginTop: 4 }, item.price),
       facts(item),
     ),
   );
-  if (x.leadInOpening) parts.push(T({ ...S.lead, marginTop: 9 }, x.leadInOpening, { key: "lead" }));
+  if (x.leadInOpening) parts.push(T({ ...S.lead, marginTop: 10 }, x.leadInOpening, { key: "lead" }));
   if (x.highlights.length) {
-    parts.push(h(View, { key: "hl", style: { marginTop: 6 } }, ...x.highlights.map((t, k) => T({ ...S.body, fontSize: 10 }, `·  ${t}`, { key: k }))));
+    parts.push(h(View, { key: "hl", style: { marginTop: 8 } }, ...x.highlights.map((t, k) => dotLine(t, { ...S.body, fontSize: 9.5, color: SOFT }, k))));
   }
 
   // Recorrido: TODAS las secciones, en orden (K4). Ningún título se queda
   // solo al pie: un título va en el mismo bloque irrompible que la foto que le
   // sigue, o pide unas líneas de su texto en la misma página.
-  const kicker = (t: string, top: number) => T({ ...S.kicker, marginTop: top }, t);
+  const kicker = (t: string, top: number) => T({ ...S.labelGold, marginTop: top }, t);
   let journeyKicker: string | null = x.leadInJourney || x.sections.length ? "EL RECORRIDO" : null;
   if (x.leadInJourney) {
-    parts.push(h(View, { key: "rl", style: { marginTop: 16 } }, h(View, { minPresenceAhead: 60 }, kicker(journeyKicker!, 0)), ...paragraphs(x.leadInJourney, S.lead).map((p, k) => h(View, { key: k, style: { marginTop: k ? 0 : 5 } }, p))));
+    parts.push(h(View, { key: "rl", style: { marginTop: 18 } }, h(View, { minPresenceAhead: 60 }, kicker(journeyKicker!, 0)), ...paragraphs(x.leadInJourney, S.lead).map((p, k) => h(View, { key: k, style: { marginTop: k ? 0 : 6 } }, p))));
     journeyKicker = null;
   }
   x.sections.forEach((s, k) => {
     const lead: ReactNode[] = [];
-    if (journeyKicker) lead.push(h(View, { key: "rk" }, kicker(journeyKicker, 16)));
-    if (s.heading) lead.push(T({ ...S.h3, marginTop: journeyKicker ? 5 : 12 }, s.heading, { key: "h" }));
+    if (journeyKicker) lead.push(h(View, { key: "rk" }, kicker(journeyKicker, 18)));
+    if (s.heading) lead.push(T({ ...S.h3, marginTop: journeyKicker ? 6 : 12 }, s.heading, { key: "h" }));
     journeyKicker = null;
     const text = paragraphs(s.text);
     if (s.photo !== null) {
       const p = ph(s.photo);
       const portrait = p && p.ok ? p.height > p.width : false;
-      lead.push(h(View, { key: "p", style: { marginTop: 6 } }, framed(p, portrait ? CONTENT_W * 0.55 : CONTENT_W, portrait ? 300 : 250), T({ ...S.cap, marginTop: 3, textAlign: "center" }, `Foto ${s.photo + 1} de ${total}`)));
-      parts.push(h(View, { key: `s${k}` }, h(View, { wrap: false }, ...lead), h(View, { style: { marginTop: 6 } }, ...text)));
+      lead.push(h(View, { key: "p", style: { marginTop: 8 } }, photoBlock(p, portrait ? CONTENT_W * 0.55 : CONTENT_W, portrait ? 300 : 250), T({ ...S.photoCap, marginTop: 5, textAlign: "center" }, `Foto ${s.photo + 1} de ${total}`)));
+      parts.push(h(View, { key: `s${k}` }, h(View, { wrap: false }, ...lead), h(View, { style: { marginTop: 8 } }, ...text)));
     } else {
       parts.push(h(View, { key: `s${k}`, style: { marginTop: s.heading ? 0 : 10 } }, h(View, { minPresenceAhead: 45 }, ...lead), ...text));
     }
@@ -279,15 +368,15 @@ function itemPage(input: CatalogPdfInput, item: PublicItem, i: number): ReactEle
     const featureList = x.features.length
       ? h(
           View,
-          { key: "df", style: { marginTop: x.description ? 10 : 6 } },
-          h(View, { minPresenceAhead: 30 }, T({ ...S.kicker, fontSize: 7 }, "CARACTERÍSTICAS")),
-          h(View, { style: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 } }, ...x.features.map((f, k) => T({ ...S.body, fontSize: 9.5, width: "50%", paddingRight: 8, marginBottom: 2 }, `·  ${f}`, { key: k }))),
+          { key: "df", style: { marginTop: x.description ? 12 : 6 } },
+          h(View, { minPresenceAhead: 30 }, T(S.label, "CARACTERÍSTICAS")),
+          h(View, { style: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 } }, ...x.features.map((f, k) => h(View, { key: k, style: { width: "50%", paddingRight: 10 } }, dotLine(f, { ...S.body, fontSize: 9.5, color: SOFT }, k)))),
         )
       : null;
     parts.push(
       h(
         View,
-        { key: "dd", style: { marginTop: 18 } },
+        { key: "dd", style: { marginTop: 20 } },
         h(View, { minPresenceAhead: 50 }, kicker("LA VIVIENDA EN DETALLE", 0)),
         ...(x.description ? paragraphs(x.description).map((p, k) => h(View, { key: k, style: { marginTop: k ? 0 : 6 } }, p)) : []),
         featureList,
@@ -298,49 +387,86 @@ function itemPage(input: CatalogPdfInput, item: PublicItem, i: number): ReactEle
   // Más fotos (hasta 6, P2), de dos en dos; el título va con la primera fila.
   if (x.more.length) {
     const cellW = (CONTENT_W - 12) / 2;
-    const cell = (idx: number) => h(View, { key: idx, style: { width: cellW, alignItems: "center" } }, framed(ph(idx), cellW, 175), T({ ...S.cap, marginTop: 3 }, `Foto ${idx + 1} de ${total}`));
+    const cell = (idx: number) => h(View, { key: idx, style: { width: cellW, alignItems: "center" } }, photoBlock(ph(idx), cellW, 175), T({ ...S.photoCap, marginTop: 5 }, `Foto ${idx + 1} de ${total}`));
     for (let r = 0; r < x.more.length; r += 2) {
-      const row = h(View, { key: `r${r}`, style: { flexDirection: "row", justifyContent: "space-between", marginTop: r ? 10 : 6 } }, ...x.more.slice(r, r + 2).map(cell));
-      parts.push(r === 0 ? h(View, { key: "mg0", wrap: false, style: { marginTop: 18 } }, kicker("MÁS FOTOS", 0), row) : h(View, { key: `mg${r}`, wrap: false }, row));
+      const row = h(View, { key: `r${r}`, style: { flexDirection: "row", justifyContent: "space-between", marginTop: r ? 12 : 8 } }, ...x.more.slice(r, r + 2).map(cell));
+      parts.push(r === 0 ? h(View, { key: "mg0", wrap: false, style: { marginTop: 20 } }, kicker("MÁS FOTOS", 0), row) : h(View, { key: `mg${r}`, wrap: false }, row));
     }
   }
 
   return h(
     Page,
     { key: item.key, size: "A4", style: { backgroundColor: PAPER, paddingHorizontal: MARGIN, paddingTop: MARGIN, paddingBottom: 56 } },
-    T({ ...S.cap, position: "absolute", top: 26, left: MARGIN, right: MARGIN }, "", { fixed: true, render: ({ subPageNumber }: { subPageNumber: number }) => (subPageNumber > 1 ? `${label} — continuación` : "") }),
+    T({ ...S.runner, position: "absolute", top: 26, left: MARGIN, right: MARGIN }, "", { fixed: true, render: ({ subPageNumber }: { subPageNumber: number }) => (subPageNumber > 1 ? up(`${label} — continuación`) : "") }),
     ...parts,
     footer(input.catalog),
   );
 }
 
-function ornament(): ReactElement {
+// ── Cierre y colofón ────────────────────────────────────────────────────────
+
+function sparkle(color: string): ReactElement {
   // ✦ dibujado (no está en el subconjunto «latin» de las fuentes).
-  return h(Svg, { width: 12, height: 12, viewBox: "0 0 24 24", style: { alignSelf: "center" } }, h(Path, { d: "M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0 Z", fill: ACCENT }));
+  return h(Svg, { width: 10, height: 10, viewBox: "0 0 24 24", style: { alignSelf: "center" } }, h(Path, { d: "M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0 Z", fill: color }));
 }
 
 function closingPage(input: CatalogPdfInput): ReactElement {
   const c = input.catalog;
   const hasCard = !!c.preparedBy || !!c.phone;
+  const initials = (c.preparedBy ?? "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+  const role = c.role === "asesora" ? "TU ASESORA" : "TU ASESOR";
   return h(
     Page,
-    { size: "A4", style: { backgroundColor: PAPER, paddingHorizontal: MARGIN, paddingTop: 70, paddingBottom: 40, alignItems: "center" } },
-    logoBlock(input.logo, CONTENT_W * 0.52, 0),
-    T({ ...S.kicker, marginTop: 34, textAlign: "center" }, "CONTACTO"),
-    T({ ...S.h2, marginTop: 4, textAlign: "center" }, "Hablemos"),
-    T({ ...S.body, marginTop: 8, textAlign: "center" }, "Si alguna de estas viviendas te encaja, organizamos la visita cuando mejor te venga."),
+    { size: "A4", style: { backgroundColor: PAPER, paddingHorizontal: MARGIN, paddingTop: 120, paddingBottom: 40, alignItems: "center" } },
+    T(S.labelGold, "CONTACTO"),
+    T({ ...S.h1, marginTop: 8, textAlign: "center" }, "Hablemos"),
+    ornament(GOLD, 18),
+    T({ ...S.body, color: SOFT, marginTop: 18, textAlign: "center", maxWidth: CONTENT_W * 0.6 }, "Si alguna de estas viviendas te encaja, organizamos la visita cuando mejor te venga."),
     hasCard
       ? h(
           View,
-          { style: { marginTop: 20, width: CONTENT_W * 0.66, paddingVertical: 16, paddingHorizontal: 14, backgroundColor: MAT, borderWidth: 0.6, borderColor: LINE, alignItems: "center" } },
-          T(S.kicker, c.role === "asesora" ? "TU ASESORA" : "TU ASESOR"),
-          c.preparedBy ? T({ ...S.h3, fontSize: 16, marginTop: 4 }, c.preparedBy) : null,
-          c.phone && c.phoneHref ? h(Link, { src: c.phoneHref, style: { textDecoration: "none", color: INK, marginTop: 5 } }, T({ fontFamily: TEXT, fontSize: 12.5 }, c.phone)) : null,
+          { style: { marginTop: 30, alignItems: "center" } },
+          initials ? h(View, { style: { width: 56, height: 56, borderRadius: 28, backgroundColor: INK, alignItems: "center", justifyContent: "center" } }, T({ fontFamily: DISPLAY, fontSize: 17, color: CREAM }, initials)) : null,
+          c.preparedBy ? T({ fontFamily: DISPLAY, fontSize: 18, color: INK, marginTop: 14, textAlign: "center" }, c.preparedBy) : null,
+          T({ ...S.label, fontSize: 6.5, color: MUTED, marginTop: 6 }, `${role} · BENJAMÍN COUSIÑO PROPIEDADES`),
+          c.phone && c.phoneHref
+            ? h(
+                Link,
+                { src: c.phoneHref, style: { textDecoration: "none", marginTop: 22 } },
+                h(View, { style: { borderWidth: 0.8, borderColor: INK, backgroundColor: INK, paddingVertical: 9, paddingHorizontal: 22 } }, T({ ...S.label, fontSize: 7.5, color: CREAM }, "LLAMAR")),
+              )
+            : null,
+          c.phone && c.phoneHref ? h(Link, { src: c.phoneHref, style: { textDecoration: "none", marginTop: 14 } }, T({ fontFamily: TEXT, fontSize: 10, color: SOFT }, c.phone)) : null,
         )
       : null,
-    T({ ...S.cap, marginTop: 24, textAlign: "center", lineHeight: 1.5 }, `Este documento es una copia fija · versión del ${versionLabel(input.capturedAt)}.\nLa selección en línea puede haber cambiado desde entonces.`),
+    T({ ...S.soft, fontSize: 8, color: MUTED, marginTop: 36, textAlign: "center", lineHeight: 1.5, maxWidth: CONTENT_W * 0.7 }, `Selección preparada para ti. Este documento es una copia fija · versión del ${versionLabel(input.capturedAt)}.\nLa selección en línea puede haber cambiado desde entonces.`),
     h(View, { style: { flexGrow: 1 } }),
-    ornament(),
+    sparkle(GOLD),
+  );
+}
+
+function colophonPage(input: CatalogPdfInput): ReactElement {
+  const c = input.catalog;
+  const cream = (a: number) => `rgba(251, 248, 243, ${a})`;
+  return h(
+    Page,
+    { size: "A4", style: { backgroundColor: INK, paddingHorizontal: MARGIN, paddingTop: 60, paddingBottom: 40 } },
+    h(
+      View,
+      { style: { flexGrow: 1, alignItems: "center", justifyContent: "center" } },
+      logoBlock(input.logoWhite, CONTENT_W * 0.26, 0),
+      T({ ...S.label, fontSize: 6.5, color: cream(0.5), marginTop: 8 }, "PRIVATE CLIENT SERVICES"),
+      ornament(CREAM, 26, 0.35),
+      T({ fontFamily: DISPLAY, fontStyle: "italic", fontSize: 15, color: cream(0.9), marginTop: 26, textAlign: "center" }, "Una selección preparada para ti."),
+      T({ ...S.label, fontSize: 7, letterSpacing: 1.4, color: cream(0.45), marginTop: 12 }, up(c.edition)),
+      T({ ...S.soft, fontSize: 7.5, color: cream(0.3), marginTop: 40, textAlign: "center" }, `Selección privada · copia fija · versión del ${versionLabel(input.capturedAt)}`),
+    ),
   );
 }
 
@@ -353,5 +479,6 @@ export function catalogDocument(input: CatalogPdfInput): ReactElement<DocumentPr
     introAndIndexPage(input),
     ...input.catalog.items.map((it, i) => itemPage(input, it, i)),
     closingPage(input),
+    colophonPage(input),
   ) as ReactElement<DocumentProps>;
 }

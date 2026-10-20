@@ -23,6 +23,8 @@ export interface WorkerRenderRequest {
   catalog: PublicCatalog;
   capturedAt: string;
   logo: string | null;
+  /** El logo en blanco para las páginas sobre tinta (opcional). */
+  logoWhite?: string | null;
   photos: WorkerPhoto[];
 }
 

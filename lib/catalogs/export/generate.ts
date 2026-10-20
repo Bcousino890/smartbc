@@ -1,5 +1,5 @@
 import "server-only";
-import { loadLogoDataUri } from "@/lib/pdf/load-logo";
+import { loadLogoDataUri, loadWhiteLogoDataUri } from "@/lib/pdf/load-logo";
 import { prepareCatalogPdfWorker } from "@/lib/pdf/catalog/render-in-worker";
 import { photoId, type PdfPhoto } from "@/lib/pdf/catalog/document";
 import { toPublicCatalog, type InternalSnapshot } from "../to-public";
@@ -108,8 +108,8 @@ export async function buildCatalogPdf(cap: Cap, signal: AbortSignal): Promise<{ 
     const photos = await loadAll(photoNeeds(cap.snapshot, cap.operation), signal);
     if (photos === "changed") return { changed: true };
     if (signal.aborted) throw new Error("cancelled");
-    const logo = await loadLogoDataUri();
-    const { pdf } = await worker.render({ catalog, capturedAt: cap.capturedAt, logo, photos });
+    const [logo, logoWhite] = await Promise.all([loadLogoDataUri(), loadWhiteLogoDataUri()]);
+    const { pdf } = await worker.render({ catalog, capturedAt: cap.capturedAt, logo, logoWhite, photos });
     return { pdf, fileName: pdfFileName(catalog.title, cap.capturedAt) };
   } finally {
     await worker.dispose();

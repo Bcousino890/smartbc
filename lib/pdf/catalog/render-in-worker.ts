@@ -197,6 +197,7 @@ export function prepareCatalogPdfWorker(signal: AbortSignal, opts: { root?: stri
             catalog: sanitizeCatalogForWorker(input.catalog),
             capturedAt: input.capturedAt.toISOString(),
             logo: input.logo,
+            logoWhite: input.logoWhite ?? null,
             photos,
           };
           const t0 = performance.now();
