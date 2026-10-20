@@ -213,6 +213,18 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $S/test-catalog-operations.sql
 
+echo "== 2u. 0218: asignaciones, enlaces personales y opiniones (enlace previo + aplicada dos veces, reversión y reaplicación)"
+M13=supabase/migrations/0218_catalog_client_feedback.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $S/test-catalog-feedback-pre.sql $M13 $M13 $S/test-catalog-feedback.sql
+$R sql $D17/rollback-0218.sql $S/test-rollback-0218.sql $M13 $M13
+$R sql $S/test-util.sql
+echo "   0218 se vuelve a aplicar tras su reversión"
+
+echo "== 2v. 0218 sobre los tests del título (0217)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $S/test-catalog-title-pre.sql $M12 $M13 $S/test-catalog-title.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

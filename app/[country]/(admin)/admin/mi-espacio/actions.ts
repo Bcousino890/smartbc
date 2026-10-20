@@ -41,6 +41,9 @@ import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
 import { notifyCatalogChanged } from "@/lib/catalogs/sync-hub-instance";
 import { isUuid, isValidOrder, normalizeIntro, normalizeTitle } from "@/lib/catalogs/validate";
+import { listClientLinks, searchClientsInScope } from "@/lib/catalogs/client-links";
+import { normalizeClientQuery, type ClientLinkView, type ClientOption } from "@/lib/catalogs/feedback-rules";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -906,5 +909,80 @@ export async function searchSavedListingsAction(input: {
 }): Promise<ActionResult<{ items: Awaited<ReturnType<typeof searchSavedListings>> }>> {
   return finish(await withHomeAccess(ownerDeps, async () => {
     return { ok: true as const, items: await searchSavedListings(String(input?.text ?? "").slice(0, 80)) };
+  }));
+}
+
+// ── Asignar a cliente: enlaces personales y opiniones (0218) ────────────────
+// Solo el dueño de la HOME (withHomeAccess + guarda SQL). Además, el cliente
+// tiene que estar en su alcance de `clientes` (permisos de siempre del CRM).
+
+const linkFail = (code: string) => ({ ok: false as const, error: catalogErrorMessage(code) });
+
+export async function listClientLinksAction(input: { catalogId: string }): Promise<ActionResult<{ links: ClientLinkView[] }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    try {
+      return { ok: true as const, links: await listClientLinks(profile.id, input.catalogId) };
+    } catch (err) {
+      return fail({ message: err instanceof Error ? err.message : String(err) });
+    }
+  }));
+}
+
+export async function searchClientsForCatalogAction(input: { catalogId: string; q: string }): Promise<ActionResult<{ clients: ClientOption[] }>> {
+  return finish(await withHomeAccess(ownerDeps, async () => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    const q = normalizeClientQuery(input?.q);
+    if (!q) return { ok: true as const, clients: [] };
+    try {
+      return { ok: true as const, clients: await searchClientsInScope(q) };
+    } catch {
+      return fail(null);
+    }
+  }));
+}
+
+export async function createClientLinkAction(input: { catalogId: string; clientId: string; days?: number | string | null }): Promise<ActionResult<{ link: ClientLinkView }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (!isUuid(input?.clientId)) return linkFail("client_not_found");
+    const days = parseShareDays(input.days);
+    if (!days.ok) return fail("invalid_days");
+    if (!(await canActOnClient(input.clientId, "clientes", "view"))) return linkFail("client_forbidden");
+    const { data, error } = await db().rpc("catalog_client_link_create", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_client: input.clientId,
+      p_days: days.days,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row?.id) return fail(error);
+    const link = (await listClientLinks(profile.id, input.catalogId)).find((l) => l.id === String(row.id));
+    if (!link) return fail(null);
+    revalidateCatalog(input.catalogId);
+    return { ok: true as const, link };
+  }));
+}
+
+export async function renewClientLinkAction(input: { catalogId: string; linkId: string; days?: number | string | null }): Promise<ActionResult<{ expiresAt: string }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.linkId)) return fail("forbidden");
+    const days = parseShareDays(input.days);
+    if (!days.ok) return fail("invalid_days");
+    const { data, error } = await db().rpc("catalog_client_link_renew", { p_actor: profile.id, p_link: input.linkId, p_days: days.days });
+    if (error || !data) return fail(error);
+    notifyCatalogChanged();
+    return { ok: true as const, expiresAt: String(data) };
+  }));
+}
+
+export async function revokeClientLinkAction(input: { catalogId: string; linkId: string }): Promise<ActionResult<object>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.linkId)) return fail("forbidden");
+    const { error } = await db().rpc("catalog_client_link_revoke", { p_actor: profile.id, p_link: input.linkId });
+    if (error) return fail(error);
+    // El lector abierto con ese enlace pasa a «no disponible» al momento.
+    notifyCatalogChanged();
+    return { ok: true as const };
   }));
 }

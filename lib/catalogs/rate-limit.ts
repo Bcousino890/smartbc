@@ -49,3 +49,8 @@ export const pageLimiter = createRateLimiter(120);
  *  único turno de generación unos segundos, así que pocas por minuto. */
 export const pdfLinkLimiter = createRateLimiter(6);
 export const pdfOwnerLimiter = createRateLimiter(12);
+
+/** Opiniones (0218): por token personal. Guardar de una en una a mano no
+ *  pasa de unas pocas por minuto; 30 deja margen a reintentos. */
+export const feedbackWriteLimiter = createRateLimiter(30);
+export const feedbackReadLimiter = createRateLimiter(120);

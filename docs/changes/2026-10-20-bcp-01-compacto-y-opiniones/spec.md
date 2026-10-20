@@ -37,6 +37,18 @@
 | **DC19** | Entrega en dos PR pequeños y dependientes: **A** lector compacto y título/descripción fiables (0217); **B** asignaciones, opiniones y avisos (0218), sobre A. |
 | **DC20** | Pendientes que se conservan hasta tener su evidencia: G-ALQ, diagnóstico de Recoletos, D13 y validación del PDF representativo. |
 
+## Decisiones de implementación (PR B)
+
+Registradas al implementar, dentro de DC10–DC18:
+
+- **Quién asigna.** Solo el dueño de la HOME (guarda de siempre) y solo a clientes que estén en su alcance de `clientes` · ver (los permisos existentes del CRM, comprobados en el servidor al buscar y al crear). La búsqueda no ofrece clientes fuera de ese alcance.
+- **Una asignación vigente por catálogo y cliente.** Si la anterior caducó, asignar de nuevo la revoca y crea otra con token nuevo; esa asignación nueva ve y edita las opiniones anteriores del mismo cliente en ese catálogo (la opinión es del cliente sobre la vivienda en ese catálogo, no del token).
+- **Escritura.** Se revalida en cada envío: enlace inexistente, general, revocado, caducado o de un catálogo archivado responde igual (`link_invalid`, 410). Una vivienda que ya no está en la lista efectiva responde `not_in_catalog` (404). Comentario recortado; en blanco = sin comentario. Escrituras serializadas por opinión (reintentos y dos pestañas).
+- **Histórico (DC15).** Revocar, caducar, retirar la vivienda del catálogo o borrarla del CRM no borra la opinión: queda con el título que veía el cliente y la ficha la marca «ya no está en el catálogo». Solo borrar el cliente la borra (cascada, como el resto de su ficha).
+- **Avisos (DC17).** Destinatario: `assigned_advisor_id` si existe, si no el dueño del catálogo. Enlace a la ficha del cliente en su país (`/{país}/admin/clientes/{id}?tab=properties#catalog-feedback`). Se ven en la campana del CRM y se marcan leídos al abrirlos; `/api/admin/cl/notifications` y el contador de Captaciones los excluyen.
+- **Ficha (DC16).** Tarjeta en Resumen y bloque en Propiedades (ancla `#catalog-feedback`) con las opiniones y los enlaces personales; el enlace «Gestionar» solo aparece al dueño del catálogo. Si 0218 no está aplicada, la ficha se abre igual sin el bloque.
+- **Lector.** «Tu opinión» va al pie de los datos de la pantalla 2, dentro de su panel desplazable; no cambia el número de páginas ni el PDF. No muestra el nombre del cliente.
+
 ## Alcance
 
 - **A:** reader-state con dos partes por vivienda; páginas Apertura y Detalle; PDF compacto; 0217 (título); gestor con Título y Descripción como copia principal; IA con título; pruebas.
@@ -65,5 +77,5 @@ Cambiar la ficha del CRM; borrar historias; correo o WhatsApp; inicio de sesión
 ## Impacto en datos y despliegue
 
 - **0217**: añade dos columnas a `catalog_texts`, una sobrecarga y redefine cuatro funciones. Sin datos que migrar; ninguna huella cambia salvo en catálogos que publiquen título propio.
-- **0218**: tablas nuevas (asignaciones y opiniones), funciones con guarda de dueño o de token, y lectura pública ampliada a los enlaces personales. Inserta en `crm_notifications` (tabla existente).
+- **0218**: tablas nuevas `catalog_client_links` y `catalog_feedback` (RLS sin políticas, solo `service_role`), funciones con guarda de dueño o de token, y `get_public_catalog` / `get_catalog_states` redefinidas para aceptar también los enlaces personales (misma instantánea y misma huella: los enlaces generales existentes no cambian). Inserta y actualiza filas `type = 'catalog_feedback'` en `crm_notifications` (tabla existente). Sin datos que migrar. La reversión borra las dos tablas (las opiniones se pierden si no se copian antes) y conserva los avisos ya creados.
 - Las dos se prueban solo en el Postgres temporal (aplicadas dos veces, reversión y reaplicación) y llevan su `rollback-*.sql`. El merge a `main` despliega y aplica migraciones.

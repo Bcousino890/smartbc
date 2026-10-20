@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { clientRowToAdminClient } from "@/lib/db/adapters";
 import { getClientById } from "@/lib/db/queries/clients";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
+import { getClientCatalogFeedback } from "@/lib/catalogs/client-links";
 import { checkPermission, guardPage } from "@/lib/auth/guard";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
@@ -100,6 +101,14 @@ export default async function ClientCommandCenterPage({
 
   // Lo que la ficha nunca había traído. Cada una devuelve algo vacío si falla:
   // que no haya analítica no puede impedir abrir la ficha de un cliente.
+  // 0218 · opiniones de catálogos y enlaces personales del cliente. Con el
+  // mismo permiso que la ficha (`clientes` · ver, ya comprobado arriba). Si
+  // falla (p. ej. 0218 aún sin aplicar), la ficha se abre igual sin el bloque.
+  const catalogFeedback = await getClientCatalogFeedback(id, profile?.id ?? null).catch((err) => {
+    console.warn("[clientes] opiniones de catálogos:", err instanceof Error ? err.message : err);
+    return null;
+  });
+
   const [prefs, tags, applications, engagement, origin] = await Promise.all([
     getClientPreferencesFull(id),
     getClientTags(id),
@@ -316,6 +325,7 @@ export default async function ClientCommandCenterPage({
             }
           : null
       }
+      catalogFeedback={catalogFeedback}
       viewingCollections={
         inScope
           ? {

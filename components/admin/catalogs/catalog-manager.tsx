@@ -8,6 +8,7 @@ import { formatContactPhone } from "@/lib/catalogs/contact-format";
 import { usePdfDownload } from "@/lib/catalogs/export/download-client";
 import { useHomeMeasure } from "./measure-panel";
 import type { ShareActions, ShareView } from "./share-panel";
+import type { ClientLinkActions } from "@/lib/catalogs/feedback-rules";
 import type { SelectionActions } from "./selection-panel";
 import type { SearchAction } from "./property-search";
 import type { CatalogSearchActions } from "./catalog-search";
@@ -104,6 +105,7 @@ export function CatalogManager({
   onLocalAdd,
   share = null,
   shareActions,
+  clientLinkActions,
   measureMode = false,
   texts = [],
   storyHref = (slug: string) => `/es/admin/propiedades/${encodeURIComponent(slug)}/story`,
@@ -117,6 +119,8 @@ export function CatalogManager({
   onLocalAdd?: (reference: string) => CatalogItemView | null;
   share?: ShareView | null;
   shareActions?: ShareActions;
+  /** 0218: «Asignar a cliente» (enlaces personales y opiniones). */
+  clientLinkActions?: ClientLinkActions;
   /** ?medir=1: instrumenta cada guardado para la medición de D13. */
   measureMode?: boolean;
   /** C2: textos de las viviendas (lista + reserva). */
@@ -598,6 +602,7 @@ export function CatalogManager({
           shareNotice={shareNotice}
           share={currentShare}
           shareActions={shareActions}
+          clientLinkActions={clientLinkActions}
           onShareChange={setCurrentShare}
           ads={catalog.ads}
           adActions={actions.ads}

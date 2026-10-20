@@ -12,6 +12,8 @@ export async function GET() {
       .from("crm_notifications")
       .select("*")
       .eq("user_id", profile.id)
+      // 0218: los avisos de opiniones de catálogos van en la campana del CRM.
+      .neq("type", "catalog_feedback")
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -42,7 +44,8 @@ export async function POST(request: NextRequest) {
         .from("crm_notifications")
         .update({ read: true })
         .eq("user_id", profile.id)
-        .eq("read", false);
+        .eq("read", false)
+        .neq("type", "catalog_feedback");
     }
 
     return NextResponse.json({ ok: true });

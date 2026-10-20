@@ -44,6 +44,11 @@ import {
   setCatalogContactAction,
   setCatalogStatusAction,
   updateCatalogMetaAction,
+  createClientLinkAction,
+  listClientLinksAction,
+  renewClientLinkAction,
+  revokeClientLinkAction,
+  searchClientsForCatalogAction,
 } from "../../actions";
 import {
   createGroupAction,
@@ -105,6 +110,13 @@ export default async function CatalogPage({
           },
         }}
         shareActions={{ create: createShareAction, renew: renewShareAction, revoke: revokeShareAction }}
+        clientLinkActions={{
+          list: listClientLinksAction,
+          search: searchClientsForCatalogAction,
+          create: createClientLinkAction,
+          renew: renewClientLinkAction,
+          revoke: revokeClientLinkAction,
+        }}
         actions={{
           updateMeta: updateCatalogMetaAction,
           addProperty: addPropertyToCatalogAction,

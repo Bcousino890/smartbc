@@ -3,6 +3,8 @@ import { CatalogReader } from "@/components/catalogs/reader/catalog-reader";
 import { StatePage } from "@/components/catalogs/reader/pages";
 import styles from "@/components/catalogs/reader/reader.module.css";
 import { isCatalogFixtureMode } from "@/lib/catalogs/fixture-mode";
+import { getPersonalFeedback } from "@/lib/catalogs/feedback";
+import type { PersonalFeedbackView } from "@/lib/catalogs/feedback-rules";
 import { getPublicCatalogState } from "@/lib/catalogs/public-data";
 import { pageLimiter } from "@/lib/catalogs/rate-limit";
 import { isShareToken } from "@/lib/catalogs/share";
@@ -48,12 +50,21 @@ export default async function SeleccionPage({
     state = null;
   }
   if (!state) return <Unavailable />;
+  // 0218: con un enlace personal, sus opiniones (el general no tiene). Si no
+  // se pueden leer, el catálogo se ve igual, sin «Tu opinión».
+  let feedback: PersonalFeedbackView | null = null;
+  try {
+    feedback = await getPersonalFeedback(token);
+  } catch (err) {
+    console.error("[catalogos] opiniones (lector):", err instanceof Error ? err.message : err);
+  }
   return (
     <CatalogReader
       token={token}
       initial={state}
       measure={medir === "1"}
       photoBase={isCatalogFixtureMode() ? "/dev-fixtures/foto/" : "/p/"}
+      feedback={feedback?.personal ? feedback : null}
     />
   );
 }

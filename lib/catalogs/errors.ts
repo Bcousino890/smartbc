@@ -20,6 +20,12 @@ const MESSAGES: Record<string, string> = {
   title_invalid: "El título es obligatorio y no puede pasar de 160 caracteres.",
   intro_too_long: "La introducción no puede pasar de 2.000 caracteres.",
   invalid_days: "La duración del enlace tiene que ser de 1 a 365 días.",
+  // Asignaciones a clientes (0218).
+  client_not_found: "No encuentro ese cliente en el CRM.",
+  client_forbidden: "No tienes acceso a ese cliente en el CRM.",
+  link_exists: "Ese cliente ya tiene un enlace personal vigente de este catálogo. Renuévalo o revócalo antes de crear otro.",
+  link_not_found: "No encuentro esa asignación.",
+  link_revoked: "Esa asignación está revocada. Crea un enlace nuevo para ese cliente.",
   share_exists: "Este catálogo ya tiene un enlace activo. Renuévalo o revócalo antes de crear otro.",
   no_share: "Este catálogo no tiene un enlace activo.",
   invalid_contact_name: "El nombre del asesor tiene que tener entre 2 y 80 caracteres, sin correos, webs ni teléfonos.",
