@@ -60,6 +60,8 @@ import {
   reconcileTextDraft,
   saveFailed,
   saveSucceeded,
+  savedTextOf,
+  shownTextOf,
   textKey,
   textPendingSave,
   textSaveSucceeded,
@@ -89,33 +91,19 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 function item(over: Partial<PublicItem>): PublicItem {
   return {
     key: "k", title: "T", place: null, operation: "Venta", price: "1 €", reserved: false,
-    bedrooms: null, bathrooms: null, squareMeters: null, floor: "", description: null, features: [],
-    lead: null, highlights: [], sections: [], photos: [], coverIndex: 0, mosaic: [],
+    bedrooms: null, bathrooms: null, squareMeters: null, floor: "", copy: [], features: [], photos: [], coverIndex: 0,
     ...over,
   } as PublicItem;
 }
 const ph = (n: number) => Array.from({ length: n }, (_, i) => ({ src: `/p/${i}`, w: null, h: null })) as unknown as PublicItem["photos"];
 
 function testMaterial() {
-  section("E2 · material (DQ8)");
-  // Ficha breve con 3 fotos: sin texto, 0 capítulos.
+  section("E2 · material (DQ8; lector compacto: sin «capítulos sin foto»)");
   const a = materialOf(item({ photos: ph(3) }));
-  check("ficha breve con 3 fotos", same(a, { noText: true, sections: 0, sectionsWithoutPhoto: 0, photos: 3 }));
-  check("ficha breve → «Sin descripción»", same(materialLabels(a), ["Sin descripción"]));
-  // Descripción y 3 capítulos, 2 sin foto (photo null), 4 fotos.
-  const b = materialOf(item({
-    description: "Texto", photos: ph(4),
-    sections: [{ heading: null, text: "a", photo: 1 }, { heading: null, text: "b", photo: null }, { heading: null, text: "c", photo: null }],
-  }));
-  check("3 capítulos, 2 sin foto", same(b, { noText: false, sections: 3, sectionsWithoutPhoto: 2, photos: 4 }));
-  check("«2 capítulos sin foto adecuada»", same(materialLabels(b), ["2 capítulos sin foto adecuada"]));
-  // Un capítulo sin foto y ninguna foto.
-  const c = materialOf(item({ sections: [{ heading: "H", text: "x", photo: null }] }));
-  check("1 capítulo sin foto y 0 fotos", same(materialLabels(c), ["1 capítulo sin foto adecuada", "Sin fotos"]));
-  // Descripción sin capítulos: no es ficha breve.
-  const d = materialOf(item({ description: "Texto", photos: ph(1) }));
-  check("descripción sin capítulos: sin avisos", same(materialLabels(d), []));
-  // Sin nada.
+  check("sin descripción con 3 fotos", same(a, { noText: true, photos: 3 }));
+  check("sin descripción → «Sin descripción»", same(materialLabels(a), ["Sin descripción"]));
+  const b = materialOf(item({ copy: [{ heading: "Salón", text: "a" }, { heading: null, text: "b" }], photos: ph(4) }));
+  check("con descripción y fotos: sin avisos", same(b, { noText: false, photos: 4 }) && same(materialLabels(b), []));
   check("sin texto ni fotos", same(materialLabels(materialOf(item({}))), ["Sin descripción", "Sin fotos"]));
 }
 
@@ -146,7 +134,7 @@ function testMaterialByProperty() {
   const items = [{ propertyId: "id-a", slug: "a" }, { propertyId: "id-b", slug: "b" }, { propertyId: "id-c", slug: "c" }];
   const m = materialByProperty(snap, items);
   check("solo las de la lista que ve el cliente (a y b)", same(Object.keys(m).sort(), ["id-a", "id-b"]));
-  check("b: ficha breve con 2 fotos", m["id-b"]?.noText === true && m["id-b"]?.photos === 2 && m["id-b"]?.sections === 0);
+  check("b: sin descripción con 2 fotos", m["id-b"]?.noText === true && m["id-b"]?.photos === 2);
   check("a: con descripción y sin fotos", m["id-a"]?.noText === false && m["id-a"]?.photos === 0);
   check("sin instantánea → vacío", same(materialByProperty(null, items), {}));
 }
@@ -304,6 +292,28 @@ function testText() {
   const v6 = view({ draft: { body: "Uno dos tres", lead: null, highlights: ["Terraza"], rev: 6, origin: "manual", updatedAt: null } });
   const adopt = reconcileTextDraft(okT, v6);
   check("guardado ajeno = lo escrito → rev 6 sin conflicto", adopt.conflict === null && adopt.saved.rev === 6);
+
+  section("A4/A5 · título propio en este catálogo (0217): guardar solo el título y guardados en curso");
+  const crm = view({ title: "Piso en Goya (ficha)" });
+  const tt = editTextDraft(undefined, crm, { title: "Ático luminoso en Goya", lead: "", body: "", highlights: [] });
+  check("solo un título: es un cambio pendiente de guardar", textPendingSave(tt.value, tt.saved.key) && tt.saved.rev === null);
+  check("la clave normaliza espacios del título como el SQL", textKey({ title: "  Ático   luminoso ", lead: null, body: null, highlights: [] }) === textKey({ title: "Ático luminoso", lead: null, body: null, highlights: [] }));
+  const subT = textKey(tt.value);
+  const during = { ...tt, pending: subT, value: { ...tt.value, title: "Ático luminoso en Goya, con terraza" } };
+  const savedT = textSaveSucceeded(during, subT, 1);
+  check("guardado del título con éxito: rev 1 y lo escrito durante el guardado se conserva", savedT.saved.rev === 1 && savedT.value.title === "Ático luminoso en Goya, con terraza");
+  check("…y queda pendiente de guardar otra vez", textPendingSave(savedT.value, savedT.saved.key));
+  const reloaded = view({ title: "Piso en Goya (ficha)", draft: { title: "Ático luminoso en Goya", body: null, lead: null, highlights: [], rev: 1, origin: "manual", updatedAt: null } });
+  check("recargar: el editor enseña el título guardado", shownTextOf(reloaded).title === "Ático luminoso en Goya" && savedTextOf(reloaded).rev === 1);
+  const otherTab = view({ title: "Piso en Goya (ficha)", draft: { title: "Otro título", body: null, lead: null, highlights: [], rev: 2, origin: "manual", updatedAt: null } });
+  const cfT = reconcileTextDraft(savedT, otherTab);
+  check("otra pestaña guarda otro título → conflicto, lo escrito se conserva", cfT.conflict?.raw.title === "Otro título" && cfT.value.title === "Ático luminoso en Goya, con terraza");
+  const titleOnly = view({ published: { title: "Ático luminoso", body: null, lead: null, highlights: [], at: null, current: true, changed: [] } });
+  check("estado: solo título publicado", textStateLabel(titleOnly) === "Título publicado");
+  const both = view({ published: { title: "Ático", body: "Texto", lead: null, highlights: [], at: null, current: true, changed: [] } });
+  check("estado: título y texto publicados", textStateLabel(both) === "Título y texto publicados");
+  const shown = shownTextOf(view({ published: { title: "Publicado", body: "B", lead: "L", highlights: ["Terraza"], at: null, current: true, changed: [] } }));
+  check("sin borrador se enseña lo publicado, con entrada y puntos conservados (no se pierden al guardar)", shown.title === "Publicado" && shown.lead === "L" && shown.highlights[0] === "Terraza");
 }
 
 // --- Contenido: filtros ------------------------------------------------------------------
@@ -315,7 +325,7 @@ function testFilters() {
   const stale = view({ published: { body: "P", lead: null, highlights: [], at: null, current: false, changed: ["los m²"] } });
   const pub = view({ published: { body: "P", lead: null, highlights: [], at: null, current: true, changed: [] }, draft: { body: "P", lead: null, highlights: [], rev: 1, origin: "manual", updatedAt: null } });
   const pubNewer = view({ published: { body: "P", lead: null, highlights: [], at: null, current: true, changed: [] }, draft: { body: "P2", lead: null, highlights: [], rev: 2, origin: "manual", updatedAt: null } });
-  const m: CatalogMaterial = { noText: true, sections: 0, sectionsWithoutPhoto: 0, photos: 2 };
+  const m: CatalogMaterial = { noText: true, photos: 2 };
   const ctx = { material: undefined, edited: false };
   check("estado: sin texto", textStateLabel(none) === "Sin texto propio");
   check("estado: borrador", textStateLabel(draft) === "Borrador sin publicar");

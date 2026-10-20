@@ -9,8 +9,8 @@ import { sentences } from "@/lib/catalogs/text-rules";
 import type { CatalogItemView } from "@/lib/catalogs/types";
 
 interface Stored {
-  draft: { body: string | null; lead: string | null; highlights: string[]; rev: number; origin: string };
-  published: { body: string | null; lead: string | null; highlights: string[]; at: string; sourceAtPublish: number } | null;
+  draft: { title: string | null; body: string | null; lead: string | null; highlights: string[]; rev: number; origin: string };
+  published: { title: string | null; body: string | null; lead: string | null; highlights: string[]; at: string; sourceAtPublish: number } | null;
 }
 
 /** Fuente sintética por vivienda: texto, versión limpia, historia y características. */
@@ -56,13 +56,14 @@ export function createFixtureTexts(opts: {
     return list.filter((x) => x.it).map(({ it, i, inList }) => {
       const s = sourceOf(it, i);
       const st = store.get(it.propertyId);
-      const current = !!st?.published && st.published.sourceAtPublish === (sourceRev.get(it.propertyId) ?? 0);
+      const hasPubText = !!st?.published && !!(st.published.body || st.published.lead);
+      const current = !!st?.published && (!hasPubText || st.published.sourceAtPublish === (sourceRev.get(it.propertyId) ?? 0));
       return {
         propertyId: it.propertyId, slug: it.slug, title: it.title, bcReference: it.bcReference, inList,
-        level: current ? "text" : s.clean === "current" ? "clean" : "facts",
+        level: current && hasPubText ? "text" : s.clean === "current" ? "clean" : "facts",
         source: { hasText: s.hasText, clean: s.clean, story: s.story },
         draft: st ? { ...st.draft, updatedAt: null } : null,
-        published: st?.published ? { body: st.published.body, lead: st.published.lead, highlights: st.published.highlights, at: st.published.at, current, changed: current ? [] : ["los dormitorios"] } : null,
+        published: st?.published ? { title: st.published.title, body: st.published.body, lead: st.published.lead, highlights: st.published.highlights, at: st.published.at, current, changed: current ? [] : ["los dormitorios"] } : null,
         candidates: s.features,
       };
     });
@@ -86,13 +87,14 @@ export function createFixtureTexts(opts: {
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
       await wait(Number((globalThis as { __fxAiDelay?: number }).__fxAiDelay ?? 700));
       const proposal = {
-        lead: `${f.it.title}: luz y calma.`,
-        body: `Una vivienda de ${f.it.squareMeters ?? "—"} m² con ${f.it.bedrooms ?? "—"} dormitorios. Tiene piscina comunitaria.`,
+        title: `${f.it.title.split(",")[0]} con luz natural`,
+        lead: null,
+        body: `${f.it.title}: luz y calma.\n\nUna vivienda de ${f.it.squareMeters ?? "—"} m² con ${f.it.bedrooms ?? "—"} dormitorios. Tiene piscina comunitaria.`,
         origin: "ai_draft" as const,
       };
-      return { ok: true as const, proposal, check: checkDraft({ body: proposal.body, lead: proposal.lead, highlights: [] }, draftSource(f.it, f.i)) };
+      return { ok: true as const, proposal, check: checkDraft({ title: proposal.title, body: proposal.body, lead: null, highlights: [] }, draftSource(f.it, f.i)) };
     },
-    save: async ({ propertyId, body, lead, highlights, origin, expectedRev, skipNotify }) => {
+    save: async ({ propertyId, title, body, lead, highlights, origin, expectedRev, skipNotify }) => {
       void skipNotify;
       const st = store.get(propertyId);
       if (expectedRev !== null && (st?.draft.rev ?? 0) !== expectedRev) {
@@ -100,11 +102,12 @@ export function createFixtureTexts(opts: {
       }
       remember();
       const rev = (st?.draft.rev ?? 0) + 1;
-      store.set(propertyId, { draft: { body, lead, highlights, rev, origin: origin ?? "manual" }, published: st?.published ?? null });
+      const t = (title ?? "").replace(/\s+/g, " ").trim() || null;
+      store.set(propertyId, { draft: { title: t, body, lead, highlights, rev, origin: origin ?? "manual" }, published: st?.published ?? null });
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
       opts.onChange();
       const r = await opts.unchanged();
-      return { ...r, rev, check: checkDraft({ body, lead, highlights }, draftSource(f.it, f.i)) };
+      return { ...r, rev, check: checkDraft({ title: t, body, lead, highlights }, draftSource(f.it, f.i)) };
     },
     publish: async ({ propertyId, expectedRev, confirmed, skipNotify }) => {
       const st = store.get(propertyId);
@@ -114,25 +117,26 @@ export function createFixtureTexts(opts: {
       const check = checkDraft(st.draft, draftSource(f.it, f.i));
       if (check.blockers.length) return { ok: false as const, error: check.blockers[0].code === "text_has_price" ? "El texto menciona un precio. El precio ya se ve aparte y se actualiza solo: quítalo del texto." : "El texto tiene un teléfono, un correo o una web. Quítalo antes de publicar." };
       if (pendingWarnings(check, confirmed).length) return { ok: false as const, error: "Hay avisos sin revisar: corrige el texto o confirma cada aviso antes de publicar." };
-      store.set(propertyId, { ...st, published: { body: st.draft.body, lead: st.draft.lead, highlights: st.draft.highlights, at: new Date().toISOString(), sourceAtPublish: sourceRev.get(propertyId) ?? 0 } });
+      if (!st.draft.title && !st.draft.body && !st.draft.lead) return { ok: false as const, error: "Escribe un título o una descripción antes de publicar." };
+      store.set(propertyId, { ...st, published: { title: st.draft.title, body: st.draft.body, lead: st.draft.lead, highlights: st.draft.highlights, at: new Date().toISOString(), sourceAtPublish: sourceRev.get(propertyId) ?? 0 } });
       opts.onChange();
-      return opts.live({ op: "text", index: Math.max(0, find(propertyId)?.i ?? 0), body: st.draft.body, lead: st.draft.lead, skipNotify });
+      return opts.live({ op: "text", index: Math.max(0, find(propertyId)?.i ?? 0), body: st.draft.body, lead: st.draft.lead, itemTitle: st.draft.title, skipNotify });
     },
     withdraw: async ({ propertyId, skipNotify }) => {
       const st = store.get(propertyId);
       if (!st?.published) return { ok: false as const, error: "Ese texto no estaba publicado." };
       store.set(propertyId, { ...st, published: null });
       opts.onChange();
-      return opts.live({ op: "text", index: Math.max(0, find(propertyId)?.i ?? 0), body: null, lead: null, skipNotify });
+      return opts.live({ op: "text", index: Math.max(0, find(propertyId)?.i ?? 0), body: null, lead: null, itemTitle: null, skipNotify });
     },
     remove: async ({ propertyId, skipNotify }) => {
       if (!store.has(propertyId)) return { ok: false as const, error: "Esa vivienda no tiene texto guardado en este catálogo." };
       const had = !!store.get(propertyId)?.published;
       store.delete(propertyId);
       opts.onChange();
-      return had ? opts.live({ op: "text", index: Math.max(0, find(propertyId)?.i ?? 0), body: null, lead: null, skipNotify }) : opts.unchanged();
+      return had ? opts.live({ op: "text", index: Math.max(0, find(propertyId)?.i ?? 0), body: null, lead: null, itemTitle: null, skipNotify }) : opts.unchanged();
     },
-    preview: async ({ propertyId, body, lead, highlights }) => {
+    preview: async ({ propertyId, title, body, lead, highlights }) => {
       const f = find(propertyId) ?? { it: reserved.get(propertyId)!, i: 0 };
       const all = sentences(body ?? "");
       const ownLead = (lead ?? "").trim() || null;
@@ -141,7 +145,7 @@ export function createFixtureTexts(opts: {
       return {
         ok: true as const,
         preview: { lead: ownLead ?? all[0] ?? null, highlights: highlights.length ? highlights : sourceOf(f.it, f.i).features.slice(0, 3), sections, words: (body ?? "").split(/\s+/).filter(Boolean).length },
-        check: checkDraft({ body, lead, highlights }, draftSource(f.it, f.i)),
+        check: checkDraft({ title: title ?? null, body, lead, highlights }, draftSource(f.it, f.i)),
       };
     },
   };
@@ -152,7 +156,7 @@ export function createFixtureTexts(opts: {
   const externalSave = (propertyId: string, body: string) => {
     remember();
     const st = store.get(propertyId);
-    store.set(propertyId, { draft: { body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
+    store.set(propertyId, { draft: { title: st?.draft.title ?? null, body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
   };
   return { actions, views, changeSource, externalSave };
 }

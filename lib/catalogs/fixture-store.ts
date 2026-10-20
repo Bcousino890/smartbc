@@ -500,7 +500,7 @@ export type FixtureOp =
   | { op: "status"; token: string; key: string; status: "available" | "reserved" | "sold" | "archived" }
   | { op: "photo"; token: string; key: string }
   | { op: "cover"; token: string; choose: number | null }
-  | { op: "text"; token: string; index: number; body: string | null; lead: string | null }
+  | { op: "text"; token: string; index: number; body: string | null; lead: string | null; itemTitle?: string | null }
   | { op: "revoke"; token: string }
   | { op: "expire"; token: string; inMs?: number }
   | { op: "archive"; token: string }
@@ -582,11 +582,15 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       break;
     case "text": {
       // C2: texto publicado del catálogo (sintético) en la vivienda nº `index`.
+      // 0217: `itemTitle` = título propio publicado (null = vuelve el de la
+      // ficha, guardado aparte en `crm_title` la primera vez).
       const i = snap.items.length ? op.index % snap.items.length : -1;
       if (i >= 0) {
-        const { text: _old, ...rest } = snap.items[i];
+        const { text: _old, ...rest } = snap.items[i] as typeof snap.items[number] & { crm_title?: string };
         void _old;
-        snap.items[i] = op.body || op.lead ? { ...rest, text: { b: op.body, l: op.lead, h: [] } } : rest;
+        const crm = rest.crm_title ?? rest.title;
+        const titled = op.itemTitle === undefined ? rest : { ...rest, crm_title: crm, title: op.itemTitle ?? crm };
+        snap.items[i] = op.body || op.lead ? { ...titled, text: { b: op.body, l: op.lead, h: [] } } : titled;
       }
       break;
     }

@@ -721,7 +721,7 @@ export async function prepareCatalogTextAction(input: {
         realAi,
         AbortSignal.timeout(AI_TIMEOUT_MS),
       );
-      return { ok: true as const, proposal, check: checkDraft({ body: proposal.body, lead: proposal.lead, highlights: [] }, src.source) };
+      return { ok: true as const, proposal, check: checkDraft({ title: proposal.title ?? null, body: proposal.body, lead: proposal.lead, highlights: [] }, src.source) };
     } catch (err) {
       return { ok: false as const, error: aiError(err) };
     }
@@ -740,17 +740,19 @@ export async function draftCatalogTextAction(input: {
     if (!src) return fail("property_not_found");
     try {
       const proposal = await draftFromFacts(src.source, realAi, AbortSignal.timeout(AI_TIMEOUT_MS));
-      return { ok: true as const, proposal, check: checkDraft({ body: proposal.body, lead: proposal.lead, highlights: [] }, src.source) };
+      return { ok: true as const, proposal, check: checkDraft({ title: proposal.title ?? null, body: proposal.body, lead: proposal.lead, highlights: [] }, src.source) };
     } catch (err) {
       return { ok: false as const, error: aiError(err) };
     }
   }));
 }
 
-/** Guarda el borrador (con la revisión que se abrió: si cambió, no pisa). */
+/** Guarda el borrador (con la revisión que se abrió: si cambió, no pisa).
+ *  0217: con el título propio de la vivienda en ESTE catálogo. */
 export async function saveCatalogTextDraftAction(input: {
   catalogId: string;
   propertyId: string;
+  title?: string | null;
   body: string | null;
   lead: string | null;
   highlights: string[];
@@ -760,10 +762,12 @@ export async function saveCatalogTextDraftAction(input: {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     const before = await fpBefore(profile.id, input.catalogId);
+    const title = typeof input.title === "string" ? input.title.replace(/\s+/g, " ").trim().slice(0, 200) || null : null;
     const { data, error } = await db().rpc("catalog_text_save_draft", {
       p_actor: profile.id,
       p_catalog: input.catalogId,
       p_property: input.propertyId,
+      p_title: title,
       p_body: input.body,
       p_lead: input.lead,
       p_highlights: Array.isArray(input.highlights) ? input.highlights.slice(0, 3) : [],
@@ -772,7 +776,7 @@ export async function saveCatalogTextDraftAction(input: {
     });
     if (error) return fail(error);
     const src = await textSourceFor(input.propertyId, input.catalogId);
-    const check = src ? checkDraft({ body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) : { blockers: [], warnings: [] };
+    const check = src ? checkDraft({ title, body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) : { blockers: [], warnings: [] };
     return { ...(await saved(profile.id, input.catalogId, input.expectedRev ?? 0, before, input)), rev: Number(data), check };
   }));
 }
@@ -789,7 +793,7 @@ export async function publishCatalogTextAction(input: {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     const { data: row } = await db()
       .from("catalog_texts")
-      .select("draft_body, draft_lead, draft_highlights, draft_rev")
+      .select("draft_title, draft_body, draft_lead, draft_highlights, draft_rev")
       .eq("catalog_id", input.catalogId)
       .eq("property_id", input.propertyId)
       .maybeSingle();
@@ -797,7 +801,7 @@ export async function publishCatalogTextAction(input: {
     if (Number(row.draft_rev) !== Number(input.expectedRev)) return fail("draft_changed");
     const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!src) return fail("property_not_found");
-    const check = checkDraft({ body: row.draft_body, lead: row.draft_lead, highlights: row.draft_highlights ?? [] }, src.source);
+    const check = checkDraft({ title: row.draft_title ?? null, body: row.draft_body, lead: row.draft_lead, highlights: row.draft_highlights ?? [] }, src.source);
     if (check.blockers.length) return fail(check.blockers[0].code);
     if (pendingWarnings(check, Array.isArray(input.confirmed) ? input.confirmed : []).length) return fail("text_unconfirmed");
     const before = await fpBefore(profile.id, input.catalogId);
@@ -838,6 +842,7 @@ export async function deleteCatalogTextAction(input: { catalogId: string; proper
 export async function previewCatalogTextAction(input: {
   catalogId: string;
   propertyId: string;
+  title?: string | null;
   body: string | null;
   lead: string | null;
   highlights: string[];
@@ -848,7 +853,7 @@ export async function previewCatalogTextAction(input: {
     const preview = await previewJourney(input.propertyId, input.catalogId, { body: input.body, lead: input.lead, highlights: input.highlights ?? [] });
     const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!preview || !src) return fail("property_not_found");
-    return { ok: true as const, preview, check: checkDraft({ body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) };
+    return { ok: true as const, preview, check: checkDraft({ title: input.title ?? null, body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) };
   }));
 }
 
