@@ -198,14 +198,10 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): Pu
     bathrooms: nonNegativeInt(it.bathrooms),
     squareMeters: positiveInt(it.square_meters),
     floor: floorN === ATICO_FLOOR ? floorLabel(null, true) : floorLabel(floorN),
-    description: ed.description,
+    copy: ed.copy,
     features: ed.features,
-    lead: ed.lead,
-    highlights: ed.highlights,
-    sections: ed.sections.map((x) => ({ heading: x.heading, text: x.text, photo: x.photo })),
     photos,
     coverIndex,
-    mosaic: ed.mosaic,
   };
 }
 

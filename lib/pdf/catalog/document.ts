@@ -333,53 +333,34 @@ function itemPage(input: CatalogPdfInput, item: PublicItem, i: number): ReactEle
       facts(item),
     ),
   );
-  if (x.leadInOpening) parts.push(T({ ...S.lead, marginTop: 10 }, x.leadInOpening, { key: "lead" }));
-  if (x.highlights.length) {
-    parts.push(h(View, { key: "hl", style: { marginTop: 8 } }, ...x.highlights.map((t, k) => dotLine(t, { ...S.body, fontSize: 9.5, color: SOFT }, k))));
-  }
-
-  // Recorrido: TODAS las secciones, en orden (K4). Ningún título se queda
-  // solo al pie: un título va en el mismo bloque irrompible que la foto que le
-  // sigue, o pide unas líneas de su texto en la misma página.
+  // La vivienda en detalle: características y la descripción completa del
+  // catálogo, íntegra y una sola vez (DC9). Un título de capítulo nunca se
+  // queda solo al pie: pide unas líneas de su texto en la misma página.
   const kicker = (t: string, top: number) => T({ ...S.labelGold, marginTop: top }, t);
-  let journeyKicker: string | null = x.leadInJourney || x.sections.length ? "EL RECORRIDO" : null;
-  if (x.leadInJourney) {
-    parts.push(h(View, { key: "rl", style: { marginTop: 18 } }, h(View, { minPresenceAhead: 60 }, kicker(journeyKicker!, 0)), ...paragraphs(x.leadInJourney, S.lead).map((p, k) => h(View, { key: k, style: { marginTop: k ? 0 : 6 } }, p))));
-    journeyKicker = null;
-  }
-  x.sections.forEach((s, k) => {
-    const lead: ReactNode[] = [];
-    if (journeyKicker) lead.push(h(View, { key: "rk" }, kicker(journeyKicker, 18)));
-    if (s.heading) lead.push(T({ ...S.h3, marginTop: journeyKicker ? 6 : 12 }, s.heading, { key: "h" }));
-    journeyKicker = null;
-    const text = paragraphs(s.text);
-    if (s.photo !== null) {
-      const p = ph(s.photo);
-      const portrait = p && p.ok ? p.height > p.width : false;
-      lead.push(h(View, { key: "p", style: { marginTop: 8 } }, photoBlock(p, portrait ? CONTENT_W * 0.55 : CONTENT_W, portrait ? 300 : 250), T({ ...S.photoCap, marginTop: 5, textAlign: "center" }, `Foto ${s.photo + 1} de ${total}`)));
-      parts.push(h(View, { key: `s${k}` }, h(View, { wrap: false }, ...lead), h(View, { style: { marginTop: 8 } }, ...text)));
-    } else {
-      parts.push(h(View, { key: `s${k}`, style: { marginTop: s.heading ? 0 : 10 } }, h(View, { minPresenceAhead: 45 }, ...lead), ...text));
-    }
-  });
-
-  // La vivienda en detalle: descripción completa y características.
-  if (x.description || x.features.length) {
+  if (x.copy.length || x.features.length) {
     const featureList = x.features.length
       ? h(
           View,
-          { key: "df", style: { marginTop: x.description ? 12 : 6 } },
+          { key: "df", style: { marginTop: 8 } },
           h(View, { minPresenceAhead: 30 }, T(S.label, "CARACTERÍSTICAS")),
           h(View, { style: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 } }, ...x.features.map((f, k) => h(View, { key: k, style: { width: "50%", paddingRight: 10 } }, dotLine(f, { ...S.body, fontSize: 9.5, color: SOFT }, k)))),
         )
       : null;
+    const blocks = x.copy.map((b, k) =>
+      h(
+        View,
+        { key: `c${k}`, style: { marginTop: k ? (b.heading ? 12 : 6) : 8 } },
+        b.heading ? h(View, { minPresenceAhead: 45 }, T(S.h3, b.heading)) : null,
+        ...paragraphs(b.text).map((p, j) => h(View, { key: j, style: { marginTop: b.heading && j === 0 ? 4 : 0 } }, p)),
+      ),
+    );
     parts.push(
       h(
         View,
         { key: "dd", style: { marginTop: 20 } },
         h(View, { minPresenceAhead: 50 }, kicker("LA VIVIENDA EN DETALLE", 0)),
-        ...(x.description ? paragraphs(x.description).map((p, k) => h(View, { key: k, style: { marginTop: k ? 0 : 6 } }, p)) : []),
         featureList,
+        ...(x.copy.length ? [h(View, { key: "dk", minPresenceAhead: 40, style: { marginTop: x.features.length ? 14 : 6 } }, T(S.label, "DESCRIPCIÓN")), ...blocks] : []),
       ),
     );
   }

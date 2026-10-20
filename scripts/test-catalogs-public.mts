@@ -44,6 +44,7 @@ import {
   applyUpdate,
   goTo,
   itemParts,
+  clampPage,
   openingFolio,
   pageIndex,
   setLayout,
@@ -57,12 +58,11 @@ import {
   REMOVED_LAST_NOTICE,
   REMOVED_NOTICE,
 } from "../lib/catalogs/reader-state.ts";
-import { itemLayout, sectionsInJourney, packPages, journeyBlocks, LEAD_OPENING_MAX_WORDS, MAX_JOURNEY_SPREADS, TINY_WORDS } from "../lib/catalogs/journey-layout.ts";
 import { HomeMeter, ReaderMeter, formatLatency, type TrialMsg } from "../lib/catalogs/measurement.ts";
 import type { PublicCatalog, PublicCatalogState, PublicItem } from "../lib/catalogs/public-contract.ts";
 import { captureFixed, captureHash, isUnstableRead, verifyFixed } from "../lib/catalogs/export/capture.ts";
 import { createExportRunner } from "../lib/catalogs/export/runner.ts";
-import { descriptionInSections, contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
+import { contentDisposition, MORE_PHOTOS_MAX, pdfFileName, pdfMetadata, photosOfExport, planItemExport, versionLabel } from "../lib/catalogs/export/plan.ts";
 
 let failures = 0;
 
@@ -83,6 +83,11 @@ const md5 = (s: string) => createHash("md5").update(s).digest("hex");
 
 const RAW_DESC = "Precioso piso reformado. Llame a Inmobiliaria Sol al 600 123 456. Ref. 4411.";
 const RAW_FEATURES = ["Planta 7ª exterior", "Ascensor", "", "Contacto: agencia@ejemplo.com"];
+
+/** Texto de n palabras que empieza por `tag` (pruebas de longitud). */
+function W(n: number, tag: string): string {
+  return `${tag} ` + Array.from({ length: Math.max(0, n - 1) }, () => "palabra").join(" ") + ".";
+}
 
 function item(over: Partial<InternalItem> = {}): InternalItem {
   return {
@@ -185,14 +190,10 @@ function pubCatalog(keys: string[], title = "Catálogo"): PublicCatalog {
       bathrooms: null,
       squareMeters: null,
       floor: "Planta · sin dato",
-      description: null,
+      copy: [],
       features: [],
-      lead: null,
-      highlights: [],
-      sections: [],
       photos: [{ src: `/p/${key}/0.webp`, width: null, height: null, orientation: "unknown" as const }, { src: `/p/${key}/1.webp`, width: null, height: null, orientation: "unknown" as const }],
       coverIndex: 0,
-      mosaic: [],
     })),
   };
 }
@@ -434,7 +435,7 @@ async function liveTests() {
       story: { h: "x", p: "Entrada", b: [{ c: "living", t: "Salón." }] } })]));
     check("contrato público con texto e historia: sin claves prohibidas, UUID ni huellas internas",
       findForbiddenKeys(pubC, FORBIDDEN_PUBLIC_KEYS).length === 0 && !UUID_RE.test(JSON.stringify(pubC))
-      && !/"(h|b|l|p|ph|story|level)":/.test(JSON.stringify(pubC)) && pubC.items[0].description === "Texto propio del catálogo. Con dos frases.");
+      && !/"(h|b|l|p|ph|story|level)":/.test(JSON.stringify(pubC)) && pubC.items[0].copy.map((x) => x.text).join() === "Texto propio del catálogo. Con dos frases.");
     check("bloqueos de publicación iguales a SQL (contacto, URL, correo, precio; años y m² no)",
       textBlocker("Llame al 600 123 456") === "text_has_contact" && textBlocker("www.x.es") === "text_has_contact" && textBlocker("a@b.com") === "text_has_contact"
       && textBlocker("Por 590.000 €") === "text_has_price" && textBlocker("1.500 euros al mes") === "text_has_price"
@@ -479,7 +480,7 @@ async function liveTests() {
       { u: "a0", w: 1600, h: 1067, c: true }, { u: "a1", w: 1600, h: 1067, c: false, k: "floor_plan" }, { u: "a2", w: 1600, h: 1067, c: false, k: "other" }, { u: "a3", w: 1600, h: 1067, c: false },
     ] }));
     check("la galería conserva las 4 fotos (también plano y «other»)", pub.photos.length === 4);
-    check("el contrato añade solo «mosaic» (índices) y ninguna clase", Array.isArray(pub.mosaic) && !/"k":|floor_plan|"other"/.test(JSON.stringify(pub)));
+    check("el contrato no lleva clases de foto, ni mosaico ni secciones del recorrido (DC1)", !/"k":|floor_plan|"other"/.test(JSON.stringify(pub)) && !("mosaic" in pub) && !("sections" in pub));
   }
 
   section("Ampliación C2 · borradores con IA inyectada y comprobación (Z4)");
@@ -513,8 +514,13 @@ async function liveTests() {
       floor: "Planta 3.ª", features: ["Ascensor", "Terraza"], cleanDescription: "Piso exterior con terraza." };
     const ut = draftUserText(src);
     check("borrador con IA: solo hechos conocidos, sin precio ni fotos", !/precio|€|price|foto|photo|http/i.test(ut) && /"dormitorios":3/.test(ut) && /Terraza/.test(ut));
-    const d = await draftFromFacts(src, fake([JSON.stringify({ lead: "Luz y terraza en Delicias.", body: "Piso exterior de 110 m² con terraza." })]));
-    check("borrador con IA: propuesta con entrada y cuerpo (no publica ni guarda)", d.origin === "ai_draft" && d.lead === "Luz y terraza en Delicias.");
+    const d = await draftFromFacts(src, fake([JSON.stringify({ title: "  Piso exterior  con terraza en Delicias ", lead: "Luz y terraza en Delicias.", body: "Piso exterior de 110 m² con terraza." })]));
+    check("borrador con IA: propone título y descripción (la entrada abre la descripción); no publica ni guarda",
+      d.origin === "ai_draft" && d.title === "Piso exterior con terraza en Delicias" && d.lead === null && d.body === "Luz y terraza en Delicias.\n\nPiso exterior de 110 m² con terraza.");
+    const tChk = checkDraft({ title: "Ático por 590.000 €", body: null, lead: null, highlights: [] }, src);
+    check("comprobación: un precio en el título bloquea", tChk.blockers.some((b) => b.where === "title" && b.code === "text_has_price"));
+    const tWarn = checkDraft({ title: "Ático con piscina", body: null, lead: null, highlights: [] }, src);
+    check("comprobación: lo que la ficha no dice en el título es un aviso", tWarn.warnings.some((w) => w.id === "feature:piscina"));
     const ok = checkDraft({ body: d.body, lead: d.lead, highlights: ["Terraza"] }, src);
     check("comprobación: sin avisos cuando todo sale de la ficha", ok.blockers.length === 0 && ok.warnings.length === 0, JSON.stringify(ok));
     const bad = checkDraft({ body: "Piso de 140 m² con piscina y garaje. Llame al 600 123 456. Por 590.000 €.", lead: null, highlights: [] }, src);
@@ -919,7 +925,7 @@ async function liveTests() {
   section("T8 · estado del lector (D12)");
   {
     const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b", part: "open" });
-    check("páginas: portada, índice, 3 viviendas, cierre, colofón", pagesOf(s0.catalog).length === 7);
+    check("páginas: portada, índice, 3 viviendas × 2 pantallas, cierre, colofón", pagesOf(s0.catalog).length === 10);
     const s1 = applyUpdate(s0, pubState("B", ["a", "c"]));
     check("se quita la que leo → pasa a la siguiente", s1.page.kind === "item" && s1.page.key === "c" && s1.notice === REMOVED_NOTICE);
     const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c", part: "open" }), pubState("B", ["a", "b"]));
@@ -940,183 +946,75 @@ async function liveTests() {
     check("paso de página en el borde no se sale", step(initialState(pubState("A", ["a"])), -1).page.kind === "cover");
   }
 
-  section("Z6 · lector por partes (doble página) y D12 desde cualquier parte");
+  section("DC1 · exactamente dos pantallas por vivienda y D12 desde cualquier parte");
   {
-    // E1: valores EXPLÍCITOS calculados a mano con las reglas de journey-layout
-    // (C_TEXT 165, una sección de 100 palabras sin título ni foto por página).
-    const W = (n: number, tag: string) => `${tag} ` + Array.from({ length: n - 1 }, () => "palabra").join(" ") + ".";
-    const secs = (spec: number[]) => spec.map((w, i) => ({ heading: null, text: W(w, `S${i + 1}`), photo: null }));
-    const withParts = (fp: string, spec: Array<[string, number[], boolean]>): PublicCatalogState => {
+    const withCopy = (fp: string, spec: Array<[string, number]>): PublicCatalogState => {
       const st = pubState(fp, spec.map(([k]) => k));
-      st.catalog.items = st.catalog.items.map((it, i) => ({ ...it, sections: secs(spec[i][1]), description: spec[i][2] ? "Texto completo." : null }));
+      st.catalog.items = st.catalog.items.map((it, i) => ({ ...it, copy: Array.from({ length: spec[i][1] }, (_, n) => ({ heading: null, text: `Párrafo ${n + 1}.` })) }));
       return st;
     };
+    const A = withCopy("A", [["a", 12], ["b", 0], ["c", 3]]);
     const items = (st: PublicCatalogState) => st.catalog.items;
-    const H100 = (n: number) => Array.from({ length: n }, () => 100);
-    const A = withParts("A", [["a", H100(4), true], ["b", H100(6), true], ["c", [], false]]);
-    check("partes: a (4 × 100) = apertura + 2 recorridos + detalle", itemParts(items(A)[0], "spread").join() === "open,j1,j2,detail");
-    check("partes: b (6 × 100) = 3 recorridos + detalle", itemParts(items(A)[1], "spread").join() === "open,j1,j2,j3,detail");
-    const many = { ...items(A)[1], sections: secs(H100(9)) };
-    check("9 × 100 → 3 dobles páginas (secciones 1–6) y el resto íntegro en la descripción",
-      itemParts(many, "spread").join() === "open,j1,j2,j3,detail" && itemLayout(many).truncated && sectionsInJourney(itemLayout(many)).join() === "0,1,2,3,4,5");
-    check("solo datos sin descripción ni características → solo apertura (ficha breve)", itemParts(items(A)[2], "spread").join() === "open" && itemLayout(items(A)[2]).brief);
-    check("una página → una hoja por vivienda", itemParts(items(A)[1], "single").join() === "open" && pagesOf(A.catalog, "single").length === 7);
-    check("folios: portada 1, índice 2, a abre en 3, b en 7, c en 12, cierre 13, colofón 14",
-      openingFolio(A.catalog, "a", "spread") === 3 && openingFolio(A.catalog, "b", "spread") === 7 && openingFolio(A.catalog, "c", "spread") === 12 && pagesOf(A.catalog, "spread").length === 14);
-    check("folios en una página: a 3, b 4, c 5", [openingFolio(A.catalog, "a", "single"), openingFolio(A.catalog, "b", "single"), openingFolio(A.catalog, "c", "single")].join() === "3,4,5");
-
+    for (const layout of ["spread", "single"] as const) {
+      check(`${layout}: toda vivienda tiene apertura y detalle (texto largo, sin texto…)`, items(A).every((it) => itemParts(it, layout).join() === "open,detail"));
+      check(`${layout}: páginas = portada, índice, 2 × 3 viviendas, cierre, colofón`, pagesOf(A.catalog, layout).length === 10);
+      check(`${layout}: folios de apertura 3, 5 y 7`, ["a", "b", "c"].map((k) => openingFolio(A.catalog, k, layout)).join() === "3,5,7");
+    }
     let s = initialState(A, { kind: "item", key: "a", part: "open" }, "spread");
     s = step(s, 1);
-    check("→ desde la apertura va al primer recorrido", s.page.kind === "item" && s.page.part === "j1");
-    s = step(step(s, 1), 1);
-    check("→ recorre hasta el detalle", s.page.kind === "item" && s.page.key === "a" && s.page.part === "detail");
+    check("→ desde la apertura va al detalle de la misma vivienda", s.page.kind === "item" && s.page.key === "a" && s.page.part === "detail");
     s = step(s, 1);
-    check("→ desde el detalle abre la siguiente vivienda", s.page.kind === "item" && s.page.key === "b" && s.page.part === "open");
-
-    for (const part of ["open", "j1", "j2", "detail"] as const) {
-      const r = applyUpdate(initialState(A, { kind: "item", key: "a", part }, "spread"), withParts("B", [["b", H100(6), true], ["c", [], false]]));
-      check(`D12 desde «${part}» → apertura de la siguiente con aviso`, r.page.kind === "item" && r.page.key === "b" && r.page.part === "open" && r.notice === REMOVED_NOTICE);
-    }
-    const lastGone = applyUpdate(initialState(A, { kind: "item", key: "c", part: "open" }, "spread"), withParts("B", [["a", H100(4), true], ["b", H100(6), true]]));
-    check("D12 desde la última → índice", lastGone.page.kind === "index" && lastGone.notice === REMOVED_LAST_NOTICE);
-    const fromJourney = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", []));
-    check("D12 sin viviendas desde un recorrido → índice vacío", fromJourney.page.kind === "index" && fromJourney.catalog.items.length === 0);
-
-    const shorter = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j3" }, "spread"), withParts("B", [["a", H100(4), true], ["b", [100], true], ["c", [], false]]));
-    check("el recorrido se acorta (1 sección) → se queda en j1 de la misma vivienda", shorter.page.kind === "item" && shorter.page.key === "b" && shorter.page.part === "j1" && shorter.notice === null);
-    const noDetail = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withParts("B", [["a", [], false], ["b", H100(6), true], ["c", [], false]]));
-    check("desaparece el detalle → apertura de la misma vivienda", noDetail.page.kind === "item" && noDetail.page.key === "a" && noDetail.page.part === "open");
-    const moved = applyUpdate(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), withParts("B", [["c", [], false], ["b", H100(6), true], ["a", H100(4), true]]));
-    check("reordenar mantiene vivienda y parte", moved.page.kind === "item" && moved.page.key === "b" && moved.page.part === "j2" && moved.notice === null);
-    check("reordenar cambia el folio de la parte (c 3, b 4–5, j2 = 6)", pageIndex(moved.catalog, moved.page, "spread") + 1 === 6);
-
-    const turned = setLayout(initialState(A, { kind: "item", key: "b", part: "j2" }, "spread"), "single");
-    check("pasar a una página conserva la vivienda (su hoja)", turned.page.kind === "item" && turned.page.key === "b" && turned.page.part === "open");
-    const jump = goTo(initialState(A, { kind: "cover" }, "spread"), { kind: "item", key: "c", part: "detail" });
-    check("ir a una parte que no existe → la anterior que existe", jump.page.kind === "item" && jump.page.part === "open");
+    check("→ desde el detalle va a la apertura de la siguiente", s.page.kind === "item" && s.page.key === "b" && s.page.part === "open");
+    const old = clampPage(A.catalog, "spread", { kind: "item", key: "a", part: "j2" as never });
+    check("una parte antigua del recorrido («j2») vuelve a la apertura", old.kind === "item" && old.part === "open");
+    const fromDetail = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withCopy("B", [["b", 0], ["c", 3]]));
+    check("D12 desde el detalle: se quita la vivienda → apertura de la siguiente con aviso",
+      fromDetail.page.kind === "item" && fromDetail.page.key === "b" && fromDetail.page.part === "open" && fromDetail.notice === REMOVED_NOTICE);
+    const moved = applyUpdate(initialState(A, { kind: "item", key: "c", part: "detail" }, "spread"), withCopy("B", [["c", 3], ["a", 12], ["b", 0]]));
+    check("reordenar mantiene vivienda y parte", moved.page.kind === "item" && moved.page.key === "c" && moved.page.part === "detail" && moved.notice === null);
+    const turned = setLayout(initialState(A, { kind: "item", key: "c", part: "detail" }, "spread"), "single");
+    check("girar la tableta conserva vivienda y parte (las dos composiciones tienen las mismas partes)", turned.page.kind === "item" && turned.page.key === "c" && turned.page.part === "detail");
+    const shorter = applyUpdate(initialState(A, { kind: "item", key: "a", part: "detail" }, "spread"), withCopy("B", [["a", 0], ["b", 0], ["c", 3]]));
+    check("el texto se retira mientras se lee el detalle → se queda en el detalle (ficha técnica)", shorter.page.kind === "item" && shorter.page.key === "a" && shorter.page.part === "detail");
   }
 
-  section("E1 · composición del recorrido (T4)");
+  section("DC3 · la descripción completa: una sola vez, íntegra, por prioridad");
   {
-    const W = (n: number, tag: string) => `${tag} ` + Array.from({ length: n - 1 }, () => "palabra").join(" ") + ".";
-    const base = pubCatalog(["x"]).items[0];
-    const photos = Array.from({ length: 16 }, (_, i) => ({ src: `/p/x/${i}.webp`, width: null, height: null, orientation: "unknown" as const }));
-    const mk = (o: Partial<typeof base>) => ({ ...base, photos, ...o });
-    const sec = (words: number, heading: string | null, photo: number | null, tag = "C") => ({ heading, text: W(words, tag), photo });
-    const slots = (lay: ReturnType<typeof itemLayout>) => lay.spreads.map((sp) => sp.slots.map((sl) => sl.kind === "photo" ? `foto${sl.photo}` : `[${sl.page.blocks.map((b) => b.kind === "intro" ? "E" : `s${b.index}`).join(",")}${sl.inlinePhoto !== null ? `+f${sl.inlinePhoto}` : ""}]`).join(" | ")).join(" ‖ ");
-
-    // (a) tipo Reforma: entrada de 96 palabras y capítulos de 9, 8 y 16 palabras (el 2.º con foto 13).
-    const A = mk({ lead: W(96, "Entrada"), sections: [sec(9, "La vivienda", null), sec(8, "Salón y luz", 13), sec(16, "La finca", null)], description: null, features: [] });
-    const la = itemLayout(A);
-    check("(a) entrada larga fuera de la apertura", !la.introInOpening);
-    check("(a) una doble página: [entrada] | [caps. 1–3 + foto 13] (los capítulos breves no se quedan solos)", slots(la) === "[E] | [s0,s1,s2+f13]", slots(la));
-    check("(a) partes: apertura y j1 (sin detalle)", itemParts(A, "spread").join() === "open,j1" && la.detail === null);
-
-    // (b) tipo Peñalver: entrada corta; capítulos de 11 (foto 1), 20 y 45 palabras; con una característica.
-    const B = mk({ lead: W(30, "Entrada"), sections: [sec(11, "La vivienda", 1), sec(20, "La finca", null), sec(45, "Vivir en Lista", null)], description: null, features: ["Conserje"] });
-    const lb = itemLayout(B);
-    check("(b) entrada corta en la apertura", lb.introInOpening);
-    check("(b) una doble página: [cap. 1, cap. 2 + foto 1] | [cap. 3]", slots(lb) === "[s0,s1+f1] | [s2]", slots(lb));
-    check("(b) partes: apertura, j1 y detalle (por la característica)", itemParts(B, "spread").join() === "open,j1,detail" && lb.detail?.story === false);
-
-    // (c) historia de 8 capítulos de 40 palabras (el 3.º con foto 3), sin limpia ni características.
-    const C8 = Array.from({ length: 8 }, (_, i) => sec(40, `Capítulo ${i + 1}`, i === 2 ? 3 : null, `Cap${i + 1}`));
-    const C = mk({ lead: W(20, "Entrada"), sections: C8, description: null, features: [] });
-    const lc = itemLayout(C);
-    check("(c) 8 capítulos: [1,2] | [3 + foto 3] ‖ [4,5] | [6,7] ‖ [8]", slots(lc) === "[s0,s1] | [s2+f3] ‖ [s3,s4] | [s5,s6] ‖ [s7]", slots(lc));
-    check("(c) partes: apertura, j1, j2, j3 (sin detalle)", itemParts(C, "spread").join() === "open,j1,j2,j3");
-
-    // (d) 7 capítulos con una descripción limpia distinta.
-    const D = mk({ lead: null, sections: C8.slice(0, 7), description: "Descripción limpia distinta de la historia.", features: [] });
-    const ld = itemLayout(D);
-    check("(d) 7 capítulos: [1,2] | [3 + foto 3] ‖ [4,5] | [6,7]", slots(ld) === "[s0,s1] | [s2+f3] ‖ [s3,s4] | [s5,s6]", slots(ld));
-    check("(d) partes: apertura, j1, j2 y detalle con la descripción", itemParts(D, "spread").join() === "open,j1,j2,detail" && ld.detail?.description === true && ld.detail?.story === false);
-
-    // (e) 9 capítulos de 120 palabras: no caben → 3 dobles páginas (caps. 1–6) y «La historia completa».
-    const E = mk({ lead: null, sections: Array.from({ length: 9 }, (_, i) => sec(120, `Capítulo ${i + 1}`, null, `Largo${i + 1}`)), description: null, features: [] });
-    const le = itemLayout(E);
-    check("(e) recorrido con los capítulos 1–6 y el resto en el detalle", sectionsInJourney(le).join() === "0,1,2,3,4,5" && le.truncated && le.spreads.length === MAX_JOURNEY_SPREADS);
-    check("(e) detalle con la historia completa", le.detail?.story === true && itemParts(E, "spread").join() === "open,j1,j2,j3,detail");
-
-    // (f) cola escasa: 160 + 10 palabras → una sola página (la de 10 no queda sola).
-    const F = mk({ lead: null, sections: [sec(160, null, null), sec(10, null, null)], description: "x", features: [] });
-    check("(f) cola de 10 palabras unida a la página anterior", slots(itemLayout(F)) === "[s0,s1]", slots(itemLayout(F)));
-    // (f2) una sección corta seguida de una larga: la corta no se queda sola.
-    const F2 = mk({ lead: null, sections: [sec(10, null, null), sec(160, null, null)], description: "x", features: [] });
-    check("(f2) 10 + 160 palabras → misma página", slots(itemLayout(F2)) === "[s0,s1]", slots(itemLayout(F2)));
-    // (g) bloque más largo que una página: su página, sin partirse.
-    const G = mk({ lead: null, sections: [sec(300, null, null)], description: "x", features: [] });
-    check("(g) 300 palabras → una página compuesta sola", slots(itemLayout(G)) === "[s0]");
-    // (h) ficha breve.
-    const Hh = mk({ lead: null, sections: [], description: null, features: [], mosaic: [1, 2] });
-    check("(h) solo datos → ficha breve, sin recorrido ni detalle", itemLayout(Hh).brief && itemParts(Hh, "spread").join() === "open");
-    // (i) umbral de la entrada: 45 palabras se queda; 46 sale.
-    check("(i) entrada de 45 palabras en la apertura; de 46, en el recorrido",
-      itemLayout(mk({ lead: W(LEAD_OPENING_MAX_WORDS, "E"), sections: [], description: "x" })).introInOpening
-      && !itemLayout(mk({ lead: W(LEAD_OPENING_MAX_WORDS + 1, "E"), sections: [], description: "x" })).introInOpening);
-    // (l) recorrido de una sola frase (9 palabras): va en la apertura, sin doble página.
-    const Ll = mk({ lead: W(30, "Entrada"), sections: [sec(9, null, 1)], description: "Texto completo.", features: [] });
-    check("(l) 9 palabras de recorrido → en la apertura; partes: apertura y detalle", itemLayout(Ll).openingSections.join() === "0" && itemParts(Ll, "spread").join() === "open,detail");
-    // (j) página suelta con foto → [foto grande | texto].
-    check("(j) página suelta con foto → foto grande y texto", slots(itemLayout(mk({ lead: null, sections: [sec(30, null, 2)], description: "x" }))) === "foto2 | [s0]");
-
-    // L1 · completitud contra los CAPÍTULOS DE ORIGEN (no contra la composición):
-    // historias de 6–9 capítulos, sin limpia / con limpia distinta / con
-    // características, por deriveEditorial → toPublic → composición.
     const facts = { description: "Piso exterior en Goya.", bedrooms: 3, bathrooms: 2, squareMeters: 110, features: ["Ascensor"] };
+    const baseIn = (over: Partial<EditorialInput>): EditorialInput => ({
+      description: facts.description, features: facts.features, features_manual: null, bedrooms: 3, bathrooms: 2, square_meters: 110,
+      zone: "Madrid", subzone: "Goya", cleanDescription: null, cleanFeatures: [], text: null, story: null,
+      photos: Array.from({ length: 6 }, (_, i) => ({ u: String(i) })), coverIndex: 0, ...over,
+    });
+    const flat = (c: Array<{ heading: string | null; text: string }>) => c.map((b) => `${b.heading ? b.heading + ": " : ""}${b.text}`).join(" | ");
+    // Texto propio con entrada aparte y párrafos.
+    const t = deriveEditorial(baseIn({ text: { b: "Primer párrafo del catálogo.\n\nSegundo párrafo, con más detalle.", l: "Entrada propia.", h: [] }, cleanDescription: "Limpia." }));
+    check("texto del catálogo: entrada propia + párrafos, en orden; la limpia no se repite",
+      t.level === "text" && flat(t.copy) === "Entrada propia. | Primer párrafo del catálogo. | Segundo párrafo, con más detalle.", flat(t.copy));
+    const t2 = deriveEditorial(baseIn({ text: { b: "Entrada que ya está dentro. Y más texto.", l: "Entrada que ya está dentro.", h: [] } }));
+    check("una entrada que ya está dentro del texto no se repite", flat(t2.copy) === "Entrada que ya está dentro. Y más texto.", flat(t2.copy));
+    // Historia aprobada: entrada y capítulos con su título; la limpia distinta no se añade.
     const CH = ["overview", "living", "kitchen", "private", "outdoor", "finishes", "building", "barrio", "living"];
-    for (const n of [6, 7, 8, 9]) {
-      for (const variant of ["sin limpia", "limpia distinta", "con características"] as const) {
-        const source = Array.from({ length: n }, (_, i) => ({ c: CH[i], t: `Capítulo aprobado ${i + 1} de ${n}: ${W(70 + i * 7, "texto")}` }));
-        const micro = { c: "building", t: "Portería." };
-        const ed = deriveEditorial({
-          description: facts.description, features: facts.features, features_manual: variant === "con características" ? ["Terraza"] : null,
-          bedrooms: 3, bathrooms: 2, square_meters: 110, zone: "Madrid", subzone: "Goya",
-          cleanDescription: variant === "limpia distinta" ? "Una descripción limpia distinta de la historia." : null,
-          cleanFeatures: variant === "limpia distinta" ? ["Ascensor"] : [], text: null,
-          story: { h: storySourceHash({ ...facts, features: [...facts.features, ...(variant === "con características" ? ["Terraza"] : [])] }), p: "Entrada.", b: [...source, micro] },
-          photos: Array.from({ length: 12 }, (_, i) => ({ u: String(i) })), coverIndex: 0,
-        });
-        const item = mk({ lead: ed.lead, sections: ed.sections, description: ed.description, features: ed.features, mosaic: ed.mosaic });
-        const lay = itemLayout(item);
-        const reach = new Set(sectionsInJourney(lay).map((i) => item.sections[i].text));
-        if (lay.detail?.story) item.sections.forEach((x) => reach.add(x.text));
-        const missingDesktop = source.filter((c) => !reach.has(c.t)).length;
-        const missingMobile = source.filter((c) => !item.sections.some((x) => x.text === c.t)).length;
-        check(`L1 · historia de ${n} capítulos, ${variant}: todos accesibles en escritorio y en móvil; «Portería» en las características`,
-          ed.level === "story" && missingDesktop === 0 && missingMobile === 0 && item.features.includes("Portería"), `escritorio ${missingDesktop} · móvil ${missingMobile}`);
-      }
+    for (const n of [6, 9, 12]) {
+      const source = Array.from({ length: n }, (_, i) => ({ c: CH[i % CH.length], t: `Capítulo aprobado ${i + 1} de ${n}: ${W(70 + i * 7, "texto")}` }));
+      const ed = deriveEditorial(baseIn({ cleanDescription: "Una descripción limpia distinta de la historia.", cleanFeatures: ["Ascensor"],
+        story: { h: storySourceHash(facts), p: "Entrada de la historia.", b: [...source, { c: "building", t: "Portería." }] } }));
+      const missing = source.filter((c) => !ed.copy.some((b) => b.text === c.t)).length;
+      check(`historia de ${n} capítulos: todos en la descripción, con título; entrada primero; la limpia no se repite; «Portería» en características`,
+        ed.level === "story" && missing === 0 && ed.copy[0].text === "Entrada de la historia." && ed.copy.slice(1).every((b) => !!b.heading)
+          && !flat(ed.copy).includes("limpia distinta") && ed.features.includes("Portería"), `faltan ${missing}`);
     }
-
-    // Invariantes aleatorias (complemento, no oráculo).
-    let seed = 7;
-    const rnd = (k: number) => { seed = (seed * 48271) % 2147483647; return seed % k; };
-    let ok = true;
-    let why = "";
-    for (let t = 0; t < 300 && ok; t++) {
-      const n = rnd(12);
-      const it = mk({ lead: rnd(3) ? W(1 + rnd(90), "E") : null, sections: Array.from({ length: n }, (_, i) => sec(1 + rnd(150), rnd(2) ? `T${i}` : null, rnd(3) === 0 ? 1 + rnd(15) : null, `R${t}x${i}`)), description: rnd(2) ? "d" : null, features: [] });
-      const lay = itemLayout(it);
-      const shown = sectionsInJourney(lay);
-      const pages = packPages(journeyBlocks(it));
-      if (shown.some((v, i) => v !== i)) { ok = false; why = `orden ${shown}`; }
-      if (lay.spreads.length > MAX_JOURNEY_SPREADS) { ok = false; why = "más de 3"; }
-      if (!lay.truncated && shown.length !== n) { ok = false; why = "falta una sección sin truncar"; }
-      if (lay.truncated && !lay.detail) { ok = false; why = "truncado sin detalle"; }
-      const tiny = pages.filter((p, i) => p.weight < TINY_WORDS && !(pages.length === 1 || i === pages.length - 1));
-      if (tiny.length) { ok = false; why = "página escasa en medio"; }
-    }
-    check("300 viviendas aleatorias: orden, cada sección una vez, ≤ 3 dobles páginas, sin páginas escasas en medio", ok, why);
-  }
-
-  {
-    const d1 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });
-    const d2 = updateDelay({ now: 1300, turnStartedAt: 1000, reducedMotion: false, galleryOpen: false });
-    const d3 = updateDelay({ now: 1000, turnStartedAt: 900, reducedMotion: true, galleryOpen: false });
-    const d4 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: true });
-    const d5 = updateDelay({ now: 1000, turnStartedAt: 5000, reducedMotion: false, galleryOpen: false });
-    check("gesto en curso → espera ≤ 0,72 s", d1 === PAGE_TURN_MS && d2 === 420 && d5 <= PAGE_TURN_MS, `${d1} ${d2} ${d5}`);
-    check("menos movimiento o galería → 0 s", d3 === 0 && d4 === 0);
+    const c = deriveEditorial(baseIn({ cleanDescription: "Párrafo uno.\n\nPárrafo dos." }));
+    check("descripción limpia: sus párrafos, sin títulos", c.level === "clean" && flat(c.copy) === "Párrafo uno. | Párrafo dos.");
+    const f = deriveEditorial(baseIn({}));
+    check("solo datos: sin descripción", f.level === "facts" && f.copy.length === 0);
+    // Texto largo (1.500 palabras) llega entero.
+    const long = W(1500, "Largo");
+    const lg = deriveEditorial(baseIn({ text: { b: long, l: null, h: [] } }));
+    check("texto de 1.500 palabras: llega entero a la descripción (sin recortes)", lg.copy.map((b) => b.text).join(" ") === long);
+    // Proyección pública: el contrato lleva `copy` y el título propio.
+    const pub = toPublicItem(item({ key: "kT", slug: "t", title: "Título propio del catálogo", text: { b: "Uno.\n\nDos.", l: null, h: [] } }));
+    check("contrato: `copy` con los párrafos y el título que llega en la instantánea", pub.title === "Título propio del catálogo" && pub.copy.length === 2 && !("lead" in pub) && !("description" in pub));
   }
 
   section("T10 · medición correlacionada");
@@ -1205,50 +1103,22 @@ async function liveTests() {
 
 // ── PDF del catálogo · reglas puras (expediente 2026-10-16-bcp-01-pdf) ──────
 function pdfPlanTests() {
-  section("PDF · contenido completo y fotos por vivienda (P2, K4)");
+  section("PDF · contenido completo y fotos por vivienda (P2, DC9)");
   const ph = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, src: `/p/x/${i}.webp?f=k${i}`, width: 100, height: 80, orientation: "landscape" as const }));
   const base = (over: Partial<PublicItem>): PublicItem => ({
     key: "it", title: "Piso", place: null, operation: "Venta", price: "1 €", reserved: false, bedrooms: null, bathrooms: null, squareMeters: null, floor: "",
-    description: null, features: [], lead: null, highlights: [], sections: [], photos: [], coverIndex: 0, mosaic: [], ...over,
+    copy: [], features: [], photos: [], coverIndex: 0, ...over,
   });
-  // 12 fotos; apertura = 3; secciones con fotos 5, 3 (repite la apertura), 7 y 5 (repetida).
-  const it = base({
-    photos: ph(12), coverIndex: 3,
-    sections: [
-      { heading: "Uno", text: "a", photo: 5 },
-      { heading: "Dos", text: "b", photo: 3 },
-      { heading: null, text: "c", photo: null },
-      { heading: "Cuatro", text: "d", photo: 7 },
-      { heading: "Cinco", text: "e", photo: 5 },
-    ],
-    description: "Descripción", features: ["Ascensor"],
-  });
-  const x = planItemExport(it);
-  check("apertura = la foto de portada efectiva (3)", x.opening === 3);
-  check("secciones: todas, en orden, con su foto solo si no salió antes", JSON.stringify(x.sections.map((s) => s.photo)) === JSON.stringify([5, null, null, 7, null]) && x.sections.length === 5);
-  check("más fotos: hasta 6, en el orden de la galería, sin las ya usadas", JSON.stringify(x.more) === JSON.stringify([0, 1, 2, 4, 6, 8]) && MORE_PHOTOS_MAX === 6);
-  check("ninguna foto repetida en toda la vivienda", new Set(photosOfExport(x)).size === photosOfExport(x).length && JSON.stringify(photosOfExport(x)) === JSON.stringify([3, 5, 7, 0, 1, 2, 4, 6, 8]));
-  check("descripción y características se conservan", x.description === "Descripción" && JSON.stringify(x.features) === JSON.stringify(["Ascensor"]) && !x.brief);
-  const desc = "Primera parte del texto. Segunda parte, más larga.\n\nTercera parte final.";
-  const split = base({ description: desc, sections: [{ heading: null, text: "Primera parte del texto. Segunda parte, más larga.", photo: null }, { heading: null, text: "Tercera parte final.", photo: null }] });
-  check("secciones = la descripción entera, en orden: no se repite en el detalle", descriptionInSections(split) && planItemExport(split).description === null && planItemExport(split).sections.length === 2);
-  const partial = base({ description: desc, sections: [{ heading: null, text: "Primera parte del texto.", photo: null }] });
-  check("si a las secciones les falta algo, la descripción va entera", !descriptionInSections(partial) && planItemExport(partial).description === desc);
-  const story = base({ description: "Otra cosa distinta.", sections: [{ heading: "La vivienda", text: "Capítulo", photo: null }] });
-  check("historia + descripción distinta: las dos", planItemExport(story).description === "Otra cosa distinta.");
-  const withLead = base({ description: desc, lead: "Primera parte del texto.", sections: [{ heading: null, text: "Segunda parte, más larga.", photo: null }, { heading: null, text: "Tercera parte final.", photo: null }] });
-  check("entrada (primeras frases) + secciones = la descripción: no se repite", descriptionInSections(withLead) && planItemExport(withLead).description === null);
-  const many = base({ sections: Array.from({ length: 12 }, (_, i) => ({ heading: `Capítulo ${i + 1}`, text: `Texto ${i + 1} `.repeat(200), photo: null })) });
+  const x = planItemExport(base({ photos: ph(12), coverIndex: 3, copy: [{ heading: null, text: "Descripción" }], features: ["Ascensor"] }));
+  check("apertura = la foto de apertura", x.opening === 3);
+  check(`más fotos: hasta ${MORE_PHOTOS_MAX}, en el orden de la galería, sin la apertura`, JSON.stringify(x.more) === "[0,1,2,4,5,6]");
+  check("todas las fotos, sin repetir", new Set(photosOfExport(x)).size === photosOfExport(x).length && photosOfExport(x).length === 7);
+  check("descripción y características se conservan", x.copy.length === 1 && x.copy[0].text === "Descripción" && JSON.stringify(x.features) === JSON.stringify(["Ascensor"]) && !x.brief);
+  const many = base({ copy: Array.from({ length: 12 }, (_, i) => ({ heading: `Capítulo ${i + 1}`, text: `Texto ${i + 1} `.repeat(200) })) });
   const xm = planItemExport(many);
-  check("K4: una historia de 12 capítulos sale entera (sin el límite de 3 dobles páginas del lector)", xm.sections.length === 12 && xm.sections[11].heading === "Capítulo 12" && xm.sections.every((s, i) => s.text === many.sections[i].text));
-  const shortLead = "Una entrada breve de diez palabras para la apertura del piso.";
-  const longLead = Array.from({ length: 46 }, (_, i) => `palabra${i}`).join(" ");
-  check("entrada de ≤ 45 palabras: en la apertura", planItemExport(base({ lead: shortLead })).leadInOpening === shortLead && planItemExport(base({ lead: shortLead })).leadInJourney === null);
-  check("entrada de 46 palabras: al principio del recorrido (regla del lector)", planItemExport(base({ lead: longLead })).leadInJourney === longLead && planItemExport(base({ lead: longLead })).leadInOpening === null);
+  check("una historia de 12 capítulos sale entera, una sola vez (sin secciones repetidas)", xm.copy.length === 12 && xm.copy[11].heading === "Capítulo 12");
   check("sin fotos: sin apertura ni más fotos", planItemExport(base({})).opening === null && planItemExport(base({})).more.length === 0);
-  check("sin secciones ni descripción: ficha breve", planItemExport(base({ features: ["Terraza"] })).brief);
-  check("pocas fotos: más fotos = las que queden", JSON.stringify(planItemExport(base({ photos: ph(3), coverIndex: 1 })).more) === JSON.stringify([0, 2]));
-  check("portada fuera de rango (defensa): la primera", planItemExport(base({ photos: ph(2), coverIndex: 9 })).opening === 0);
+  check("sin descripción: ficha breve", planItemExport(base({})).brief);
 
   section("PDF · nombre, versión y metadatos");
   const at = new Date("2026-10-16T17:40:00Z");
@@ -1487,7 +1357,7 @@ async function main() {
     check("sin hash de URL de foto", !json.includes(md5("https://x.supabase.co/storage/v1/object/public/properties-photos/a.webp")));
     check("sin descripción de portal (teléfono ajeno)", !json.includes("600 123 456") && !json.includes("Inmobiliaria Sol"));
     check("sin características de portal", !json.includes("agencia@ejemplo.com") && cat.items[0].features.length === 0);
-    check("descripción omitida sin caché", cat.items[0].description === null);
+    check("descripción omitida sin caché", cat.items[0].copy.length === 0);
     check("contacto del catálogo, no del perfil", cat.preparedBy === "Laura Méndez" && !json.includes("Perfil Del Dueño"));
     check("teléfono del catálogo formateado", cat.phone === "+34 600 111 222" && cat.phoneHref === "tel:+34600111222");
     check("asesora", cat.role === "asesora");
@@ -1505,12 +1375,12 @@ async function main() {
     const ok = toPublicCatalog(
       snap([item({ clean: { src, description: "Precioso piso reformado.", features: ["Planta 7 exterior", "Ascensor", " "] } })]),
     );
-    check("caché vigente → descripción limpia", ok.items[0].description === "Precioso piso reformado.");
+    check("caché vigente → descripción limpia", ok.items[0].copy.map((b) => b.text).join() === "Precioso piso reformado.");
     check("caché vigente → características limpias sin vacíos", ok.items[0].features.join("|") === "Planta 7 exterior|Ascensor");
     const stale = toPublicCatalog(
       snap([item({ description: RAW_DESC + " Nuevo texto.", clean: { src, description: "Antiguo", features: ["X"] } })]),
     );
-    check("caché desfasada → nada de texto", stale.items[0].description === null && stale.items[0].features.length === 0);
+    check("caché desfasada → nada de texto", stale.items[0].copy.length === 0 && stale.items[0].features.length === 0);
     const expectedSrc = md5(RAW_DESC.trim() + "\u0000" + RAW_FEATURES.filter((f) => f.trim()).join("\u0001"));
     check("hash igual que client-description.ts", src === expectedSrc);
   }
@@ -1847,8 +1717,7 @@ async function main() {
     const pub = toPublicItem(it);
     check("lector: solo las fotos en uso, con su ruta por clave", pub.photos.map((p) => p.src).join(" ") === [0, 2, 3].map((i) => `/p/piso-e3/${i}.webp?f=${K("acd"[[0, 2, 3].indexOf(i)])}&v=${"acd"[[0, 2, 3].indexOf(i)]}0000000`).join(" "));
     check("lector: apertura = la elegida (D, índice 2 de la lista filtrada)", pub.coverIndex === 2 && pub.photos[2].key === K("d"));
-    check("lector: secciones y mosaico solo con índices de la lista filtrada",
-      pub.sections.every((x) => x.photo === null || (x.photo >= 0 && x.photo < pub.photos.length)) && pub.mosaic.every((i) => i >= 0 && i < pub.photos.length));
+    check("lector: la apertura es un índice de la lista filtrada", pub.coverIndex >= 0 && pub.coverIndex < pub.photos.length);
     const json = JSON.stringify(toPublicCatalog(snap([it])));
     check("privacidad: ni claves internas de ajustes, ni md5 de URL, ni ids, ni URLs de storage",
       !json.includes('"pp"') && !json.includes(U("a")) && !UUID_RE.test(json) && !/supabase|storage\.example/.test(json) && findForbiddenKeys(JSON.parse(json), FORBIDDEN_PUBLIC_KEYS).length === 0);

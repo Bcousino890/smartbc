@@ -54,9 +54,8 @@ export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperati
   };
   for (const item of catalog.items) {
     const x = planItemExport(item);
-    const sectionSet = new Set(x.sections.map((s) => s.photo).filter((p): p is number => p !== null));
     for (const idx of photosOfExport(x)) {
-      const width = idx === x.opening ? PHOTO_WIDTHS.opening : sectionSet.has(idx) ? PHOTO_WIDTHS.section : PHOTO_WIDTHS.more;
+      const width = idx === x.opening ? PHOTO_WIDTHS.opening : PHOTO_WIDTHS.more;
       const n = needOf(item.key, item.photos[idx].key, width);
       if (n) needs.set(photoId(item.key, idx), n);
     }

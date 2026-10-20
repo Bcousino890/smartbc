@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { ChapterMark, DataPoint, Label, Ornament, Rule, StatusLine } from "@/app/v/[token]/_components/editorial";
 import { CatalogCover, countLabel } from "@/components/catalogs/catalog-cover";
 import { contactRoleLabel } from "@/lib/catalogs/contact-format";
-import type { ItemLayout, JourneyPage, JourneySpread } from "@/lib/catalogs/journey-layout";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { shareExpiryLabel } from "@/lib/catalogs/share";
 import { cn } from "@/lib/utils";
@@ -165,14 +164,12 @@ function PhotoColumn({
   url,
   sizes = PHOTO_SIZES,
   onOpenGallery,
-  showCount = true,
 }: {
   item: PublicItem;
   photo: number;
   url: PhotoUrl;
   sizes?: string;
   onOpenGallery: (photo: number) => void;
-  showCount?: boolean;
 }) {
   const p = item.photos[photo];
   return (
@@ -180,7 +177,7 @@ function PhotoColumn({
       {p ? (
         <button type="button" className={cn(styles.photoBtn, "vc-focus group")} onClick={() => onOpenGallery(photo)} aria-haspopup="dialog" aria-label={`Ver las fotos de ${item.title}`}>
           <ReaderImage variant="frame" {...photoProps(p, url, sizes)} alt={item.title} decoding="async" />
-          {showCount && item.photos.length > 1 ? (
+          {item.photos.length > 1 ? (
             <span className="pointer-events-none absolute bottom-6 right-6 border border-cream-50/45 bg-ink/55 px-4 py-2.5 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm">
               {photosWord(item.photos.length)}
             </span>
@@ -205,7 +202,7 @@ function ItemHead({ item, index, total }: { item: PublicItem; index: number; tot
       <Label tone="gold" className="mt-4 md:mt-7">
         {[item.operation, item.place].filter(Boolean).join(" · ")}
       </Label>
-      <h2 className="mt-2 max-w-[18ch] break-words font-serif text-[26px] font-normal vc-tight text-ink sm:text-[30px] md:text-[34px] lg:text-[42px]" data-check-overflow="titulo">
+      <h2 className="mt-2 max-w-[18ch] break-words font-serif text-[26px] font-normal vc-tight text-ink sm:text-[30px] md:text-[34px] lg:text-[42px]" data-check-overflow="titulo" data-testid="item-title">
         {item.title}
       </h2>
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 md:mt-5">
@@ -241,51 +238,27 @@ export function KeyFacts({ item }: { item: PublicItem }) {
   );
 }
 
-/** Entrada breve y hasta tres puntos verificados (literales de la ficha). */
-function LeadAndHighlights({ item }: { item: PublicItem }) {
-  return (
-    <>
-      {item.lead ? (
-        <p className="mt-5 break-words font-sans text-[14px] leading-relaxed text-ink/80 md:mt-6 md:text-[15px]" data-testid="lead">
-          {item.lead}
-        </p>
-      ) : null}
-      {item.highlights.length ? (
-        <ul className="mt-4 flex flex-col gap-1.5" aria-label="Puntos destacados" data-testid="highlights">
-          {item.highlights.slice(0, 3).map((h) => (
-            <li key={h} className="flex items-start gap-2.5 font-sans text-[13px] leading-relaxed text-ink/70">
-              <span aria-hidden className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-gold" />
-              <span className="break-words">{h}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </>
-  );
-}
+/** Miniaturas de la apertura: las primeras fotos elegibles (sin la de
+ *  apertura) y el acceso a la galería completa. */
+const THUMBS_MAX = 6;
 
-function SectionText({ section, className }: { section: PublicItem["sections"][number]; className?: string }) {
+function Thumbs({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
+  const others = item.photos.map((_, i) => i).filter((i) => i !== item.coverIndex);
+  if (!others.length) return null;
+  const shown = others.slice(0, THUMBS_MAX);
   return (
-    <div className={cn("w-full", className)} data-testid="journey-section">
-      {section.heading ? <h3 className="font-serif text-[21px] font-normal leading-tight text-ink md:text-[24px]">{section.heading}</h3> : null}
-      <p className={cn("whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85", section.heading && "mt-3")}>{section.text}</p>
+    <div className="mt-6 md:mt-8" data-testid="thumbs">
+      <ul className={styles.thumbs}>
+        {shown.map((i) => (
+          <li key={item.photos[i].key}>
+            <button type="button" className={cn(styles.thumb, "vc-focus")} onClick={() => onOpenGallery(i)} aria-haspopup="dialog" aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
+              <ReaderImage variant="thumb" src={url(item.photos[i].src, 640)} alt="" loading="lazy" decoding="async" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <GalleryLink item={item} onOpenGallery={onOpenGallery} />
     </div>
-  );
-}
-
-function ContinueLink({ onClick, testid, children }: { onClick: () => void; testid: string; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testid}
-      className="vc-focus group mt-7 inline-flex items-center gap-3 self-start font-display text-[10.5px] font-medium uppercase vc-tracked text-ink/60 transition-colors duration-500 hover:text-ink"
-    >
-      {children}
-      <span aria-hidden className="inline-block transition-transform duration-500 group-hover:translate-x-1">
-        &rarr;
-      </span>
-    </button>
   );
 }
 
@@ -294,9 +267,10 @@ function GalleryLink({ item, onOpenGallery }: { item: PublicItem; onOpenGallery:
   return (
     <button
       type="button"
-      onClick={() => onOpenGallery(0)}
+      onClick={() => onOpenGallery(item.coverIndex)}
       aria-haspopup="dialog"
-      className="vc-focus group mt-7 inline-flex items-center gap-3 self-start font-display text-[10.5px] font-medium uppercase vc-tracked text-ink/60 transition-colors duration-500 hover:text-ink"
+      data-testid="gallery-open"
+      className="vc-focus group mt-5 inline-flex items-center gap-3 self-start font-display text-[10.5px] font-medium uppercase vc-tracked text-ink/60 transition-colors duration-500 hover:text-ink"
     >
       {photosWord(item.photos.length)}
       <span aria-hidden className="inline-block transition-transform duration-500 group-hover:translate-x-1">
@@ -306,49 +280,29 @@ function GalleryLink({ item, onOpenGallery }: { item: PublicItem; onOpenGallery:
   );
 }
 
-/** Foto pequeña dentro de un texto (recorrido, hoja única). */
-function InlinePhoto({ item, photo, url, onOpenGallery }: { item: PublicItem; photo: number; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
-  const p = item.photos[photo];
-  if (!p) return null;
-  return (
-    <button
-      type="button"
-      className={cn(styles.inlinePhoto, p.orientation === "portrait" && styles.inlinePortrait, "vc-focus")}
-      onClick={() => onOpenGallery(photo)}
-      aria-haspopup="dialog"
-      aria-label={`Ver las fotos de ${item.title}`}
-    >
-      <ReaderImage variant="frame" {...photoProps(p, url, "(min-width: 900px) and (min-height: 620px) 40vw, 100vw")} alt="" decoding="async" />
-    </button>
-  );
-}
-
 function Features({ item }: { item: PublicItem }) {
   if (!item.features.length) return null;
   return (
-    <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2" aria-label="Características">
-      {item.features.map((f, i) => (
-        <li key={`${i}-${f}`} className="flex items-center gap-2 font-sans text-[13px] text-ink/70">
-          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-gold/70" />
-          {f}
-        </li>
-      ))}
-    </ul>
+    <div className="mt-7" data-testid="features">
+      <Label>Características</Label>
+      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2" aria-label="Características">
+        {item.features.map((f, i) => (
+          <li key={`${i}-${f}`} className="flex items-center gap-2 font-sans text-[13px] text-ink/70">
+            <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-gold/70" />
+            {f}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
-/** Ficha completa: todos los datos estructurados, con «sin dato» explícito.
- *  En la ficha breve, operación, precio y zona ya están en la cabecera de la
- *  misma página y no se repiten. */
-function FullFacts({ item, compact = false, className }: { item: PublicItem; compact?: boolean; className?: string }) {
+/** Ficha técnica completa, con «sin dato» explícito. */
+function FullFacts({ item, className }: { item: PublicItem; className?: string }) {
   const rows: Array<[string, string | null]> = [
-    ...(compact
-      ? []
-      : ([
-          ["Operación", item.operation],
-          ["Precio", item.price],
-          ["Zona", item.place],
-        ] as Array<[string, string | null]>)),
+    ["Operación", item.operation],
+    ["Precio", item.price],
+    ["Zona", item.place],
     ["Superficie", item.squareMeters === null ? null : `${item.squareMeters.toLocaleString("es-ES")} m²`],
     ["Dormitorios", item.bedrooms === null ? null : item.bedrooms.toLocaleString("es-ES")],
     ["Baños", item.bathrooms === null ? null : item.bathrooms.toLocaleString("es-ES")],
@@ -370,83 +324,49 @@ function FullFacts({ item, compact = false, className }: { item: PublicItem; com
   );
 }
 
-/** E1 (D-QA6) · Mosaico adaptable de hasta 4 fotos elegibles de la galería. */
-function Mosaic({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
-  const tiles = item.mosaic.filter((i) => item.photos[i]).slice(0, 4);
-  if (!tiles.length) return null;
+/** La descripción completa del catálogo (DC3): íntegra, una sola vez. */
+function Copy({ item }: { item: PublicItem }) {
   return (
-    <div className={cn(styles.mosaic, styles[`mosaic${tiles.length}`])} data-testid="mosaic">
-      {tiles.map((i) => (
-        <button key={i} type="button" className={cn(styles.mosaicTile, "vc-focus")} onClick={() => onOpenGallery(i)} aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
-          <ReaderImage variant="thumb" src={url(item.photos[i].src, 640)} alt="" loading="lazy" decoding="async" />
-        </button>
+    <div className="flex flex-col gap-6" data-testid="full-description">
+      {item.copy.map((b, i) => (
+        <div key={i} data-testid={b.heading ? "story-chapter" : "copy-block"}>
+          {b.heading ? <h3 className="font-serif text-[21px] font-normal leading-tight text-ink md:text-[24px]">{b.heading}</h3> : null}
+          <p className={cn("whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85", b.heading && "mt-3")}>{b.text}</p>
+        </div>
       ))}
     </div>
   );
 }
 
-/** E1 (D-QA6) · Ficha breve: datos completos, características y mosaico. */
-function BriefBody({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
-  return (
-    <div className="mt-4 flex w-full flex-col" data-testid="brief">
-      <FullFacts item={item} compact />
-      <Features item={item} />
-      <Mosaic item={item} url={url} onOpenGallery={onOpenGallery} />
-      <GalleryLink item={item} onOpenGallery={onOpenGallery} />
-    </div>
-  );
-}
+// ─── Pantalla 1 · Apertura ───────────────────────────────────────────────────
 
-// ─── Apertura: panel editorial | fotografía a página ─────────────────────────
-
+/** Foto de apertura grande, título, operación, precio, datos clave,
+ *  miniaturas y acceso a la galería (DC1). En doble composición, panel |
+ *  fotografía alternando de lado; en una columna, la foto arriba. */
 export function OpeningSpread({
   item,
   index,
   total,
   url,
-  layout,
   flipped,
   onOpenGallery,
-  onContinue,
 }: {
   item: PublicItem;
   index: number;
   total: number;
   url: PhotoUrl;
-  layout: ItemLayout;
   /** Fotografía a la izquierda (alterna por vivienda, como la referencia). */
   flipped: boolean;
   onOpenGallery: (photo: number) => void;
-  /** Ir a la primera doble página del recorrido (null si no hay). */
-  onContinue: (() => void) | null;
 }) {
-  const showLead = layout.introInOpening;
-  const forLead = showLead ? item : { ...item, lead: null };
   return (
     <section className={cn(styles.page, styles.split, flipped && styles.flip)} aria-label={item.title} data-part="open">
       <div className={styles.panel}>
         <ScrollRegion label={item.title}>
           <div className={cn(styles.panelInner, "flex flex-col")}>
             <ItemHead item={item} index={index} total={total} />
-            {layout.brief ? (
-              <>
-                <LeadAndHighlights item={forLead} />
-                <BriefBody item={item} url={url} onOpenGallery={onOpenGallery} />
-              </>
-            ) : (
-              <>
-                <KeyFacts item={item} />
-                <LeadAndHighlights item={forLead} />
-                {layout.openingSections.map((i) => (
-                  <SectionText key={i} section={item.sections[i]} className="mt-6" />
-                ))}
-                {!showLead && onContinue ? (
-                  <ContinueLink onClick={onContinue} testid="to-journey">
-                    Sigue · La vivienda
-                  </ContinueLink>
-                ) : null}
-              </>
-            )}
+            <KeyFacts item={item} />
+            <Thumbs item={item} url={url} onOpenGallery={onOpenGallery} />
           </div>
         </ScrollRegion>
       </div>
@@ -455,233 +375,80 @@ export function OpeningSpread({
   );
 }
 
-// ─── Recorrido: una doble página de la composición pura ──────────────────────
+// ─── Pantalla 2 · Detalle ────────────────────────────────────────────────────
 
-function JourneyTextPanel({
-  item,
-  page,
-  inlinePhoto,
-  more,
-  url,
-  onOpenGallery,
-  composed = false,
-  rule = false,
-}: {
-  item: PublicItem;
-  page: JourneyPage;
-  inlinePhoto: number | null;
-  more: { label: string; onClick: () => void } | null;
-  url: PhotoUrl;
-  onOpenGallery: (photo: number) => void;
-  /** Sola en su doble página y sin foto: composición tipográfica centrada. */
-  composed?: boolean;
-  rule?: boolean;
-}) {
-  return (
-    <div className={cn(styles.panel, rule && styles.panelRule)}>
-      <ScrollRegion label={`${item.title} · recorrido`}>
-        <div className={cn(styles.panelInner, "flex flex-col", composed && "items-center text-center")}>
-          <Label className="mb-5">{item.title}</Label>
-          {composed ? <Ornament className="mb-7" /> : null}
-          {inlinePhoto !== null && item.photos[inlinePhoto] ? <InlinePhoto item={item} photo={inlinePhoto} url={url} onOpenGallery={onOpenGallery} /> : null}
-          {page.blocks.map((b, k) =>
-            b.kind === "intro" ? (
-              <p key="intro" className={cn("break-words font-sans text-[16px] leading-relaxed text-ink", k > 0 && "mt-7")} data-testid="journey-intro">
-                {item.lead}
-              </p>
-            ) : (
-              <SectionText key={b.index} section={item.sections[b.index]} className={k > 0 ? "mt-7" : undefined} />
-            ),
-          )}
-          {composed ? <GalleryLink item={item} onOpenGallery={onOpenGallery} /> : null}
-          {more ? (
-            <ContinueLink onClick={more.onClick} testid="to-detail">
-              {more.label}
-            </ContinueLink>
-          ) : null}
-        </div>
-      </ScrollRegion>
-    </div>
-  );
-}
-
-export function JourneySpreadPage({
-  item,
-  spread,
-  part,
-  more,
-  url,
-  flipped,
-  onOpenGallery,
-}: {
-  item: PublicItem;
-  spread: JourneySpread;
-  part: string;
-  /** Quedan secciones fuera del recorrido: enlace al detalle. */
-  more: { label: string; onClick: () => void } | null;
-  url: PhotoUrl;
-  flipped: boolean;
-  onOpenGallery: (photo: number) => void;
-}) {
-  const composed = spread.slots.length === 1;
-  if (composed) {
-    const slot = spread.slots[0];
-    if (slot.kind !== "text") return null;
-    return (
-      <section className={cn(styles.page, styles.composed)} aria-label={`${item.title} · recorrido`} data-part={part} data-composed="true">
-        <JourneyTextPanel item={item} page={slot.page} inlinePhoto={null} more={more} url={url} onOpenGallery={onOpenGallery} composed />
-      </section>
-    );
-  }
-  // [foto | texto] va al lado contrario que la apertura, para dar ritmo.
-  const slots = spread.slots[0].kind === "photo" && flipped ? [...spread.slots].reverse() : spread.slots;
-  return (
-    <section className={cn(styles.page, styles.twoPanels)} aria-label={`${item.title} · recorrido`} data-part={part}>
-      {slots.map((slot, k) =>
-        slot.kind === "photo" ? (
-          <PhotoColumn key={`ph${k}`} item={item} photo={slot.photo} url={url} onOpenGallery={onOpenGallery} showCount={false} />
-        ) : (
-          <JourneyTextPanel
-            key={`tx${k}`}
-            item={item}
-            page={slot.page}
-            inlinePhoto={slot.inlinePhoto}
-            more={k === slots.length - 1 ? more : null}
-            url={url}
-            onOpenGallery={onOpenGallery}
-            rule={k > 0}
-          />
-        ),
-      )}
-    </section>
-  );
-}
-
-// ─── Detalle: ficha completa | descripción íntegra ───────────────────────────
-
-function DescriptionPanel({ item, story }: { item: PublicItem; story: boolean }) {
-  const label = story ? "La historia completa" : "Descripción completa";
-  return (
-    <div className={cn(styles.panel, styles.panelRule)} aria-label={`${item.title} · ${label.toLowerCase()}`}>
-      <ScrollRegion label={`${item.title} · ${label.toLowerCase()}`}>
-        <div className={cn(styles.panelInner, "flex flex-col")}>
-          <Label tone="gold">{label}</Label>
-          <Ornament className="mx-0 mb-6 mt-5" />
-          {story ? (
-            <div className="flex flex-col gap-7" data-testid="story-full">
-              {item.lead ? <p className="break-words font-sans text-[16px] leading-relaxed text-ink">{item.lead}</p> : null}
-              {item.sections.map((sec, i) => (
-                <div key={i} data-testid="story-chapter">
-                  {sec.heading ? <h3 className="font-serif text-[21px] font-normal leading-tight text-ink md:text-[24px]">{sec.heading}</h3> : null}
-                  <p className={cn("whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85", sec.heading && "mt-3")}>{sec.text}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {story && item.description ? <Label className="mb-3 mt-8">Descripción de la ficha</Label> : null}
-          {item.description ? (
-            <p className="whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85" data-testid="full-description">
-              {item.description}
-            </p>
-          ) : null}
-        </div>
-      </ScrollRegion>
-    </div>
-  );
-}
-
+/** Título, ficha técnica, características y la descripción completa (DC1,
+ *  DC4). La descripción se desplaza DENTRO de la pantalla con su señal; no se
+ *  recorta ni crea páginas. En doble composición: datos | descripción; en una
+ *  columna (o sin descripción), todo en un panel. */
 export function DetailSpread({
   item,
   index,
   total,
-  url,
-  layout,
+  single,
   onOpenGallery,
+  extra,
 }: {
   item: PublicItem;
   index: number;
   total: number;
-  url: PhotoUrl;
-  layout: ItemLayout;
+  /** Una columna: un solo panel que se desplaza. */
+  single: boolean;
   onOpenGallery: (photo: number) => void;
+  /** Bloque adicional bajo los datos (la opinión del cliente, PR B). */
+  extra?: ReactNode;
 }) {
-  const right = !!item.description || !!layout.detail?.story;
+  const hasCopy = item.copy.length > 0;
+  const head = (
+    <>
+      <ChapterMark index={index + 1} total={total} />
+      <Label tone="gold" className="mt-6">
+        La vivienda en detalle
+      </Label>
+      <h2 className="mt-2 break-words font-serif text-[24px] font-normal vc-tight text-ink md:text-[30px]">{item.title}</h2>
+      <FullFacts item={item} className="mt-6" />
+      <Features item={item} />
+      <GalleryLink item={item} onOpenGallery={onOpenGallery} />
+      {extra}
+    </>
+  );
+  const copyLabel = (
+    <>
+      <Label tone="gold">Descripción</Label>
+      <Ornament className="mx-0 mb-6 mt-5" />
+    </>
+  );
+  if (single || !hasCopy) {
+    return (
+      <section className={cn(styles.page, styles.composed)} aria-label={`${item.title} · en detalle`} data-part="detail">
+        <div className={styles.panel}>
+          <ScrollRegion label={`${item.title} · en detalle`}>
+            <div className={cn(styles.panelInner, "flex flex-col")}>
+              {head}
+              {hasCopy ? (
+                <div className="mt-10">
+                  {copyLabel}
+                  <Copy item={item} />
+                </div>
+              ) : null}
+            </div>
+          </ScrollRegion>
+        </div>
+      </section>
+    );
+  }
   return (
-    <section className={cn(styles.page, right ? styles.twoPanels : styles.composed)} aria-label={`${item.title} · ficha completa`} data-part="detail">
+    <section className={cn(styles.page, styles.twoPanels)} aria-label={`${item.title} · en detalle`} data-part="detail">
       <div className={styles.panel}>
-        <ScrollRegion label={`${item.title} · ficha completa`}>
-          <div className={cn(styles.panelInner, "flex flex-col")}>
-            <ChapterMark index={index + 1} total={total} />
-            <Label tone="gold" className="mt-6">
-              La vivienda en detalle
-            </Label>
-            <h2 className="mt-2 break-words font-serif text-[24px] font-normal vc-tight text-ink md:text-[30px]">{item.title}</h2>
-            <FullFacts item={item} className="mt-6" />
-            <Features item={item} />
-            <GalleryLink item={item} onOpenGallery={onOpenGallery} />
-          </div>
+        <ScrollRegion label={`${item.title} · ficha`}>
+          <div className={cn(styles.panelInner, "flex flex-col")}>{head}</div>
         </ScrollRegion>
       </div>
-      {right ? <DescriptionPanel item={item} story={!!layout.detail?.story} /> : null}
-    </section>
-  );
-}
-
-// ─── Hoja única (una columna): la vivienda entera bajo su fotografía ─────────
-
-export function SheetPage({
-  item,
-  index,
-  total,
-  url,
-  layout,
-  onOpenGallery,
-}: {
-  item: PublicItem;
-  index: number;
-  total: number;
-  url: PhotoUrl;
-  layout: ItemLayout;
-  onOpenGallery: (photo: number) => void;
-}) {
-  return (
-    <section className={cn(styles.page, styles.sheet)} aria-label={item.title} data-part="sheet">
-      <PhotoColumn item={item} photo={item.coverIndex} url={url} sizes="100vw" onOpenGallery={onOpenGallery} />
-      <div className={styles.panel}>
-        <ScrollRegion label={item.title}>
+      <div className={styles.panel} aria-label={`${item.title} · descripción`}>
+        <ScrollRegion label={`${item.title} · descripción`}>
           <div className={cn(styles.panelInner, "flex flex-col")}>
-            <ItemHead item={item} index={index} total={total} />
-            {layout.brief ? (
-              <>
-                <LeadAndHighlights item={item} />
-                <BriefBody item={item} url={url} onOpenGallery={onOpenGallery} />
-              </>
-            ) : (
-              <>
-                <KeyFacts item={item} />
-                <LeadAndHighlights item={item} />
-                {item.sections.map((sec, i) => (
-                  <div key={i} className="mt-8 flex w-full flex-col">
-                    {sec.photo !== null && item.photos[sec.photo] ? <InlinePhoto item={item} photo={sec.photo} url={url} onOpenGallery={onOpenGallery} /> : null}
-                    <SectionText section={sec} />
-                  </div>
-                ))}
-                <details className={styles.fold} data-testid="fold-facts">
-                  <summary>Ficha completa</summary>
-                  <FullFacts item={item} />
-                  <Features item={item} />
-                </details>
-                {item.description ? (
-                  <details className={styles.fold} data-testid="fold-description">
-                    <summary>Descripción completa</summary>
-                    <p className="whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85" data-testid="full-description">
-                      {item.description}
-                    </p>
-                  </details>
-                ) : null}
-                <GalleryLink item={item} onOpenGallery={onOpenGallery} />
-              </>
-            )}
+            {copyLabel}
+            <Copy item={item} />
           </div>
         </ScrollRegion>
       </div>

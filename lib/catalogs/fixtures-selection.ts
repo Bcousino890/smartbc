@@ -103,13 +103,13 @@ export function fixtureMaterial(p: FixtureProperty): CatalogMaterial {
   const photos = p.photo_count;
   switch (n % 4) {
     case 1:
-      return { noText: false, sections: 3, sectionsWithoutPhoto: 0, photos };
+      return { noText: false, photos };
     case 2:
-      return { noText: false, sections: 4, sectionsWithoutPhoto: 2, photos };
+      return { noText: false, photos };
     case 3:
-      return { noText: true, sections: 0, sectionsWithoutPhoto: 0, photos };
+      return { noText: true, photos };
     default:
-      return { noText: false, sections: 0, sectionsWithoutPhoto: 0, photos };
+      return { noText: false, photos };
   }
 }
 

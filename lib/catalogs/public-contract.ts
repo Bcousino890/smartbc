@@ -26,15 +26,18 @@ export interface PublicPhoto {
   orientation: PhotoOrientation;
 }
 
-export interface PublicSection {
+/** Un bloque de la descripción completa del catálogo (DC3). `heading` solo
+ *  en los capítulos de una historia aprobada; null en el resto. */
+export interface PublicCopyBlock {
   heading: string | null;
   text: string;
-  photo: number | null;
 }
 
 export interface PublicItem {
   /** Clave pública opaca del elemento (catalog_items.public_key). */
   key: string;
+  /** Título de la vivienda EN ESTE CATÁLOGO: el propio publicado (0217) o,
+   *  si no hay, el de la ficha. */
   title: string;
   /** «Chamberí, Madrid» o null. */
   place: string | null;
@@ -45,25 +48,16 @@ export interface PublicItem {
   bathrooms: number | null;
   squareMeters: number | null;
   floor: string;
-  /** Descripción COMPLETA, íntegra, para «La vivienda en detalle»: el texto
-   *  publicado del catálogo si está vigente; si no, la descripción limpia
-   *  para clientes vigente; si no, null. Nunca el texto del portal. */
-  description: string | null;
+  /** DC3 · La descripción completa del catálogo, íntegra y una sola vez, por
+   *  prioridad: texto publicado del catálogo (si está vigente) → historia
+   *  aprobada vigente → descripción limpia para clientes vigente → []. Nunca
+   *  el texto del portal. */
+  copy: PublicCopyBlock[];
   /** Características verificadas (limpias + manuales + datos de la historia). */
   features: string[];
-  /** C2 · Entrada breve de la apertura (o null). */
-  lead: string | null;
-  /** C2 · Hasta 3 puntos verificados, literales. */
-  highlights: string[];
-  /** C2 · Recorrido: secciones cortas con su foto (índice en photos) o sin
-   *  ella. Título solo cuando viene de una historia aprobada. */
-  sections: PublicSection[];
   photos: PublicPhoto[];
-  /** Índice de la foto de portada dentro de photos (0 si no hay marca). */
+  /** Índice de la foto de apertura dentro de photos (0 si no hay marca). */
   coverIndex: number;
-  /** E1 · Ficha breve: hasta 4 fotos adicionales elegibles (índices en
-   *  photos). [] si la vivienda tiene texto o secciones. */
-  mosaic: number[];
 }
 
 export interface PublicCatalog {
