@@ -55,9 +55,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "Sin permiso para esta solicitud" }, { status: 403 });
     }
 
-    // Rama de staff (no el solicitante ni un co-solicitante): permiso y alcance
+    // Rama de staff (no el solicitante; co_applicant_id viene del formData y no cuenta): permiso y alcance
     // de edición de Documentación. El acceso del cliente no cambia.
-    if (isStaff && !isOwner && !isCoApplicant) {
+    if (isStaff && !isOwner) {
       const denied = await denyStaffApplicationAccess(application, STAFF_WRITE);
       if (denied) return denied;
     }

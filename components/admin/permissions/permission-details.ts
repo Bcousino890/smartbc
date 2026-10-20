@@ -59,7 +59,7 @@ export const PERMISSION_DETAILS: Record<PermissionResource, Details> = {
     create: "Sin efecto hoy: los documentos los sube el cliente o se añaden dentro de una solicitud.",
     edit: "Aprobar, rechazar, reabrir y verificar documentos.",
     delete: "Borrar documentos.",
-    export: "Descargar el resumen de la solicitud.",
+    export: "Descargar o enviar el resumen de la solicitud.",
     publish: "Sin efecto hoy: la documentación no se publica en ningún portal.",
   },
   mensajes: {

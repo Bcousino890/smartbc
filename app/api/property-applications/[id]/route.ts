@@ -155,9 +155,9 @@ export async function PATCH(
     const isOwner = application.client_id === auth.userId;
 
     // Rama de staff: acciones de decisión/edición exigen documentacion.edit y
-    // alcance de edición sobre el cliente. `submit` (solo solicitante) y el
-    // propio cliente no se tocan.
-    if (isStaffRole(auth.role) && !isOwner) {
+    // alcance de edición sobre el cliente, también si el staff es el propio
+    // solicitante. `submit` y los clientes no se tocan.
+    if (isStaffRole(auth.role)) {
       const access = staffAccessForPatchAction(body.action);
       if (access) {
         const denied = await denyStaffApplicationAccess(application, access);
