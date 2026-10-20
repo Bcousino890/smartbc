@@ -26,12 +26,12 @@
 
 | Tarea | Contenido | Verificación |
 | --- | --- | --- |
-| B1 | `0218_catalog_client_feedback.sql` y `rollback-0218.sql`: `catalog_client_links` (token propio, caducidad, revocación, una activa por catálogo y cliente), `catalog_feedback` (por asignación y vivienda), funciones de dueño (crear, renovar, revocar, listar), lectura pública ampliada a enlaces personales, escritura de opinión por token con validación, idempotencia y aviso en `crm_notifications` | `test-catalog-feedback.sql`: dos clientes, reintento, edición, reorden, vivienda retirada, caducado, revocado, enlace general sin opinión, aviso único, reversión |
-| B2 | Rutas públicas `GET/POST /api/seleccion/[token]/opiniones` con límite y validación | pruebas de la capa pura |
+| B1 | `0218_catalog_client_feedback.sql` y `rollback-0218.sql`: `catalog_client_links` (token propio, caducidad, revocación, una activa por catálogo y cliente), `catalog_feedback` (por catálogo, cliente y vivienda; guarda la asignación con la que se escribió), funciones de dueño (crear, renovar, revocar, listar), lectura pública ampliada a enlaces personales, escritura de opinión por token con validación, idempotencia y aviso en `crm_notifications` | `test-catalog-feedback.sql`: dos clientes, reintento, edición, reorden, vivienda retirada, caducado, revocado, enlace general sin opinión, aviso único, reversión |
+| B2 | Rutas públicas `GET/POST /api/seleccion/[token]/opiniones` con límite y validación (lógica en `lib/catalogs/feedback-route.ts`) | `test:catalogs-feedback` (capa pura y la lógica de la ruta contra el almacén sintético) |
 | B3 | Lector: «Tu opinión» en la pantalla 2, solo con enlace personal | capturas y QA |
-| B4 | Compartir: «Asignar a cliente» (buscador de clientes con permisos y alcance), lista de enlaces personales | `test:catalogs-manager` |
-| B5 | Ficha del cliente: tarjeta y bloque «Opiniones de catálogos» con permisos | prueba de lectura con alcance |
-| B6 | Campana: avisos de opinión desde `crm_notifications` y marcar como leído; Captaciones no los cuenta | prueba de la ruta |
+| B4 | Compartir: «Asignar a cliente» (buscador de clientes con permisos y alcance), lista de enlaces personales | `test:catalogs-feedback` y QA en Chromium con fixtures |
+| B5 | Ficha del cliente: tarjeta y bloque «Opiniones de catálogos» con permisos | QA con la ficha sintética (`/dev-fixtures/cliente-opiniones`); la página ya exige `clientes` · ver con alcance |
+| B6 | Campana: avisos de opinión desde `crm_notifications` y marcar como leído; Captaciones no los cuenta | SQL (aviso único, destinatario), `test:catalogs-feedback` (fuente del contador) y `test:api-guards` |
 | B7 | Resultado y PR | CI |
 
 ## Pasos de entorno
