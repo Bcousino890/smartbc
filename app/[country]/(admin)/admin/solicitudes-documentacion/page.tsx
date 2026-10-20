@@ -1,10 +1,8 @@
-import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
-import { getCountryConfig, type Country } from "@/lib/country-config";
+import type { Country } from "@/lib/country-config";
 import { getApplicationsForAdmin } from "@/lib/db/queries/property-applications";
-import { getCurrentProfile } from "@/lib/db/queries/session";
-import { canAccess } from "@/lib/permissions";
+import { guardPage } from "@/lib/auth/guard";
 import { getTemplatesByCountry } from "@/lib/documentos/templates";
 import { SolicitudesDocumentacionClient } from "./solicitudes-documentacion-client";
 
@@ -16,10 +14,8 @@ export default async function SolicitudesDocumentacionPage({
   params: Promise<{ country: Country }>;
 }) {
   const { country } = await params;
-  const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "solicitudes", "view")) {
-    redirect(getCountryConfig(country).prefix);
-  }
+  // Documentación es un permiso propio (ya no cuelga de «Solicitudes y visitas»).
+  await guardPage("documentacion", country);
 
   // Límite amplio: la búsqueda y los filtros son client-side, así que lo
   // que no se carga aquí no aparece nunca en el buscador del panel.

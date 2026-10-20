@@ -6,6 +6,7 @@ import {
   getApplicationsForAdmin,
 } from "@/lib/db/queries/property-applications";
 import { isStaffRole } from "@/lib/permissions";
+import { checkPermission } from "@/lib/auth/guard";
 import type { ApplicationCountry, ApplicationOperation } from "@/lib/property-applications/types";
 
 export async function GET(req: Request) {
@@ -19,6 +20,11 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const country = url.searchParams.get("country") as ApplicationCountry | null;
+
+    // Documentación es permiso propio; el alcance (todo / solo lo suyo) lo
+    // aplica getApplicationsForAdmin con resolveViewScope("documentacion").
+    const perm = await checkPermission("documentacion", "view", { country: country ?? undefined });
+    if (!perm.ok) return Response.json({ error: perm.error }, { status: 403 });
     const operation = url.searchParams.get("operation") as ApplicationOperation | null;
     const status = url.searchParams.get("status") as string | null;
     const limit = parseInt(url.searchParams.get("limit") ?? "50");

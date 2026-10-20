@@ -71,7 +71,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "publicacion",  onlyCountry: "es" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
-  { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "solicitudes"   },
+  { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "documentacion" },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
   // Sin recurso de permisos a propósito: es el buzón PERSONAL de cada

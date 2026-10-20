@@ -2,6 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
+import { denyStaffApplicationAccess } from "@/lib/property-applications/staff-gate";
+import { STAFF_WRITE } from "@/lib/property-applications/staff-access";
 import {
   getApplicationById,
   getDocumentTypes,
@@ -52,6 +54,10 @@ export async function POST(req: Request) {
     if (!application) {
       return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     }
+
+    // Subir/asignar documentos es edición de Documentación (permiso + alcance).
+    const denied = await denyStaffApplicationAccess(application, STAFF_WRITE);
+    if (denied) return denied;
 
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (!AUTO_ACCEPTED_EXT.includes(ext)) {

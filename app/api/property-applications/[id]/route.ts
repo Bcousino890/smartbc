@@ -13,6 +13,8 @@ import {
 import type { ApplicationCountry, ApplicationOperation, PropertyApplicationWithDetails } from "@/lib/property-applications/types";
 import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
 import { isStaffRole } from "@/lib/permissions";
+import { denyStaffApplicationAccess } from "@/lib/property-applications/staff-gate";
+import { STAFF_READ, staffAccessForPatchAction } from "@/lib/property-applications/staff-access";
 import { sendEmail } from "@/lib/email/send-email";
 import { renderEmailLayout, escapeHtml } from "@/lib/email/templates";
 
@@ -95,6 +97,13 @@ export async function GET(
       return Response.json({ error: "Sin permiso" }, { status: 403 });
     }
 
+    // Rama de staff: permiso + alcance de Documentación. El propio cliente
+    // (isOwner) no pasa por aquí: su acceso no cambia.
+    if (isStaff && !isOwner) {
+      const denied = await denyStaffApplicationAccess(application, STAFF_READ);
+      if (denied) return denied;
+    }
+
     // Auto-sana solicitudes que se quedaron sin score calcular (p.ej. las
     // creadas antes de que el pipeline de scoring se conectara).
     if (!application.score && (application.documents?.length ?? 0) > 0) {
@@ -144,6 +153,17 @@ export async function PATCH(
     }
 
     const isOwner = application.client_id === auth.userId;
+
+    // Rama de staff: acciones de decisión/edición exigen documentacion.edit y
+    // alcance de edición sobre el cliente. `submit` (solo solicitante) y el
+    // propio cliente no se tocan.
+    if (isStaffRole(auth.role) && !isOwner) {
+      const access = staffAccessForPatchAction(body.action);
+      if (access) {
+        const denied = await denyStaffApplicationAccess(application, access);
+        if (denied) return denied;
+      }
+    }
 
     if (body.action === "submit") {
       if (!isOwner) {

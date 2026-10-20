@@ -27,6 +27,12 @@ import {
   validateScopeOverrides,
   type ScopeOverride,
 } from "../lib/permissions-scope.ts";
+import {
+  STAFF_EXPORT,
+  STAFF_READ,
+  STAFF_WRITE,
+  staffAccessForPatchAction,
+} from "../lib/property-applications/staff-access.ts";
 
 let n = 0;
 function t(name: string, fn: () => void) {
@@ -274,6 +280,23 @@ t("isLeadAllowedForScope: own ve propios y sin asignar", () => {
   assert.equal(isLeadAllowedForScope("all", "u1", "u2"), true);
   assert.equal(isLeadAllowedForScope("none", "u1", null), false);
   assert.equal(isLeadAllowedForScope("own_only", null, "u2"), true);
+});
+
+t("documentación: acción del PATCH -> permiso y alcance de staff", () => {
+  for (const a of ["approve", "reject", "reopen", "update", "recalculate"]) {
+    assert.deepEqual(staffAccessForPatchAction(a), { permission: "edit", scope: "edit" }, a);
+  }
+  // submit es del solicitante; lo desconocido no abre ni cierra nada aquí.
+  assert.equal(staffAccessForPatchAction("submit"), null);
+  assert.equal(staffAccessForPatchAction("borrar"), null);
+  assert.equal(staffAccessForPatchAction(undefined), null);
+  assert.equal(staffAccessForPatchAction({ toString: () => "approve" }), null);
+});
+
+t("documentación: lectura=view/view, escritura=edit/edit, exportar=export con alcance de Ver", () => {
+  assert.deepEqual(STAFF_READ, { permission: "view", scope: "view" });
+  assert.deepEqual(STAFF_WRITE, { permission: "edit", scope: "edit" });
+  assert.deepEqual(STAFF_EXPORT, { permission: "export", scope: "view" });
 });
 
 console.log(`\n${n} pruebas OK`);

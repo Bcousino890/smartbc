@@ -3,6 +3,8 @@ import { createClient } from "@/lib/db/server";
 import { requireSession } from "@/lib/db/auth-helpers";
 import { getApplicationById } from "@/lib/db/queries/property-applications";
 import { isStaffRole } from "@/lib/permissions";
+import { denyStaffApplicationAccess } from "@/lib/property-applications/staff-gate";
+import { STAFF_EXPORT } from "@/lib/property-applications/staff-access";
 import {
   buildCandidateSummaryPdfData,
   renderCandidateSummaryPdfBuffer,
@@ -26,6 +28,10 @@ export async function GET(
 
     const application = await getApplicationById(id, true);
     if (!application) return new Response("No encontrada", { status: 404 });
+
+    // Exportar sigue el alcance de Ver (permiso documentacion.export).
+    const denied = await denyStaffApplicationAccess(application, STAFF_EXPORT);
+    if (denied) return denied;
 
     const data = await buildCandidateSummaryPdfData(application);
     const buffer = await renderCandidateSummaryPdfBuffer(data);

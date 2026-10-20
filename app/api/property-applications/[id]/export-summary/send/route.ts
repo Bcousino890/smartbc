@@ -2,6 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
+import { denyStaffApplicationAccess } from "@/lib/property-applications/staff-gate";
+import { STAFF_EXPORT } from "@/lib/property-applications/staff-access";
 import { getApplicationById } from "@/lib/db/queries/property-applications";
 import {
   buildCandidateSummaryPdfData,
@@ -29,6 +31,11 @@ export async function POST(
     // sesión pueden no cubrir todos los roles staff, p.ej. 'owner')
     const application = await getApplicationById(id, true);
     if (!application) return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
+
+    // Enviar el resumen es una exportación: permiso documentacion.export,
+    // alcance de Ver.
+    const denied = await denyStaffApplicationAccess(application, STAFF_EXPORT);
+    if (denied) return denied;
     if (!application.property_id) {
       return Response.json(
         { error: "Esta solicitud no está vinculada a ninguna propiedad" },

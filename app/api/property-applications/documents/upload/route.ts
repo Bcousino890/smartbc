@@ -2,6 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireSession } from "@/lib/db/auth-helpers";
+import { denyStaffApplicationAccess } from "@/lib/property-applications/staff-gate";
+import { STAFF_WRITE } from "@/lib/property-applications/staff-access";
 import {
   getDocumentTypeById,
   getApplicationById,
@@ -51,6 +53,13 @@ export async function POST(req: Request) {
 
     if (!isStaff && !isOwner && !isCoApplicant) {
       return Response.json({ error: "Sin permiso para esta solicitud" }, { status: 403 });
+    }
+
+    // Rama de staff (no el solicitante ni un co-solicitante): permiso y alcance
+    // de edición de Documentación. El acceso del cliente no cambia.
+    if (isStaff && !isOwner && !isCoApplicant) {
+      const denied = await denyStaffApplicationAccess(application, STAFF_WRITE);
+      if (denied) return denied;
     }
 
     // Obtener tipo de documento para validaciones. Se busca por id (no por

@@ -147,11 +147,11 @@ export async function getApplicationsForAdmin(filters: {
 }) {
   const supabase = createAdminClient();
 
-  // Scope de datos para "solicitudes". Esta query usa service role (salta las
+  // Scope de datos para "documentacion" (permiso propio, antes colgaba de "solicitudes"). Esta query usa service role (salta las
   // RLS), así que el scope se aplica en código. `property_applications` no
   // tiene columna de propietario propia: el dueño efectivo es el asesor
   // asignado al cliente (`client_id` → `profiles.assigned_advisor_id`).
-  const { restriction, userId } = await resolveViewScope("solicitudes");
+  const { restriction, userId } = await resolveViewScope("documentacion", "view", filters.country);
   if (restriction === "none") return { data: [], count: 0 };
   let clientIds: string[] | null = null;
   if (restriction !== "all" && userId) {
