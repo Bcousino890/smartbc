@@ -75,7 +75,7 @@ export function operationLabel(op: string | null | undefined, ops?: string[] | n
   return "Operación · sin dato";
 }
 
-/** Planta sin ordinal (Karla dibuja «ª» casi como «a»). El dato de origen
+/** Planta sin ordinal (decisión de la especificación: «Planta 7», «Planta baja»). El dato de origen
  *  (lib/floor.ts: número; 0 = bajo; −1 = sótano) no se modifica. */
 export function floorLabel(floor: number | null | undefined, isAtico = false): string {
   if (isAtico) return "Ático";

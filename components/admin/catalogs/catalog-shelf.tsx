@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CatalogCover } from "@/components/catalogs/catalog-cover";
+import { CatalogCover, countLabel } from "@/components/catalogs/catalog-cover";
 import { criteriaSummary } from "@/lib/catalogs/criteria";
 import { cardTags, selectionCounts, selectionMatcher, type GroupSelection, type GroupsState } from "@/lib/catalogs/groups";
 import type { CatalogSummary } from "@/lib/catalogs/types";
@@ -140,6 +140,7 @@ export function CatalogShelf({ catalogs, basePath, groups = null }: { catalogs: 
                       edition: c.edition,
                       photoUrl: c.coverPhotoUrl,
                       preparedBy: c.contactName,
+                      countLabel: countLabel(c.itemCount),
                     }}
                   />
                 </div>

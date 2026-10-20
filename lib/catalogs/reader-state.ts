@@ -3,7 +3,8 @@
 // se prueba sin navegador en scripts/test-catalogs-public.mts.
 //
 // Páginas lógicas: portada · índice (con la introducción) · las partes de cada
-// vivienda · cierre. Las partes dependen de la composición:
+// vivienda · cierre · colofón (enmienda visual 2026-10-20, DV4). Las partes
+// dependen de la composición:
 //   · «spread» (doble página, desde 900 × 620): apertura, de 0 a 3 dobles
 //     páginas del recorrido («j1»…«j3», composición de journey-layout.ts) y
 //     el detalle (datos completos, descripción íntegra y, si el recorrido no
@@ -34,7 +35,8 @@ export type PageRef =
   | { kind: "cover" }
   | { kind: "index" }
   | { kind: "item"; key: string; part: ItemPart }
-  | { kind: "closing" };
+  | { kind: "closing" }
+  | { kind: "colophon" };
 
 export interface GalleryRef {
   key: string;
@@ -51,8 +53,9 @@ export interface ReaderState {
   notice: string | null;
 }
 
-/** Duración del paso de página; con «reducir movimiento», 0. */
-export const PAGE_TURN_MS = 380;
+/** Duración del paso de página (el giro de la referencia, book-stage.tsx);
+ *  con «reducir movimiento», 0. */
+export const PAGE_TURN_MS = 720;
 
 export const REMOVED_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección.";
 export const REMOVED_LAST_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección. Vuelves al índice.";
@@ -80,6 +83,7 @@ export function pagesOf(catalog: PublicCatalog, layout: ReaderLayout = "single")
     { kind: "index" },
     ...catalog.items.flatMap((it) => itemParts(it, layout).map((part) => ({ kind: "item" as const, key: it.key, part }))),
     { kind: "closing" },
+    { kind: "colophon" },
   ];
 }
 

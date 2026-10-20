@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import { CatalogCover } from "@/components/catalogs/catalog-cover";
+import { CatalogCover, countLabel } from "@/components/catalogs/catalog-cover";
 import type { CoverRaw, MetaRaw } from "@/lib/catalogs/manager-state";
 import { sharePath } from "@/lib/catalogs/share";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
@@ -111,6 +111,7 @@ export function DesignSection({
               edition: catalog.edition,
               photoUrl: catalog.cover.effectivePhotoUrl ?? null,
               preparedBy: contactName.trim() || null,
+              countLabel: countLabel(items.length),
             }}
           />
         </div>

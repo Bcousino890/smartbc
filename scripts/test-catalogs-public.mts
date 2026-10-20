@@ -257,8 +257,8 @@ async function liveTests() {
     // navegador (12/20/24 viviendas) vive fuera de CI; esto evita que se
     // pierda la zona sin que nadie lo note.
     const pages = readFileSync("components/catalogs/reader/pages.tsx", "utf8");
-    const index = pages.slice(pages.indexOf("export function IndexPage"), pages.indexOf("function Fact("));
-    check("índice dentro de ScrollRegion (variante «index»)", /<ScrollRegion label="Índice" variant="index"[^>]*>\s*<ol className=\{styles\.indexList\}>/.test(index));
+    const index = pages.slice(pages.indexOf("export function IndexPage"), pages.indexOf("// ─── Piezas de una vivienda"));
+    check("índice dentro de ScrollRegion (variante «index»)", /<ScrollRegion label="Índice" variant="index"[^>]*>\s*<Rule[^>]*\/>\s*<ol>/.test(index));
     check("índice: todas las entradas, sin cortes ni límites", /catalog\.items\.map\(/.test(index) && !/catalog\.items\.slice\(/.test(index));
     const css = readFileSync("components/catalogs/reader/reader.module.css", "utf8");
     check("índice: la hoja es columna flexible en la doble página", /\.indexPage \{\s*display: flex;\s*flex-direction: column;/.test(css));
@@ -919,7 +919,7 @@ async function liveTests() {
   section("T8 · estado del lector (D12)");
   {
     const s0 = initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "b", part: "open" });
-    check("páginas: portada, índice, 3 viviendas, cierre", pagesOf(s0.catalog).length === 6);
+    check("páginas: portada, índice, 3 viviendas, cierre, colofón", pagesOf(s0.catalog).length === 7);
     const s1 = applyUpdate(s0, pubState("B", ["a", "c"]));
     check("se quita la que leo → pasa a la siguiente", s1.page.kind === "item" && s1.page.key === "c" && s1.notice === REMOVED_NOTICE);
     const s2 = applyUpdate(initialState(pubState("A", ["a", "b", "c"]), { kind: "item", key: "c", part: "open" }), pubState("B", ["a", "b"]));
@@ -960,9 +960,9 @@ async function liveTests() {
     check("9 × 100 → 3 dobles páginas (secciones 1–6) y el resto íntegro en la descripción",
       itemParts(many, "spread").join() === "open,j1,j2,j3,detail" && itemLayout(many).truncated && sectionsInJourney(itemLayout(many)).join() === "0,1,2,3,4,5");
     check("solo datos sin descripción ni características → solo apertura (ficha breve)", itemParts(items(A)[2], "spread").join() === "open" && itemLayout(items(A)[2]).brief);
-    check("una página → una hoja por vivienda", itemParts(items(A)[1], "single").join() === "open" && pagesOf(A.catalog, "single").length === 6);
-    check("folios: portada 1, índice 2, a abre en 3, b en 7, c en 12, cierre 13",
-      openingFolio(A.catalog, "a", "spread") === 3 && openingFolio(A.catalog, "b", "spread") === 7 && openingFolio(A.catalog, "c", "spread") === 12 && pagesOf(A.catalog, "spread").length === 13);
+    check("una página → una hoja por vivienda", itemParts(items(A)[1], "single").join() === "open" && pagesOf(A.catalog, "single").length === 7);
+    check("folios: portada 1, índice 2, a abre en 3, b en 7, c en 12, cierre 13, colofón 14",
+      openingFolio(A.catalog, "a", "spread") === 3 && openingFolio(A.catalog, "b", "spread") === 7 && openingFolio(A.catalog, "c", "spread") === 12 && pagesOf(A.catalog, "spread").length === 14);
     check("folios en una página: a 3, b 4, c 5", [openingFolio(A.catalog, "a", "single"), openingFolio(A.catalog, "b", "single"), openingFolio(A.catalog, "c", "single")].join() === "3,4,5");
 
     let s = initialState(A, { kind: "item", key: "a", part: "open" }, "spread");
@@ -1115,7 +1115,7 @@ async function liveTests() {
     const d3 = updateDelay({ now: 1000, turnStartedAt: 900, reducedMotion: true, galleryOpen: false });
     const d4 = updateDelay({ now: 1000, turnStartedAt: 1000, reducedMotion: false, galleryOpen: true });
     const d5 = updateDelay({ now: 1000, turnStartedAt: 5000, reducedMotion: false, galleryOpen: false });
-    check("gesto en curso → espera ≤ 0,38 s", d1 === PAGE_TURN_MS && d2 === 80 && d5 <= PAGE_TURN_MS, `${d1} ${d2} ${d5}`);
+    check("gesto en curso → espera ≤ 0,72 s", d1 === PAGE_TURN_MS && d2 === 420 && d5 <= PAGE_TURN_MS, `${d1} ${d2} ${d5}`);
     check("menos movimiento o galería → 0 s", d3 === 0 && d4 === 0);
   }
 

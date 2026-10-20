@@ -11,6 +11,7 @@
 > - **Producción:** funciona según su informe.
 > - **Aprobación visual (P9 / PDF12):** aprobada por Fabricio sobre el PDF real.
 > - **Parón del proceso al maquetar:** va en una tarea aparte, [`2026-10-17-bcp-01-pdf-worker`](../2026-10-17-bcp-01-pdf-worker/spec.md).
+> - **Enmienda visual (20 de octubre de 2026):** la identidad Boutique del PDF (D17, Fraunces y Karla) se sustituye por la de la publicación del itinerario, con el mismo renderizador, hilo y verificación. Ver [`2026-10-20-bcp-01-catalogo-visual/enmienda.md`](../2026-10-20-bcp-01-catalogo-visual/enmienda.md). La aprobación P9/PDF12 no cubre el PDF rediseñado.
 
 ## Base y commits
 

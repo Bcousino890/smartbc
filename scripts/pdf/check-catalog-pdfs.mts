@@ -102,7 +102,7 @@ await fixtureMutate({ op: "operation", token: FIXTURE_TOKENS.main, operation: "r
 await fixtureMutate({ op: "reset" });
 
 // PDF7 · todos los caracteres españoles de la lista, por el documento real:
-// título (Fraunces) y texto de la vivienda (Karla, con º/ª en Fraunces).
+// título (Playfair Display), etiquetas (Cinzel) y texto de la vivienda (Inter).
 section("· glifos españoles (PDF7)");
 {
   const G = "¿Ático único? ¡Sí! Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso";
@@ -192,7 +192,7 @@ section("· PDF de propiedad (Helvetica) después de los del catálogo");
   const o = objects(join(OUT, "propiedad.pdf"), join(OUT, "propiedad-jpg"));
   ok("se genera y su texto se extrae entero", t.includes("Piso de prueba en Chamberí") && t.includes("Descripción con eñe, tildes y comillas «así».") && t.includes("Ascensor"), t.slice(0, 300));
   const rawP = readFileSync(join(OUT, "propiedad.pdf")).toString("latin1");
-  ok("sigue usando Helvetica (las fuentes estándar no se tocaron)", /\/BaseFont \/Helvetica/.test(rawP) && o.fonts.every((f) => !/Fraunces|Karla/.test(f.name)), JSON.stringify(o.fonts));
+  ok("sigue usando Helvetica (las fuentes estándar no se tocaron)", /\/BaseFont \/Helvetica/.test(rawP) && o.fonts.every((f) => !/Playfair|Cinzel|Inter/.test(f.name)), JSON.stringify(o.fonts));
 }
 
 // Otro PDF del catálogo al final: el texto se sigue extrayendo bien.
