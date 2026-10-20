@@ -117,26 +117,37 @@ function ScopeChip({
 }) {
   const own = value === "own";
   const kindLabel = kind === "view" ? "Ver" : "Editar";
+  const blocked = !canEdit || locked;
+  const lockReason = "Si solo ve lo suyo, solo puede editar lo suyo";
+  const reasonId = `scope-lock-${resource}-${kind}`;
   return (
     <span className="relative inline-flex">
       <button
         type="button"
-        disabled={!canEdit || locked}
+        // aria-disabled (no `disabled`): sigue enfocable con teclado y lector de pantalla.
+        aria-disabled={blocked || undefined}
+        aria-describedby={locked ? reasonId : undefined}
         onClick={() => {
-          if (!canEdit || locked) return;
+          if (blocked) return;
           onScope(resource, kind, own ? "all" : "own");
         }}
-        title={locked ? "Si solo ve lo suyo, solo puede editar lo suyo" : `Cambiar el alcance de ${kindLabel}`}
+        title={locked ? lockReason : `Cambiar el alcance de ${kindLabel}`}
         aria-label={`Alcance de ${kindLabel} en ${RESOURCE_LABELS[resource]}: ${SCOPE_LABELS[value]}`}
         className={cn(
-          "whitespace-nowrap rounded-full border px-1.5 py-0.5 text-xs font-medium leading-4 transition",
+          // En móvil el área táctil se amplía a ~48px con un pseudo-elemento sin cambiar el aspecto compacto.
+          "relative whitespace-nowrap rounded-full border px-1.5 py-0.5 text-xs font-medium leading-4 transition max-md:before:absolute max-md:before:-inset-x-2 max-md:before:-inset-y-3 max-md:before:content-['']",
           own ? "border-gold/50 bg-gold/15 text-ink" : "border-ink/15 bg-white/70 text-ink/60",
-          locked && "opacity-50",
-          (!canEdit || locked) ? "cursor-default" : "hover:border-ink/30 hover:text-ink",
+          locked ? "opacity-50" : !canEdit && "opacity-60",
+          blocked ? "cursor-default" : "hover:border-ink/30 hover:text-ink",
         )}
       >
         {SCOPE_LABELS[value]}
       </button>
+      {locked && (
+        <span id={reasonId} className="sr-only">
+          {lockReason}
+        </span>
+      )}
       {value !== profileValue && (
         <ModifiedDot title={`Modificado: el perfil lo tiene en «${SCOPE_LABELS[profileValue]}»`} />
       )}
@@ -343,6 +354,9 @@ export function PermissionMatrix({
                             {PERMISSION_ACTIONS.map((action) => {
                               const on = effective[resource][action];
                               const def = defaults[resource][action];
+                              const chip = scopeChipFor(resource, action);
+                              // Filas escalables: todas las celdas reservan el hueco del chip para que los interruptores queden alineados.
+                              const scopedRow = !!scopes && isScopedResource(resource);
                               return (
                                 <td key={action} className="px-1 py-2.5 text-center">
                                   <span className="relative inline-flex" title={permissionDetail(resource, action)}>
@@ -355,9 +369,7 @@ export function PermissionMatrix({
                                     />
                                     {on !== def && <ModifiedDot was={def} />}
                                   </span>
-                                  {scopeChipFor(resource, action) && (
-                                    <div className="mt-1.5 flex justify-center">{scopeChipFor(resource, action)}</div>
-                                  )}
+                                  {scopedRow && <div className="mt-1.5 flex h-6 justify-center">{chip}</div>}
                                 </td>
                               );
                             })}
