@@ -93,4 +93,4 @@ Fabricio no pidió revisión de Codex para esta tarea (y el encargo la excluye):
 
 ## PR, CI y merge
 
-PR en borrador desde `fabri/bcp-01-visual-itinerario`; la CI del repositorio (tsc, tests de catálogos, build) se anota en el PR. **El merge lo hace Fabricio** y puede disparar el despliegue del VPS.
+PR en borrador: [#338](https://github.com/Bcousino890/smartbc/pull/338) desde `fabri/bcp-01-visual-itinerario`; la CI del repositorio (tsc, tests de catálogos, build) se ve en el PR. **El merge lo hace Fabricio** y puede disparar el despliegue del VPS.
