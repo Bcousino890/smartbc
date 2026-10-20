@@ -5,6 +5,7 @@
 import type { TextActions } from "@/components/admin/catalogs/catalog-texts-panel";
 import { checkDraft, pendingWarnings, type DraftSource } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
+import { organizeDescription, paragraphsOf } from "@/lib/catalogs/structure";
 import { sentences } from "@/lib/catalogs/text-rules";
 import type { CatalogItemView } from "@/lib/catalogs/types";
 
@@ -59,7 +60,7 @@ export function createFixtureTexts(opts: {
       const hasPubText = !!st?.published && !!(st.published.body || st.published.lead);
       const current = !!st?.published && (!hasPubText || st.published.sourceAtPublish === (sourceRev.get(it.propertyId) ?? 0));
       return {
-        propertyId: it.propertyId, slug: it.slug, title: it.title, bcReference: it.bcReference, inList,
+        propertyId: it.propertyId, slug: it.slug, title: it.title, bcReference: it.bcReference, area: it.zone, inList,
         level: current && hasPubText ? "text" : s.clean === "current" ? "clean" : "facts",
         source: { hasText: s.hasText, clean: s.clean, story: s.story },
         draft: st ? { ...st.draft, updatedAt: null } : null,
@@ -142,9 +143,10 @@ export function createFixtureTexts(opts: {
       const ownLead = (lead ?? "").trim() || null;
       const restSentences = ownLead ? all : all.slice(1);
       const sections = restSentences.length ? [{ heading: null, text: restSentences.join(" "), photo: !!f.it.photoUrl }] : [];
+      const organized = organizeDescription({ lead: ownLead && !(body ?? "").includes(ownLead) ? ownLead : null, paragraphs: paragraphsOf(body), area: f.it.zone });
       return {
         ok: true as const,
-        preview: { lead: ownLead ?? all[0] ?? null, highlights: highlights.length ? highlights : sourceOf(f.it, f.i).features.slice(0, 3), sections, words: (body ?? "").split(/\s+/).filter(Boolean).length },
+        preview: { lead: ownLead ?? all[0] ?? null, highlights: highlights.length ? highlights : sourceOf(f.it, f.i).features.slice(0, 3), sections, words: (body ?? "").split(/\s+/).filter(Boolean).length, copy: organized.copy, missing: organized.missing },
         check: checkDraft({ title: title ?? null, body, lead, highlights }, draftSource(f.it, f.i)),
       };
     },
