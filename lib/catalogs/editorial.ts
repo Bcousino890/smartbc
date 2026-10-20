@@ -3,7 +3,10 @@ import { CHAPTER_PHOTO_CLASSES } from "@/lib/services/story/gate";
 import { isMicroChapter, microChapterFact } from "@/lib/services/story/micro-chapter";
 import { isStorySourceCurrent } from "@/lib/services/story/source-hash";
 import { CHAPTER_HEADINGS, STORY_CHAPTERS, type StoryChapter } from "@/lib/services/story/types";
-import { countWords, fold, HIGHLIGHT_TERMS, isPublicSafe, PHONE_RE, EMAIL_RE, URL_RE, sentences } from "./text-rules";
+import { fold, HIGHLIGHT_TERMS, isPublicSafe, PHONE_RE, EMAIL_RE, URL_RE } from "./text-rules";
+import { leadFrom, organizeDescription, paragraphsOf, SECTION_ORDER, type SectionKey } from "./structure";
+
+export { leadFrom, paragraphsOf };
 
 // ============================================================================
 // Recorrido editorial de una vivienda (BCP-01 ampliación C2, R6). PURO: lo
@@ -24,6 +27,12 @@ import { countWords, fold, HIGHLIGHT_TERMS, isPublicSafe, PHONE_RE, EMAIL_RE, UR
 // `copy`, la descripción completa del catálogo en bloques, UNA sola vez y con
 // la misma prioridad. `lead`, `highlights`, `sections` y `mosaic` se siguen
 // calculando para la gestión y las pruebas.
+//
+// Descripción estructurada (expediente 2026-10-21-bcp-01-descripcion-
+// estructurada, DE1–DE9): `copy` sale SIEMPRE del organizador determinista
+// de structure.ts, en los tres niveles con texto: introducción, Salón y luz,
+// Cocina y comedor, Acabados y confort, La finca y Vivir en [zona]. Cada
+// frase, literal y una sola vez; ninguna parte vacía.
 // ============================================================================
 
 export type EditorialLevel = "text" | "story" | "clean" | "facts";
@@ -79,19 +88,13 @@ export interface Editorial {
    *  elegibles (índices en photos, en su orden, sin la de apertura ni las
    *  clases excluidas). [] en cualquier otro caso. */
   mosaic: number[];
-  /** DC3 · La descripción completa del catálogo, en bloques y en orden, sin
-   *  fotos: texto publicado (su entrada propia y sus párrafos), o la entrada y
-   *  los capítulos de la historia (con su título), o los párrafos de la
-   *  descripción limpia; [] solo con datos. Nunca se repite un texto. */
+  /** DC3/DE1 · La descripción completa del catálogo, organizada en la
+   *  estructura estándar (introducción sin título y partes con título), sin
+   *  fotos: del texto publicado, de la historia aprobada o de la descripción
+   *  limpia; [] solo con datos. Nunca se repite ni se pierde una frase. */
   copy: Array<{ heading: string | null; text: string }>;
-}
-
-/** Párrafos de un texto (separados por una línea en blanco), sin vacíos. */
-export function paragraphsOf(text: string | null | undefined): string[] {
-  return (text ?? "")
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  /** DE10 · Partes de la estructura sin material (aviso del editor). */
+  missing: SectionKey[];
 }
 
 /** E1 (D-QA4) · Clases que el recorrido automático NO usa solas. Solo cuentan
@@ -104,22 +107,10 @@ function eligible(p: EditorialPhoto): boolean {
   return !p.k || !JOURNEY_EXCLUDED_CLASSES.includes(p.k);
 }
 
-const LEAD_MAX_WORDS = 45;
-
 function num(v: number | string | null): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-/** 1–2 primeras frases literales, de 45 palabras como máximo (o null). */
-export function leadFrom(text: string | null): { lead: string | null; rest: string } {
-  const all = sentences(text ?? "");
-  if (all.length === 0) return { lead: null, rest: "" };
-  if (countWords(all[0]) > LEAD_MAX_WORDS) return { lead: null, rest: all.join(" ") };
-  let n = 1;
-  if (all.length > 1 && countWords(all[0]) < 20 && countWords(`${all[0]} ${all[1]}`) <= LEAD_MAX_WORDS) n = 2;
-  return { lead: all.slice(0, n).join(" "), rest: all.slice(n).join(" ") };
 }
 
 /** Candidatos a punto verificado: literales, de la lista cerrada y sin contacto. */
@@ -155,6 +146,8 @@ function alternatePhotos(sections: EditorialSection[], photos: EditorialPhoto[],
 }
 
 function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
+  // Zona verificada de la ficha para «Vivir en …» y sus palabras clave (DE9).
+  const area = [it.subzone, it.zone].map((x) => (typeof x === "string" ? x.trim() : "")).find(Boolean) ?? null;
   const manual = (it.features_manual ?? []).filter((f) => typeof f === "string" && f.trim() && isPublicSafe(f)).map((f) => f.trim());
   const features: string[] = [];
   const seenF = new Set<string>();
@@ -191,9 +184,14 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       it.photos,
       used,
     );
-    // La entrada propia (si la hay) abre la descripción; si la entrada salió
-    // del propio texto, ya está dentro de él y no se repite.
-    const copy = [...(tl && noContact(tl) && !(tb ?? "").includes(tl) ? [tl] : []), ...paragraphsOf(tb).filter(noContact)].map((text) => ({ heading: null, text }));
+    // La entrada propia (si la hay) abre la introducción; si la entrada salió
+    // del propio texto, ya está dentro de él y no se repite. El resto se
+    // organiza frase a frase (DE1–DE6).
+    const organized = organizeDescription({
+      lead: tl && noContact(tl) && !(tb ?? "").includes(tl) ? tl : null,
+      paragraphs: paragraphsOf(tb).filter(noContact),
+      area,
+    });
     return {
       level: "text",
       lead: autoLead && noContact(autoLead) ? autoLead : null,
@@ -201,13 +199,15 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       sections,
       description: tb,
       features,
-      copy,
+      copy: organized.copy,
+      missing: organized.missing,
     };
   }
 
   // 2 · Historia aprobada vigente.
   if (storyCurrent) {
     const sections: EditorialSection[] = [];
+    const chapters: Array<{ chapter: StoryChapter; text: string }> = [];
     for (const b of storyBlocks) {
       const t = b.t.trim();
       if (!isPublicSafe(t)) continue;
@@ -220,6 +220,7 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
         continue;
       }
       const chapter = b.c as StoryChapter;
+      chapters.push({ chapter, text: t });
       const wanted = CHAPTER_PHOTO_CLASSES[chapter] ?? [];
       const idx = wanted.length ? it.photos.findIndex((p, i) => !used.has(i) && !!p.k && wanted.includes(p.k)) : -1;
       if (idx >= 0) used.add(idx);
@@ -232,6 +233,10 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
     }
     const prelude = (it.story?.p ?? "").trim();
     const safePrelude = prelude && isPublicSafe(prelude) ? prelude : null;
+    // La historia ES la descripción (DC3): su entrada y sus capítulos, en la
+    // estructura estándar (DE7: los capítulos compatibles conservan su título;
+    // los demás van a la introducción). La limpia no se repite debajo.
+    const organized = organizeDescription({ lead: safePrelude, paragraphs: [], chapters, area });
     return {
       level: "story",
       lead: safePrelude ?? leadFrom(it.cleanDescription).lead,
@@ -239,13 +244,12 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       sections,
       description: it.cleanDescription,
       features,
-      // La historia ES la descripción (DC3): su entrada y sus capítulos. La
-      // descripción limpia no se repite debajo.
-      copy: [...(safePrelude ? [{ heading: null, text: safePrelude }] : []), ...sections.map((x) => ({ heading: x.heading, text: x.text }))],
+      copy: organized.copy,
+      missing: organized.missing,
     };
   }
 
-  // 3 · Descripción limpia vigente (sin títulos inventados).
+  // 3 · Descripción limpia vigente (organizada como el texto propio).
   if (it.cleanDescription) {
     const { lead, rest } = leadFrom(it.cleanDescription);
     const sections = alternatePhotos(
@@ -253,6 +257,7 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       it.photos,
       used,
     );
+    const organized = organizeDescription({ lead: null, paragraphs: paragraphsOf(it.cleanDescription).filter(isPublicSafe), area });
     return {
       level: "clean",
       lead: lead && isPublicSafe(lead) ? lead : null,
@@ -260,12 +265,13 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       sections,
       description: it.cleanDescription,
       features,
-      copy: paragraphsOf(it.cleanDescription).filter(isPublicSafe).map((text) => ({ heading: null, text })),
+      copy: organized.copy,
+      missing: organized.missing,
     };
   }
 
   // 4 · Solo datos y fotos.
-  return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features, copy: [] };
+  return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features, copy: [], missing: [...SECTION_ORDER] };
 }
 
 export function deriveEditorial(it: EditorialInput): Editorial {

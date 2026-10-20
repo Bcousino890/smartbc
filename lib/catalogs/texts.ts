@@ -40,6 +40,8 @@ export interface CatalogTextView {
   /** Título de la ficha del CRM (el título propio del catálogo va en draft/published). */
   title: string;
   bcReference: string | null;
+  /** Zona verificada de la ficha (subzona o zona) para «Vivir en …» (DE9). */
+  area: string | null;
   inList: boolean;
   /** Lo que ve hoy el lector para esta vivienda. */
   level: EditorialLevel;
@@ -136,6 +138,7 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
       slug: p.slug,
       title: p.title,
       bcReference: p.bc_reference ?? null,
+      area: (p.subzone ?? "").trim() || (p.zone ?? "").trim() || null,
       inList: r.in_list === true,
       level: publishedCurrent && (t?.pub_body || t?.pub_lead) ? "text" : story === "current" ? "story" : clean.status === "current" ? "clean" : "facts",
       source: { hasText: !!(p.description ?? "").trim(), clean: clean.status, story },
@@ -197,12 +200,13 @@ export async function textSourceFor(propertyId: string, catalogId: string | null
   };
 }
 
-/** Vista previa del recorrido con un texto del catálogo (borrador o no). */
+/** Vista previa con un texto del catálogo (borrador o no): la descripción
+ *  organizada (DE2, la misma función que el lector) y las partes sin material. */
 export async function previewJourney(
   propertyId: string,
   catalogId: string | null,
   text: { body: string | null; lead: string | null; highlights: string[] },
-): Promise<{ lead: string | null; highlights: string[]; sections: Array<{ heading: string | null; text: string; photo: boolean }>; words: number } | null> {
+): Promise<{ lead: string | null; highlights: string[]; sections: Array<{ heading: string | null; text: string; photo: boolean }>; words: number; copy: Array<{ heading: string | null; text: string }>; missing: string[] } | null> {
   const s = await textSourceFor(propertyId, catalogId);
   if (!s) return null;
   const ed = deriveEditorial({
@@ -226,5 +230,7 @@ export async function previewJourney(
     highlights: ed.highlights,
     sections: ed.sections.map((x) => ({ heading: x.heading, text: x.text, photo: x.photo !== null })),
     words: (text.body ?? "").trim().split(/\s+/).filter(Boolean).length,
+    copy: ed.copy,
+    missing: ed.missing,
   };
 }

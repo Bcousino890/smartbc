@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/catalogs/access";
 import type { DraftCheck, DraftProposal } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
+import { organizeDescription, paragraphsOf, SECTION_LABELS } from "@/lib/catalogs/structure";
 import {
   editTextDraft,
   isEdited,
@@ -39,7 +40,7 @@ import { SidePanelFooter } from "./manager/side-panel";
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 type Proposal = ActionResult<{ proposal: DraftProposal; check: DraftCheck }>;
-type JourneyPreview = { lead: string | null; highlights: string[]; sections: Array<{ heading: string | null; text: string; photo: boolean }>; words: number };
+type JourneyPreview = { lead: string | null; highlights: string[]; sections: Array<{ heading: string | null; text: string; photo: boolean }>; words: number; copy: Array<{ heading: string | null; text: string }>; missing: string[] };
 type Preview = ActionResult<{ preview: JourneyPreview; check: DraftCheck }>;
 
 export interface TextActions {
@@ -322,8 +323,11 @@ export function TextEditor({
           data-testid="text-body"
           className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
         />
-        <span className="mt-1 block text-xs text-ink/50">Separa los párrafos con una línea en blanco. El cliente la lee entera en la segunda pantalla de la vivienda.</span>
+        <span className="mt-1 block text-xs text-ink/50">
+          Escribe con naturalidad: el catálogo la organiza solo en «Salón y luz», «Cocina y comedor», «Acabados y confort», «La finca» y «Vivir en {view.area ?? "…"}» según lo que diga cada frase. Separa los párrafos con una línea en blanco.
+        </span>
       </label>
+      <StructurePreview body={body} lead={lead} area={view.area} />
       <details className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-more" open={!!(lead || highlights.length) || undefined}>
         <summary className="cursor-pointer text-xs text-ink/70">Más opciones (entrada y puntos de la versión anterior; no hacen falta para publicar)</summary>
         <label className="mt-2 block">
@@ -500,5 +504,33 @@ export function TextEditor({
         </div>
       </SidePanelFooter>
     </div>
+  );
+}
+
+/** DE10 · Vista previa organizada EN VIVO con la misma función que el lector y
+ *  el PDF (sin servidor ni IA), y las partes que quedan sin material. */
+function StructurePreview({ body, lead, area }: { body: string; lead: string; area: string | null }) {
+  const organized = useMemo(() => {
+    const l = lead.replace(/\s+/g, " ").trim();
+    return organizeDescription({ lead: l && !body.includes(l) ? l : null, paragraphs: paragraphsOf(body), area });
+  }, [body, lead, area]);
+  if (!body.trim() && !lead.trim()) return null;
+  return (
+    <details open className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-structure">
+      <summary className="cursor-pointer text-xs text-ink/70">Así se verá en el lector y en el PDF (organizado automáticamente)</summary>
+      <div className="mt-2 space-y-3">
+        {organized.copy.map((b, i) => (
+          <div key={i} data-testid={b.heading ? "structure-section" : "structure-intro"}>
+            {b.heading ? <p className="crm-label-sm text-gold-dark">{b.heading}</p> : <p className="crm-label-sm text-ink/45">Introducción</p>}
+            <p className="mt-0.5 whitespace-pre-line text-xs leading-relaxed text-ink/80">{b.text}</p>
+          </div>
+        ))}
+        {organized.missing.length ? (
+          <p className="text-xs text-amber-900" data-testid="structure-missing">
+            Sin material sobre: {organized.missing.map((k) => SECTION_LABELS[k]).join(", ")}. Si la ficha lo sabe, añádelo; si no, se queda fuera (no se inventa).
+          </p>
+        ) : null}
+      </div>
+    </details>
   );
 }

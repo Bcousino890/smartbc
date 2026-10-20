@@ -113,8 +113,11 @@ section("· glifos españoles (PDF7)");
   const norm = (t: string) => t.replace(/\s+/g, " ");
   const n = norm(r.text);
   ok("título del catálogo con ¿ ¡ ü « » — € ² ª º: se extrae tal cual", n.includes(G), n.slice(0, 160));
-  // La proyección parte el texto en frases (entrada + recorrido), como el lector.
-  ok("texto de la vivienda con los mismos caracteres: se extrae tal cual", n.includes("Entrada. ¿Ático único?") && n.includes("¡Sí! Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso. Fin del texto."), n.slice(n.indexOf("Entrada"), n.indexOf("Entrada") + 200));
+  // El organizador (DE1–DE3) reparte las frases por tema («vistas» → Salón y
+  // luz); lo que se comprueba aquí es que cada frase, con sus glifos, llega
+  // tal cual al PDF.
+  const glyphSentences = ["Entrada. ¿Ático único?", "¡Sí!", "Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso.", "Fin del texto."];
+  ok("texto de la vivienda con los mismos caracteres: cada frase se extrae tal cual", glyphSentences.every((g) => n.includes(g)), n.slice(n.indexOf("Entrada"), n.indexOf("Entrada") + 200));
   ok("«Nº» no pasa a «NO» en los rótulos en mayúsculas", !/N\s?O\s?0\s?1/.test(r.text) && /N\s?º\s?0\s?1/.test(r.text));
   await fixtureMutate({ op: "reset" });
 }

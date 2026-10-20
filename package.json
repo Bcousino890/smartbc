@@ -67,7 +67,8 @@
     "test:catalogs-public": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-public.mts",
     "test:catalog-search": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalog-search.mts",
     "test:catalogs-manager": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-manager.mts",
-    "test:catalogs-feedback": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-feedback.mts"
+    "test:catalogs-feedback": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-feedback.mts",
+    "test:catalogs-structure": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-structure.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",
