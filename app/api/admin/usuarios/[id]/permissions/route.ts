@@ -2,12 +2,24 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
-import { getEffectivePermissions, resolveBaseMatrix } from "@/lib/db/queries/permissions";
+import {
+  getEffectivePermissions,
+  getEffectiveScopes,
+  resolveBaseMatrix,
+} from "@/lib/db/queries/permissions";
 import { canManageUser, isUserAdminRole } from "@/lib/auth/user-rank";
 import {
   PERMISSION_ACTIONS,
   PERMISSION_RESOURCES,
 } from "@/lib/permissions";
+import {
+  SCOPE_LABELS,
+  defaultScopes,
+  planScopeChanges,
+  validateScopeOverrides,
+  type ScopeOverride,
+  type ScopeOverrideInput,
+} from "@/lib/permissions-scope";
 
 // Resources and actions shown in the permissions matrix.
 // Canonical set lives in lib/permissions.ts so canAccess() resolves every cell.
@@ -139,7 +151,19 @@ export async function GET(
   // badge "modificado" y para "Restablecer a valores del rol" — si usara
   // canAccess(role,...) en cliente (solo estático) daría una base incorrecta
   // para usuarios con rol personalizado o rol por país.
-  return Response.json({ role, permissions, isCustomRole, roleDefaults: roleMatrix });
+  // Alcance (Todo / Solo lo suyo) por sección: efectivo (con ?country=) y el
+  // del perfil del rol. Defensivo: sin la tabla 0216 equivale a los defaults.
+  const { scopes } = await getEffectiveScopes(userId, role, country ?? undefined);
+  const scopeDefaults = defaultScopes(role);
+
+  return Response.json({
+    role,
+    permissions,
+    isCustomRole,
+    roleDefaults: roleMatrix,
+    scopes,
+    scopeDefaults,
+  });
 }
 
 export async function POST(
@@ -172,6 +196,7 @@ export async function POST(
   let body: {
     overrides: { resource: string; action: string; allowed: boolean }[];
     country?: "es" | "cl" | null;
+    scopeOverrides?: unknown;
   };
   try {
     body = await req.json();
@@ -213,6 +238,16 @@ export async function POST(
   //   null (o ausente) = overrides GLOBALES (comportamiento actual)
   //   'es' | 'cl'      = overrides sólo de ese país
   const country = parseCountryParam(body.country ?? null);
+
+  // Alcance por sección: opcional. Si falta no se tocan sus filas.
+  let scopeInput: ScopeOverrideInput[] | null = null;
+  if (body.scopeOverrides !== undefined) {
+    const v = validateScopeOverrides(body.scopeOverrides);
+    if (!v.ok) {
+      return Response.json({ error: v.error }, { status: 400 });
+    }
+    scopeInput = v.value;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
@@ -274,6 +309,49 @@ export async function POST(
     }
   }
 
+  // Alcance: se calcula y comprueba ANTES de escribir nada (solo lecturas), así
+  // un 403/500 no deja guardados los permisos a medias.
+  let scopeToStore: ScopeOverrideInput[] = [];
+  if (scopeInput !== null) {
+    let storedQuery = db
+      .from("user_scope_overrides")
+      .select("resource, kind, scope, country")
+      .eq("user_id", userId);
+    storedQuery = country
+      ? storedQuery.eq("country", country)
+      : storedQuery.is("country", null);
+    const { data: storedRows, error: storedErr } = await storedQuery;
+    if (storedErr) {
+      return Response.json(
+        {
+          error:
+            "No se pudo guardar el alcance por sección: falta aplicar la migración de alcance (user_scope_overrides).",
+        },
+        { status: 500 },
+      );
+    }
+    const { scopes: actorScopes } = await getEffectiveScopes(
+      currentProfile.id,
+      currentProfile.role,
+      country ?? undefined,
+    );
+    const plan = planScopeChanges(
+      defaultScopes(target.role),
+      actorScopes,
+      (storedRows ?? []) as ScopeOverride[],
+      scopeInput,
+    );
+    if (plan.escalation) {
+      return Response.json(
+        {
+          error: `No puedes conceder alcance “${SCOPE_LABELS.all}” en ${plan.escalation.resource}: tú no lo tienes`,
+        },
+        { status: 403 },
+      );
+    }
+    scopeToStore = plan.toStore;
+  }
+
   // Borra sólo el subconjunto del país indicado. `.is`/`.eq` en la columna
   // `country` implementa el "IS NOT DISTINCT FROM" del valor recibido:
   //   - country NULL → borra sólo las filas globales (country IS NULL)
@@ -312,6 +390,37 @@ export async function POST(
     }
   }
 
+  // Alcance por sección (tras los permisos): reemplaza el subconjunto del país.
+  if (scopeInput !== null) {
+    let delScope = db.from("user_scope_overrides").delete().eq("user_id", userId);
+    delScope = country ? delScope.eq("country", country) : delScope.is("country", null);
+    const { error: delScopeErr } = await delScope;
+    if (delScopeErr) {
+      return Response.json(
+        { error: "No se pudo guardar el alcance por sección: " + delScopeErr.message },
+        { status: 500 },
+      );
+    }
+    if (scopeToStore.length > 0) {
+      const { error: insScopeErr } = await db.from("user_scope_overrides").insert(
+        scopeToStore.map((o) => ({
+          user_id: userId,
+          resource: o.resource,
+          kind: o.kind,
+          scope: o.scope,
+          country,
+          created_by: currentProfile.id,
+        })),
+      );
+      if (insScopeErr) {
+        return Response.json(
+          { error: "No se pudo guardar el alcance por sección: " + insScopeErr.message },
+          { status: 500 },
+        );
+      }
+    }
+  }
+
   // Auditoría (best-effort): registra que se actualizaron los overrides de este
   // usuario, con el país afectado (si vino) y un resumen del conjunto guardado.
   await logPermissionEvent({
@@ -323,6 +432,9 @@ export async function POST(
       country,
       overrideCount: body.overrides.length,
       overrides: body.overrides,
+      ...(scopeInput !== null
+        ? { scopeOverrideCount: scopeToStore.length, scopeOverrides: scopeToStore }
+        : {}),
     },
   });
 

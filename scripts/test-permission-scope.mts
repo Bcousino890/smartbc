@@ -12,6 +12,7 @@ import {
   defaultScopes,
   isEscalation,
   normalizeCell,
+  planScopeChanges,
   resolveCaptacionRestriction,
   resolveRestriction,
   scopeKindForAction,
@@ -161,6 +162,30 @@ t("resolveCaptacionRestriction", () => {
     "own_only",
   );
   assert.equal(resolveCaptacionRestriction("captadora", []), "assigned_only");
+});
+
+t("planScopeChanges", () => {
+  const defs = defaultScopes("agent_senior");
+  const actor = defaultScopes("agent_senior");
+  const all = { resource: "clientes", kind: "view", scope: "all" } as const;
+  const same = { resource: "clientes", kind: "edit", scope: defs.clientes.edit } as const;
+  // igual al perfil: no se guarda; "all" nuevo sin tenerlo: escalada
+  let r = planScopeChanges(defs, actor, [], [all, same]);
+  assert.deepEqual(r.toStore, [all]);
+  assert.deepEqual(r.escalation, all);
+  // ya guardada con ese valor: se conserva sin escalada
+  r = planScopeChanges(defs, actor, [{ resource: "clientes", kind: "view", scope: "all" }], [all]);
+  assert.deepEqual(r.toStore, [all]);
+  assert.equal(r.escalation, null);
+  // guardada con otro valor: sigue siendo nueva
+  r = planScopeChanges(defs, actor, [{ resource: "clientes", kind: "view", scope: "own" }], [all]);
+  assert.deepEqual(r.escalation, all);
+  // actor que sí lo tiene
+  r = planScopeChanges(defs, defaultScopes("admin"), [], [all]);
+  assert.equal(r.escalation, null);
+  // vacío
+  r = planScopeChanges(defs, actor, [], []);
+  assert.deepEqual(r, { toStore: [], escalation: null });
 });
 
 console.log(`\n${n} pruebas OK`);

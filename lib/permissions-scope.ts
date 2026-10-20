@@ -204,3 +204,22 @@ export function validateScopeOverrides(
 export function isEscalation(actor: ScopeMatrix, o: ScopeOverrideInput): boolean {
   return o.scope === "all" && actor[o.resource][o.kind] !== "all";
 }
+
+/**
+ * Decide qué guardar al recibir un conjunto de excepciones de alcance:
+ * solo las celdas que difieren del perfil del rol (`defaults`), y de ellas
+ * la primera concesión NUEVA ("all" que el actor no tiene y que no estaba ya
+ * guardada con ese valor), si la hay.
+ */
+export function planScopeChanges(
+  defaults: ScopeMatrix,
+  actor: ScopeMatrix,
+  stored: ScopeOverride[],
+  input: ScopeOverrideInput[],
+): { toStore: ScopeOverrideInput[]; escalation: ScopeOverrideInput | null } {
+  const toStore = input.filter((o) => defaults[o.resource][o.kind] !== o.scope);
+  const wasStored = (o: ScopeOverrideInput) =>
+    stored.some((s) => s.resource === o.resource && s.kind === o.kind && s.scope === o.scope);
+  const escalation = toStore.find((o) => !wasStored(o) && isEscalation(actor, o)) ?? null;
+  return { toStore, escalation };
+}
