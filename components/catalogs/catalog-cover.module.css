@@ -1,6 +1,9 @@
-/* Portada Boutique del catálogo (D17). Medidas en em sobre una base que escala
-   con el ancho del contenedor (cqi): la misma portada sirve de miniatura en la
-   HOME y de página en el lector. Fuentes y colores limitados a esta pieza. */
+/* Portada del catálogo (enmienda visual 2026-10-20, DV9): la portada de la
+   publicación del itinerario — fotografía a sangre oscurecida con doble velo,
+   marca blanca, Playfair y Cinzel sobre tinta. Medidas en em sobre una base
+   que escala con el ANCHO del contenedor (cqi): la misma pieza sirve de
+   miniatura en la HOME (150 px), de vista previa en Diseño y de primera
+   página del lector. Fuentes y colores limitados a esta pieza. */
 
 .frame {
   container-type: inline-size;
@@ -11,13 +14,12 @@
 .cover {
   /* 16 px por cada 600 px de ancho del contenedor. */
   font-size: 2.6667cqi;
-  --paper: #f4ede1;
-  --ink: #2b2118;
-  --accent: #9b4a2e;
-  --muted: #7a6a58;
-  --mat: #fbf7f0;
-  --display: var(--font-catalog-display), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --text: var(--font-catalog-text), "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  --ink: #0a0a0a;
+  --cream: #fbf8f3;
+  --gold: #c9a96e;
+  --serif: var(--font-playfair), "Playfair Display", Georgia, serif;
+  --display: var(--font-cinzel), "Cinzel", "Trajan Pro", serif;
+  --sans: var(--font-inter), "Inter", system-ui, sans-serif;
 
   position: relative;
   box-sizing: border-box;
@@ -27,15 +29,12 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  padding: 2.4em 2.2em 2em;
+  padding: 2.2em 1.6em 1.8em;
   text-align: center;
-  color: var(--ink);
-  font-family: var(--text);
+  color: var(--cream);
+  font-family: var(--sans);
   font-variant-numeric: tabular-nums;
-  background:
-    radial-gradient(ellipse at 25% 15%, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(ellipse at 85% 95%, rgba(150, 110, 70, 0.12), transparent 55%),
-    var(--paper);
+  background: var(--ink);
 }
 
 .cover *,
@@ -44,137 +43,287 @@
   box-sizing: border-box;
 }
 
-/* Etiquetas a ambos lados (principio de Pleat); se apilan si no caben. */
-/* Logo oficial (D18): public/logo.png tal cual, sin filtros, con su
-   proporción (3282 × 519 ≈ 6,32:1). Tinta #121626 sobre el papel: 15,4:1. */
-.logo {
-  display: block;
-  flex: none;
-  width: 44%;
-  height: auto;
-  aspect-ratio: 3282 / 519;
-  margin: 0 0 1.1em;
+/* ── Fotografía a sangre con doble velo (vertical para el texto, plano para
+   el contraste general). Sin velo el titular no alcanza AA sobre fotografías
+   claras. ── */
+.photo {
+  position: absolute;
+  inset: 0;
 }
 
-/* Portada estrecha (lector en móvil): el logo algo más grande. */
-@container (max-width: 480px) {
-  .logo {
-    width: 62%;
-  }
-}
-
-/* Miniatura de la HOME: a ese tamaño no se lee; se oculta. */
-@container (max-width: 219px) {
-  .logo {
-    display: none;
-  }
-}
-
-.kickers {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.3em 1em;
-  width: 100%;
-  font-size: 0.6em;
-  line-height: 1.4;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.arch {
-  position: relative;
-  flex: none;
-  width: 56%;
-  aspect-ratio: 3 / 4;
-  margin: 1.4em 0 1.3em;
-  overflow: hidden;
-  border-radius: 999px 999px 0 0;
-  background: linear-gradient(180deg, #ddd0bf 0%, #b49c84 100%);
-  box-shadow:
-    0 0 0 0.5em var(--mat),
-    0 0 0 calc(0.5em + 1px) rgba(155, 74, 46, 0.35);
-}
-
-.arch img {
+.photo img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.noPhoto {
+.veil {
   position: absolute;
-  inset: auto 0 1.2em;
-  font-size: 0.55em;
-  letter-spacing: 0.18em;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.65) 50%, rgba(10, 10, 10, 0.92));
+}
+
+.veil2 {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.25);
+}
+
+/* ── Marca ── */
+.brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Logo oficial (D18), en blanco sobre la tinta como en la referencia. */
+.logo {
+  display: block;
+  width: 44%;
+  max-width: 150px;
+  height: auto;
+  aspect-ratio: 3282 / 519;
+  filter: brightness(0) invert(1);
+  user-select: none;
+}
+
+.tagline {
+  margin-top: 0.75em;
+  font-family: var(--display);
+  font-size: 0.6em;
+  font-weight: 500;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(251, 248, 243, 0.55);
+}
+
+/* Miniatura de la HOME: a ese tamaño la marca no se lee; se oculta. */
+@container (max-width: 219px) {
+  .brand {
+    display: none;
+  }
+}
+
+/* ── Cuerpo ── */
+.body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  padding: 1.2em 0;
+}
+
+.kicker {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 0.66em;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(251, 248, 243, 0.7);
 }
 
 .title {
-  margin: 0;
+  margin: 0.7em 0 0;
   max-width: 100%;
-  font-family: var(--display);
-  font-style: italic;
+  font-family: var(--serif);
   font-weight: 400;
-  font-size: 3em;
-  /* Con 1.04 y overflow:hidden (lo exige el recorte a 3 líneas) se cortaban
-     los rasgos descendentes y los acentos de la cursiva («y», «í»). */
-  line-height: 1.12;
-  padding: 0.04em 0.1em 0.08em;
+  font-size: 3.4em;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--cream);
   text-wrap: balance;
   overflow-wrap: anywhere;
+  /* La portada tiene altura fija: el título se recorta a 4 líneas; el título
+     íntegro está siempre en el índice. */
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.subtitle {
-  margin: 0.6em 0 0;
-  max-width: 22em;
-  font-size: 0.9em;
-  line-height: 1.5;
-  color: var(--muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  padding: 0.06em 0.05em 0.1em;
 }
 
 .ornament {
-  margin: 0.8em 0;
-  font-size: 0.9em;
-  color: var(--accent);
-}
-
-.sign {
-  margin: auto 0 0;
-  font-size: 0.6em;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.sign strong {
   display: block;
-  margin-top: 0.3em;
-  font-family: var(--display);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 1.9em;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink);
+  width: 2.5em;
+  height: 1px;
+  margin: 1.4em 0 0;
+  background: rgba(251, 248, 243, 0.35);
 }
 
-/* E1 · Portada dentro del lector: los textos auxiliares no bajan de 12 px. */
-.readable .kickers,
-.readable .sign {
-  font-size: max(12px, 0.6em);
+.preparedLabel {
+  margin: 1.2em 0 0;
+  font-family: var(--display);
+  font-size: 0.6em;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(251, 248, 243, 0.55);
 }
-.readable .noPhoto {
-  font-size: max(12px, 0.55em);
+
+.preparedBy {
+  margin: 0.35em 0 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.7em;
+  line-height: 1.15;
+  color: var(--cream);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  margin: 1.6em 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.edition {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 0.7em;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(251, 248, 243, 0.85);
+}
+
+.count {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 0.78em;
+  color: rgba(251, 248, 243, 0.55);
+}
+
+.subtitle {
+  margin: 1.2em 0 0;
+  max-width: 24em;
+  font-family: var(--sans);
+  font-size: 0.78em;
+  line-height: 1.5;
+  color: rgba(251, 248, 243, 0.6);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.noPhoto {
+  margin: 1.4em 0 0;
+  font-family: var(--display);
+  font-size: 0.55em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(251, 248, 243, 0.4);
+}
+
+/* ── Invitación a continuar (solo en el lector) ── */
+.begin {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75em;
+  padding: 0.5em 1em 0;
+  border: 0;
+  background: none;
+  color: rgba(251, 248, 243, 0.6);
+  cursor: pointer;
+  transition: color 500ms;
+}
+
+.begin:hover {
+  color: var(--cream);
+}
+
+.begin:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+
+.beginLabel {
+  font-family: var(--display);
+  font-size: 0.6em;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.beginLine {
+  display: block;
+  width: 1px;
+  height: 2.4em;
+  background: rgba(251, 248, 243, 0.3);
+  transition: height 700ms;
+}
+
+.begin:hover .beginLine {
+  height: 3.4em;
+}
+
+/* ── En el lector: los textos auxiliares no bajan de 12 px, y la portada
+   entra con el fundido y el zoom lentísimo de la referencia (globals.css,
+   respeta «reducir movimiento»). ── */
+/* En el lector el contenedor es la ventana entera: la base se acota a 16 px
+   (la portada de la referencia trabaja en píxeles) y los dos textos grandes
+   escalan con la ventana entre los mismos límites que la referencia. */
+.readable .cover {
+  font-size: clamp(12px, 2.6667cqi, 16px);
+  padding: 2.25rem 1.5rem 2rem;
+}
+
+.readable .kicker,
+.readable .tagline,
+.readable .preparedLabel,
+.readable .edition,
+.readable .beginLabel {
+  font-size: max(12px, 0.66em);
+}
+
+.readable .count,
+.readable .subtitle {
+  font-size: max(13px, 0.78em);
+}
+
+.readable .preparedBy {
+  font-size: max(22px, 1.7em);
+}
+
+.readable .title {
+  font-size: clamp(38px, 5.4cqi, 78px);
+}
+
+.readable .preparedBy {
+  font-size: clamp(27px, 2.4cqi, 34px);
+}
+
+.readable .body {
+  padding: 2.5rem 0;
+}
+
+.readable .logo {
+  width: 128px;
+  max-width: 44%;
+}
+
+@media (min-width: 768px) {
+  .readable .logo {
+    width: 150px;
+  }
+}
+
+.readable .ornament {
+  width: 40px;
 }

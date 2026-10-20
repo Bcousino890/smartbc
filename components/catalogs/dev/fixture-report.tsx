@@ -15,7 +15,7 @@ export function FixtureReport() {
       document.fonts.forEach((f) => {
         if (f.status === "loaded") loaded.add(f.family.replace(/["']/g, ""));
       });
-      const want = ["Fraunces", "Karla", "Lato"];
+      const want = ["Playfair", "Cinzel", "Inter", "Lato"];
       const fonts = want.map((w) => `${w}:${[...loaded].some((f) => f.includes(w)) ? "sí" : "no"}`).join(" ");
       const issues: string[] = [];
       if (document.documentElement.scrollWidth > window.innerWidth + 1) issues.push("horizontal-documento");
