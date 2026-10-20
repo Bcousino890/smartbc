@@ -57,6 +57,10 @@ jobs:
       # conflictos, material y filtros). Puro, sin BD.
       - name: "Catálogos (gestor: borradores y diagnósticos, offline)"
         run: npm run test:catalogs-manager
+      # 0218: opiniones de clientes (validación, ruta pública con el almacén
+      # sintético, dos clientes, reintentos, caducado/revocado). Sin BD.
+      - name: "Catálogos (opiniones de clientes, offline)"
+        run: npm run test:catalogs-feedback
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
