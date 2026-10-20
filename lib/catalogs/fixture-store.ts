@@ -442,7 +442,7 @@ export async function fixtureGetMetas(tokens: string[]): Promise<Map<string, Cat
   const st = await store();
   const out = new Map<string, CatalogMeta>();
   for (const t of tokens) {
-    const s = st.get(t);
+    const s = resolveShare(st, t);
     if (s) out.set(t, { version: s.version ?? 1, operation: s.operation ?? "any" });
   }
   return out;
@@ -469,12 +469,12 @@ export async function fixtureOwnerSnapshot(token: string): Promise<InternalSnaps
 
 /** Huella pública actual de un enlace (null si no vale). */
 export async function fixtureFingerprint(token: string): Promise<string | null> {
-  const s = (await store()).get(token);
+  const s = resolveShare(await store(), token);
   return valid(s) ? publicFingerprintOf(s) : null;
 }
 
 export async function fixtureGetPublic(token: string): Promise<{ snapshot: InternalSnapshot; fingerprint: string; expiresAt: string } | null> {
-  const s = (await store()).get(token);
+  const s = resolveShare(await store(), token);
   if (!valid(s)) return null;
   return { snapshot: s.snapshot, fingerprint: fingerprintOf(s.snapshot), expiresAt: new Date(s.expiresAt).toISOString() };
 }
@@ -483,7 +483,7 @@ export async function fixtureGetStates(tokens: string[]) {
   const st = await store();
   return new Map(
     tokens.map((t) => {
-      const s = st.get(t);
+      const s = resolveShare(st, t);
       return [t, valid(s) ? { valid: true, fingerprint: fingerprintOf(s.snapshot), expiresAt: new Date(s.expiresAt).toISOString() } : { valid: false, fingerprint: null, expiresAt: null }] as const;
     }),
   );
@@ -526,6 +526,7 @@ export type FixtureOp =
 export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: string | null }> {
   if (op.op === "reset") {
     await resetFixtureStore();
+    resetFeedbackStore();
     (globalThis as GF)[FAIL_KEY] = undefined;
     (globalThis as GD)[DELAY_KEY] = 0;
     (globalThis as GD)[SIZE_KEY] = 0;
@@ -703,4 +704,257 @@ export async function fixturePhotoSvg(slug: string, idx: number, f: string | nul
     return decodeURIComponent(uri.replace(/^data:image\/svg\+xml;charset=utf-8,/, ""));
   }
   return null;
+}
+
+
+// ============================================================================
+// 0218 · Asignaciones a clientes, enlaces personales y opiniones (SINTÉTICOS).
+// Imitan las funciones de 0218: el token personal abre la MISMA instantánea
+// que el enlace general de su catálogo; la opinión se guarda por (catálogo,
+// cliente, vivienda) y se valida en cada escritura. Clientes inventados.
+// ============================================================================
+
+export const FIXTURE_CLIENTS = [
+  { id: "c0000000-0000-0000-0000-0000000000c1", name: "Ana Prieto (sintética)", email: "ana.prieto@ejemplo.test", advisor: "Asesora de prueba" },
+  { id: "c0000000-0000-0000-0000-0000000000c2", name: "Luis Romero (sintético)", email: "luis.romero@ejemplo.test", advisor: null },
+  { id: "c0000000-0000-0000-0000-0000000000c3", name: "Marta Vidal (sintética)", email: "marta.vidal@ejemplo.test", advisor: "Asesora de prueba" },
+] as const;
+
+export const FIXTURE_PERSONAL_TOKENS = {
+  anaMain: "fixturePersonalAnaMain000014",
+  luisMain: "fixturePersonalLuisMain00015",
+} as const;
+
+interface PersonalLink {
+  id: string;
+  token: string;
+  /** Token del enlace general del catálogo (la instantánea compartida). */
+  base: string;
+  clientId: string;
+  createdAt: number;
+  expiresAt: number;
+  revokedAt: number | null;
+}
+
+interface StoredFeedback {
+  id: string;
+  base: string;
+  clientId: string;
+  key: string;
+  catalogTitle: string;
+  propertyTitle: string;
+  rating: number;
+  comment: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FixtureNotice {
+  id: string;
+  to: "asesor" | "dueño";
+  clientId: string;
+  body: string;
+  link: string;
+  read: boolean;
+  feedbackId: string;
+  rating: number;
+  createdAt: number;
+}
+
+interface FeedbackState {
+  links: Map<string, PersonalLink>;
+  feedback: Map<string, StoredFeedback>;
+  notices: FixtureNotice[];
+  seq: number;
+}
+
+const FB_KEY = "__bcpCatalogFixtureFeedback";
+type GFB = typeof globalThis & { [FB_KEY]?: FeedbackState };
+
+function seedFeedback(): FeedbackState {
+  const far = Date.now() + 90 * 86_400_000;
+  const mk = (id: string, token: string, clientId: string): [string, PersonalLink] => [token, { id, token, base: FIXTURE_TOKENS.main, clientId, createdAt: Date.now(), expiresAt: far, revokedAt: null }];
+  return {
+    links: new Map([
+      mk("d0000000-0000-0000-0000-0000000000d1", FIXTURE_PERSONAL_TOKENS.anaMain, FIXTURE_CLIENTS[0].id),
+      mk("d0000000-0000-0000-0000-0000000000d2", FIXTURE_PERSONAL_TOKENS.luisMain, FIXTURE_CLIENTS[1].id),
+    ]),
+    feedback: new Map(),
+    notices: [],
+    seq: 100,
+  };
+}
+
+function fb(): FeedbackState {
+  const g = globalThis as GFB;
+  if (!g[FB_KEY]) g[FB_KEY] = seedFeedback();
+  return g[FB_KEY]!;
+}
+
+function resetFeedbackStore(): void {
+  (globalThis as GFB)[FB_KEY] = seedFeedback();
+}
+
+/** Enlace general o personal → el «Share» que lo representa. El personal
+ *  comparte instantánea, operación y archivado con su catálogo, y tiene su
+ *  propia caducidad y revocación (como 0218). */
+function resolveShare(st: Map<string, Share>, token: string): Share | undefined {
+  const s = st.get(token);
+  if (s) return s;
+  const p = fb().links.get(token);
+  if (!p) return undefined;
+  const b = st.get(p.base);
+  if (!b) return undefined;
+  return { ...b, expiresAt: p.expiresAt, revoked: p.revokedAt !== null };
+}
+
+function validPersonal(st: Map<string, Share>, token: string): { link: PersonalLink; share: Share } | null {
+  const link = fb().links.get(token);
+  if (!link || link.revokedAt !== null || link.expiresAt <= Date.now()) return null;
+  const share = st.get(link.base);
+  if (!share || share.archived) return null;
+  return { link, share };
+}
+
+const fbKey = (base: string, clientId: string, key: string) => `${base}|${clientId}|${key}`;
+const nextId = (prefix: string) => `${prefix}000000-0000-0000-0000-${String(++fb().seq).padStart(12, "0")}`;
+
+export async function fixtureFeedbackGet(token: string): Promise<{ personal: boolean; items: Record<string, { rating: number; comment: string | null; updated_at: string }> }> {
+  const v = validPersonal(await store(), token);
+  if (!v) return { personal: false, items: {} };
+  const items: Record<string, { rating: number; comment: string | null; updated_at: string }> = {};
+  for (const it of v.share.snapshot.items) {
+    const f = fb().feedback.get(fbKey(v.link.base, v.link.clientId, it.key));
+    if (f) items[it.key] = { rating: f.rating, comment: f.comment, updated_at: new Date(f.updatedAt).toISOString() };
+  }
+  return { personal: true, items };
+}
+
+/** Como catalog_feedback_set: lanza Error(código) igual que la función SQL. */
+export async function fixtureFeedbackSet(token: string, key: string, rating: number, comment: string | null): Promise<{ status: "saved" | "unchanged"; updated_at: string }> {
+  const v = validPersonal(await store(), token);
+  if (!v) throw new Error("link_invalid");
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error("invalid_rating");
+  const c = comment && comment.trim() ? comment.trim() : null;
+  if (c && [...c].length > 1000) throw new Error("comment_too_long");
+  const item = v.share.snapshot.items.find((x) => x.key === key);
+  if (!item) throw new Error("not_in_catalog");
+  const k = fbKey(v.link.base, v.link.clientId, key);
+  const prev = fb().feedback.get(k);
+  if (prev && prev.rating === rating && prev.comment === c) return { status: "unchanged", updated_at: new Date(prev.updatedAt).toISOString() };
+  const now = Date.now();
+  const row: StoredFeedback = prev
+    ? { ...prev, rating, comment: c, catalogTitle: v.share.snapshot.title, propertyTitle: item.title, updatedAt: now }
+    : { id: nextId("e"), base: v.link.base, clientId: v.link.clientId, key, catalogTitle: v.share.snapshot.title, propertyTitle: item.title, rating, comment: c, createdAt: now, updatedAt: now };
+  fb().feedback.set(k, row);
+  const client = FIXTURE_CLIENTS.find((x) => x.id === v.link.clientId);
+  const body = `${client?.name ?? "Cliente"} ha valorado «${item.title}» con ${rating} de 5 en el catálogo «${v.share.snapshot.title}».` + (c ? ` «${c.slice(0, 160)}${c.length > 160 ? "…" : ""}»` : "");
+  const open = fb().notices.find((n) => n.feedbackId === row.id && !n.read);
+  if (open) Object.assign(open, { body, rating, createdAt: now });
+  else fb().notices.push({ id: nextId("n"), to: client?.advisor ? "asesor" : "dueño", clientId: v.link.clientId, body, link: `/dev-fixtures/cliente-opiniones?cliente=${v.link.clientId}#catalog-feedback`, read: false, feedbackId: row.id, rating, createdAt: now });
+  return { status: "saved", updated_at: new Date(now).toISOString() };
+}
+
+function baseOfCatalog(catalogId: string): string | null {
+  return fixtureOwnerToken(catalogId);
+}
+
+export interface FixtureClientLink {
+  id: string; client_id: string; client_name: string; token: string; expires_at: string; revoked_at: string | null;
+  created_at: string; feedback_count: number; last_feedback_at: string | null;
+}
+
+function linkRow(p: PersonalLink): FixtureClientLink {
+  const mine = [...fb().feedback.values()].filter((f) => f.base === p.base && f.clientId === p.clientId);
+  return {
+    id: p.id,
+    client_id: p.clientId,
+    client_name: FIXTURE_CLIENTS.find((c) => c.id === p.clientId)?.name ?? "Cliente",
+    token: p.token,
+    expires_at: new Date(p.expiresAt).toISOString(),
+    revoked_at: p.revokedAt ? new Date(p.revokedAt).toISOString() : null,
+    created_at: new Date(p.createdAt).toISOString(),
+    feedback_count: mine.length,
+    last_feedback_at: mine.length ? new Date(Math.max(...mine.map((f) => f.updatedAt))).toISOString() : null,
+  };
+}
+
+/** Gestor de fixtures: asignaciones de un catálogo sintético (como 0218). */
+export async function fixtureClientLinks(op:
+  | { op: "list"; catalogId: string }
+  | { op: "search"; q: string }
+  | { op: "create"; catalogId: string; clientId: string; days: number }
+  | { op: "renew"; linkId: string; days: number }
+  | { op: "revoke"; linkId: string }
+  | { op: "expire"; token: string }
+): Promise<unknown> {
+  const s = fb();
+  switch (op.op) {
+    case "list": {
+      const base = baseOfCatalog(op.catalogId);
+      return [...s.links.values()].filter((l) => l.base === base).sort((a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null) || b.createdAt - a.createdAt).map(linkRow);
+    }
+    case "search": {
+      const q = op.q.toLowerCase();
+      return FIXTURE_CLIENTS.filter((c) => c.name.toLowerCase().includes(q) || c.email.includes(q)).map((c) => ({ id: c.id, name: c.name, detail: c.email }));
+    }
+    case "create": {
+      const base = baseOfCatalog(op.catalogId);
+      if (!base) throw new Error("forbidden");
+      if (!FIXTURE_CLIENTS.some((c) => c.id === op.clientId)) throw new Error("client_not_found");
+      const mine = [...s.links.values()].filter((l) => l.base === base && l.clientId === op.clientId && l.revokedAt === null);
+      if (mine.some((l) => l.expiresAt > Date.now())) throw new Error("link_exists");
+      for (const l of mine) l.revokedAt = Date.now();
+      const token = `fixturePersonal${createHash("md5").update(`${op.clientId}${Date.now()}${s.seq}`).digest("hex").slice(0, 14)}`;
+      const link: PersonalLink = { id: nextId("d"), token, base, clientId: op.clientId, createdAt: Date.now(), expiresAt: Date.now() + op.days * 86_400_000, revokedAt: null };
+      s.links.set(token, link);
+      return linkRow(link);
+    }
+    case "renew": {
+      const l = [...s.links.values()].find((x) => x.id === op.linkId);
+      if (!l) throw new Error("link_not_found");
+      if (l.revokedAt !== null) throw new Error("link_revoked");
+      l.expiresAt = Date.now() + op.days * 86_400_000;
+      return new Date(l.expiresAt).toISOString();
+    }
+    case "revoke": {
+      const l = [...s.links.values()].find((x) => x.id === op.linkId);
+      if (!l) throw new Error("link_not_found");
+      if (l.revokedAt === null) l.revokedAt = Date.now();
+      return null;
+    }
+    case "expire": {
+      const l = s.links.get(op.token);
+      if (l) l.expiresAt = Date.now() - 1000;
+      return null;
+    }
+  }
+}
+
+/** Ficha del cliente sintética: sus opiniones y enlaces personales. */
+export async function fixtureClientRecord(clientId: string) {
+  const st = await store();
+  const s = fb();
+  const feedback = [...s.feedback.values()].filter((f) => f.clientId === clientId).sort((a, b) => b.updatedAt - a.updatedAt).map((f) => ({
+    id: f.id,
+    catalogTitle: f.catalogTitle,
+    propertyTitle: f.propertyTitle,
+    rating: f.rating,
+    comment: f.comment,
+    createdAt: new Date(f.createdAt).toISOString(),
+    updatedAt: new Date(f.updatedAt).toISOString(),
+    inCatalog: !!st.get(f.base)?.snapshot.items.some((x) => x.key === f.key),
+  }));
+  const links = [...s.links.values()].filter((l) => l.clientId === clientId).map((l) => ({
+    id: l.id,
+    catalogTitle: st.get(l.base)?.snapshot.title ?? "Catálogo",
+    token: l.token,
+    expiresAt: new Date(l.expiresAt).toISOString(),
+    revokedAt: l.revokedAt ? new Date(l.revokedAt).toISOString() : null,
+  }));
+  return { feedback, links };
+}
+
+export function fixtureNotices(): FixtureNotice[] {
+  return [...fb().notices].sort((a, b) => b.createdAt - a.createdAt);
 }

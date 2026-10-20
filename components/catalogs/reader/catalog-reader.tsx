@@ -29,6 +29,8 @@ import { SyncClient, type Connectivity, type EventSourceLike, type FetchStateRes
 import { cn } from "@/lib/utils";
 import { useReaderPdf } from "./pdf-download";
 import { ClosingPage, ColophonPage, CoverPage, DetailSpread, IndexPage, OpeningSpread, StatePage, type PhotoUrl } from "./pages";
+import { FeedbackBox } from "./feedback-box";
+import type { PersonalFeedbackView, SavedFeedback } from "@/lib/catalogs/feedback-rules";
 import { ReaderImage } from "./reader-image";
 import styles from "./reader.module.css";
 
@@ -119,9 +121,12 @@ export function CatalogReader({
   initial,
   photoBase = "/p/",
   measure = false,
+  feedback = null,
 }: {
   token: string;
   initial: PublicCatalogState;
+  /** 0218: opiniones del enlace PERSONAL (null o no personal: sin «Tu opinión»). */
+  feedback?: PersonalFeedbackView | null;
   /** Desarrollo local: fotos sintéticas en lugar del proxy /p/. */
   photoBase?: string;
   measure?: boolean;
@@ -133,6 +138,10 @@ export function CatalogReader({
   const readerPdf = useReaderPdf(token);
   const pdf = connectivity === "offline" ? null : readerPdf;
   const [userScroll, setUserScroll] = useState(false);
+  // Opiniones guardadas de este enlace personal, por clave de vivienda.
+  const personal = feedback?.personal === true;
+  const [opinions, setOpinions] = useState<Record<string, SavedFeedback>>(() => feedback?.items ?? {});
+  const onOpinionSaved = useCallback((key: string, value: SavedFeedback) => setOpinions((o) => ({ ...o, [key]: value })), []);
   const [bookFits, setBookFits] = useState(true);
   const scrollMode = userScroll || !bookFits;
   const [lowMotion, setLowMotion] = useState(false);
@@ -461,7 +470,10 @@ export function CatalogReader({
     const gallery = openGalleryAt(item.key);
     const key = `item-${p.key}-${p.part}-${state.layout}`;
     if (p.part === "detail") {
-      return wrap(key, <DetailSpread item={item} index={i} total={c.items.length} single={state.layout === "single"} onOpenGallery={gallery} />);
+      const opinion = personal ? (
+        <FeedbackBox token={token} itemKey={item.key} itemTitle={item.title} saved={opinions[item.key] ?? null} onSaved={onOpinionSaved} />
+      ) : null;
+      return wrap(key, <DetailSpread item={item} index={i} total={c.items.length} single={state.layout === "single"} onOpenGallery={gallery} extra={opinion} />);
     }
     // La fotografía alterna de lado por vivienda, como la referencia.
     return wrap(key, <OpeningSpread item={item} index={i} total={c.items.length} url={url} flipped={i % 2 === 1} onOpenGallery={gallery} />);
