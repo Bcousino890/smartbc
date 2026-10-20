@@ -25,7 +25,10 @@ import { SidePanelFooter } from "./manager/side-panel";
 // queda en el catálogo: nunca toca la ficha global ni las historias.
 //   · Diagnóstico: qué ve hoy el cliente y de dónde sale (texto del
 //     catálogo, historia aprobada, descripción limpia o solo datos).
-//   · Editor: entrada, texto completo y hasta 3 puntos verificados.
+//   · Editor (expediente 2026-10-20-bcp-01-compacto-y-opiniones, DC5–DC7):
+//     el TÍTULO y la DESCRIPCIÓN de la vivienda en este catálogo; la entrada y
+//     los puntos (de C2) quedan plegados en «Más opciones» y no hacen falta
+//     para publicar. Basta un título.
 //   · IA solo al pulsar: devuelve una PROPUESTA; si el texto cambió mientras
 //     tanto, no se pisa (se ofrece «Usar la propuesta»). Nunca publica.
 //   · Publicar: sin contacto, URL ni precio, y cada aviso corregido o
@@ -45,6 +48,7 @@ export interface TextActions {
   save: (i: {
     catalogId: string;
     propertyId: string;
+    title?: string | null;
     body: string | null;
     lead: string | null;
     highlights: string[];
@@ -55,7 +59,7 @@ export interface TextActions {
   publish: (i: { catalogId: string; propertyId: string; expectedRev: number; confirmed: string[]; skipNotify?: boolean }) => Promise<Res>;
   withdraw: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
   remove: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
-  preview: (i: { catalogId: string; propertyId: string; body: string | null; lead: string | null; highlights: string[] }) => Promise<Preview>;
+  preview: (i: { catalogId: string; propertyId: string; title?: string | null; body: string | null; lead: string | null; highlights: string[] }) => Promise<Preview>;
 }
 
 export const LEVEL: Record<CatalogTextView["level"], string> = {
@@ -80,6 +84,7 @@ const BLOCKER: Record<string, string> = {
   text_has_contact: "Tiene un teléfono, un correo o una web",
   text_has_price: "Menciona un precio (el precio ya se ve aparte y se actualiza solo)",
 };
+const WHERE: Record<string, string> = { title: "título", body: "descripción", lead: "entrada", highlight: "puntos" };
 
 type TextSession = {
   origin: "manual" | "ai_clean" | "ai_draft";
@@ -89,7 +94,7 @@ type TextSession = {
   preview: JourneyPreview | null;
 };
 const EMPTY_SESSION: TextSession = { origin: "manual", check: null, confirmed: [], proposal: null, preview: null };
-const EMPTY_KEY = textKey({ lead: null, body: null, highlights: [] });
+const EMPTY_KEY = textKey({ title: null, lead: null, body: null, highlights: [] });
 
 export const textDraftKey = (propertyId: string) => `text:${propertyId}`;
 export const textSessionKey = (propertyId: string) => `textSession:${propertyId}`;
@@ -135,20 +140,21 @@ export function TextEditor({
     });
   const savedNow = savedTextOf(view);
   const value: TextRaw = d ? d.value : shownTextOf(view);
-  const { body, lead, highlights } = value;
+  const { title, body, lead, highlights } = value;
   const currentValue = () => draftsStore.draft<TextDraft>(catalogId, dKey)?.value ?? shownTextOf(view);
   const setValue = (patch: Partial<TextRaw>) =>
     draftsStore.updateDraft<TextDraft>(catalogId, dKey, (prev) => editTextDraft(prev, view, { ...(prev ? prev.value : shownTextOf(view)), ...patch }));
+  const setTitle = (v: string) => setValue({ title: v });
   const setBody = (v: string) => setValue({ body: v });
   const setLead = (v: string) => setValue({ lead: v });
   const setHighlights = (fn: (h: string[]) => string[]) => setValue({ highlights: fn(currentValue().highlights) });
 
   const savedKey = d ? d.saved.key : savedNow.key;
   const rev = d ? d.saved.rev : savedNow.rev;
-  const { check, confirmed, proposal, preview, origin } = sess;
+  const { check, confirmed, proposal, origin } = sess;
   const [error, setError] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<null | "prepare" | "draft">(null);
-  const [busy, start] = useTransition();
+  const [busy] = useTransition();
   const req = useRef(0);
 
   // «Pendiente de guardar» (C2): lo escrito ≠ el último borrador guardado.
@@ -168,7 +174,7 @@ export function TextEditor({
   function askAi(kind: "prepare" | "draft") {
     setError(null);
     const id = ++req.current;
-    const snapshot = { body, lead };
+    const snapshot = { title, body, lead };
     setAiBusy(kind);
     (kind === "prepare" ? actions.prepare : actions.draft)({ catalogId, propertyId: view.propertyId }).then((r) => {
       if (id !== req.current) return; // cancelada o sustituida: se ignora
@@ -179,7 +185,7 @@ export function TextEditor({
       }
       // Si el texto cambió mientras la IA trabajaba, no se pisa.
       const cur = currentValue();
-      if (cur.body !== snapshot.body || cur.lead !== snapshot.lead) {
+      if (cur.title !== snapshot.title || cur.body !== snapshot.body || cur.lead !== snapshot.lead) {
         setSess(() => ({ proposal: r.proposal }));
         return;
       }
@@ -188,7 +194,7 @@ export function TextEditor({
   }
 
   function applyProposal(p: DraftProposal, c?: DraftCheck) {
-    setValue(p.lead ? { body: p.body, lead: p.lead } : { body: p.body });
+    setValue({ body: p.body, ...(p.lead ? { lead: p.lead } : {}), ...(p.title ? { title: p.title } : {}) });
     setSess(() => ({ origin: p.origin, proposal: null, confirmed: [], ...(c ? { check: c } : {}) }));
   }
 
@@ -197,10 +203,10 @@ export function TextEditor({
   // Si la sesión ya la tiene (editor reabierto), no se vuelve a pedir.
   useEffect(() => {
     const saved = view.draft;
-    if (sess.check || !saved || !(saved.body || saved.lead)) return;
+    if (sess.check || !saved || !(saved.body || saved.lead || saved.title)) return;
     let alive = true;
     actions
-      .preview({ catalogId, propertyId: view.propertyId, body: saved.body, lead: saved.lead, highlights: saved.highlights })
+      .preview({ catalogId, propertyId: view.propertyId, title: saved.title, body: saved.body, lead: saved.lead, highlights: saved.highlights })
       .then((r) => {
         if (alive && r.ok) setSess((s) => (s.check ? {} : { check: r.check }));
       })
@@ -233,6 +239,7 @@ export function TextEditor({
         const r = await actions.save({
           catalogId,
           propertyId: view.propertyId,
+          title: submitted.title.replace(/\s+/g, " ").trim() || null,
           body: submitted.body.trim() || null,
           lead: submitted.lead.trim() || null,
           highlights: submitted.highlights,
@@ -257,25 +264,14 @@ export function TextEditor({
     );
   }
 
-  function showPreview() {
-    setError(null);
-    start(async () => {
-      const r = await actions.preview({ catalogId, propertyId: view.propertyId, body: body.trim() || null, lead: lead.trim() || null, highlights });
-      if (!r.ok) {
-        setError(r.error);
-        return;
-      }
-      setSess(() => ({ preview: r.preview, check: r.check }));
-    });
-  }
-
   return (
     <div className="space-y-3" data-testid="text-editor">
       {d?.conflict ? (
         <div role="status" className="space-y-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="text-conflict">
           <p className="font-semibold">El borrador guardado cambió (en otra pestaña o con otra acción). Tus cambios siguen aquí y no se han guardado.</p>
           <p>
-            Guardado ahora: {d.conflict.raw.lead ? <em>{d.conflict.raw.lead} </em> : null}
+            Guardado ahora: {d.conflict.raw.title ? <strong>{d.conflict.raw.title} · </strong> : null}
+            {d.conflict.raw.lead ? <em>{d.conflict.raw.lead} </em> : null}
             <span className="line-clamp-3">{d.conflict.raw.body || "—"}</span>
           </p>
           <div className="flex flex-wrap gap-3 pt-1">
@@ -297,55 +293,74 @@ export function TextEditor({
       ) : null}
       {view.published && !view.published.current ? (
         <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="text-stale">
-          Lo publicado ya no se muestra: cambió {view.published.changed.join(", ") || "la ficha"}. Revísalo y vuelve a publicar; mientras tanto el cliente ve{" "}
-          {view.level === "story" ? "la historia aprobada" : view.level === "clean" ? "la descripción limpia" : "solo datos y fotos"}.
+          La descripción publicada ya no se muestra: cambió {view.published.changed.join(", ") || "la ficha"}. Revísala y vuelve a publicar; mientras tanto el cliente ve{" "}
+          {view.level === "story" ? "la historia aprobada" : view.level === "clean" ? "la descripción limpia" : "solo datos y fotos"}
+          {view.published.title ? ". El título propio sigue publicado" : ""}.
         </p>
       ) : null}
       <label className="block">
-        <span className="crm-label-sm text-ink/70">Entrada (opcional, hasta 280 caracteres)</span>
-        <textarea
-          value={lead}
-          onChange={(e) => setLead(e.target.value)}
-          maxLength={280}
-          rows={2}
-          aria-label="Entrada"
+        <span className="crm-label-sm text-ink/70">Título en este catálogo</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={160}
+          placeholder={view.title}
+          aria-label="Título en este catálogo"
+          data-testid="text-title"
           className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
         />
+        <span className="mt-1 block text-xs text-ink/50">Vacío = el de la ficha («{view.title}»). Solo cambia en este catálogo.</span>
       </label>
       <label className="block">
-        <span className="crm-label-sm text-ink/70">Texto completo (hasta 6.000 caracteres)</span>
+        <span className="crm-label-sm text-ink/70">Descripción para este catálogo (hasta 6.000 caracteres)</span>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           maxLength={6000}
-          rows={8}
-          aria-label="Texto completo"
+          rows={10}
+          aria-label="Descripción para este catálogo"
+          data-testid="text-body"
           className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
         />
+        <span className="mt-1 block text-xs text-ink/50">Separa los párrafos con una línea en blanco. El cliente la lee entera en la segunda pantalla de la vivienda.</span>
       </label>
-      <fieldset>
-        <legend className="crm-label-sm text-ink/70">Puntos verificados (hasta 3, literales de la ficha)</legend>
-        {view.candidates.length === 0 ? (
-          <p className="text-xs text-ink/50">La ficha no tiene características de la lista cerrada (terraza, ascensor, garaje…).</p>
-        ) : (
-          <div className="mt-1 flex flex-wrap gap-2">
-            {view.candidates.map((c) => {
-              const on = highlights.includes(c);
-              return (
-                <label key={c} className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${on ? "border-gold bg-gold/15" : "border-gold/25"}`}>
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    disabled={!on && highlights.length >= 3}
-                    onChange={() => setHighlights((h) => (on ? h.filter((x) => x !== c) : [...h, c]))}
-                  />
-                  {c}
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </fieldset>
+      <details className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-more" open={!!(lead || highlights.length) || undefined}>
+        <summary className="cursor-pointer text-xs text-ink/70">Más opciones (entrada y puntos de la versión anterior; no hacen falta para publicar)</summary>
+        <label className="mt-2 block">
+          <span className="crm-label-sm text-ink/70">Entrada (opcional, hasta 280 caracteres; abre la descripción)</span>
+          <textarea
+            value={lead}
+            onChange={(e) => setLead(e.target.value)}
+            maxLength={280}
+            rows={2}
+            aria-label="Entrada"
+            className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+          />
+        </label>
+        <fieldset className="mt-2">
+          <legend className="crm-label-sm text-ink/70">Puntos verificados (hasta 3, literales de la ficha)</legend>
+          {view.candidates.length === 0 ? (
+            <p className="text-xs text-ink/50">La ficha no tiene características de la lista cerrada (terraza, ascensor, garaje…).</p>
+          ) : (
+            <div className="mt-1 flex flex-wrap gap-2">
+              {view.candidates.map((c) => {
+                const on = highlights.includes(c);
+                return (
+                  <label key={c} className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${on ? "border-gold bg-gold/15" : "border-gold/25"}`}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={!on && highlights.length >= 3}
+                      onChange={() => setHighlights((h) => (on ? h.filter((x) => x !== c) : [...h, c]))}
+                    />
+                    {c}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </fieldset>
+      </details>
 
       <div className="flex flex-wrap gap-2">
         {aiBusy ? (
@@ -374,13 +389,10 @@ export function TextEditor({
               disabled={pending || busy}
               className="rounded-lg border border-gold/40 px-3 py-1.5 text-xs text-ink/80 hover:bg-white disabled:opacity-50"
             >
-              Borrador con IA
+              Borrador con IA (título y descripción)
             </button>
           </>
         )}
-        <button type="button" onClick={showPreview} disabled={pending || busy} className="rounded-lg border border-gold/40 px-3 py-1.5 text-xs text-ink/80 hover:bg-white disabled:opacity-50">
-          Ver recorrido
-        </button>
       </div>
       <p className="text-xs text-ink/50">
         La IA usa el proveedor ya configurado (Configuración → IA) solo cuando pulsas el botón. Propone un texto; nada se guarda ni se publica sin ti.
@@ -407,7 +419,7 @@ export function TextEditor({
         <div className="space-y-1" data-testid="text-check">
           {check.blockers.map((b) => (
             <p key={`${b.code}-${b.where}`} className="rounded-lg bg-red-50 px-2 py-1 text-xs text-red-800">
-              No se puede publicar: {BLOCKER[b.code]} ({b.where === "body" ? "texto" : b.where === "lead" ? "entrada" : "puntos"}).
+              No se puede publicar: {BLOCKER[b.code]} ({WHERE[b.where] ?? b.where}).
             </p>
           ))}
           {check.warnings.map((w) => (
@@ -426,21 +438,6 @@ export function TextEditor({
               </span>
             </label>
           ))}
-        </div>
-      ) : null}
-
-      {preview ? (
-        <div className="space-y-1 rounded-lg border border-gold/20 bg-white p-2 text-xs text-ink/70" data-testid="text-preview">
-          <p>
-            <strong>Entrada:</strong> {preview.lead ?? "—"}
-          </p>
-          <p>
-            <strong>Puntos:</strong> {preview.highlights.join(" · ") || "—"}
-          </p>
-          <p>
-            <strong>Recorrido:</strong> {preview.sections.length} sección{preview.sections.length === 1 ? "" : "es"} ·{" "}
-            {preview.sections.filter((s) => s.photo).length} con foto · {preview.words} palabras
-          </p>
         </div>
       ) : null}
 
@@ -485,7 +482,7 @@ export function TextEditor({
         <button
           type="button"
           onClick={() =>
-            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Texto publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
+            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
           }
           disabled={pending || busy || !canPublish}
           title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}

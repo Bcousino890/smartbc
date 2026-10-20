@@ -25,11 +25,12 @@ import {
   type ReaderLayout,
   type ReaderState,
 } from "@/lib/catalogs/reader-state";
-import { itemLayout } from "@/lib/catalogs/journey-layout";
 import { SyncClient, type Connectivity, type EventSourceLike, type FetchStateResult } from "@/lib/catalogs/sync-client";
 import { cn } from "@/lib/utils";
 import { useReaderPdf } from "./pdf-download";
-import { ClosingPage, ColophonPage, CoverPage, DetailSpread, IndexPage, JourneySpreadPage, OpeningSpread, SheetPage, StatePage, type PhotoUrl } from "./pages";
+import { ClosingPage, ColophonPage, CoverPage, DetailSpread, IndexPage, OpeningSpread, StatePage, type PhotoUrl } from "./pages";
+import { FeedbackBox } from "./feedback-box";
+import type { PersonalFeedbackView, SavedFeedback } from "@/lib/catalogs/feedback-rules";
 import { ReaderImage } from "./reader-image";
 import styles from "./reader.module.css";
 
@@ -38,8 +39,8 @@ import styles from "./reader.module.css";
 // pantalla completa con el giro de página, la barra y la galería de
 // app/v/[token] (DV12), o el modo desplazamiento. Teclado, deslizar, índice,
 // «reducir movimiento», actualizaciones en vivo con D12/E4 y, con ?medir=1,
-// la medición de D13. En doble composición cada vivienda tiene varias partes
-// (apertura, recorrido, detalle); en una columna, una hoja por vivienda.
+// la medición de D13. Cada vivienda tiene exactamente dos pantallas, apertura
+// y detalle (expediente 2026-10-20-bcp-01-compacto-y-opiniones, DC1).
 
 type Action =
   | { type: "goto"; page: PageRef }
@@ -120,9 +121,12 @@ export function CatalogReader({
   initial,
   photoBase = "/p/",
   measure = false,
+  feedback = null,
 }: {
   token: string;
   initial: PublicCatalogState;
+  /** 0218: opiniones del enlace PERSONAL (null o no personal: sin «Tu opinión»). */
+  feedback?: PersonalFeedbackView | null;
   /** Desarrollo local: fotos sintéticas en lugar del proxy /p/. */
   photoBase?: string;
   measure?: boolean;
@@ -134,6 +138,10 @@ export function CatalogReader({
   const readerPdf = useReaderPdf(token);
   const pdf = connectivity === "offline" ? null : readerPdf;
   const [userScroll, setUserScroll] = useState(false);
+  // Opiniones guardadas de este enlace personal, por clave de vivienda.
+  const personal = feedback?.personal === true;
+  const [opinions, setOpinions] = useState<Record<string, SavedFeedback>>(() => feedback?.items ?? {});
+  const onOpinionSaved = useCallback((key: string, value: SavedFeedback) => setOpinions((o) => ({ ...o, [key]: value })), []);
   const [bookFits, setBookFits] = useState(true);
   const scrollMode = userScroll || !bookFits;
   const [lowMotion, setLowMotion] = useState(false);
@@ -461,43 +469,14 @@ export function CatalogReader({
     if (!item) return null;
     const gallery = openGalleryAt(item.key);
     const key = `item-${p.key}-${p.part}-${state.layout}`;
-    const lay = itemLayout(item);
-    // La fotografía alterna de lado por vivienda, como la referencia.
-    const flipped = i % 2 === 1;
-    if (state.layout === "single") {
-      return wrap(key, <SheetPage item={item} index={i} total={c.items.length} url={url} layout={lay} onOpenGallery={gallery} />);
-    }
-    if (p.part === "open") {
-      return wrap(
-        key,
-        <OpeningSpread
-          item={item}
-          index={i}
-          total={c.items.length}
-          url={url}
-          layout={lay}
-          flipped={flipped}
-          onOpenGallery={gallery}
-          onContinue={lay.spreads.length ? () => go({ kind: "item", key: item.key, part: "j1" }) : null}
-        />,
-      );
-    }
     if (p.part === "detail") {
-      return wrap(key, <DetailSpread item={item} index={i} total={c.items.length} url={url} layout={lay} onOpenGallery={gallery} />);
+      const opinion = personal ? (
+        <FeedbackBox token={token} itemKey={item.key} itemTitle={item.title} saved={opinions[item.key] ?? null} onSaved={onOpinionSaved} />
+      ) : null;
+      return wrap(key, <DetailSpread item={item} index={i} total={c.items.length} single={state.layout === "single"} onOpenGallery={gallery} extra={opinion} />);
     }
-    // Recorrido (E1): la doble página n de la composición pura.
-    const n = Number(p.part.slice(1));
-    const spread = lay.spreads[n - 1];
-    if (!spread) return null;
-    const last = n === lay.spreads.length;
-    const more =
-      last && lay.truncated && lay.detail
-        ? {
-            label: lay.detail.story ? "Sigue en la historia completa" : "Sigue en la descripción completa",
-            onClick: () => go({ kind: "item", key: item.key, part: "detail" }),
-          }
-        : null;
-    return wrap(key, <JourneySpreadPage item={item} spread={spread} part={p.part} more={more} url={url} flipped={flipped} onOpenGallery={gallery} />);
+    // La fotografía alterna de lado por vivienda, como la referencia.
+    return wrap(key, <OpeningSpread item={item} index={i} total={c.items.length} url={url} flipped={i % 2 === 1} onOpenGallery={gallery} />);
   }
 
   const rootClass = cn(styles.root, "font-sans text-ink", lowMotion && styles.lowMotion);

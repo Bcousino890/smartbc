@@ -18,6 +18,12 @@ import { countWords, fold, HIGHLIGHT_TERMS, isPublicSafe, PHONE_RE, EMAIL_RE, UR
 // Nunca se inventa: sin historia, el texto se reparte SIN títulos temáticos.
 // La descripción completa (la del nivel que manda, o la limpia) va íntegra en
 // el detalle; ningún dato estructurado se pierde.
+//
+// Lector compacto (expediente 2026-10-20-bcp-01-compacto-y-opiniones, DC3):
+// el lector y el PDF ya no reparten el texto en secciones con fotos; usan
+// `copy`, la descripción completa del catálogo en bloques, UNA sola vez y con
+// la misma prioridad. `lead`, `highlights`, `sections` y `mosaic` se siguen
+// calculando para la gestión y las pruebas.
 // ============================================================================
 
 export type EditorialLevel = "text" | "story" | "clean" | "facts";
@@ -73,6 +79,19 @@ export interface Editorial {
    *  elegibles (índices en photos, en su orden, sin la de apertura ni las
    *  clases excluidas). [] en cualquier otro caso. */
   mosaic: number[];
+  /** DC3 · La descripción completa del catálogo, en bloques y en orden, sin
+   *  fotos: texto publicado (su entrada propia y sus párrafos), o la entrada y
+   *  los capítulos de la historia (con su título), o los párrafos de la
+   *  descripción limpia; [] solo con datos. Nunca se repite un texto. */
+  copy: Array<{ heading: string | null; text: string }>;
+}
+
+/** Párrafos de un texto (separados por una línea en blanco), sin vacíos. */
+export function paragraphsOf(text: string | null | undefined): string[] {
+  return (text ?? "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 }
 
 /** E1 (D-QA4) · Clases que el recorrido automático NO usa solas. Solo cuentan
@@ -172,6 +191,9 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       it.photos,
       used,
     );
+    // La entrada propia (si la hay) abre la descripción; si la entrada salió
+    // del propio texto, ya está dentro de él y no se repite.
+    const copy = [...(tl && noContact(tl) && !(tb ?? "").includes(tl) ? [tl] : []), ...paragraphsOf(tb).filter(noContact)].map((text) => ({ heading: null, text }));
     return {
       level: "text",
       lead: autoLead && noContact(autoLead) ? autoLead : null,
@@ -179,6 +201,7 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       sections,
       description: tb,
       features,
+      copy,
     };
   }
 
@@ -208,13 +231,17 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       });
     }
     const prelude = (it.story?.p ?? "").trim();
+    const safePrelude = prelude && isPublicSafe(prelude) ? prelude : null;
     return {
       level: "story",
-      lead: prelude && isPublicSafe(prelude) ? prelude : leadFrom(it.cleanDescription).lead,
+      lead: safePrelude ?? leadFrom(it.cleanDescription).lead,
       highlights: candidates.slice(0, 3),
       sections,
       description: it.cleanDescription,
       features,
+      // La historia ES la descripción (DC3): su entrada y sus capítulos. La
+      // descripción limpia no se repite debajo.
+      copy: [...(safePrelude ? [{ heading: null, text: safePrelude }] : []), ...sections.map((x) => ({ heading: x.heading, text: x.text }))],
     };
   }
 
@@ -233,11 +260,12 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       sections,
       description: it.cleanDescription,
       features,
+      copy: paragraphsOf(it.cleanDescription).filter(isPublicSafe).map((text) => ({ heading: null, text })),
     };
   }
 
   // 4 · Solo datos y fotos.
-  return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features };
+  return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features, copy: [] };
 }
 
 export function deriveEditorial(it: EditorialInput): Editorial {

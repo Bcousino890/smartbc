@@ -44,6 +44,8 @@ export interface DraftSource {
 }
 
 export interface DraftProposal {
+  /** Título propuesto para ESTE catálogo (solo «Borrador con IA»; null si no). */
+  title?: string | null;
   body: string;
   lead: string | null;
   origin: "ai_clean" | "ai_draft";
@@ -82,9 +84,11 @@ export async function prepareFromSource(
 
 const DRAFT_SCHEMA = {
   type: "object",
-  properties: { lead: { type: "string" }, body: { type: "string" } },
-  required: ["lead", "body"],
+  properties: { title: { type: "string" }, lead: { type: "string" }, body: { type: "string" } },
+  required: ["title", "lead", "body"],
 } as const;
+
+export const TITLE_MAX = 160;
 
 export function draftSystemPrompt(): string {
   return `Escribe en español el texto de una vivienda para el catálogo privado de un personal shopper inmobiliario.
@@ -94,6 +98,7 @@ Usa SOLO los hechos que te doy. Reglas estrictas:
 - No menciones precios, gastos, honorarios ni condiciones económicas.
 - No incluyas teléfonos, correos, webs, nombres de agencias ni de personas.
 - Tono sobrio y elegante, sin superlativos vacíos ni exclamaciones.
+- "title": un título breve para el catálogo (máximo 80 caracteres), con el tipo de vivienda y la zona si se conocen; sin precio ni adjetivos vacíos.
 - "lead": una entrada de una o dos frases (máximo 40 palabras).
 - "body": de 3 a 6 párrafos cortos, separados por una línea en blanco.
 - Si hay pocos hechos, escribe poco: es mejor un texto corto que uno inventado.
@@ -118,18 +123,21 @@ export function draftUserText(src: DraftSource): string {
 /** «Borrador con IA» a partir de hechos conocidos (sin guardar nada). */
 export async function draftFromFacts(src: DraftSource, ai: AiFn, signal?: AbortSignal): Promise<DraftProposal> {
   const raw = await ai({ system: draftSystemPrompt(), userText: draftUserText(src), maxTokens: 1500, jsonSchema: DRAFT_SCHEMA as unknown as Record<string, unknown>, signal });
-  const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as { lead?: unknown; body?: unknown };
+  const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as { title?: unknown; lead?: unknown; body?: unknown };
   const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
   const lead = typeof parsed.lead === "string" && parsed.lead.trim() ? parsed.lead.trim() : null;
-  if (!body && !lead) throw new Error("ai_failed");
-  return { body, lead, origin: "ai_draft" };
+  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.replace(/\s+/g, " ").trim().slice(0, TITLE_MAX) : null;
+  if (!body && !lead && !title) throw new Error("ai_failed");
+  // La entrada se incorpora al principio de la descripción: el editor ya no
+  // la pide aparte (DC7).
+  return { title, body: lead && body ? `${lead}\n\n${body}` : body || lead || "", lead: null, origin: "ai_draft" };
 }
 
 // ── Comprobación determinista ───────────────────────────────────────────────
 
 export interface DraftBlocker {
   code: TextBlocker;
-  where: "body" | "lead" | "highlight";
+  where: "title" | "body" | "lead" | "highlight";
 }
 export interface DraftWarning {
   /** Estable: lo que el dueño confirma («number:110», «feature:piscina»). */
@@ -154,7 +162,7 @@ function numbersIn(text: string): string[] {
 }
 
 export function checkDraft(
-  draft: { body: string | null; lead: string | null; highlights: string[] },
+  draft: { title?: string | null; body: string | null; lead: string | null; highlights: string[] },
   src: DraftSource,
 ): DraftCheck {
   const blockers: DraftBlocker[] = [];
@@ -163,11 +171,12 @@ export function checkDraft(
       if (!blockers.some((x) => x.code === b && x.where === where)) blockers.push({ code: b, where });
     }
   };
+  add(draft.title ?? null, "title");
   add(draft.body, "body");
   add(draft.lead, "lead");
   for (const h of draft.highlights) add(h, "highlight");
 
-  const text = [draft.lead ?? "", draft.body ?? ""].join(" ");
+  const text = [draft.title ?? "", draft.lead ?? "", draft.body ?? ""].join(" ");
   const sourceText = [src.title, src.place, src.floor, src.operation, src.cleanDescription, ...src.features].filter(Boolean).join(" ");
   const known = new Set<string>([
     ...numbersIn(sourceText),

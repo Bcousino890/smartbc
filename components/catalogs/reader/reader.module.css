@@ -116,13 +116,6 @@
   order: 1;
 }
 
-/* Hoja única (una columna): la vivienda entera bajo su fotografía. */
-.sheet {
-  display: grid;
-  height: 100%;
-  grid-template-rows: 35% minmax(0, 1fr);
-}
-
 /* Dos paneles de texto (recorrido, detalle): solo existen en la doble
    composición. */
 .twoPanels {
@@ -352,51 +345,26 @@
   margin-bottom: 1rem;
 }
 
-/* ── Fotos dentro del texto y mosaico de la ficha breve ───────────────── */
+/* ── Miniaturas de la apertura (DC1) ─────────────────────────────────── */
 
-.inlinePhoto {
-  position: relative;
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  margin: 0 0 1.5rem;
-  padding: 0;
-  border: 0;
-  overflow: hidden;
-  background: rgba(10, 10, 10, 0.05);
-  cursor: pointer;
-}
-
-.inlinePhoto img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.inlinePortrait {
-  width: 56%;
-  aspect-ratio: 3 / 4;
-}
-
-.mosaic {
+.thumbs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  width: 100%;
-  margin-top: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.mosaic1 {
-  grid-template-columns: 1fr;
+/* Una columna: una sola fila de miniaturas (el resto, en la galería). */
+.thumbs li:nth-child(n + 4) {
+  display: none;
 }
 
-.mosaic3 .mosaicTile:first-child {
-  grid-column: 1 / -1;
-}
-
-.mosaicTile {
+.thumb {
   position: relative;
+  display: block;
+  width: 100%;
   aspect-ratio: 3 / 2;
   padding: 0;
   border: 0;
@@ -405,11 +373,16 @@
   cursor: pointer;
 }
 
-.mosaicTile img {
+.thumb img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: opacity 500ms;
+}
+
+.thumb:hover img {
+  opacity: 0.85;
 }
 
 /* ── Doble composición: desde 900 × 620 ───────────────────────────────── */
@@ -434,6 +407,14 @@
 
   .split.flip .photoCol {
     order: 1;
+  }
+
+  .thumbs {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .thumbs li:nth-child(n + 4) {
+    display: block;
   }
 
   .textScroll {
@@ -477,28 +458,24 @@
 /* ── Modo desplazamiento: alturas naturales ───────────────────────────── */
 
 .flow .split,
-.flow .sheet,
 .flow .twoPanels,
 .flow .composed {
   height: auto;
   grid-template-rows: auto auto;
 }
 
-.flow .split .photoCol,
-.flow .sheet .photoCol {
+.flow .split .photoCol {
   aspect-ratio: 4 / 5;
 }
 
 @media (min-width: 640px) {
-  .flow .split .photoCol,
-  .flow .sheet .photoCol {
+  .flow .split .photoCol {
     aspect-ratio: 3 / 2;
   }
 }
 
 @media (min-width: 900px) {
-  .flow .split .photoCol,
-  .flow .sheet .photoCol {
+  .flow .split .photoCol {
     aspect-ratio: 2 / 1;
   }
 }

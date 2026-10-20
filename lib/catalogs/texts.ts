@@ -37,14 +37,18 @@ export type StoryStatus = "none" | "pending" | "current" | "stale";
 export interface CatalogTextView {
   propertyId: string;
   slug: string;
+  /** Título de la ficha del CRM (el título propio del catálogo va en draft/published). */
   title: string;
   bcReference: string | null;
   inList: boolean;
   /** Lo que ve hoy el lector para esta vivienda. */
   level: EditorialLevel;
   source: { hasText: boolean; clean: CleanStatus; story: StoryStatus };
-  draft: { body: string | null; lead: string | null; highlights: string[]; rev: number; origin: string; updatedAt: string | null } | null;
-  published: { body: string | null; lead: string | null; highlights: string[]; at: string | null; current: boolean; changed: string[] } | null;
+  /** 0217: `title` es el título propio de la vivienda en ESTE catálogo (null = el de la ficha). */
+  draft: { title: string | null; body: string | null; lead: string | null; highlights: string[]; rev: number; origin: string; updatedAt: string | null } | null;
+  /** `current`: el texto publicado se ve (su fuente no cambió). El título
+   *  publicado se ve siempre (DC6). */
+  published: { title: string | null; body: string | null; lead: string | null; highlights: string[]; at: string | null; current: boolean; changed: string[] } | null;
   /** Puntos verificados que se pueden elegir (literales de la ficha). */
   candidates: string[];
 }
@@ -133,13 +137,14 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
       title: p.title,
       bcReference: p.bc_reference ?? null,
       inList: r.in_list === true,
-      level: publishedCurrent ? "text" : story === "current" ? "story" : clean.status === "current" ? "clean" : "facts",
+      level: publishedCurrent && (t?.pub_body || t?.pub_lead) ? "text" : story === "current" ? "story" : clean.status === "current" ? "clean" : "facts",
       source: { hasText: !!(p.description ?? "").trim(), clean: clean.status, story },
-      draft: t && (t.draft_body || t.draft_lead)
-        ? { body: t.draft_body, lead: t.draft_lead, highlights: t.draft_highlights ?? [], rev: Number(t.draft_rev), origin: t.draft_origin, updatedAt: t.draft_updated_at }
-        : t ? { body: null, lead: null, highlights: [], rev: Number(t.draft_rev), origin: t.draft_origin, updatedAt: t.draft_updated_at } : null,
-      published: t && (t.pub_body || t.pub_lead)
+      draft: t && (t.draft_body || t.draft_lead || t.draft_title)
+        ? { title: t.draft_title ?? null, body: t.draft_body, lead: t.draft_lead, highlights: t.draft_highlights ?? [], rev: Number(t.draft_rev), origin: t.draft_origin, updatedAt: t.draft_updated_at }
+        : t ? { title: null, body: null, lead: null, highlights: [], rev: Number(t.draft_rev), origin: t.draft_origin, updatedAt: t.draft_updated_at } : null,
+      published: t && (t.pub_body || t.pub_lead || t.pub_title)
         ? {
+            title: t.pub_title ?? null,
             body: t.pub_body,
             lead: t.pub_lead,
             highlights: t.pub_highlights ?? [],

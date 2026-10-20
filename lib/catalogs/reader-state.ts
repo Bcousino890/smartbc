@@ -3,15 +3,14 @@
 // se prueba sin navegador en scripts/test-catalogs-public.mts.
 //
 // Páginas lógicas: portada · índice (con la introducción) · las partes de cada
-// vivienda · cierre · colofón (enmienda visual 2026-10-20, DV4). Las partes
-// dependen de la composición:
-//   · «spread» (doble página, desde 900 × 620): apertura, de 0 a 3 dobles
-//     páginas del recorrido («j1»…«j3», composición de journey-layout.ts) y
-//     el detalle (datos completos, descripción íntegra y, si el recorrido no
-//     alcanza, la historia completa) si hay algo que enseñar ahí;
-//   · «single» (una página): UNA hoja continua por vivienda («open») con el
-//     recorrido entero y el detalle plegable.
-// Los folios y el índice cuentan estas páginas lógicas.
+// vivienda · cierre · colofón (enmienda visual 2026-10-20, DV4). Lector
+// compacto (expediente 2026-10-20-bcp-01-compacto-y-opiniones, DC1): cada
+// vivienda tiene EXACTAMENTE dos partes, en las dos composiciones:
+//   · «open»   la apertura (foto, título, operación, precio, datos y fotos);
+//   · «detail» el detalle (ficha técnica, características y la descripción
+//              completa, que se desplaza dentro de la pantalla si es larga).
+// La composición («spread» desde 900 × 620, «single» por debajo) solo cambia
+// cómo se pintan. Los folios y el índice cuentan estas páginas lógicas.
 //
 // D12 al llegar una versión nueva:
 //   · la vivienda que se lee sigue → se queda en ella (aunque cambie de sitio)
@@ -25,11 +24,10 @@
 // cierra y se aplica D12.
 // ============================================================================
 
-import { itemLayout } from "./journey-layout";
 import type { PublicCatalog, PublicCatalogState, PublicItem } from "./public-contract";
 
 export type ReaderLayout = "spread" | "single";
-export type ItemPart = "open" | "j1" | "j2" | "j3" | "detail";
+export type ItemPart = "open" | "detail";
 
 export type PageRef =
   | { kind: "cover" }
@@ -62,19 +60,13 @@ export const REMOVED_LAST_NOTICE = "La vivienda que estabas viendo ya no forma p
 /** E3: la foto que se veía en la galería ya no se usa en este catálogo. */
 export const PHOTO_REMOVED_NOTICE = "Esa foto ya no forma parte del catálogo.";
 
-const JOURNEY_PARTS: ItemPart[] = ["j1", "j2", "j3"];
+const ITEM_PARTS: readonly ItemPart[] = ["open", "detail"];
 
-/**
- * Partes de una vivienda. En doble página salen de la composición pura del
- * recorrido (journey-layout.ts, E1): apertura, de 0 a 3 dobles páginas de
- * recorrido y el detalle si hay algo que enseñar ahí. En una página, una hoja.
- */
-export function itemParts(item: PublicItem, layout: ReaderLayout): ItemPart[] {
-  if (layout === "single") return ["open"];
-  const lay = itemLayout(item);
-  const parts: ItemPart[] = ["open", ...JOURNEY_PARTS.slice(0, lay.spreads.length)];
-  if (lay.detail) parts.push("detail");
-  return parts;
+/** Partes de una vivienda (DC1): siempre apertura y detalle, sea cual sea su
+ *  texto y la composición. Los parámetros se conservan por compatibilidad. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function itemParts(_item: PublicItem, _layout: ReaderLayout): ItemPart[] {
+  return [...ITEM_PARTS];
 }
 
 export function pagesOf(catalog: PublicCatalog, layout: ReaderLayout = "single"): PageRef[] {
@@ -94,21 +86,15 @@ export function samePage(a: PageRef, b: PageRef): boolean {
 }
 
 /**
- * La parte que se puede enseñar de verdad: si la pedida ya no existe (el texto
- * se acortó, se retiró o cambió la composición), la anterior que exista.
- * Una vivienda que no está se devuelve tal cual (la resuelve D12).
+ * La parte que se puede enseñar de verdad: una parte desconocida (un enlace o
+ * un estado antiguo con «j1»…) vuelve a la apertura. Una vivienda que no está
+ * se devuelve tal cual (la resuelve D12).
  */
 export function clampPage(catalog: PublicCatalog, layout: ReaderLayout, page: PageRef): PageRef {
   if (page.kind !== "item") return page;
   const it = catalog.items.find((x) => x.key === page.key);
   if (!it) return page;
-  const parts = itemParts(it, layout);
-  if (parts.includes(page.part)) return page;
-  const order: ItemPart[] = ["open", ...JOURNEY_PARTS, "detail"];
-  const want = order.indexOf(page.part);
-  let best: ItemPart = "open";
-  for (const p of parts) if (order.indexOf(p) <= want) best = p;
-  return { kind: "item", key: page.key, part: best };
+  return itemParts(it, layout).includes(page.part) ? page : { kind: "item", key: page.key, part: "open" };
 }
 
 export function pageIndex(catalog: PublicCatalog, page: PageRef, layout: ReaderLayout = "single"): number {

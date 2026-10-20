@@ -206,14 +206,22 @@ export function contactKey(name: string | null, phone: string | null, role: stri
 
 export const contactAdapter: FormAdapter<ContactRaw> = { key: (r) => contactKey(r.name, r.phone, r.role) };
 
+/** Copia del catálogo para una vivienda: título propio (vacío = el de la
+ *  ficha), descripción y, plegadas, entrada y puntos (DC5–DC7). */
 export interface TextRaw {
+  title: string;
   lead: string;
   body: string;
   highlights: string[];
 }
 
-export function textKey(t: { lead: string | null; body: string | null; highlights: string[] }): string {
-  return JSON.stringify([(t.lead ?? "").trim(), (t.body ?? "").trim(), [...t.highlights].sort()]);
+/** Título normalizado como lo guarda el SQL (espacios seguidos → uno). */
+export function normTitle(t: string | null | undefined): string {
+  return (t ?? "").replace(/\s+/g, " ").trim();
+}
+
+export function textKey(t: { title?: string | null; lead: string | null; body: string | null; highlights: string[] }): string {
+  return JSON.stringify([(t.lead ?? "").trim(), (t.body ?? "").trim(), [...t.highlights].sort(), normTitle(t.title)]);
 }
 
 export const textAdapter: FormAdapter<TextRaw> = { key: (r) => textKey(r) };
@@ -229,7 +237,7 @@ export interface TextDraft extends Draft<TextRaw> {
 
 export function savedTextOf(view: CatalogTextView): { raw: TextRaw; key: string; rev: number | null } {
   const d = view.draft;
-  const raw = { lead: d?.lead ?? "", body: d?.body ?? "", highlights: d?.highlights ?? [] };
+  const raw = { title: d?.title ?? "", lead: d?.lead ?? "", body: d?.body ?? "", highlights: d?.highlights ?? [] };
   return { raw, key: textKey(raw), rev: d ? d.rev : null };
 }
 
@@ -238,7 +246,8 @@ export function savedTextOf(view: CatalogTextView): { raw: TextRaw; key: string;
 export function shownTextOf(view: CatalogTextView): TextRaw {
   const d = view.draft;
   const p = view.published;
-  return { lead: d?.lead ?? p?.lead ?? "", body: d?.body ?? p?.body ?? "", highlights: d?.highlights ?? p?.highlights ?? [] };
+  if (d) return { title: d.title ?? "", lead: d.lead ?? "", body: d.body ?? "", highlights: d.highlights ?? [] };
+  return { title: p?.title ?? "", lead: p?.lead ?? "", body: p?.body ?? "", highlights: p?.highlights ?? [] };
 }
 
 export function editTextDraft(d: TextDraft | undefined, view: CatalogTextView, value: TextRaw): TextDraft {
@@ -287,11 +296,15 @@ export const CONTENT_FILTERS: Array<{ id: ContentFilter; label: string }> = [
   { id: "sin-guardar", label: "Cambios sin guardar" },
 ];
 
-const hasDraftContent = (v: CatalogTextView) => !!(v.draft && (v.draft.body || v.draft.lead));
+const hasDraftContent = (v: CatalogTextView) => !!(v.draft && (v.draft.body || v.draft.lead || v.draft.title));
 
-/** Estado del texto (los mismos textos que la fila de C2). */
+/** Estado del texto (los mismos textos que la fila de C2, con el título). */
 export function textStateLabel(v: CatalogTextView): string {
-  if (v.published) return v.published.current ? "Texto publicado" : `Publicado · revisar (cambió ${v.published.changed.join(", ") || "la ficha"})`;
+  if (v.published) {
+    const onlyTitle = !v.published.body && !v.published.lead;
+    if (!v.published.current) return `Publicado · revisar (cambió ${v.published.changed.join(", ") || "la ficha"})`;
+    return onlyTitle ? "Título publicado" : v.published.title ? "Título y texto publicados" : "Texto publicado";
+  }
   return hasDraftContent(v) ? "Borrador sin publicar" : "Sin texto propio";
 }
 

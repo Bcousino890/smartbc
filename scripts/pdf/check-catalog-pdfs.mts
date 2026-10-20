@@ -87,8 +87,9 @@ for (const c of [link("pdf"), link("main"), link("one"), link("journey"), link("
     ok("contacto de asesora: «TU ASESORA» y su nombre", flat(r.text).includes("tuasesora") && r.text.includes("Laura Méndez"));
     ok("vivienda sin fotos: «Sin fotos»", r.text.includes("Sin fotos"));
     ok("precio sin dato y reservada", /Precio · sin dato/.test(r.text) && flat(r.text).includes("reservada"));
-    const desc = r.catalog.items.find((it) => (it.description ?? "").length > 8000);
-    ok(`descripción larga (${desc ? tokens(desc.description!).length : 0} palabras) entera`, !!desc && tokens(desc.description!).length >= 1400);
+    const desc = r.catalog.items.find((it) => it.copy.map((c) => c.text).join(" ").length > 8000);
+    const words = desc ? tokens(desc.copy.map((c) => c.text).join(" ")).length : 0;
+    ok(`descripción larga (${words} palabras) entera`, !!desc && words >= 1400);
   }
 }
 
@@ -115,6 +116,19 @@ section("· glifos españoles (PDF7)");
   // La proyección parte el texto en frases (entrada + recorrido), como el lector.
   ok("texto de la vivienda con los mismos caracteres: se extrae tal cual", n.includes("Entrada. ¿Ático único?") && n.includes("¡Sí! Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso. Fin del texto."), n.slice(n.indexOf("Entrada"), n.indexOf("Entrada") + 200));
   ok("«Nº» no pasa a «NO» en los rótulos en mayúsculas", !/N\s?O\s?0\s?1/.test(r.text) && /N\s?º\s?0\s?1/.test(r.text));
+  await fixtureMutate({ op: "reset" });
+}
+
+// 0217 · título propio de la vivienda en este catálogo (A4): índice y página.
+section("· título propio del catálogo (0217)");
+{
+  const before = (await captureFixed(exportReaders(link("main").scope)))!;
+  const crmTitle = toPublicCatalog(before.snapshot as InternalSnapshot, before.operation).items[1].title;
+  await fixtureMutate({ op: "text", token: FIXTURE_TOKENS.main, index: 1, body: null, lead: null, itemTitle: "Señorial con galería en Almagro" } as never);
+  const r = await checkCase({ ...link("main"), tag: "titulo-propio" });
+  const n = r.text.replace(/\s+/g, " ");
+  ok("título propio: en la página de la vivienda y en el índice", (n.match(/Señorial con galería en Almagro/gi) ?? []).length >= 2, n.slice(0, 200));
+  ok("título de la ficha: ya no aparece en este catálogo", !n.includes(crmTitle.replace(/\s+/g, " ")), crmTitle);
   await fixtureMutate({ op: "reset" });
 }
 

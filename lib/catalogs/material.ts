@@ -8,30 +8,24 @@ import type { PublicItem } from "./public-contract";
 // ============================================================================
 
 export interface CatalogMaterial {
-  /** Ni descripción ni capítulos: el cliente ve la ficha breve (datos y fotos). */
+  /** Sin descripción: el cliente ve solo la ficha técnica y las fotos. */
   noText: boolean;
-  /** Capítulos del recorrido. */
-  sections: number;
-  /** De ellos, sin foto adecuada (la proyección no les asignó foto). */
-  sectionsWithoutPhoto: number;
   /** Fotos que ve el cliente. */
   photos: number;
 }
 
 export function materialOf(item: PublicItem): CatalogMaterial {
   return {
-    noText: !item.description && item.sections.length === 0,
-    sections: item.sections.length,
-    sectionsWithoutPhoto: item.sections.filter((s) => s.photo === null).length,
+    noText: item.copy.length === 0,
     photos: item.photos.length,
   };
 }
 
-/** Avisos breves para la lista de Contenido (orden fijo). */
+/** Avisos breves para la lista de Contenido (orden fijo). El lector compacto
+ *  ya no pone fotos en el texto: desaparece «capítulos sin foto adecuada». */
 export function materialLabels(m: CatalogMaterial): string[] {
   const out: string[] = [];
   if (m.noText) out.push("Sin descripción");
-  if (m.sectionsWithoutPhoto > 0) out.push(`${m.sectionsWithoutPhoto} capítulo${m.sectionsWithoutPhoto === 1 ? "" : "s"} sin foto adecuada`);
   if (m.photos === 0) out.push("Sin fotos");
   return out;
 }

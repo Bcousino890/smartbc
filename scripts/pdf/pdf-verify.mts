@@ -95,6 +95,13 @@ export function missingWord(hay: string[], want: string, gap = 45): string | nul
       at = found;
     }
     if (k === w.length) return null;
+    // PDFKit a veces extrae la ÚLTIMA línea corta de un párrafo («día.») antes
+    // que el resto: si solo faltan las 2 últimas palabras y están justo antes
+    // del comienzo (a ≤ 40 palabras), el texto está entero.
+    if (k >= w.length - 2 && k > 2) {
+      const near = hay.slice(Math.max(0, s - 40), s);
+      if (w.slice(k).every((x) => near.includes(x))) return null;
+    }
   }
   // Para el informe: hasta dónde llega el mejor intento.
   let best = 0;
@@ -181,21 +188,25 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
     const flatHay = flat(pages.slice(from - 1, to).map((p) => p.text).join("\n"));
     const shorts: [string, string][] = [["título", it.title], ["precio", it.price], ["rótulo", `Nº ${n2(i)}`], ["operación", it.operation], ...(it.place ?? "Zona · sin dato").split(",").map((z): [string, string] => ["zona", z])];
     if (it.reserved) shorts.push(["reservada", "Reservada"]);
-    x.highlights.forEach((h, k) => shorts.push([`punto ${k + 1}`, h]));
     x.features.forEach((f, k) => shorts.push([`característica ${k + 1}`, f]));
-    x.sections.forEach((s, k) => s.heading && shorts.push([`título de sección ${k + 1}`, s.heading]));
+    x.copy.forEach((b, k) => b.heading && shorts.push([`título de capítulo ${k + 1}`, b.heading]));
     const shortMiss = shorts.filter(([, w]) => !flatHay.includes(flat(w)));
-    ok(`nº ${n2(i)}: título, rótulo, precio, puntos y características (${shorts.length})`, shortMiss.length === 0, shortMiss.map(([k, w]) => `${k}: «${w}»`).join(" | "));
-    const wants: [string, string][] = [];
-    if (x.leadInOpening) wants.push(["entrada", x.leadInOpening]);
-    if (x.leadInJourney) wants.push(["entrada del recorrido", x.leadInJourney]);
-    x.sections.forEach((s, k) => wants.push([`sección ${k + 1}`, s.text]));
-    if (x.description) wants.push(["descripción", x.description]);
+    ok(`nº ${n2(i)}: título, rótulo, precio, características y capítulos (${shorts.length})`, shortMiss.length === 0, shortMiss.map(([k, w]) => `${k}: «${w}»`).join(" | "));
+    // DC9: la descripción completa del catálogo, bloque a bloque, una vez.
+    const wants: [string, string][] = x.copy.map((b, k) => [`bloque ${k + 1}`, b.text]);
     const missing = wants.map(([k, w]) => [k, missingWord(hay, w)] as const).filter(([, m]) => m);
     const words = wants.reduce((n, [, w]) => n + tokens(w).length, 0);
     ok(`nº ${n2(i)}: ${wants.length} textos (${words} palabras) enteros en sus páginas ${from}–${to}`, missing.length === 0, missing.map(([k, m]) => `${k}: ${m}`).join(" | "));
-    // Todas las secciones: también cuando hay más de las que caben en pantalla.
-    if (x.sections.length > 6) ok(`nº ${n2(i)}: las ${x.sections.length} secciones del recorrido, todas`, missing.filter(([k]) => k.startsWith("sección")).length === 0);
+    // Sin repetir: un bloque no aparece en las páginas de la vivienda más
+    // veces de las que está en la propia descripción (los textos sintéticos
+    // repiten frases a propósito).
+    const source = tokens(x.copy.map((b) => b.text).join("\n")).join(" ");
+    const count = (str: string, sub: string) => str.split(sub).length - 1;
+    const repeated = x.copy.filter((b) => tokens(b.text).length >= 12).filter((b) => {
+      const t = tokens(b.text).slice(0, 12).join(" ");
+      return count(hay.join(" "), t) > count(source, t);
+    });
+    ok(`nº ${n2(i)}: la descripción no se repite (${x.copy.length} bloques)`, repeated.length === 0, repeated.map((b) => b.text.slice(0, 40)).join(" | "));
   });
   ok("versión con fecha y hora en la portada", /Versión del \d{1,2} de \p{L}+ de \d{4}, \d\d:\d\d/u.test(pages[0].text), pages[0].text.slice(0, 200));
   ok("cierre: rol del contacto", catalog.preparedBy || catalog.phone ? flat(pages[closingPage - 1].text).includes(catalog.role === "asesora" ? "tuasesora" : "tuasesor") : true);
@@ -241,7 +252,10 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
   if (failedSeen) ok(`foto que falla: «Foto no disponible» en su lugar (${failedSeen})`, (all.match(/Foto no disponible/g) ?? []).length === failedSeen);
 
   // PDF4/PDF15 · nada interno.
-  const raw = readFileSync(file).toString("latin1");
+  // Fuera de los flujos binarios (imágenes y texto comprimido): ahí una
+  // cadena corta como «BC-» puede aparecer por azar en los bytes. El texto de
+  // los flujos ya llega descomprimido en obj.streamText.
+  const raw = readFileSync(file).toString("latin1").replace(/stream\r?\n[\s\S]*?\r?\nendstream/g, "stream endstream");
   const hayAll = [all, obj.streamText, JSON.stringify(obj.info), JSON.stringify(ins.meta), raw].join("\n");
   const forbidden = new Set<string>([...FORBIDDEN_IN_PDF, token, "http://", "https://", "www.", "bcousinoprop", "localhost", "127.0.0.1", "fixture", ...extraForbidden]);
   if (catalogId) forbidden.add(catalogId);

@@ -99,8 +99,13 @@ export function ContentSection({
           >
             <p className="truncate text-sm text-ink">
               {t.bcReference ? <span className="mr-2 text-xs text-ink/45">{t.bcReference}</span> : null}
-              {t.title}
+              {t.published?.title ?? t.title}
             </p>
+            {t.published?.title ? (
+              <p className="truncate text-xs text-ink/45" data-testid="row-crm-title">
+                En la ficha: {t.title}
+              </p>
+            ) : null}
           </button>
           {unsaved ? (
             <p className="text-xs font-semibold text-amber-800" data-testid="row-unsaved">

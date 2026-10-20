@@ -40,10 +40,16 @@ async function shareMetas(tokens: string[]): Promise<Map<string, CatalogMeta>> {
     const { fixtureGetMetas } = await import("./fixture-store");
     return fixtureGetMetas(tokens);
   }
-  const { data, error } = await db().from("catalog_shares").select("token, catalogs(version, criteria)").in("token", tokens);
-  if (error) throw new Error(`catalog_shares: ${error.message}`);
+  // 0218: el token puede ser el enlace general (catalog_shares) o el
+  // personal de una asignación (catalog_client_links). Mismo catálogo.
+  const [shares, personal] = await Promise.all([
+    db().from("catalog_shares").select("token, catalogs(version, criteria)").in("token", tokens),
+    db().from("catalog_client_links").select("token, catalogs(version, criteria)").in("token", tokens),
+  ]);
+  if (shares.error) throw new Error(`catalog_shares: ${shares.error.message}`);
+  if (personal.error) throw new Error(`catalog_client_links: ${personal.error.message}`);
   const out = new Map<string, CatalogMeta>();
-  for (const r of (data ?? []) as any[]) {
+  for (const r of [...(shares.data ?? []), ...(personal.data ?? [])] as any[]) {
     const c = Array.isArray(r.catalogs) ? r.catalogs[0] : r.catalogs;
     if (!c) continue;
     out.set(String(r.token), { version: Number(c.version), operation: c.criteria?.operation });
