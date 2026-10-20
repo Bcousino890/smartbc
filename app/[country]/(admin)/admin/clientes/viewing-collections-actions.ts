@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
+import { scopeKindForAction } from "@/lib/permissions-scope";
 import {
   canAccessClient,
   collectionUrl,
@@ -118,7 +119,7 @@ async function gate(
   if (!auth.ok) return { ok: false, error: auth.error };
 
   if (clientId) {
-    const allowed = await canAccessClient(clientId);
+    const allowed = await canAccessClient(clientId, scopeKindForAction(action) ?? "view");
     if (!allowed) {
       return { ok: false, error: "No tienes acceso a este cliente." };
     }
@@ -158,7 +159,10 @@ async function clientIdOfStop(
   const it = Array.isArray(data.viewing_itineraries)
     ? data.viewing_itineraries[0]
     : data.viewing_itineraries;
-  return { clientId: it?.client_id, itineraryId: data.itinerary_id };
+  // Sin cliente resoluble se falla cerrado (gate() omite la comprobación si
+  // no recibe clientId).
+  if (!it?.client_id) return null;
+  return { clientId: it.client_id as string, itineraryId: data.itinerary_id };
 }
 
 // ============================================================================

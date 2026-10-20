@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
+import { scopeKindForAction } from "@/lib/permissions-scope";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
 import {
   attachPropertyToLink,
@@ -68,7 +69,7 @@ async function gate(
   const auth = await requireStaff(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
 
-  if (clientId && !(await canAccessClientLinks(clientId))) {
+  if (clientId && !(await canAccessClientLinks(clientId, scopeKindForAction(action) ?? "view"))) {
     return { ok: false, error: "No tienes acceso a este cliente." };
   }
   return { ok: true, userId: auth.userId };

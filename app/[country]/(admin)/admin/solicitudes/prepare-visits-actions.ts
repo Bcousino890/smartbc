@@ -25,7 +25,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
-import { canActOnLead } from "@/lib/db/queries/view-scope";
+import { canActOnClient, canActOnLead } from "@/lib/db/queries/view-scope";
 import { addPropertyToSelection } from "../clientes/viewing-collections-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -273,6 +273,10 @@ export async function confirmPrepareVisits(input: {
       .maybeSingle();
     if (!data || data.role !== "client") {
       return { ok: false, error: "El cliente seleccionado ya no existe." };
+    }
+    // Vincular/añadir propiedad a un cliente ajeno exige poder editarlo.
+    if (!(await canActOnClient(data.id, "viewing_collections", "edit"))) {
+      return { ok: false, error: "No tienes acceso a este cliente." };
     }
     clientId = data.id;
   } else if (input.newClient) {

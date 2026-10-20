@@ -17,6 +17,8 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
 import { checkPermission } from "@/lib/auth/guard";
+import { canAccessClient } from "@/lib/db/queries/viewing-collections";
+import { scopeKindForAction } from "@/lib/permissions-scope";
 import { isCollectionLanguage } from "@/lib/viewing-collections/i18n";
 import { createItinerary } from "./viewing-collections-actions";
 
@@ -40,10 +42,24 @@ function shortlistToken(): string {
   return out;
 }
 
-async function gate(action: "view" | "create" | "edit" | "delete") {
+async function gate(action: "view" | "create" | "edit" | "delete", clientId?: string) {
   const res = await checkPermission("viewing_collections", action);
   if (!res.ok) return { ok: false as const, error: res.error };
+  if (clientId && !(await canAccessClient(clientId, scopeKindForAction(action) ?? "view"))) {
+    return { ok: false as const, error: "No tienes acceso a este cliente." };
+  }
   return { ok: true as const, userId: res.profile.id };
+}
+
+/** Cliente dueño de una shortlist; null si no existe o la lectura falla (falla cerrado). */
+async function clientIdOfShortlist(shortlistId: string): Promise<string | null> {
+  const { data, error } = await db()
+    .from("client_shortlists")
+    .select("client_id")
+    .eq("id", shortlistId)
+    .maybeSingle();
+  if (error) return null;
+  return (data as { client_id: string | null } | null)?.client_id ?? null;
 }
 
 function revalidateClient(clientId: string) {
@@ -73,7 +89,7 @@ export async function createClientShortlist(
     title?: string;
   },
 ): Promise<ActionResult<{ shortlistId: string; token: string }>> {
-  const g = await gate("create");
+  const g = await gate("create", clientId);
   if (!g.ok) return g;
 
   const propertyIds = [...new Set(input.propertyIds ?? [])];
@@ -156,7 +172,9 @@ export async function renewClientShortlist(
   shortlistId: string,
   days = DEFAULT_EXPIRY_DAYS,
 ): Promise<ActionResult<object>> {
-  const g = await gate("edit");
+  const clientId = await clientIdOfShortlist(shortlistId);
+  if (!clientId) return { ok: false, error: "Selección no encontrada." };
+  const g = await gate("edit", clientId);
   if (!g.ok) return g;
 
   const expires = new Date();
@@ -178,7 +196,9 @@ export async function renewClientShortlist(
 export async function revokeClientShortlist(
   shortlistId: string,
 ): Promise<ActionResult<object>> {
-  const g = await gate("edit");
+  const clientId = await clientIdOfShortlist(shortlistId);
+  if (!clientId) return { ok: false, error: "Selección no encontrada." };
+  const g = await gate("edit", clientId);
   if (!g.ok) return g;
 
   const { data, error } = await db()
@@ -197,7 +217,9 @@ export async function revokeClientShortlist(
 export async function archiveClientShortlist(
   shortlistId: string,
 ): Promise<ActionResult<object>> {
-  const g = await gate("edit");
+  const clientId = await clientIdOfShortlist(shortlistId);
+  if (!clientId) return { ok: false, error: "Selección no encontrada." };
+  const g = await gate("edit", clientId);
   if (!g.ok) return g;
 
   const { data, error } = await db()
@@ -236,7 +258,7 @@ export async function createItineraryFromShortlist(
   const g = await gate("create");
   if (!g.ok) return g;
 
-  const { data: shortlist } = await db()
+  const { data: shortlist, error: shortlistError } = await db()
     .from("client_shortlists")
     .select(
       `id, client_id, language, country,
@@ -248,7 +270,10 @@ export async function createItineraryFromShortlist(
     .eq("id", shortlistId)
     .maybeSingle();
 
-  if (!shortlist) return { ok: false, error: "Selección no encontrada." };
+  if (shortlistError || !shortlist) return { ok: false, error: "Selección no encontrada." };
+  if (!shortlist.client_id || !(await canAccessClient(shortlist.client_id, "view"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
+  }
 
   // Un anuncio de portal al que ya se le creó ficha cuenta como esa ficha; uno
   // que el equipo descartó no entra aunque el cliente lo marcara.

@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
-import { resolveViewScope, getAssignedClientIds } from "./view-scope";
+import { resolveViewScope, getAssignedClientIds, canActOnClient } from "./view-scope";
+import type { ScopeKind } from "@/lib/permissions-scope";
 import type {
   ClientPortalLinkRow,
   LinkedProperty,
@@ -25,12 +26,11 @@ function db() {
  * Duplicar el recurso de permisos habría obligado a mantener dos matrices que
  * en la práctica siempre valdrían lo mismo.
  */
-export async function canAccessClientLinks(clientId: string): Promise<boolean> {
-  const { restriction, userId } = await resolveViewScope("viewing_collections");
-  if (restriction === "none") return false;
-  if (restriction === "all" || !userId) return true;
-  const ids = await getAssignedClientIds(userId);
-  return ids.includes(clientId);
+export async function canAccessClientLinks(
+  clientId: string,
+  kind: ScopeKind = "view",
+): Promise<boolean> {
+  return canActOnClient(clientId, "viewing_collections", kind);
 }
 
 /**

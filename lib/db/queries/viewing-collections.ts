@@ -1,7 +1,8 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
-import { resolveViewScope, getAssignedClientIds } from "./view-scope";
+import { canActOnClient } from "./view-scope";
+import type { ScopeKind } from "@/lib/permissions-scope";
 import { checkPermission } from "@/lib/auth/guard";
 import {
   toPublicViewingCollection,
@@ -417,12 +418,11 @@ const SELECTION_PROPERTY_SELECT = `
  * scope del recurso (own/team/all). Mismo puente que usa getVisitRequests: el
  * dueño efectivo de un cliente es su asesor asignado.
  */
-export async function canAccessClient(clientId: string): Promise<boolean> {
-  const { restriction, userId } = await resolveViewScope("viewing_collections");
-  if (restriction === "none") return false;
-  if (restriction === "all" || !userId) return true;
-  const ids = await getAssignedClientIds(userId);
-  return ids.includes(clientId);
+export async function canAccessClient(
+  clientId: string,
+  kind: ScopeKind = "view",
+): Promise<boolean> {
+  return canActOnClient(clientId, "viewing_collections", kind);
 }
 
 /** La selección de un cliente, con insignias derivadas. */
