@@ -89,10 +89,7 @@ Encontrados durante la revisión:
 7. Un asesor restringido a «Solo lo suyo» no puede quitar ni reasignar leads de otros; sí puede coger leads sin dueño. Tampoco puede reasignar clientes ajenos ni «tomar» un cliente sin asignar.
 8. Un administrador con excepción Editar = «Solo lo suyo» no reasigna ni borra captaciones ajenas.
 9. Se conserva que un **senior** (regla de Ver `confirmed_and_own`) mueva o convierta captaciones **confirmadas** ajenas. La excepción vale **solo** para esa regla: un administrador o asesor que ve todo pero tiene la excepción Editar = «Solo lo suyo» ya no mueve ni convierte confirmadas ajenas.
-10. **Decisión del dueño — exportar en Documentación.** Descargar el resumen de candidato (`export-summary`) y «Enviar» (`/send`) exigen ahora `documentacion.export` (`STAFF_EXPORT` en `lib/property-applications/staff-access.ts`). `agent_senior` y `agent_junior` no lo tienen en `PERMISSIONS_BY_ROLE`, así que **pierden** esas dos acciones (antes cualquier miembro del equipo podía). Dos opciones:
-    - **A)** dar `documentacion.export = true` a `agent_senior` / `agent_junior` en `PERMISSIONS_BY_ROLE` (`lib/permissions.ts`), o por persona con una excepción en el panel;
-    - **B)** aceptar la pérdida (solo administración exporta y envía).
-    No se ha cambiado ninguna matriz de roles: queda a decisión del dueño.
+10. **Exportar en Documentación (decidido por el dueño el 2026-10-20: se acepta la pérdida).** Descargar el resumen de candidato (`export-summary`) y «Enviar» (`/send`) exigen ahora `documentacion.export` (`STAFF_EXPORT` en `lib/property-applications/staff-access.ts`). El «Asesor · Solo su cartera» (`agent_senior`) y el heredado `agent_junior` no lo tienen en `PERMISSIONS_BY_ROLE`, así que **pierden** esas dos acciones (antes cualquier miembro del equipo podía). El «Asesor · Toda la cartera» (`advisor`), los administradores y los propietarios la conservan. No se ha cambiado ninguna matriz de roles. Si más adelante se quiere devolver, basta una excepción por persona en el panel (Documentación › Exportar) o activar `documentacion.export` para `agent_senior` en `lib/permissions.ts`.
 11. Los valores por defecto de Captaciones en el panel ahora salen del rol de Chile (antes el panel usaba el rol global y la aplicación real el de Chile: el panel decía una cosa y el servidor otra).
 
 ## 5. Límites conocidos (pendientes, no bloquean)
@@ -150,10 +147,7 @@ WHERE matrix->'solicitudes'->>'view' = 'true'
 
 Si devuelve filas, decidir si esas personas deben conservar Documentación (activarles `documentacion › Ver` antes de fusionar).
 
-**Decisión pendiente del dueño — exportar en Documentación** (ver §4, punto 10): `agent_senior` y `agent_junior` pierden la descarga del resumen de candidato y «Enviar». Elegir:
-
-- [ ] A) Dar `documentacion.export` a `agent_senior` / `agent_junior` en `PERMISSIONS_BY_ROLE` (cambio de código) o por persona en el panel.
-- [ ] B) Aceptar la pérdida.
+**Decidido por el dueño — exportar en Documentación** (ver §4, punto 10): el «Asesor · Solo su cartera» pierde la descarga del resumen de candidato y «Enviar»; se acepta. No hay nada que ejecutar.
 
 **Antes del PR:** *rebase* de `feat/permisos-alcance` sobre `origin/main`.
 
