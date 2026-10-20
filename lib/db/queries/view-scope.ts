@@ -96,6 +96,22 @@ export async function getAssignedClientIds(
   }
 }
 
+/** País (profiles.country) del cliente; undefined si falla o es null. */
+async function getClientCountry(clientId: string): Promise<string | undefined> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (createAdminClient() as any)
+      .from("profiles")
+      .select("country")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (error || !data) return undefined;
+    return (data as { country: string | null }).country ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * ¿Puede el usuario actual ver/editar a este cliente en `resource`? Misma
  * lógica que `canAccessClient` de viewing-collections, pero con el alcance
@@ -107,7 +123,10 @@ export async function canActOnClient(
   kind: ScopeKind,
   country?: string,
 ): Promise<boolean> {
-  const { restriction, userId } = await resolveViewScope(resource, kind, country);
+  // Sin país explícito (acciones/rutas) se deriva del propio cliente en BD,
+  // nunca de la petición, para que cuenten las excepciones por país.
+  const effectiveCountry = country ?? (await getClientCountry(clientId));
+  const { restriction, userId } = await resolveViewScope(resource, kind, effectiveCountry);
   if (restriction === "none") return false;
   if (restriction === "all" || !userId) return true;
   const ids = await getAssignedClientIds(userId);

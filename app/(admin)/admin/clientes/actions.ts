@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { assertPermission } from "@/lib/auth/guard";
+import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { createInvitedUser } from "@/lib/email/password-reset";
 import type { ClientProfileType, Operation, StayType } from "@/lib/types";
 import {
@@ -295,6 +296,9 @@ export async function saveClientPreferencesChile(
   input: SaveClientPreferencesChileInput,
 ): Promise<SaveClientPreferencesResult> {
   await assertPermission("clientes", "edit");
+  if (!(await canActOnClient(input.clientId, "clientes", "edit"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
+  }
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
