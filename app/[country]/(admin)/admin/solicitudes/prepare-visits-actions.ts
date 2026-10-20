@@ -25,6 +25,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
+import { canActOnLead } from "@/lib/db/queries/view-scope";
 import { addPropertyToSelection } from "../clientes/viewing-collections-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -172,6 +173,10 @@ export async function lookupPrepareVisits(
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
+
+  if (source === "idealista" && !(await canActOnLead(id, "view"))) {
+    return { ok: false, error: "No tienes acceso a esta solicitud." };
+  }
 
   const admin = createAdminClient() as any;
 

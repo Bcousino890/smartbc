@@ -308,12 +308,17 @@ export async function updateVisitStatus(
   const supabase = createAdminClient() as any;
 
   // El dueño efectivo de una visita es el asesor de su cliente.
-  const { data: visit } = await supabase
+  const { data: visit, error: visitError } = await supabase
     .from("visit_requests")
     .select("client_id")
     .eq("id", id)
     .maybeSingle();
-  if (visit?.client_id && !(await canActOnClient(visit.client_id, "solicitudes", "edit"))) {
+  if (visitError) {
+    console.error("updateVisitStatus read error:", visitError);
+    return { ok: false, error: "No se pudo leer la solicitud." };
+  }
+  if (!visit) return { ok: false, error: "No tienes acceso a esta solicitud." };
+  if (visit.client_id && !(await canActOnClient(visit.client_id, "solicitudes", "edit"))) {
     return { ok: false, error: "No tienes acceso a esta solicitud." };
   }
   const { error } = await supabase

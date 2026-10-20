@@ -189,6 +189,11 @@ export async function snoozeFollowUp(
   leadId: string,
   days: number,
 ): Promise<ActionResult> {
+  try {
+    await assertPermission("solicitudes", "edit");
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
   if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
   const { data } = await db()
     .from("idealista_leads")
