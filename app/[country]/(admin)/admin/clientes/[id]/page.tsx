@@ -62,7 +62,10 @@ export default async function ClientCommandCenterPage({
   await guardPage("clientes", country);
 
   // Alcance por sección: con "solo su cartera" un cliente ajeno no existe.
-  if (!(await canActOnClient(id, "clientes", "view", country))) notFound();
+  // Sin país explícito: canActOnClient usa el país DEL CLIENTE, no el de la URL
+  // (getClientById no filtra por país, así que abrir /cl/.../<cliente es> con
+  // el país de la URL se saltaría una excepción por país de `es`).
+  if (!(await canActOnClient(id, "clientes", "view"))) notFound();
 
   const rowData = await getClientById(id);
   if (!rowData) notFound();
@@ -80,6 +83,7 @@ export default async function ClientCommandCenterPage({
     : null;
   const vc = perms?.viewing_collections;
   const inScope =
+    // canAccessClient → canActOnClient sin país: también el país del cliente.
     vcSettings.enabled && Boolean(vc?.view) && (await canAccessClient(id));
 
   const [selections, itineraries, shortlists] = inScope

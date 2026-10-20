@@ -74,8 +74,9 @@ export default async function AdminDashboardPage({
   let visitsMode: "all" | "none" | { clientIds: string[] } = canVisits ? "all" : "none";
   if (profile && (canClients || canVisits)) {
     const [clientScope, visitScope] = await Promise.all([
-      canClients ? resolveViewScope("clientes") : null,
-      canVisits ? resolveViewScope("solicitudes") : null,
+      // País de la ruta: los datos del dashboard ya se filtran por él.
+      canClients ? resolveViewScope("clientes", "view", country) : null,
+      canVisits ? resolveViewScope("solicitudes", "view", country) : null,
     ]);
     if (clientScope && clientScope.restriction !== "all") {
       clientsMode = clientScope.restriction === "none" ? "none" : "own";

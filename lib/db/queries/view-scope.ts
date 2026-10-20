@@ -16,6 +16,14 @@ import {
 import { getScopeOverrides } from "./permissions";
 
 /**
+ * País de los leads de la bandeja de Solicitudes (`idealista_leads` /
+ * `lead_inbox_facts`): son de Idealista, o sea de España. La vista no tiene
+ * columna de país, así que el alcance de los leads se resuelve siempre con las
+ * excepciones globales + las de `es`.
+ */
+export const LEADS_COUNTRY = "es";
+
+/**
  * Scope de datos resuelto para el usuario actual sobre un recurso concreto.
  * Es el puente entre la política de negocio (`getViewRestriction` en
  * `lib/permissions.ts`) y las queries del panel.
@@ -149,7 +157,7 @@ export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boo
 export async function canActOnLeads(leadIds: string[], kind: ScopeKind): Promise<string[]> {
   const unique = [...new Set(leadIds)];
   if (unique.length === 0) return [];
-  const { restriction, userId } = await resolveViewScope("solicitudes", kind);
+  const { restriction, userId } = await resolveViewScope("solicitudes", kind, LEADS_COUNTRY);
   if (restriction === "none") return [];
   if (restriction === "all" || !userId) return unique;
   try {

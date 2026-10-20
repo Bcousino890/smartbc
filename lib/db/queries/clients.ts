@@ -108,7 +108,8 @@ export async function getVisitRequests(country?: string): Promise<VisitRequestWi
   // Scope de datos para "solicitudes". `visit_requests` no tiene columna de
   // propietario propia: el dueño efectivo es el asesor asignado al cliente de
   // la visita, así que restringimos por `client_id` ∈ (clientes del asesor).
-  const { restriction, userId } = await resolveViewScope("solicitudes");
+  // Con país, cuentan también las excepciones de alcance de ese país.
+  const { restriction, userId } = await resolveViewScope("solicitudes", "view", country);
   if (restriction === "none") return [];
   let clientIds: string[] | null = null;
   if (restriction !== "all" && userId) {

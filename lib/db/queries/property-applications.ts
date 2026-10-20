@@ -140,6 +140,13 @@ export async function getApplicationById(
 
 export async function getApplicationsForAdmin(filters: {
   country?: ApplicationCountry;
+  /**
+   * País SOLO para resolver el alcance (excepciones por país, en minúsculas
+   * `es`/`cl`). NO filtra los datos: la pantalla de Documentación sigue
+   * enseñando las mismas filas que antes (sin filtro de país; decisión del
+   * dueño). Si falta, se usa `country` (filtro de datos) en minúsculas.
+   */
+  scopeCountry?: string;
   operation?: ApplicationOperation;
   status?: ApplicationStatus;
   limit?: number;
@@ -151,11 +158,18 @@ export async function getApplicationsForAdmin(filters: {
   // RLS), así que el scope se aplica en código. `property_applications` no
   // tiene columna de propietario propia: el dueño efectivo es el asesor
   // asignado al cliente (`client_id` → `profiles.assigned_advisor_id`).
-  const { restriction, userId } = await resolveViewScope("documentacion", "view", filters.country);
+  // `ApplicationCountry` va en mayúsculas ("ES"/"CL"); las excepciones de
+  // alcance y `profiles.country` van en minúsculas ("es"/"cl").
+  const dataCountry = filters.country?.toLowerCase();
+  const { restriction, userId } = await resolveViewScope(
+    "documentacion",
+    "view",
+    filters.scopeCountry ?? dataCountry,
+  );
   if (restriction === "none") return { data: [], count: 0 };
   let clientIds: string[] | null = null;
   if (restriction !== "all" && userId) {
-    clientIds = await getAssignedClientIds(userId, filters.country);
+    clientIds = await getAssignedClientIds(userId, dataCountry);
     if (clientIds.length === 0) return { data: [], count: 0 };
   }
 

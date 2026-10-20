@@ -90,6 +90,20 @@ export function defaultScopes(role: string): ScopeMatrix {
   return m;
 }
 
+/**
+ * Valores por defecto del alcance de una persona, con UNA sola regla para el
+ * panel, la API y la aplicación real: Captaciones (módulo solo de Chile) sale
+ * del rol de Chile (`captacionesRole`, el rol por país si lo hay); el resto de
+ * secciones, del rol global del perfil. Sin `captacionesRole` = `defaultScopes(role)`.
+ */
+export function defaultScopesFor(role: string, captacionesRole?: string | null): ScopeMatrix {
+  const m = defaultScopes(role);
+  if (captacionesRole && captacionesRole !== role) {
+    m.captaciones = { ...defaultScopes(captacionesRole).captaciones };
+  }
+  return m;
+}
+
 /** Globales primero, luego las del país activo; ignora valores desconocidos; normaliza. */
 export function applyScopeOverrides(
   base: ScopeMatrix,
@@ -291,4 +305,26 @@ export function isLeadAllowedForScope(
   if (restriction === "none") return false;
   if (restriction === "all" || !userId) return true;
   return assignedTo == null || assignedTo === userId;
+}
+
+/**
+ * Regla «el país es el del cliente» aplicada fila a fila a una LISTA de
+ * clientes de varios países (p. ej. el autocompletado de clientes, que no
+ * tiene país de ruta). Misma lógica que `canActOnClient` sin país: con país
+ * `es`/`cl` cuenta la restricción de ese país (globales + país); sin país (o
+ * uno desconocido), solo las globales. "all" → sí; "none" → no; el resto
+ * (own/team…) → solo si es de su cartera.
+ */
+export function isClientInCountryScope(
+  scopes: {
+    global: ViewRestriction | string;
+    byCountry: Partial<Record<string, ViewRestriction | string>>;
+  },
+  ownIds: ReadonlySet<string>,
+  client: { id: string; country?: string | null },
+): boolean {
+  const r = (client.country ? scopes.byCountry[client.country] : undefined) ?? scopes.global;
+  if (r === "none") return false;
+  if (r === "all") return true;
+  return ownIds.has(client.id);
 }

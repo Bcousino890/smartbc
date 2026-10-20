@@ -5,7 +5,7 @@ import { createAdminClient } from "../admin";
 import type { CaptacionViewRestriction, EffectivePermissions } from "@/lib/permissions";
 import {
   applyScopeOverrides,
-  defaultScopes,
+  defaultScopesFor,
   resolveCaptacionRestriction,
   type ScopeValue,
 } from "@/lib/permissions-scope";
@@ -53,8 +53,13 @@ export async function getCaptacionActor(profile: {
     role: effectiveRole,
     effective: permissions,
     isAdmin: isCaptacionAdminRole(effectiveRole),
-    editScope: applyScopeOverrides(defaultScopes(effectiveRole), overrides, CAPTACIONES_COUNTRY)
-      .captaciones.edit,
+    // Mismos defaults que el panel (`getScopeDefaults` → `defaultScopesFor`):
+    // la celda de captaciones sale del rol de Chile.
+    editScope: applyScopeOverrides(
+      defaultScopesFor(profile.role, effectiveRole),
+      overrides,
+      CAPTACIONES_COUNTRY,
+    ).captaciones.edit,
     viewRestriction: resolveCaptacionRestriction(effectiveRole, overrides, CAPTACIONES_COUNTRY),
   };
 }

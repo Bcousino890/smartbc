@@ -16,6 +16,8 @@ import {
   scopeCellDiffers,
   scopesEqual,
   defaultScopes,
+  defaultScopesFor,
+  isClientInCountryScope,
   isEscalation,
   isLeadAllowedForScope,
   normalizeCell,
@@ -369,6 +371,63 @@ t("captaciones: actorHasEditReach / actorCanManageCaptacion", () => {
   // confirmada ajena fuera de lo que puede ver (own_only) no vale
   const ownOnly = { id: "u", editScope: "own", viewRestriction: "own_only" } as const;
   assert.equal(actorCanManageCaptacion(ownOnly, { assigned_to: "x", owner_confirmed: true }), false);
+});
+
+t("captaciones: la excepción 'confirmada ajena' solo vale para confirmed_and_own", () => {
+  // Admin/asesor con Ver = Todo y excepción Editar = «Solo lo suyo»: NO mueve
+  // ni convierte confirmadas ajenas (antes sí, porque las ve).
+  const adminOwnEdit = { id: "u", editScope: "own", viewRestriction: "all" } as const;
+  assert.equal(actorCanManageCaptacion(adminOwnEdit, { assigned_to: "x", owner_confirmed: true }), false);
+  assert.equal(actorCanManageCaptacion(adminOwnEdit, { assigned_to: "u", owner_confirmed: true }), true);
+  // assigned_only tampoco tiene la excepción.
+  const assignedOnly = { id: "u", editScope: "own", viewRestriction: "assigned_only" } as const;
+  assert.equal(actorCanManageCaptacion(assignedOnly, { assigned_to: "x", owner_confirmed: true }), false);
+  // La regla histórica del senior (confirmed_and_own) se conserva.
+  const senior = { id: "u", editScope: "own", viewRestriction: "confirmed_and_own" } as const;
+  assert.equal(actorCanManageCaptacion(senior, { assigned_to: "x", owner_confirmed: true }), true);
+  assert.equal(actorCanManageCaptacion(senior, { assigned_to: "x", owner_confirmed: false }), false);
+});
+
+t("defaultScopesFor: captaciones sigue el rol de Chile, el resto el rol global", () => {
+  // Global agent_senior + Chile admin → captaciones all/all; resto = senior.
+  const m = defaultScopesFor("agent_senior", "admin");
+  assert.deepEqual(m.captaciones, { view: "all", edit: "all" });
+  const senior = defaultScopes("agent_senior");
+  const admin = defaultScopes("admin");
+  for (const r of SCOPED_RESOURCES) {
+    if (r === "captaciones") continue;
+    assert.deepEqual(m[r], senior[r], r);
+  }
+  assert.deepEqual(m.captaciones, admin.captaciones);
+  // Al revés: global admin + Chile agent_senior → captaciones = senior.
+  const m2 = defaultScopesFor("admin", "agent_senior");
+  assert.deepEqual(m2.captaciones, senior.captaciones);
+  assert.deepEqual(m2.clientes, admin.clientes);
+  // Sin rol de Chile = defaultScopes(rol global).
+  assert.deepEqual(defaultScopesFor("agent_senior"), senior);
+  assert.deepEqual(defaultScopesFor("agent_senior", null), senior);
+});
+
+t("isClientInCountryScope: la regla del país del cliente, fila a fila", () => {
+  const own = new Set(["mine"]);
+  const scopes = { global: "all", byCountry: { es: "own_only", cl: "all" } } as const;
+  // es restringido: solo los suyos
+  assert.equal(isClientInCountryScope(scopes, own, { id: "mine", country: "es" }), true);
+  assert.equal(isClientInCountryScope(scopes, own, { id: "other", country: "es" }), false);
+  // cl todo
+  assert.equal(isClientInCountryScope(scopes, own, { id: "other", country: "cl" }), true);
+  // sin país: solo globales
+  assert.equal(isClientInCountryScope(scopes, own, { id: "other", country: null }), true);
+  assert.equal(isClientInCountryScope(scopes, own, { id: "other" }), true);
+  // país desconocido: globales
+  assert.equal(isClientInCountryScope(scopes, own, { id: "other", country: "xx" }), true);
+  // none: nada
+  const none = { global: "none", byCountry: { es: "none" } } as const;
+  assert.equal(isClientInCountryScope(none, own, { id: "mine", country: "es" }), false);
+  // team ≈ own
+  const team = { global: "team", byCountry: {} } as const;
+  assert.equal(isClientInCountryScope(team, own, { id: "mine", country: "es" }), true);
+  assert.equal(isClientInCountryScope(team, own, { id: "other", country: "es" }), false);
 });
 
 console.log(`\n${n} pruebas OK`);

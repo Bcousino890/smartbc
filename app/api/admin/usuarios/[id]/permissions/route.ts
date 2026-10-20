@@ -5,6 +5,7 @@ import { logPermissionEvent } from "@/lib/db/queries/audit";
 import {
   getEffectivePermissions,
   getEffectiveScopes,
+  getScopeDefaults,
   resolveBaseMatrix,
 } from "@/lib/db/queries/permissions";
 import { canManageUser, isUserAdminRole } from "@/lib/auth/user-rank";
@@ -14,7 +15,6 @@ import {
 } from "@/lib/permissions";
 import {
   SCOPE_LABELS,
-  defaultScopes,
   planScopeChanges,
   validateScopeOverrides,
   type ScopeOverride,
@@ -152,9 +152,14 @@ export async function GET(
   // canAccess(role,...) en cliente (solo estático) daría una base incorrecta
   // para usuarios con rol personalizado o rol por país.
   // Alcance (Todo / Solo lo suyo) por sección: efectivo (con ?country=) y el
-  // del perfil del rol. Defensivo: sin la tabla 0216 equivale a los defaults.
-  const { scopes } = await getEffectiveScopes(userId, role, country ?? undefined);
-  const scopeDefaults = defaultScopes(role);
+  // del perfil (`getScopeDefaults`: Captaciones con el rol de Chile, el resto
+  // con el global — el mismo criterio que aplica el servidor). Defensivo: sin
+  // la tabla 0216 equivale a los defaults.
+  const { scopes, defaults: scopeDefaults } = await getEffectiveScopes(
+    userId,
+    role,
+    country ?? undefined,
+  );
 
   return Response.json({
     role,
@@ -336,7 +341,7 @@ export async function POST(
       country ?? undefined,
     );
     const plan = planScopeChanges(
-      defaultScopes(target.role),
+      await getScopeDefaults(target.id, target.role),
       actorScopes,
       (storedRows ?? []) as ScopeOverride[],
       scopeInput,
@@ -392,11 +397,16 @@ export async function POST(
 
   // Alcance por sección (tras los permisos). ORDEN Y NO ATOMICIDAD: las filas de
   // permisos ya están guardadas cuando llegamos aquí. Si el borrado o el insert
-  // de alcance falla se responde 500 y, en el peor caso, las excepciones de
-  // alcance de este subconjunto vuelven a los defaults del perfil (dirección
-  // segura: nunca más amplio). Coherente con el delete+insert no atómico de los
-  // permisos de arriba. La validación, la lectura previa y la comprobación de
-  // escalada se hicieron antes de escribir nada, para que casi nada falle aquí.
+  // de alcance falla se responde 500 y, en el peor caso (borrado hecho, insert
+  // fallido), las excepciones de alcance de este subconjunto vuelven a los
+  // defaults del perfil. Eso NO siempre es la dirección segura: si el perfil
+  // tiene «Todo» por defecto y la excepción guardada era una restricción
+  // («Solo lo suyo»), el fallo devuelve a esa persona el alcance «Todo». Se
+  // borra antes de insertar porque los índices únicos (user_id, resource, kind,
+  // país) impiden insertar las filas nuevas mientras siguen las viejas.
+  // Coherente con el delete+insert no atómico de los permisos de arriba. La
+  // validación, la lectura previa y la comprobación de escalada se hicieron
+  // antes de escribir nada, para que casi nada falle aquí.
   // Reemplaza el subconjunto del país.
   if (scopeInput !== null) {
     let delScope = db.from("user_scope_overrides").delete().eq("user_id", userId);

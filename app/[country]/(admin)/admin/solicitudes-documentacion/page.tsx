@@ -19,7 +19,12 @@ export default async function SolicitudesDocumentacionPage({
 
   // Límite amplio: la búsqueda y los filtros son client-side, así que lo
   // que no se carga aquí no aparece nunca en el buscador del panel.
-  const { data: applications, count } = await getApplicationsForAdmin({ limit: 200 });
+  // `scopeCountry`: el país de la ruta solo decide qué excepción de alcance
+  // cuenta; la lista NO se filtra por país (mismas filas que antes).
+  const { data: applications, count } = await getApplicationsForAdmin({
+    limit: 200,
+    scopeCountry: country,
+  });
 
   const docTemplates = getTemplatesByCountry(country).map((t) => ({
     id: t.id,

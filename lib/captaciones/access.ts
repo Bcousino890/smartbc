@@ -114,13 +114,19 @@ export function actorHasEditReach(
 
 /**
  * Mover de etapa / convertir (además del gate de rol/permiso): alcance de
- * Editar completo, captación propia, o la excepción «un senior mueve/convierte
- * confirmadas ajenas» (confirmada y dentro de lo que puede VER).
+ * Editar completo, captación propia, o la excepción histórica «un senior
+ * mueve/convierte confirmadas ajenas». Esa excepción SOLO vale para la regla
+ * de Ver `confirmed_and_own` (la del senior): un admin/asesor que ve todo pero
+ * tiene una excepción Editar = «Solo lo suyo» no la hereda.
  */
 export function actorCanManageCaptacion(
   actor: CaptacionScopeActor,
   c: CaptacionAccessRef,
 ): boolean {
   if (actorHasEditReach(actor, c)) return true;
-  return c.owner_confirmed === true && captacionMatchesView(actor.viewRestriction, actor.id, c);
+  return (
+    actor.viewRestriction === "confirmed_and_own" &&
+    c.owner_confirmed === true &&
+    captacionMatchesView(actor.viewRestriction, actor.id, c)
+  );
 }

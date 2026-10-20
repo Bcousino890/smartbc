@@ -14,7 +14,7 @@ import {
 } from "@/lib/permissions";
 import {
   applyScopeOverrides,
-  defaultScopes,
+  defaultScopesFor,
   type ScopeMatrix,
   type ScopeOverride,
 } from "@/lib/permissions-scope";
@@ -271,16 +271,34 @@ export async function getScopeOverrides(userId: string): Promise<ScopeOverride[]
   }
 }
 
+/** Captaciones es un módulo exclusivo de Chile: su rol sale de `cl`. */
+const CAPTACIONES_COUNTRY = "cl";
+
 /**
- * Alcance efectivo por sección: el del perfil del rol (`defaults`) y el
- * resultado de aplicarle las excepciones del usuario (`scopes`).
+ * Valores por defecto del alcance de un usuario (ver `defaultScopesFor`):
+ * Captaciones con el rol de Chile (rol por país `cl` si lo tiene; el mismo que
+ * usa `getCaptacionActor` para aplicarlo), el resto con el rol global. Es la
+ * ÚNICA fuente de defaults para el panel (GET), el guardado (POST) y
+ * `getEffectiveScopes`, para que el panel y el servidor no discrepen.
+ */
+export async function getScopeDefaults(userId: string, role: string): Promise<ScopeMatrix> {
+  const { effectiveRole } = await resolveBaseMatrix(userId, role, CAPTACIONES_COUNTRY);
+  return defaultScopesFor(role, effectiveRole);
+}
+
+/**
+ * Alcance efectivo por sección: el del perfil del rol (`defaults`, con
+ * `getScopeDefaults`) y el resultado de aplicarle las excepciones del usuario
+ * (`scopes`).
  */
 export async function getEffectiveScopes(
   userId: string,
   role: string,
   country?: string,
 ): Promise<{ scopes: ScopeMatrix; defaults: ScopeMatrix }> {
-  const defaults = defaultScopes(role);
-  const overrides = await getScopeOverrides(userId);
+  const [defaults, overrides] = await Promise.all([
+    getScopeDefaults(userId, role),
+    getScopeOverrides(userId),
+  ]);
   return { scopes: applyScopeOverrides(defaults, overrides, country), defaults };
 }

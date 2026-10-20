@@ -3,6 +3,9 @@ import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { sanitizeSearchTerm } from "@/lib/db/search-term";
 import { getAssignedClientIds, resolveViewScope } from "@/lib/db/queries/view-scope";
+import { isClientInCountryScope } from "@/lib/permissions-scope";
+
+const RESULT_LIMIT = 20;
 
 /**
  * Autocompletado de clientes (p. ej. en "Nueva solicitud de documentación").
@@ -21,13 +24,32 @@ export async function GET(req: Request) {
     const gate = await requirePermission("clientes", "view");
     if (!gate.ok) return gate.response;
 
-    const scope = await resolveViewScope("clientes");
-    if (scope.restriction === "none") return Response.json({ data: [] });
+    // La petición no trae país (el modal busca clientes de los dos países), así
+    // que se aplica la regla de `canActOnClient` fila a fila: cada cliente se
+    // juzga con la excepción de alcance de SU país (globales si no tiene).
+    const [globalScope, esScope, clScope] = await Promise.all([
+      resolveViewScope("clientes"),
+      resolveViewScope("clientes", "view", "es"),
+      resolveViewScope("clientes", "view", "cl"),
+    ]);
+    const scopes = {
+      global: globalScope.restriction,
+      byCountry: { es: esScope.restriction, cl: clScope.restriction },
+    };
+    const restrictions = [globalScope.restriction, esScope.restriction, clScope.restriction];
+    if (restrictions.every((r) => r === "none")) return Response.json({ data: [] });
+    const unrestricted = restrictions.every((r) => r === "all");
+    const anyAll = restrictions.some((r) => r === "all");
 
-    let scopedIds: string[] | null = null; // null = sin restricción de cartera
-    if (scope.restriction !== "all") {
-      scopedIds = await getAssignedClientIds(gate.profile.id);
-      if (scopedIds.length === 0) return Response.json({ data: [] });
+    let ownIds = new Set<string>();
+    let scopedIds: string[] | null = null; // null = sin restricción de cartera en la query
+    if (!unrestricted) {
+      ownIds = new Set(await getAssignedClientIds(gate.profile.id));
+      // Si ningún país da «Todo», solo puede salir su cartera: se filtra ya en BD.
+      if (!anyAll) {
+        scopedIds = [...ownIds];
+        if (scopedIds.length === 0) return Response.json({ data: [] });
+      }
     }
 
     const url = new URL(req.url);
@@ -37,20 +59,27 @@ export async function GET(req: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (admin as any)
       .from("profiles")
-      .select("id, full_name, email, phone, avatar_url, role")
+      .select("id, full_name, email, phone, avatar_url, role, country")
       .eq("role", "client")
       .order("created_at", { ascending: false })
-      .limit(20);
+      // Con alcance mixto por país se filtra después en código: se pide margen.
+      .limit(unrestricted ? RESULT_LIMIT : RESULT_LIMIT * 3);
 
     if (scopedIds) query = query.in("id", scopedIds);
     if (term) {
       query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`);
     }
 
-    const { data, error } = await query;
+    const { data: rows, error } = await query;
     if (error) throw error;
 
-    return Response.json({ data: data ?? [] });
+    const data = ((rows ?? []) as Array<{ id: string; country?: string | null } & Record<string, unknown>>)
+      .filter((c) => unrestricted || isClientInCountryScope(scopes, ownIds, c))
+      .slice(0, RESULT_LIMIT)
+      // Misma forma de respuesta que antes (sin `country`).
+      .map(({ country: _country, ...rest }) => rest);
+
+    return Response.json({ data });
   } catch (err) {
     console.error("[clientes-search] Error:", err);
     return Response.json({ error: "Error interno" }, { status: 500 });

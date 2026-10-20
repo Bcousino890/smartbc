@@ -51,7 +51,9 @@ export async function getPortalLinkSummaries(
 ): Promise<Record<string, PortalLinkSummary>> {
   if (clientIds.length === 0) return {};
 
-  const { restriction, userId } = await resolveViewScope("viewing_collections");
+  // El país de la lista: las filas ya se filtran por él, así que su excepción
+  // de alcance por país es la que manda.
+  const { restriction, userId } = await resolveViewScope("viewing_collections", "view", country);
   if (restriction === "none") return {};
   let allowed = new Set(clientIds);
   if (restriction !== "all" && userId) {
