@@ -181,3 +181,21 @@ CREATE TABLE IF NOT EXISTS property_tag_links (
 );
 REVOKE ALL ON agencies, agency_feeds, property_tags, property_tag_links FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON agencies, agency_feeds, property_tags, property_tag_links TO service_role;
+
+-- ── Ampliación 0218: asesor y país del cliente, y avisos del CRM ───────────
+-- Solo pruebas locales. En producción ya existen (0001, 0038 y 0050).
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS assigned_advisor_id uuid REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country text NOT NULL DEFAULT 'es';
+CREATE TABLE IF NOT EXISTS crm_notifications (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type       text NOT NULL,
+  title      text NOT NULL,
+  body       text,
+  link       text,
+  read       boolean DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  data       jsonb
+);
+REVOKE ALL ON crm_notifications FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON crm_notifications TO service_role;
