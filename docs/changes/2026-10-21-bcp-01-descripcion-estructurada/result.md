@@ -22,7 +22,7 @@
 | `test:catalogs-public` (DC3 adaptado a la estructura), `test:catalogs-manager`, `test:catalogs`, `test:catalogs-feedback` y el resto de suites de la CI; `tsc`; `lint-migrations.py` | ✅ |
 | PDF reales (`check-catalog-pdfs.mts`, 13 PDF por el hilo, 626 comprobaciones): texto entero bloque a bloque con los títulos nuevos, sin repetir, glifos frase a frase, fotos, índice, privacidad | ✅ |
 | QA en Chromium con fixtures (15 comprobaciones): texto propio, historia y solo datos con los mismos títulos y orden a 1440 y a 390; tras el detalle viene otra vivienda o el cierre (dos pantallas); descripción completa dentro de la pantalla 2; editor con vista previa en vivo, aviso de partes sin material y «Sin ascensor» literal; guardar y publicar → el lector abierto recibe la versión organizada; sin errores de consola | ✅ |
-| `next build` (producción, `NEXT_BUILD_DIR=.next.qa`, `tsconfig.json` restaurado) | ver el PR |
+| `next build` (producción, `NEXT_BUILD_DIR=.next.qa`, `tsconfig.json` restaurado) | ✅ «Compiled successfully» |
 
 ## Capturas
 
