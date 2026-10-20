@@ -9,7 +9,7 @@ import { createElement as h } from "react";
 import { writeFileSync, mkdirSync } from "node:fs";
 import sharp from "sharp";
 import { Document, Font, Image, Link, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import { DISPLAY, TEXT, freshCatalogFonts, noHyphens, registerCatalogFonts, splitOrdinals } from "../../lib/pdf/catalog/fonts.ts";
+import { DISPLAY, LABEL, TEXT, freshCatalogFonts, noHyphens, registerCatalogFonts } from "../../lib/pdf/catalog/fonts.ts";
 // Sin reset, react-pdf reutiliza entre documentos la fuente ya cargada y los
 // caracteres que se usan por primera vez en un documento posterior pierden su
 // correspondencia de texto (se ven, pero no se pueden copiar ni buscar).
@@ -74,7 +74,7 @@ writeFileSync(`${out}/2-indice.pdf`, buf2);
 writeFileSync(`${out}/2-indice-paginas.json`, JSON.stringify({ pasada1: seen1, pasada2: seen2 }));
 
 // 3 · Glifos.
-const glyphs = "Áá Éé Íí Óó Úú Ññ Üü ¿Sí? ¡Claro! «comillas» 1.450.000 € 186 m² nº 01 · 2.ª planta — guion largo · Fraunces y Karla";
+const glyphs = "Áá Éé Íí Óó Úú Ññ Üü ¿Sí? ¡Claro! «comillas» 1.450.000 € 186 m² nº 01 · 2.ª planta — guion largo · Playfair, Cinzel e Inter";
 const g = h(Document, { title: "Prueba glifos", author: "Benjamín Cousiño Propiedades" },
   h(Page, { size: "A4", style: { backgroundColor: PAPER, padding: 51 } },
     T({ fontFamily: DISPLAY, fontSize: 16 }, glyphs),
@@ -83,11 +83,9 @@ const g = h(Document, { title: "Prueba glifos", author: "Benjamín Cousiño Prop
     T({ fontFamily: TEXT, fontSize: 12, marginTop: 8 }, glyphs),
     T({ fontFamily: TEXT, fontWeight: 600, fontSize: 12, marginTop: 8 }, glyphs),
     T({ fontFamily: TEXT, fontSize: 7.5, letterSpacing: 2, marginTop: 8 }, "SELECCIÓN PRIVADA · nº 01 · 2.ª".toUpperCase()),
-    // Con los ordinales en Fraunces (splitOrdinals):
-    h(Text, { style: { fontFamily: TEXT, fontSize: 12, marginTop: 8 }, hyphenationCallback: noHyphens },
-      ...splitOrdinals("Karla con ordinales en Fraunces: nº 01 · 2.ª planta · 3ºB").map(([t, o], i) => (o ? h(Text, { key: i, style: { fontFamily: DISPLAY } }, t) : t))),
-    h(Text, { style: { fontFamily: TEXT, fontSize: 7.5, letterSpacing: 2, marginTop: 8 }, hyphenationCallback: noHyphens },
-      ...splitOrdinals("SELECCIÓN PRIVADA · Nº 01 · OTOÑO 2026").map(([t, o], i) => (o ? h(Text, { key: i, style: { fontFamily: DISPLAY } }, t) : t))),
+    // Ordinales en Inter (trae «º» y «ª» propios) y etiquetas en Cinzel:
+    h(Text, { style: { fontFamily: TEXT, fontSize: 12, marginTop: 8 }, hyphenationCallback: noHyphens }, "Inter con ordinales: nº 01 · 2.ª planta · 3ºB"),
+    h(Text, { style: { fontFamily: LABEL, fontSize: 7.5, letterSpacing: 2, marginTop: 8 }, hyphenationCallback: noHyphens }, "SELECCIÓN PRIVADA · Nº 01 · OTOÑO 2026"),
   ));
 writeFileSync(`${out}/3-glifos.pdf`, await render(g));
 console.log("hecho", out);

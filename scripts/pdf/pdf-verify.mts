@@ -147,8 +147,10 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
   ok(`índice: ${catalog.items.length} enlaces internos (uno por vivienda)`, indexLinks.length === catalog.items.length, `${indexLinks.length}`);
   const starts = indexLinks.map((l) => l.to);
   ok("índice: páginas en orden creciente", starts.every((p, i) => i === 0 || p > starts[i - 1]), starts.join(","));
-  const closingPage = pages.length;
-  ok("el cierre es la última página (CONTACTO · Hablemos)", /hablemos/i.test(pages[closingPage - 1].text));
+  // Enmienda visual 2026-10-20: tras el cierre va el colofón (página oscura).
+  const closingPage = pages.length - 1;
+  ok("el cierre es la penúltima página (CONTACTO · Hablemos)", /hablemos/i.test(pages[closingPage - 1].text));
+  ok("el colofón es la última página", /preparada para ti/i.test(pages[pages.length - 1].text) && !/hablemos/i.test(pages[pages.length - 1].text));
   catalog.items.forEach((it, i) => {
     const s = starts[i];
     if (s === undefined) return;
@@ -177,7 +179,7 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
     const x = planItemExport(it);
     // Cortos (rótulos, título, precio): sin espacios. Largos: palabra a palabra.
     const flatHay = flat(pages.slice(from - 1, to).map((p) => p.text).join("\n"));
-    const shorts: [string, string][] = [["título", it.title], ["precio", it.price], ["rótulo", `Nº ${n2(i)} · ${it.operation}`], ...(it.place ?? "Zona · sin dato").split(",").map((z): [string, string] => ["zona", z])];
+    const shorts: [string, string][] = [["título", it.title], ["precio", it.price], ["rótulo", `Nº ${n2(i)}`], ["operación", it.operation], ...(it.place ?? "Zona · sin dato").split(",").map((z): [string, string] => ["zona", z])];
     if (it.reserved) shorts.push(["reservada", "Reservada"]);
     x.highlights.forEach((h, k) => shorts.push([`punto ${k + 1}`, h]));
     x.features.forEach((f, k) => shorts.push([`característica ${k + 1}`, f]));
@@ -262,7 +264,7 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
 
   // PDF7 · fuentes y glifos.
   ok("fuentes: todas incrustadas", obj.fonts.length > 0 && obj.fonts.every((f) => f.embedded), JSON.stringify(obj.fonts));
-  ok("fuentes: solo Fraunces y Karla (sin fuentes estándar)", obj.fonts.every((f) => /Fraunces|Karla/.test(f.name)), obj.fonts.map((f) => f.name).join(","));
+  ok("fuentes: solo Playfair Display, Cinzel e Inter (sin fuentes estándar)", obj.fonts.every((f) => /Playfair|Cinzel|Inter/.test(f.name)), obj.fonts.map((f) => f.name).join(","));
   ok("glifos: «º», tildes, ñ y € se extraen tal cual", catalog.items.length === 0 || (/N ?º ?0 ?1/.test(all) && /[áéíóúñ]/.test(all) && all.includes("€")));
   return { pages: pages.length, text: all, catalog };
 }
