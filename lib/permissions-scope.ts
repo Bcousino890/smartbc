@@ -217,7 +217,19 @@ export function planScopeChanges(
   stored: ScopeOverride[],
   input: ScopeOverrideInput[],
 ): { toStore: ScopeOverrideInput[]; escalation: ScopeOverrideInput | null } {
-  const toStore = input.filter((o) => defaults[o.resource][o.kind] !== o.scope);
+  // Fusiona la entrada con el perfil y normaliza (Ver "own" fuerza Editar
+  // "own"); solo se guardan las celdas que difieren del perfil tras normalizar.
+  const toStore: ScopeOverrideInput[] = [];
+  for (const r of SCOPED_RESOURCES) {
+    const merged = { ...defaults[r] };
+    for (const o of input) if (o.resource === r) merged[o.kind] = o.scope;
+    const norm = normalizeCell(merged);
+    for (const kind of ["view", "edit"] as const) {
+      if (norm[kind] !== defaults[r][kind]) {
+        toStore.push({ resource: r, kind, scope: norm[kind] });
+      }
+    }
+  }
   const wasStored = (o: ScopeOverrideInput) =>
     stored.some((s) => s.resource === o.resource && s.kind === o.kind && s.scope === o.scope);
   const escalation = toStore.find((o) => !wasStored(o) && isEscalation(actor, o)) ?? null;

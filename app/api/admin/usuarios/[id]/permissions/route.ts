@@ -390,7 +390,14 @@ export async function POST(
     }
   }
 
-  // Alcance por sección (tras los permisos): reemplaza el subconjunto del país.
+  // Alcance por sección (tras los permisos). ORDEN Y NO ATOMICIDAD: las filas de
+  // permisos ya están guardadas cuando llegamos aquí. Si el borrado o el insert
+  // de alcance falla se responde 500 y, en el peor caso, las excepciones de
+  // alcance de este subconjunto vuelven a los defaults del perfil (dirección
+  // segura: nunca más amplio). Coherente con el delete+insert no atómico de los
+  // permisos de arriba. La validación, la lectura previa y la comprobación de
+  // escalada se hicieron antes de escribir nada, para que casi nada falle aquí.
+  // Reemplaza el subconjunto del país.
   if (scopeInput !== null) {
     let delScope = db.from("user_scope_overrides").delete().eq("user_id", userId);
     delScope = country ? delScope.eq("country", country) : delScope.is("country", null);

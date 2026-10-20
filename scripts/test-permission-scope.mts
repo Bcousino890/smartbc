@@ -188,4 +188,39 @@ t("planScopeChanges", () => {
   assert.deepEqual(r, { toStore: [], escalation: null });
 });
 
+t("planScopeChanges normaliza contra el perfil", () => {
+  const defs = defaultScopes("agent_senior"); // Ver y Editar "own" en clientes
+  assert.equal(defs.clientes.view, "own");
+  const actor = defaultScopes("admin");
+  // edit=all solo, con Ver own por defecto: no se guarda esa fila
+  let r = planScopeChanges(defs, actor, [], [{ resource: "clientes", kind: "edit", scope: "all" }]);
+  assert.deepEqual(r.toStore, []);
+  // view=all + edit=all explícitos: se guardan ambas
+  r = planScopeChanges(defs, actor, [], [
+    { resource: "clientes", kind: "view", scope: "all" },
+    { resource: "clientes", kind: "edit", scope: "all" },
+  ]);
+  assert.deepEqual(r.toStore, [
+    { resource: "clientes", kind: "view", scope: "all" },
+    { resource: "clientes", kind: "edit", scope: "all" },
+  ]);
+  // view=all + edit=own: solo view difiere del perfil
+  r = planScopeChanges(defs, actor, [], [
+    { resource: "clientes", kind: "view", scope: "all" },
+    { resource: "clientes", kind: "edit", scope: "own" },
+  ]);
+  assert.deepEqual(r.toStore, [{ resource: "clientes", kind: "view", scope: "all" }]);
+  // perfil all/all, view=own explícito: edit se normaliza a own (fila edit own)
+  const d2 = defaultScopes("advisor");
+  assert.equal(d2.clientes.view, "all");
+  r = planScopeChanges(d2, actor, [], [{ resource: "clientes", kind: "view", scope: "own" }]);
+  assert.deepEqual(r.toStore, [
+    { resource: "clientes", kind: "view", scope: "own" },
+    { resource: "clientes", kind: "edit", scope: "own" },
+  ]);
+  // perfil own/own, view=own explícito: sin filas redundantes
+  r = planScopeChanges(defs, actor, [], [{ resource: "clientes", kind: "view", scope: "own" }]);
+  assert.deepEqual(r.toStore, []);
+});
+
 console.log(`\n${n} pruebas OK`);
