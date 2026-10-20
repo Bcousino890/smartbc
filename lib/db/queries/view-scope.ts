@@ -6,6 +6,13 @@ import {
   type PermissionResource,
   type ViewRestriction,
 } from "@/lib/permissions";
+import {
+  isScopedResource,
+  resolveRestriction,
+  type ScopedResource,
+  type ScopeKind,
+} from "@/lib/permissions-scope";
+import { getScopeOverrides } from "./permissions";
 
 /**
  * Scope de datos resuelto para el usuario actual sobre un recurso concreto.
@@ -29,6 +36,8 @@ export type ViewScope = {
  */
 export async function resolveViewScope(
   resource: PermissionResource,
+  kind: ScopeKind = "view",
+  country?: string,
 ): Promise<ViewScope> {
   let profile = null;
   try {
@@ -38,9 +47,18 @@ export async function resolveViewScope(
     profile = null;
   }
   const role = profile?.role ?? null;
-  const restriction: ViewRestriction = role
-    ? getViewRestriction(role, resource)
-    : "all";
+  let restriction: ViewRestriction = "all";
+  if (role && profile) {
+    restriction = isScopedResource(resource)
+      ? resolveRestriction(
+          role,
+          resource,
+          kind,
+          await getScopeOverrides(profile.id),
+          country,
+        )
+      : getViewRestriction(role, resource);
+  }
   return { restriction, userId: profile?.id ?? null, role };
 }
 
@@ -75,5 +93,46 @@ export async function getAssignedClientIds(
     return (data as unknown as { id: string }[]).map((r) => r.id);
   } catch {
     return [];
+  }
+}
+
+/**
+ * ¿Puede el usuario actual ver/editar a este cliente en `resource`? Misma
+ * lógica que `canAccessClient` de viewing-collections, pero con el alcance
+ * (`kind`) y el país pedidos: el dueño efectivo es el asesor asignado.
+ */
+export async function canActOnClient(
+  clientId: string,
+  resource: ScopedResource,
+  kind: ScopeKind,
+  country?: string,
+): Promise<boolean> {
+  const { restriction, userId } = await resolveViewScope(resource, kind, country);
+  if (restriction === "none") return false;
+  if (restriction === "all" || !userId) return true;
+  const ids = await getAssignedClientIds(userId);
+  return ids.includes(clientId);
+}
+
+/**
+ * ¿Puede el usuario actual ver/editar este lead? Con alcance "own" solo si
+ * está asignado a él o no está asignado a nadie (los sin asignar son de todos).
+ */
+export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boolean> {
+  const { restriction, userId } = await resolveViewScope("solicitudes", kind);
+  if (restriction === "none") return false;
+  if (restriction === "all" || !userId) return true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (createAdminClient() as any)
+      .from("lead_inbox_facts")
+      .select("assigned_to")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (error || !data) return false;
+    const assignedTo = (data as { assigned_to: string | null }).assigned_to;
+    return assignedTo == null || assignedTo === userId;
+  } catch {
+    return false;
   }
 }

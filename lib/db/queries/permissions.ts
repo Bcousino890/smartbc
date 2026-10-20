@@ -12,6 +12,12 @@ import {
   getCaptacionEditableFields,
   getCaptacionViewRestriction,
 } from "@/lib/permissions";
+import {
+  applyScopeOverrides,
+  defaultScopes,
+  type ScopeMatrix,
+  type ScopeOverride,
+} from "@/lib/permissions-scope";
 
 export type BaseRoleResolution = {
   /** Rol usado para resolver la matriz cuando no hay rol personalizado. */
@@ -243,4 +249,38 @@ export function getCaptacionEditPermissions(role: string) {
     fields: getCaptacionEditableFields(role),
     viewRestriction: getCaptacionViewRestriction(role),
   };
+}
+
+/**
+ * Excepciones de alcance (Ver / Editar) de un usuario, tal cual están en
+ * `user_scope_overrides`. Defensivo: si la tabla aún no existe (migración
+ * 0216 pendiente) o la consulta falla, devuelve [] y todo sigue como antes.
+ */
+export async function getScopeOverrides(userId: string): Promise<ScopeOverride[]> {
+  try {
+    const admin = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (admin as any)
+      .from("user_scope_overrides")
+      .select("resource, kind, scope, country")
+      .eq("user_id", userId);
+    if (error || !data) return [];
+    return data as ScopeOverride[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Alcance efectivo por sección: el del perfil del rol (`defaults`) y el
+ * resultado de aplicarle las excepciones del usuario (`scopes`).
+ */
+export async function getEffectiveScopes(
+  userId: string,
+  role: string,
+  country?: string,
+): Promise<{ scopes: ScopeMatrix; defaults: ScopeMatrix }> {
+  const defaults = defaultScopes(role);
+  const overrides = await getScopeOverrides(userId);
+  return { scopes: applyScopeOverrides(defaults, overrides, country), defaults };
 }
