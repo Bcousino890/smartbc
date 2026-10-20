@@ -198,6 +198,21 @@ $R sql $D13/rollback-0213.sql $S/test-rollback-0213.sql $M11
 $R sql $S/test-util.sql
 echo "   0213 se vuelve a aplicar tras su reversión"
 
+echo "== 2s. 0217: título propio de cada vivienda en un catálogo (catálogos previos + aplicada dos veces, reversión y reaplicación)"
+M12=supabase/migrations/0217_catalog_text_title.sql
+D17=docs/changes/2026-10-20-bcp-01-compacto-y-opiniones
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $S/test-catalog-title-pre.sql $M12 $M12 $S/test-catalog-title.sql
+$R sql $D17/rollback-0217.sql $S/test-rollback-0217.sql $M12 $M12
+$R sql $S/test-util.sql
+echo "   0217 se vuelve a aplicar tras su reversión"
+
+echo "== 2t. 0217 sobre los tests de fotos (0202) y la selección (2k)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M12 $S/test-catalog-photos.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $S/test-catalog-operations.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
