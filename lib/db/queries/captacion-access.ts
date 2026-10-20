@@ -2,7 +2,14 @@ import "server-only";
 import { getEffectiveRoleAndPermissions } from "./permissions";
 import { getCurrentProfile, type ProfileRow } from "./session";
 import { createAdminClient } from "../admin";
-import type { EffectivePermissions } from "@/lib/permissions";
+import type { CaptacionViewRestriction, EffectivePermissions } from "@/lib/permissions";
+import {
+  applyScopeOverrides,
+  defaultScopes,
+  resolveCaptacionRestriction,
+  type ScopeValue,
+} from "@/lib/permissions-scope";
+import { getScopeOverrides } from "./permissions";
 import { canWorkCaptacion, isCaptacionAdminRole } from "@/lib/captaciones/access";
 
 /** Captaciones es un módulo exclusivo de Chile: el país siempre es `cl`. */
@@ -16,6 +23,10 @@ export type CaptacionActor = {
   effective: EffectivePermissions;
   /** Atajo para los gates de "mando" (asignar, editar ficha, mover etapa). */
   isAdmin: boolean;
+  /** Alcance de Editar en captaciones ("own" = solo asignadas/creadas por la persona). */
+  editScope: ScopeValue;
+  /** Qué captaciones puede VER (perfil + excepción de alcance de Ver). */
+  viewRestriction: CaptacionViewRestriction;
 };
 
 /**
@@ -36,11 +47,15 @@ export async function getCaptacionActor(profile: {
     profile.role,
     CAPTACIONES_COUNTRY,
   );
+  const overrides = await getScopeOverrides(profile.id);
   return {
     id: profile.id,
     role: effectiveRole,
     effective: permissions,
     isAdmin: isCaptacionAdminRole(effectiveRole),
+    editScope: applyScopeOverrides(defaultScopes(effectiveRole), overrides, CAPTACIONES_COUNTRY)
+      .captaciones.edit,
+    viewRestriction: resolveCaptacionRestriction(effectiveRole, overrides, CAPTACIONES_COUNTRY),
   };
 }
 
@@ -49,7 +64,7 @@ export function actorCanWorkCaptacion(
   actor: CaptacionActor,
   captacion: { assigned_to?: string | null; created_by?: string | null },
 ): boolean {
-  return canWorkCaptacion(actor, captacion, actor.effective);
+  return canWorkCaptacion(actor, captacion, actor.effective, actor.editScope);
 }
 
 export type CaptacionWorkGate =

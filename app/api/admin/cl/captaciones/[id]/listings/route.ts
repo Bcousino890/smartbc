@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
+import { captacionMatchesView } from "@/lib/captaciones/access";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
 
 const ALLOWED_ROLES = [
@@ -28,6 +30,21 @@ export async function GET(
     }
 
     const db = createAdminClient() as any;
+
+    // Alcance de Ver: solo los avisos de captaciones que la persona puede ver.
+    const { data: cap } = await db
+      .from("captaciones")
+      .select("assigned_to, created_by, owner_confirmed")
+      .eq("id", id)
+      .single();
+    if (!cap) {
+      return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
+    }
+    const actor = await getCaptacionActor(profile);
+    if (!captacionMatchesView(actor.viewRestriction, profile.id, cap)) {
+      return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
+    }
+
     const { data, error } = await db
       .from("captacion_listings")
       .select("*, prices:captacion_listing_prices(price, currency, source, scraped_at)")

@@ -27,6 +27,7 @@ import {
   validateScopeOverrides,
   type ScopeOverride,
 } from "../lib/permissions-scope.ts";
+import { canWorkCaptacion, captacionMatchesView } from "../lib/captaciones/access.ts";
 import {
   STAFF_EXPORT,
   STAFF_READ,
@@ -297,6 +298,30 @@ t("documentación: lectura=view/view, escritura=edit/edit, exportar=export con a
   assert.deepEqual(STAFF_READ, { permission: "view", scope: "view" });
   assert.deepEqual(STAFF_WRITE, { permission: "edit", scope: "edit" });
   assert.deepEqual(STAFF_EXPORT, { permission: "export", scope: "view" });
+});
+
+t("captaciones: editScope 'own' solo deja trabajar las propias aunque haya captaciones.edit", () => {
+  const eff = { captaciones: { edit: true } } as never;
+  const me = { id: "u1", role: "agent_senior" };
+  assert.equal(canWorkCaptacion(me, { assigned_to: "x", created_by: "y" }, eff, "own"), false);
+  assert.equal(canWorkCaptacion(me, { assigned_to: "u1" }, eff, "own"), true);
+  assert.equal(canWorkCaptacion(me, { created_by: "u1" }, eff, "own"), true);
+  assert.equal(canWorkCaptacion(me, { assigned_to: "x" }, eff, "all"), true);
+  assert.equal(canWorkCaptacion(me, { assigned_to: "x" }, eff), true);
+  assert.equal(canWorkCaptacion(me, { assigned_to: "x" }, { captaciones: { edit: false } } as never, "all"), false);
+});
+
+t("captaciones: captacionMatchesView replica las reglas del listado", () => {
+  const cap = { assigned_to: "a", created_by: "c", owner_confirmed: false };
+  assert.equal(captacionMatchesView("all", "z", cap), true);
+  assert.equal(captacionMatchesView("own_only", "a", cap), true);
+  assert.equal(captacionMatchesView("own_only", "c", cap), true);
+  assert.equal(captacionMatchesView("own_only", "z", cap), false);
+  assert.equal(captacionMatchesView("assigned_only", "a", cap), true);
+  assert.equal(captacionMatchesView("assigned_only", "c", cap), false);
+  assert.equal(captacionMatchesView("confirmed_and_own", "c", cap), true);
+  assert.equal(captacionMatchesView("confirmed_and_own", "z", { ...cap, owner_confirmed: true }), true);
+  assert.equal(captacionMatchesView("confirmed_and_own", "z", cap), false);
 });
 
 console.log(`\n${n} pruebas OK`);

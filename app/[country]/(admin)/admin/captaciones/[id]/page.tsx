@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { guardPage } from "@/lib/auth/guard";
 import { getCaptacion, getChileAssignableUsers } from "../actions";
@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getStagesForPipeline } from "@/lib/captaciones/pipeline";
 import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
+import { captacionMatchesView } from "@/lib/captaciones/access";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,13 @@ export default async function CaptacionDetailPage({
 
   if (!captacion) {
     return <div className="p-10 text-center">Captación no encontrada</div>;
+  }
+
+  // Alcance de Ver: si la captación no entra en lo que esta persona puede
+  // ver en el listado, es como si no existiera.
+  const actor = await getCaptacionActor(profile);
+  if (!captacionMatchesView(actor.viewRestriction, profile.id, captacion)) {
+    notFound();
   }
 
   const db = createAdminClient() as any;
@@ -123,7 +131,6 @@ export default async function CaptacionDetailPage({
   // decididos: la UI no vuelve a comparar `role === "captadora"`, que era lo
   // que escondía el botón "+ Registrar Intento" y los botones de edición a
   // quien sí tenía permiso en la API.
-  const actor = await getCaptacionActor(profile);
   const canWork = actorCanWorkCaptacion(actor, captacion);
   const canDelete = actor.effective.captaciones?.delete ?? false;
 

@@ -39,7 +39,7 @@ export const PERMISSION_DETAILS: Record<PermissionResource, Details> = {
     publish: "Sin efecto: publicar en PortalInmobiliario solo pueden Propietario y Administrador, sea cual sea este interruptor.",
   },
   captaciones: {
-    view: "Ver captaciones (Chile). Cuáles: todas, solo las confirmadas y propias, o solo las asignadas, según el perfil.",
+    view: "Ver captaciones (Chile). Cuáles ve la persona lo marca el alcance (Todo / Solo lo suyo = asignadas o creadas por ella); por defecto, el que traiga el perfil.",
     create: "Crear captaciones.",
     edit: "Editar captaciones y comprobar WhatsApp. Los campos editables dependen del perfil.",
     delete: "Borrar captaciones.",

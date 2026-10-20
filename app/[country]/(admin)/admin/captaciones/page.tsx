@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { CaptacionesClient } from "./captaciones-client";
-import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getChileAssignableUsers, attachDataQualityFlags, type Captacion } from "./actions";
-import { getCaptacionEditableFields, getCaptacionViewRestriction } from "@/lib/permissions";
+import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesOwn, getCaptacionesAll, getChileAssignableUsers, attachDataQualityFlags, type Captacion } from "./actions";
+import { getCaptacionEditableFields } from "@/lib/permissions";
 import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getPipelinesForCountry, getStagesForPipeline } from "@/lib/captaciones/pipeline";
@@ -41,13 +41,17 @@ export default async function CaptacionesPage({
   }
 
   // Aplicar filtrado según rol efectivo
-  const viewRestriction = getCaptacionViewRestriction(actor.role);
+  const viewRestriction = actor.viewRestriction;
 
   let captaciones: Captacion[];
   switch (viewRestriction) {
     case "all":
       // Admin, owner, agent_admin: ver todas
       captaciones = await getCaptacionesAll();
+      break;
+    case "own_only":
+      // Alcance "Solo lo suyo": asignadas o creadas por la persona
+      captaciones = await getCaptacionesOwn(profile.id);
       break;
     case "assigned_only":
       // Captadora: solo asignadas

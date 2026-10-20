@@ -1,4 +1,9 @@
-import { canAccess, type EffectivePermissions } from "@/lib/permissions";
+import {
+  canAccess,
+  type CaptacionViewRestriction,
+  type EffectivePermissions,
+} from "@/lib/permissions";
+import type { ScopeValue } from "@/lib/permissions-scope";
 
 /** Usuario que intenta operar sobre la captación. `role` es el rol EFECTIVO. */
 export type CaptacionActorRef = { id: string; role: string };
@@ -7,6 +12,7 @@ export type CaptacionActorRef = { id: string; role: string };
 export type CaptacionAccessRef = {
   assigned_to?: string | null;
   created_by?: string | null;
+  owner_confirmed?: boolean | null;
 };
 
 /**
@@ -27,7 +33,8 @@ export type CaptacionAccessRef = {
  * Criterio:
  *   1. Quien tiene la captación asignada o quien la creó, siempre — es su
  *      trabajo, no depende del rol.
- *   2. El resto del equipo, si su permiso EFECTIVO incluye `captaciones.edit`.
+ *   2. El resto del equipo, si su permiso EFECTIVO incluye `captaciones.edit`
+ *      y su alcance de Editar no es «Solo lo suyo» (`editScope !== "own"`).
  *
  * @param actor      Usuario actual (id + rol efectivo, este último solo como
  *                   fallback si no hay matriz).
@@ -40,11 +47,15 @@ export function canWorkCaptacion(
   actor: CaptacionActorRef,
   captacion: CaptacionAccessRef,
   effective?: EffectivePermissions | null,
+  editScope?: ScopeValue,
 ): boolean {
   if (!actor?.id) return false;
 
   if (captacion.assigned_to && captacion.assigned_to === actor.id) return true;
   if (captacion.created_by && captacion.created_by === actor.id) return true;
+
+  // Alcance de Editar "own": solo lo suyo (regla 1), aunque tenga el permiso.
+  if (editScope === "own") return false;
 
   if (effective) return effective.captaciones?.edit ?? false;
   return canAccess(actor.role, "captaciones", "edit");
@@ -53,4 +64,29 @@ export function canWorkCaptacion(
 /** Roles con mando sobre la captación (asignar, editar ficha, mover etapa). */
 export function isCaptacionAdminRole(role: string): boolean {
   return role === "admin" || role === "owner" || role === "agent_admin";
+}
+
+/**
+ * ¿Entra esta captación en lo que el usuario puede VER? Mismas reglas que los
+ * listados (getCaptacionesAll / ForCaptadora / ForAgent / Own).
+ */
+export function captacionMatchesView(
+  restriction: CaptacionViewRestriction,
+  userId: string,
+  c: CaptacionAccessRef,
+): boolean {
+  switch (restriction) {
+    case "all":
+      return true;
+    case "own_only":
+      return c.assigned_to === userId || c.created_by === userId;
+    case "assigned_only":
+      return c.assigned_to === userId;
+    case "confirmed_and_own":
+      return (
+        c.created_by === userId || c.assigned_to === userId || c.owner_confirmed === true
+      );
+    default:
+      return false;
+  }
 }

@@ -147,6 +147,16 @@ export async function getCaptacionesForAgent(userId: string) {
   );
 }
 
+// Alcance "Solo lo suyo": las asignadas a la persona o creadas por ella.
+export async function getCaptacionesOwn(userId: string) {
+  return queryCaptaciones((q) =>
+    q
+      .eq("country", "cl")
+      .or(`created_by.eq.${userId},assigned_to.eq.${userId}`)
+      .order("created_at", { ascending: false })
+  );
+}
+
 export async function getCaptacionesForCaptadora(userId: string) {
   return queryCaptaciones((q) =>
     q.eq("assigned_to", userId).eq("country", "cl").order("created_at", { ascending: false })
