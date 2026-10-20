@@ -47,12 +47,12 @@ export function ReaderImage({
         onError={() => setState("error")}
       />
       {state === "loading" ? (
-        <span className={`${styles.imgLoading} ${variant === "thumb" ? styles.imgLoadingQuiet : ""}`} aria-hidden="true">
+        <span className={`${styles.imgLoading} ${variant === "thumb" ? styles.imgLoadingQuiet : ""} ${variant === "gallery" ? styles.imgOnInk : ""}`} aria-hidden="true">
           {variant === "thumb" ? null : "Cargando foto…"}
         </span>
       ) : null}
       {state === "error" ? (
-        <span className={`${styles.imgError} ${variant === "thumb" ? styles.imgErrorThumb : ""}`} role={variant === "thumb" ? undefined : "img"} aria-label={variant === "thumb" ? undefined : "Foto no disponible"} data-testid="img-error">
+        <span className={`${styles.imgError} ${variant === "thumb" ? styles.imgErrorThumb : ""} ${variant === "gallery" ? styles.imgOnInk : ""}`} role={variant === "thumb" ? undefined : "img"} aria-label={variant === "thumb" ? undefined : "Foto no disponible"} data-testid="img-error">
           {variant === "thumb" ? "—" : variant === "gallery" ? "Esta foto no se puede mostrar" : "Foto no disponible"}
         </span>
       ) : null}

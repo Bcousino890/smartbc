@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { CatalogReader } from "@/components/catalogs/reader/catalog-reader";
 import { StatePage } from "@/components/catalogs/reader/pages";
 import styles from "@/components/catalogs/reader/reader.module.css";
-import { catalogFontVariables } from "@/lib/catalogs/fonts";
 import { isCatalogFixtureMode } from "@/lib/catalogs/fixture-mode";
 import { getPublicCatalogState } from "@/lib/catalogs/public-data";
 import { pageLimiter } from "@/lib/catalogs/rate-limit";
@@ -23,14 +22,10 @@ export const metadata: Metadata = {
 
 function Unavailable() {
   return (
-    <div className={`${catalogFontVariables} ${styles.root}`} data-testid="reader-unavailable">
-      <div className={styles.stage}>
-        <div className={styles.spread}>
-          <StatePage kicker="Enlace" title="Este enlace ya no está disponible">
-            <p className={styles.lede}>Si necesitas volver a ver la selección, pide un enlace nuevo a tu asesor.</p>
-          </StatePage>
-        </div>
-      </div>
+    <div className={`${styles.root} ${styles.standalone} min-h-screen bg-cream-50 font-sans text-ink`} data-testid="reader-unavailable">
+      <StatePage kicker="Enlace" title="Este enlace ya no está disponible">
+        <p>Si necesitas volver a ver la selección, pide un enlace nuevo a tu asesor.</p>
+      </StatePage>
     </div>
   );
 }

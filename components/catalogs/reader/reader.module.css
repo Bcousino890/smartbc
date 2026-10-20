@@ -1,43 +1,19 @@
-/* Lector del catálogo · C Boutique (BCP-01 T8, D17). Fraunces + Karla, papel
-   cálido, tinta marrón, fotos enmarcadas. Escala tipográfica ×1,25 sobre la
-   base de cada página y espaciado en múltiplos de 4 pt (0,25em). Cifras de
-   ancho fijo en precios y datos. Doble página desde 900 × 620; por debajo,
-   una página. Todo limitado a esta pieza: no toca el admin. */
+/* Lector del catálogo · enmienda visual 2026-10-20 (DV1, DV6, DV13): la
+   publicación del itinerario como referencia. Aquí vive SOLO el esqueleto de
+   composición (libro a pantalla completa, página, panel editorial que se
+   desplaza por dentro, columna de fotografía, hoja única, modo desplazamiento)
+   y los estados de las fotos. La tipografía y el color van con los tokens de
+   Tailwind de la referencia (ink · cream · gold; serif · display · sans) y las
+   utilidades vc-* de globals.css. Doble composición desde 900 × 620 (la misma
+   condición que la composición pura del recorrido). Todo limitado a esta
+   pieza: no toca el admin. */
 
 .root {
-  --desk: #d8cdbd;
-  --paper: #f4ede1;
-  --ink: #2b2118;
-  --accent: #9b4a2e;
-  --muted: #7a6a58;
-  --mat: #fbf7f0;
-  --rule: rgba(155, 74, 46, 0.35);
-  --display: var(--font-catalog-display), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --text: var(--font-catalog-text), "Avenir Next", "Helvetica Neue", Arial, sans-serif;
-  --s1: 0.25em;
-  --s2: 0.5em;
-  --s3: 0.75em;
-  --s4: 1em;
-  --s6: 1.5em;
-  --s8: 2em;
-  --s12: 3em;
-  --t-sm: 0.8em;
-  --t-md: 1em;
-  --t-lg: 1.25em;
-  --t-xl: 1.5625em;
-  --t-2xl: 1.953em;
-  --t-3xl: 2.441em;
-  --turn: 380ms;
-
+  --spread-min-w: 900px;
   min-height: 100svh;
-  background: var(--desk);
-  color: var(--ink);
-  font-family: var(--text);
-  font-variant-numeric: tabular-nums;
+  background: #fbf8f3;
+  color: #0a0a0a;
   -webkit-font-smoothing: antialiased;
-  --nav-h: 56px;
-  padding: 16px 12px calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
-  box-sizing: border-box;
 }
 
 .root *,
@@ -46,838 +22,315 @@
   box-sizing: border-box;
 }
 
-.root button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
+/* ── Libro: un viewport = una composición (como book-mode.tsx) ──────────── */
 
-.root :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ── Escenario y páginas ───────────────────────────────────────────────── */
-
-.stage {
-  display: flex;
-  justify-content: center;
-  touch-action: pan-y;
-  /* El paso de página entra desplazado 28 px: sin esto, en móvil el
-     navegador ensancha la página y queda un desplazamiento horizontal. */
-  overflow-x: clip;
-}
-
-.spread {
+.book {
+  position: fixed;
+  inset: 0;
+  /* En iOS la barra del navegador se come el inset-0: 100dvh. */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
+  overflow: hidden;
+  background: #fbf8f3;
 }
+
+.book.dark {
+  background: #0a0a0a;
+}
+
+/* ── Modo desplazamiento: las páginas una debajo de otra ──────────────── */
+
+.flow {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+}
+
+.flow > * + * {
+  border-top: 1px solid rgba(10, 10, 10, 0.1);
+}
+
+/* ── Página ────────────────────────────────────────────────────────────── */
 
 .page {
   position: relative;
   width: 100%;
-  min-height: calc(100svh - 120px);
-  overflow: hidden;
-  font-size: 16px;
-  background:
-    radial-gradient(ellipse at 25% 15%, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(ellipse at 85% 95%, rgba(150, 110, 70, 0.12), transparent 55%),
-    var(--paper);
-}
-
-/* En una página, la vivienda es UNA hoja: foto arriba y texto debajo (y la
-   introducción encima del índice), sin huecos entre las dos mitades. */
-.two .page:first-child,
-.spread .page + .page {
-  min-height: 0;
-}
-
-.anim {
-  animation: turnIn var(--turn) ease-out both;
-}
-
-.animBack {
-  animation: turnInBack var(--turn) ease-out both;
-}
-
-@keyframes turnIn {
-  from {
-    opacity: 0;
-    transform: translateX(28px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes turnInBack {
-  from {
-    opacity: 0;
-    transform: translateX(-28px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .anim,
-  .animBack {
-    animation: none;
-  }
-}
-
-.lowMotion .anim,
-.lowMotion .animBack {
-  animation: none;
-}
-
-/* Una página: las dos mitades forman una sola hoja continua. */
-@media not all and (min-width: 900px) and (min-height: 620px) {
-  .two {
-    background:
-      radial-gradient(ellipse at 25% 8%, rgba(255, 255, 255, 0.55), transparent 50%),
-      radial-gradient(ellipse at 85% 98%, rgba(150, 110, 70, 0.12), transparent 45%),
-      var(--paper);
-  }
-  .two .page {
-    background: transparent;
-  }
-}
-
-/* Doble página: desde 900 × 620. */
-@media (min-width: 900px) and (min-height: 620px) {
-  .root {
-    --ph: min(calc(100vh - 110px), 860px);
-    --pw: calc(var(--ph) * 0.707);
-    padding: 18px 12px 24px;
-  }
-  .spread {
-    flex-direction: row;
-    justify-content: center;
-    width: auto;
-    max-width: none;
-    box-shadow: 0 2px 4px rgba(60, 40, 20, 0.15), 0 20px 50px rgba(60, 40, 20, 0.25);
-  }
-  .page {
-    width: var(--pw);
-    height: var(--ph);
-    min-height: 0;
-    font-size: calc(var(--pw) * 0.026);
-  }
-  .spread .page + .page {
-    min-height: 0;
-  }
-  .two .page:first-child {
-    box-shadow: inset -18px 0 26px -22px rgba(0, 0, 0, 0.35);
-  }
-  .two .page:last-child {
-    box-shadow: inset 18px 0 26px -22px rgba(0, 0, 0, 0.25);
-  }
-  .wide {
-    width: calc(var(--pw) * 1.2);
-  }
-  .scrollFlow .page {
-    height: auto;
-    min-height: var(--ph);
-  }
-}
-
-/* Modo desplazamiento: todas las páginas una debajo de otra. */
-.scrollFlow {
-  display: grid;
-  gap: 28px;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-}
-
-.scrollFlow .spread {
-  box-shadow: 0 10px 30px rgba(60, 40, 20, 0.18);
-}
-
-/* ── Piezas comunes ────────────────────────────────────────────────────── */
-
-.kicker {
-  font: 500 0.66em/1.4 var(--text);
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin: 0;
-}
-
-.ornament {
-  display: block;
-  color: var(--accent);
-  font-size: 0.9em;
-  text-align: center;
-  margin: var(--s4) 0;
-}
-
-.folio {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 1.5em;
-  margin: 0;
-  text-align: center;
-  font: italic 0.72em var(--display);
-  color: var(--muted);
-}
-
-.unknown {
-  font-style: italic;
-  font-weight: 400;
-  color: var(--muted);
-}
-
-/* ── Portada ───────────────────────────────────────────────────────────── */
-
-.coverPage {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-}
-
-.coverInner {
-  width: 100%;
-  min-height: inherit;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .coverInner {
-    height: 100%;
-  }
-}
-
-/* ── Introducción e índice ─────────────────────────────────────────────── */
-
-.introPage,
-.indexPage {
-  padding: var(--s12) 1.4em 4em;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .introPage,
-  .indexPage {
-    padding: 3.4em 3em 4em;
-  }
-}
-
-.introPage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.introTitle {
-  font: italic 400 var(--t-2xl) / 1.15 var(--display);
-  margin: var(--s3) 0 var(--s4);
-}
-
-.introBody {
-  font: 400 0.98em/1.7 var(--text);
-  max-width: 24em;
-  text-align: left;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-  margin: 0;
-}
-
-.introBody::first-line {
-  font-variant: small-caps;
-  letter-spacing: 0.05em;
-}
-
-.introSign {
-  margin-top: var(--s8);
-  display: grid;
-  gap: var(--s1);
-  font: italic 0.95em var(--display);
-  color: var(--muted);
-}
-
-.introSign strong {
-  font: italic 500 1.6em var(--display);
-  color: var(--ink);
-}
-
-.indexHead {
-  text-align: center;
-  margin-bottom: var(--s8);
-}
-
-.indexTitle {
-  font: italic 400 var(--t-2xl) / 1.1 var(--display);
-  margin: var(--s2) 0 0;
-}
-
-.indexList {
-  display: grid;
-  gap: 1.25em;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.indexLink {
-  display: grid;
-  grid-template-columns: 1.7em minmax(0, max-content) minmax(1em, 1fr) auto;
-  column-gap: var(--s2);
-  row-gap: 0.15em;
-  align-items: end;
-  width: 100%;
-  border: 0;
-  background: none;
-  padding: 0;
-  text-align: left;
-}
-
-.indexLink:hover .indexName {
-  color: var(--accent);
-}
-
-.ixN {
-  grid-column: 1;
-  grid-row: 1;
-  font: italic 0.9em var(--display);
-  color: var(--accent);
-}
-
-.indexName {
-  grid-column: 2;
-  grid-row: 1;
-  font: 400 1.2em/1.2 var(--display);
-  overflow-wrap: anywhere;
-}
-
-.ixDots {
-  grid-column: 3;
-  grid-row: 1;
-  border-bottom: 1px dotted var(--muted);
-  margin-bottom: 0.4em;
-}
-
-.ixPage {
-  grid-column: 4;
-  grid-row: 1;
-  font: italic 1em var(--display);
-}
-
-.ixMeta {
-  grid-column: 2 / 5;
-  grid-row: 2;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0 var(--s4);
-  font: 0.78em var(--text);
-  color: var(--muted);
-  min-width: 0;
-}
-
-.ixPrice {
-  margin-left: auto;
-  text-align: right;
-}
-
-.ixReserved {
-  margin-left: var(--s2);
-  font: 500 0.62em var(--text);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-@media not all and (min-width: 900px) and (min-height: 620px) {
-  .ixDots {
-    display: none;
-  }
-  .indexLink {
-    grid-template-columns: 1.7em minmax(0, 1fr) auto;
-  }
-  .ixPage {
-    grid-column: 3;
-  }
-  .ixMeta {
-    grid-column: 2 / 4;
-  }
-}
-
-/* El índice usa la zona de ScrollRegion: en una página fluye entero; en la
-   doble página (altura fija) la lista se desplaza dentro de la página, con
-   el mismo degradado y la señal «Más viviendas ↓» que los textos largos. */
-.textScroll.indexScroll {
-  display: block;
-  text-align: left;
-  padding: 0;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .indexPage {
-    display: flex;
-    flex-direction: column;
-  }
-  .indexHead {
-    flex: none;
-  }
-  /* Un poco de aire para que el foco de cada entrada no se corte. */
-  .textScroll.indexScroll {
-    padding: 0.3em 0.5em 1.5em;
-    margin: -0.3em -0.5em 0;
-  }
-}
-
-.emptyBox {
-  text-align: center;
-  padding: var(--s8) var(--s4);
-}
-
-/* ── Vivienda ──────────────────────────────────────────────────────────── */
-
-.photoPage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1.6em 1.4em 0.5em;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .photoPage {
-    padding: 3em 2.6em 4em;
-  }
-}
-
-.frame {
-  position: relative;
-  width: 100%;
-  background: var(--mat);
-  box-shadow: 0 0 0 0.6em var(--mat), 0 0.9em 1.6em rgba(60, 40, 20, 0.22);
-  overflow: hidden;
-  border: 0;
-  padding: 0;
-  display: block;
-}
-
-.frame img {
-  display: block;
-  width: 100%;
   height: 100%;
 }
 
-.fitCover img {
+.flow .page {
+  height: auto;
+  min-height: 70svh;
+}
+
+/* Página suelta fuera del libro (enlace no disponible): llena la ventana. */
+.standalone .page {
+  height: auto;
+  min-height: 100svh;
+}
+
+.coverPage {
+  overflow: hidden;
+}
+
+.flow .coverPage {
+  min-height: 100svh;
+}
+
+.dark {
+  background: #0a0a0a;
+}
+
+/* Página centrada (índice sin introducción, cierre, colofón, estados). */
+.centered {
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.centeredInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 30rem;
+  margin: auto 0;
+  text-align: center;
+}
+
+/* ── Vivienda: panel editorial | fotografía a página ───────────────────── */
+
+/* Apertura. Una columna: fotografía arriba (35 % del alto), texto debajo.
+   Doble composición: las dos a página, alternando de lado por vivienda. */
+.split {
+  display: grid;
+  height: 100%;
+  grid-template-rows: 35% minmax(0, 1fr);
+}
+
+.split .panel {
+  order: 2;
+}
+
+.split .photoCol {
+  order: 1;
+}
+
+/* Hoja única (una columna): la vivienda entera bajo su fotografía. */
+.sheet {
+  display: grid;
+  height: 100%;
+  grid-template-rows: 35% minmax(0, 1fr);
+}
+
+/* Dos paneles de texto (recorrido, detalle): solo existen en la doble
+   composición. */
+.twoPanels {
+  display: grid;
+  height: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.twoPanels > * + * {
+  border-left: 1px solid rgba(10, 10, 10, 0.1);
+}
+
+.panelRule {
+  border-left: 1px solid rgba(10, 10, 10, 0.1);
+}
+
+/* Página de texto compuesta (sola en su doble página, sin foto). */
+.composed {
+  display: flex;
+  justify-content: center;
+  height: 100%;
+}
+
+.composed .panel {
+  width: 100%;
+  max-width: 48rem;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.photoCol {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+.photoBtn {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: rgba(10, 10, 10, 0.05);
+  cursor: pointer;
+}
+
+.photoBtn img {
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  transition: transform 1400ms ease-out;
 }
 
-.fitContain img {
-  object-fit: contain;
+.photoBtn:hover img {
+  transform: scale(1.025);
 }
 
-.frameLandscape {
-  aspect-ratio: 3 / 2;
-}
-
-.framePortrait {
-  aspect-ratio: 2 / 3;
-  width: auto;
-  height: min(70svh, 34em);
-  max-width: 100%;
-}
-
-.frameSquare {
-  aspect-ratio: 1;
-}
-
-.frameUnknown {
-  aspect-ratio: 4 / 3;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .framePortrait {
-    height: auto;
-    width: 74%;
-  }
-}
-
-.noPhoto {
+.photoEmpty {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 4 / 3;
   width: 100%;
-  font: italic 1em var(--display);
-  color: var(--muted);
+  height: 100%;
+  background: rgba(10, 10, 10, 0.05);
 }
 
-.caption {
-  margin: 1.6em 0 0;
-  font: italic 0.95em/1.4 var(--display);
-  color: var(--muted);
-  text-align: center;
-  max-width: 24em;
-  overflow-wrap: anywhere;
-}
-
-.plate {
-  font: 500 0.68em var(--text);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-right: var(--s2);
-  font-style: normal;
-}
-
-.textPage {
-  padding: 1.6em 0 4em;
-}
-
-.scrollCue,
-.cueBand {
-  display: none;
-}
+/* ── Zona que se desplaza por dentro de la página (textos largos, índice):
+   la señal «Sigue leyendo ↓» vive en SU banda, debajo (L3). ─────────── */
 
 .scrollWrap {
   position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
 }
 
 .textScroll {
-  padding: 0 1.4em;
-  text-align: center;
   display: flex;
+  flex: 1;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+/* Centra si cabe; si no, desplaza desde arriba sin cortar nada. */
+.textScroll > * {
+  flex-shrink: 0;
+}
+
+.panelInner {
+  width: 100%;
+  margin: auto 0;
+}
+
+.textScroll:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -4px;
+}
+
+.textScroll[data-more="true"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 3.5rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 3.5rem), transparent);
+}
+
+.cueBand {
+  display: flex;
+  flex: none;
   align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin: 0 1.5rem;
+  border-top: 1px solid rgba(10, 10, 10, 0.1);
 }
 
-/* Doble página: altura fija; una descripción larga se desplaza DENTRO de la
-   página y el folio queda fuera, sin pisar el texto. */
-@media (min-width: 900px) and (min-height: 620px) {
-  .textPage {
-    display: flex;
-    flex-direction: column;
-    padding: 3em 0 4em;
-  }
-  .scrollWrap {
-    flex: 1;
-  }
-  .textScroll {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    padding: 0 3em 1em;
-  }
-  .textScroll:focus-visible {
-    outline-offset: -2px;
-  }
-  /* Señal de que el texto sigue: el propio texto se desvanece abajo (sin
-     tapar el fondo de la página) y aparece «Sigue leyendo ↓». */
-  .textScroll[data-more="true"] {
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 4em), transparent);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 4em), transparent);
-  }
-  /* E1 (L3): banda propia bajo la zona que se desplaza. */
-  .cueBand {
-    flex: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: max(32px, 2.6em);
-    margin: 0 3em;
-    border-top: 1px solid var(--rule);
-  }
-  .root .scrollCue {
-    display: block;
-    padding: 0.5em 1em;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    font: 500 0.7em var(--text);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--accent);
-  }
-  .root .scrollCue:hover {
-    background: rgba(155, 74, 46, 0.08);
-  }
-  .scrollFlow .textScroll {
-    overflow: visible;
-  }
-}
-
-.runner {
-  font: italic 0.75em var(--display);
-  color: var(--muted);
-  margin: 0 0 var(--s8);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.root .scrollCue {
+  padding: 0.5rem 1rem;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-cinzel), serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
   white-space: nowrap;
+  color: rgba(10, 10, 10, 0.55);
+  transition: color 500ms;
 }
 
-.itemN {
-  font: italic 1.1em var(--display);
-  letter-spacing: 0;
-  margin-right: var(--s1);
+.root .scrollCue:hover {
+  color: #0a0a0a;
 }
 
-.itemTitle {
-  font: 400 var(--t-2xl) / 1.15 var(--display);
-  margin: var(--s2) 0;
-  max-width: 14em;
-  overflow-wrap: anywhere;
+.textScroll.indexScroll {
+  padding: 0 0.25rem 1.5rem;
 }
 
-.price {
-  font: italic 400 1.65em var(--display);
-  color: var(--accent);
-  margin: 0;
+/* En modo desplazamiento el texto fluye: nada se desplaza por dentro y la
+   señal no aparece (ScrollRegion mira overflow-y). */
+.flow .scrollWrap,
+.flow .textScroll {
+  flex: none;
+  overflow: visible;
 }
 
-.reserved {
-  display: inline-block;
-  vertical-align: middle;
-  margin-left: var(--s2);
-  font: 500 0.42em var(--text);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  font-style: normal;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  padding: 0.4em 0.9em;
+.flow .cueBand {
+  display: none;
 }
 
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.35em 1.2em;
-  margin: var(--s6) 0 var(--s2);
-  padding: 0;
-  font-size: 0.9em;
-  max-width: 26em;
-  list-style: none;
-}
+/* ── Índice: introducción | lista ──────────────────────────────────────── */
 
-.facts strong {
-  font-weight: 600;
-}
-
-.unit {
-  font-size: 0.78em;
-  color: var(--muted);
-  margin-left: 0.15em;
-}
-
-.desc {
-  text-align: left;
-  font: 400 0.94em/1.7 var(--text);
-  max-width: 25em;
-  margin: 0;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-
-.desc::first-line {
-  font-variant: small-caps;
-  letter-spacing: 0.04em;
-}
-
-.features {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--s2);
-  margin: var(--s6) 0 0;
-  padding: 0;
-  list-style: none;
-  max-width: 26em;
-}
-
-.features li {
-  font: 0.78em var(--text);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  padding: 0.3em 0.9em;
-  color: var(--ink);
-}
-
-.thumbs {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--s2);
-  margin-top: var(--s6);
-}
-
-.thumb {
-  position: relative;
-  width: 3.6em;
-  height: 2.7em;
-  padding: 0;
-  border: 0;
-  background: var(--mat);
-  box-shadow: 0 0 0 0.18em var(--mat), 0 0.2em 0.5em rgba(60, 40, 20, 0.2);
-  overflow: hidden;
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.galleryOpen {
-  font: 500 0.7em var(--text);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
-  background: none;
-  border: 0;
-  margin-top: var(--s3);
-  padding: var(--s1);
-}
-
-/* ── Recorrido editorial (C2): entrada, puntos, secciones y detalle ────── */
-
-.leadText {
-  font: italic 400 1.18em/1.5 var(--display);
-  max-width: 22em;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.highlights {
+.indexPage {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--s2);
-  margin: var(--s6) 0 0;
-  padding: 0;
-  list-style: none;
-  max-width: 24em;
+  overflow-y: auto;
+  padding: 2rem 1.5rem 1.5rem;
 }
 
-.highlights li {
-  font: 500 0.78em/1.4 var(--text);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-.highlights li::before {
-  content: "✦";
-  color: var(--accent);
-  margin-right: 0.6em;
-  letter-spacing: 0;
-}
-
-.journeyPage .runner {
-  margin-bottom: var(--s6);
-}
-
-.section {
-  max-width: 25em;
-  text-align: left;
+.indexLayout {
+  display: grid;
   width: 100%;
+  max-width: 64rem;
+  margin: auto;
+  gap: 2rem;
 }
 
-.section + .section {
-  margin-top: var(--s8);
-}
-
-.sectionHeading {
-  font: italic 400 var(--t-xl) / 1.2 var(--display);
-  color: var(--accent);
-  margin: 0 0 var(--s3);
-  text-align: center;
-}
-
-.sectionText {
-  font: 400 0.98em/1.75 var(--text);
-  margin: 0;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-
-.detailTitle {
-  font: 400 var(--t-xl) / 1.2 var(--display);
-  margin: var(--s2) 0 var(--s4);
-  max-width: 16em;
-  overflow-wrap: anywhere;
-}
-
-.factList {
-  width: 100%;
-  max-width: 24em;
-  margin: 0;
-  text-align: left;
-  font-size: 0.9em;
-}
-
-.factList > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 1em;
-  padding: 0.55em 0;
-  border-bottom: 1px solid var(--rule);
-}
-
-.factList dt {
-  color: var(--muted);
-}
-
-.factList dd {
-  margin: 0;
-  font-weight: 600;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-/* Una página: la hoja continua alterna foto y texto. */
-.sheetSection {
-  width: 100%;
+.indexCol {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin-top: var(--s8);
+  min-height: 0;
 }
 
-.sheetPhoto {
-  width: 100%;
-  margin-bottom: var(--s6);
+.introCol {
+  min-width: 0;
 }
+
+/* ── Hoja única: ficha y descripción plegables ─────────────────────────── */
 
 .fold {
   width: 100%;
-  max-width: 25em;
-  margin-top: var(--s6);
-  border-top: 1px solid var(--rule);
-  text-align: left;
+  margin-top: 1.5rem;
+  border-top: 1px solid rgba(10, 10, 10, 0.1);
 }
 
 .fold summary {
-  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 44px;
   cursor: pointer;
-  font: 500 0.72em var(--text);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
   list-style: none;
+  font-family: var(--font-cinzel), serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.6);
 }
 
 .fold summary::-webkit-details-marker {
@@ -886,7 +339,8 @@
 
 .fold summary::after {
   content: "+";
-  font: 400 1.4em var(--display);
+  font-family: var(--font-playfair), serif;
+  font-size: 20px;
   letter-spacing: 0;
 }
 
@@ -894,234 +348,216 @@
   content: "−";
 }
 
-.fold .desc,
-.fold .factList {
-  margin-bottom: var(--s4);
+.fold > :not(summary) {
+  margin-bottom: 1rem;
 }
 
-/* ── Cierre y estados ──────────────────────────────────────────────────── */
+/* ── Fotos dentro del texto y mosaico de la ficha breve ───────────────── */
 
-.closingPage,
-.statePage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 0.9em;
-  padding: 3em 1.4em;
+.inlinePhoto {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: rgba(10, 10, 10, 0.05);
+  cursor: pointer;
 }
 
-.closingTitle,
-.stateTitle {
-  font: italic 400 var(--t-3xl) / 1 var(--display);
-  margin: 0;
-  max-width: 14em;
+.inlinePhoto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.stateTitle {
-  font-size: var(--t-2xl);
-  line-height: 1.1;
+.inlinePortrait {
+  width: 56%;
+  aspect-ratio: 3 / 4;
 }
 
-.lede {
-  font: 1em/1.6 var(--text);
-  max-width: 22em;
-  color: var(--muted);
-  margin: 0;
+.mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+  margin-top: 1.5rem;
 }
 
-/* Cierre «Hablemos» (D20): logo, filete, título, tarjeta con una sola acción. */
-.closingPage {
-  justify-content: flex-start;
-  gap: 0;
-  padding: 3.2em 1.4em 3em;
+.mosaic1 {
+  grid-template-columns: 1fr;
+}
+
+.mosaic3 .mosaicTile:first-child {
+  grid-column: 1 / -1;
+}
+
+.mosaicTile {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: rgba(10, 10, 10, 0.05);
+  cursor: pointer;
+}
+
+.mosaicTile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Doble composición: desde 900 × 620 ───────────────────────────────── */
+
+@media (min-width: 900px) and (min-height: 620px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .split .panel {
+    order: 1;
+  }
+
+  .split .photoCol {
+    order: 2;
+  }
+
+  .split.flip .panel {
+    order: 2;
+  }
+
+  .split.flip .photoCol {
+    order: 1;
+  }
+
+  .textScroll {
+    padding: 2.5rem 2.5rem 2rem;
+  }
+
+  .cueBand {
+    margin: 0 2.5rem;
+  }
+
+  .indexPage {
+    padding: 2.5rem 2.5rem 2rem;
+  }
+
+  .indexWithIntro {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    gap: 3.5rem;
+    align-items: start;
+  }
+
+  .indexLayout {
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  .indexCol {
+    max-height: 100%;
+  }
+}
+
+@media (min-width: 1200px) and (min-height: 620px) {
+  .textScroll {
+    padding: 2.5rem 3.5rem 2rem;
+  }
+
+  .composed .textScroll {
+    padding: 2.5rem 3rem 2rem;
+  }
+}
+
+/* ── Modo desplazamiento: alturas naturales ───────────────────────────── */
+
+.flow .split,
+.flow .sheet,
+.flow .twoPanels,
+.flow .composed {
+  height: auto;
+  grid-template-rows: auto auto;
+}
+
+.flow .split .photoCol,
+.flow .sheet .photoCol {
+  aspect-ratio: 4 / 5;
+}
+
+@media (min-width: 640px) {
+  .flow .split .photoCol,
+  .flow .sheet .photoCol {
+    aspect-ratio: 3 / 2;
+  }
+}
+
+@media (min-width: 900px) {
+  .flow .split .photoCol,
+  .flow .sheet .photoCol {
+    aspect-ratio: 2 / 1;
+  }
 }
 
 @media (min-width: 900px) and (min-height: 620px) {
-  .closingPage {
-    padding: 3.2em 3em 3em;
+  .flow .split {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .flow .split .photoCol {
+    aspect-ratio: auto;
+    min-height: 70vh;
+  }
+
+  .flow .twoPanels .photoCol {
+    min-height: 60vh;
   }
 }
 
-.closingLogo {
-  display: block;
-  width: 52%;
-  max-width: 22em;
-  height: auto;
-  aspect-ratio: 3282 / 519;
+.flow .centered {
+  min-height: 70svh;
 }
 
-@media not all and (min-width: 900px) and (min-height: 620px) {
-  .closingLogo {
-    width: 70%;
-  }
-}
+/* ── Navegación en modo desplazamiento: barra fija abajo ──────────────── */
 
-.closingRule {
-  display: block;
-  width: 2.2em;
-  height: 1px;
-  background: var(--rule);
-  margin: 1.8em 0 1.6em;
-}
-
-.closingPage .closingTitle {
-  margin: 0.2em 0 0.4em;
-}
-
-.contactCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 2em 0 0;
-  padding: 1.6em 2.2em 1.8em;
-  width: min(100%, 22em);
-  background: var(--mat);
-  box-shadow: 0 0.6em 1.4em rgba(60, 40, 20, 0.12);
-}
-
-.contactRole {
-  margin: 0;
-  font: 500 0.66em var(--text);
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.contactName {
-  margin: 0.25em 0 0.8em;
-  font: italic 500 1.9em/1.2 var(--display);
-  overflow-wrap: anywhere;
-}
-
-.callButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6em;
-  min-height: 44px;
-  padding: 0.8em 1.6em;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff8f0;
-  font: 600 0.95em var(--text);
-  letter-spacing: 0.03em;
-  text-decoration: none;
-}
-
-.callButton:hover {
-  background: #873f26;
-}
-
-.callButton svg {
-  width: 1.1em;
-  height: 1.1em;
-}
-
-.contactNumber {
-  display: block;
-  margin-top: 0.8em;
-  font: italic 1.05em var(--display);
-  color: var(--ink);
-}
-
-.closingFoot {
-  margin: auto 0 0;
-  padding-top: 2em;
-  font: 0.75em/1.5 var(--text);
-  color: var(--muted);
-  max-width: 26em;
-}
-
-.closingPage .ornament {
-  margin: 0.6em 0 0;
-}
-
-/* ── Navegación «← 3 / 9 →» ─────────────────────────────────────────────
-   Escritorio (doble página): cápsula debajo del libro, en el flujo.
-   Una página (móvil/ventanas estrechas): barra OPACA de ancho completo pegada
-   abajo; la página reserva su altura más el área segura, así que nunca tapa
-   texto, botones ni avisos (condición 1 de la ampliación). */
-
-.capsule {
+.navFlow {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
-  padding: 0 8px env(safe-area-inset-bottom);
-  background: var(--mat);
-  border-top: 1px solid rgba(155, 74, 46, 0.2);
-  box-shadow: 0 -4px 14px rgba(60, 40, 20, 0.08);
-  font: 13px/1 var(--text);
-  color: var(--ink);
+  background: rgba(251, 248, 243, 0.96);
+  backdrop-filter: blur(6px);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.capsule button {
-  border: 0;
-  background: none;
-  border-radius: 999px;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 10px;
-  white-space: nowrap;
-}
-
-.capsule button:hover:not(:disabled) {
-  background: rgba(155, 74, 46, 0.1);
-}
-
-.capsule button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.counter {
-  min-width: 4.2em;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.capsuleSep {
-  width: 1px;
-  height: 20px;
-  background: var(--rule);
-  margin: 0 2px;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .capsule {
-    position: static;
-    width: max-content;
-    height: auto;
-    margin: 14px auto 0;
-    padding: 4px;
-    border: 0;
-    border-radius: 999px;
-    background: rgba(251, 247, 240, 0.94);
-    box-shadow: 0 4px 18px rgba(60, 40, 20, 0.25);
-  }
-}
-
-/* ── Avisos ────────────────────────────────────────────────────────────── */
+/* ── Avisos (sin conexión, D12, E3) ───────────────────────────────────── */
 
 .banner {
-  max-width: 760px;
-  margin: 0 auto 12px;
-  padding: 10px 14px;
-  font: 14px/1.4 var(--text);
-  background: #efe3cf;
-  color: #5b3a22;
-  border-left: 3px solid var(--accent);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  align-items: flex-start;
+  padding: 10px 16px;
+  background: #f5f0e8;
+  border-bottom: 1px solid rgba(201, 169, 110, 0.55);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #0a0a0a;
+}
+
+.flow .banner {
+  position: sticky;
 }
 
 .banner button {
@@ -1132,12 +568,36 @@
   padding: 0 4px;
 }
 
+.galleryNotice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  background: rgba(251, 248, 243, 0.1);
+  border: 1px solid rgba(251, 248, 243, 0.25);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 13px;
+  color: rgba(251, 248, 243, 0.85);
+}
+
+.galleryNotice button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  min-width: 32px;
+  height: 32px;
+}
+
 .measureBadge {
   position: fixed;
   top: 8px;
   right: 8px;
   z-index: 30;
-  font: 12px/1.3 var(--text);
+  font: 12px/1.3 var(--font-inter), system-ui, sans-serif;
   background: #fff8e6;
   border: 1px solid #e0c48a;
   color: #5a4400;
@@ -1146,194 +606,11 @@
   max-width: 220px;
 }
 
-/* ── Galería ───────────────────────────────────────────────────────────── */
+/* ── Estados de las fotos (L4) ────────────────────────────────────────────
+   Cargando: tono del marfil (y «Cargando foto…» en los marcos grandes).
+   Error: «Foto no disponible», sin el icono roto. La animación solo existe
+   si no se pide «reducir movimiento». */
 
-.lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: rgba(30, 22, 16, 0.94);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-columns: minmax(0, 1fr);
-  color: #f4ede1;
-  font-family: var(--text);
-}
-
-.lbTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
-}
-
-.lbTitle {
-  font: italic 1em var(--display);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.lbStage {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  padding: 0 8px;
-  touch-action: pan-y;
-}
-
-.lbStage img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.lbNotice {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 32px);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  font: 14px/1.4 var(--text);
-  background: #efe3cf;
-  color: #5b3a22;
-  border-left: 3px solid var(--accent);
-}
-
-.lightbox .lbNotice button {
-  border: 0;
-  background: none;
-  color: inherit;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0;
-  min-width: 32px;
-  height: 32px;
-}
-
-.lbBottom {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 18px;
-  padding: 10px 14px max(14px, env(safe-area-inset-bottom));
-  font-variant-numeric: tabular-nums;
-}
-
-.lightbox button {
-  border: 1px solid rgba(244, 237, 225, 0.35);
-  background: rgba(244, 237, 225, 0.08);
-  color: inherit;
-  border-radius: 999px;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 14px;
-}
-
-/* ── E1 (L2) · Letra mínima en doble página ────────────────────────────────
-   La página escala con la altura de la ventana (--pw); en 1280 × 720 el texto
-   corrido bajaba a 11 px. Suelos: recorrido y descripción 15 px, entrada
-   16 px, datos clave 13 px y textos auxiliares 12 px. Los títulos conservan
-   su escala. Una página (móvil) ya está por encima y no cambia. */
-@media (min-width: 900px) and (min-height: 620px) {
-  .sectionText,
-  .introBody {
-    font-size: max(15px, 0.98em);
-  }
-  .desc {
-    font-size: max(15px, 0.94em);
-  }
-  .leadText {
-    font-size: max(16px, 1.18em);
-  }
-  .facts,
-  .factList {
-    font-size: max(13px, 0.9em);
-  }
-  .unit {
-    font-size: max(12px, 0.78em);
-  }
-  /* Auxiliares: cada pieza conserva su proporción y no baja de 12 px. */
-  .kicker {
-    font-size: max(12px, 0.66em);
-  }
-  .runner {
-    font-size: max(12px, 0.75em);
-  }
-  .folio {
-    font-size: max(12px, 0.72em);
-  }
-  .caption {
-    font-size: max(12px, 0.95em);
-  }
-  .plate {
-    font-size: max(12px, 0.68em);
-  }
-  .galleryOpen {
-    font-size: max(12px, 0.7em);
-  }
-  .features li {
-    font-size: max(12px, 0.78em);
-  }
-  .highlights li {
-    font-size: max(12px, 0.78em);
-  }
-  .ixN {
-    font-size: max(12px, 0.9em);
-  }
-  .ixPage {
-    font-size: max(12px, 1em);
-  }
-  .ixMeta {
-    font-size: max(12px, 0.78em);
-  }
-  .ixReserved {
-    font-size: max(12px, 0.62em);
-  }
-  .reserved {
-    font-size: max(12px, 0.42em);
-  }
-  .contactRole {
-    font-size: max(12px, 0.66em);
-  }
-  .contactNumber {
-    font-size: max(12px, 1.05em);
-  }
-  .callButton {
-    font-size: max(12px, 0.95em);
-  }
-  .closingFoot {
-    font-size: max(12px, 0.75em);
-  }
-  .introSign {
-    font-size: max(12px, 0.95em);
-  }
-  .lede {
-    font-size: max(12px, 1em);
-  }
-  .noPhoto {
-    font-size: max(12px, 1em);
-  }
-  .root .scrollCue {
-    font-size: max(12px, 0.7em);
-  }
-}
-
-/* ── E1 (L4) · Estados de las fotos ───────────────────────────────────────
-   Cargando: tono del papel (y «Cargando foto…» en marcos grandes). Error:
-   «Foto no disponible», sin el icono roto. La animación solo existe si no se
-   pide «reducir movimiento». */
 .imgHidden {
   visibility: hidden;
 }
@@ -1343,22 +620,25 @@
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   padding: 0.9em;
   text-align: center;
   pointer-events: none;
-  font: italic max(12px, 0.85em) / 1.3 var(--display);
-  color: var(--muted);
+  font-family: var(--font-cinzel), serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.45);
 }
 
 .imgLoading {
-  background: linear-gradient(110deg, #f1e9dc 30%, #f8f2e8 50%, #f1e9dc 70%) 0 0 / 300% 100%;
+  background: linear-gradient(110deg, #f1ece3 30%, #f8f4ec 50%, #f1ece3 70%) 0 0 / 300% 100%;
 }
 
 .imgError {
-  align-items: center;
-  background: #efe7da;
+  background: #ede8de;
 }
 
 .imgLoadingQuiet {
@@ -1366,15 +646,14 @@
 }
 
 .imgErrorThumb {
-  font-size: 12px;
+  font-size: 9.5px;
   padding: 0;
 }
 
-.lbStage .imgLoading,
-.lbStage .imgError {
+/* Sobre tinta (galería): sin fondo, letra marfil. */
+.imgOnInk {
   background: transparent;
-  color: rgba(244, 237, 225, 0.75);
-  align-items: center;
+  color: rgba(251, 248, 243, 0.7);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1394,209 +673,4 @@
   to {
     background-position: 0 0;
   }
-}
-
-/* ── E1 · Composición adaptativa del recorrido ─────────────────────────── */
-
-/* Entrada larga (D-QA2): abre el recorrido, íntegra. */
-.introBlock {
-  font: italic 400 1.12em/1.6 var(--display);
-  text-align: left;
-  max-width: 25em;
-  width: 100%;
-  margin: 0 0 var(--s6);
-  overflow-wrap: anywhere;
-}
-
-/* Enlace de la apertura a la entrada larga. */
-.continueLink {
-  margin-top: var(--s8);
-  padding: var(--s2) var(--s4);
-  border: 0;
-  background: none;
-  font: 500 0.7em var(--text);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-/* Foto pequeña dentro de una página de recorrido. */
-.inlinePhoto {
-  width: 62%;
-  margin: var(--s2) auto var(--s6);
-}
-
-/* Página de texto compuesta (D-QA3): sola en su doble página, sin foto. */
-.composedPage .textScroll {
-  justify-content: safe center;
-}
-
-.composedPage .section {
-  text-align: center;
-}
-
-.storyFull {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.subKicker {
-  margin-top: var(--s8);
-}
-
-/* Ficha breve (D-QA6): datos completos, características y mosaico. */
-.brief {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: var(--s4);
-}
-
-.mosaic {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6em;
-  width: 100%;
-  max-width: 24em;
-  margin-top: var(--s6);
-}
-
-.mosaic1 {
-  grid-template-columns: 1fr;
-  max-width: 18em;
-}
-
-.mosaic3 .mosaicTile:first-child {
-  grid-column: 1 / -1;
-}
-
-.mosaicTile {
-  position: relative;
-  aspect-ratio: 3 / 2;
-  padding: 0;
-  border: 0;
-  overflow: hidden;
-  background: var(--mat);
-  box-shadow: 0 0 0 0.25em var(--mat), 0 0.4em 0.9em rgba(60, 40, 20, 0.18);
-}
-
-.mosaicTile img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  .introBlock {
-    font-size: max(16px, 1.12em);
-  }
-  .continueLink {
-    font-size: max(12px, 0.7em);
-  }
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  /* Ficha breve en doble página: mosaico contenido para que quepa con los datos. */
-  .brief .mosaic {
-    max-width: 19em;
-    gap: 0.5em;
-    margin-top: var(--s4);
-  }
-}
-
-/* E1 · En una zona que se desplaza (flex en columna), ningún hijo se encoge:
-   el título corrido y los marcos (overflow: hidden) llegaban a medir 0 de alto
-   cuando el contenido llenaba la página. */
-.textScroll > * {
-  flex-shrink: 0;
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  /* Foto pequeña vertical: misma altura aproximada que una horizontal. */
-  .inlinePhoto .framePortrait {
-    width: 44%;
-  }
-}
-
-@media (min-width: 900px) and (min-height: 620px) {
-  /* Los botones del lector heredan la letra (.root button { font: inherit }),
-     así que su propia clase no fijaba el tamaño: en doble página bajaban a
-     ~11 px. Mismo suelo de 12 px que el resto de textos auxiliares. */
-  .root .galleryOpen,
-  .root .continueLink {
-    font-size: max(12px, 0.7em);
-  }
-}
-
-/* ── PDF del catálogo (expediente 2026-10-16-bcp-01-pdf) ─────────────────
-   Índice: enlace discreto bajo el título. Cierre: botón secundario bajo la
-   tarjeta del asesor (la acción principal sigue siendo «Llamar»). */
-
-.pdfIndex,
-.pdfClosing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4em;
-}
-
-.pdfIndex {
-  margin-top: var(--s3);
-}
-
-.pdfClosing {
-  margin-top: 1.6em;
-  max-width: 22em;
-}
-
-.pdfLink {
-  min-height: 44px;
-  padding: 0.4em 0.8em;
-  background: none;
-  border: 0;
-  color: var(--accent);
-  font: 500 0.82em var(--text);
-  letter-spacing: 0.06em;
-  text-decoration: underline;
-  text-underline-offset: 0.25em;
-  cursor: pointer;
-}
-
-.pdfButton {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0.7em 1.5em;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--accent);
-  font: 600 0.9em var(--text);
-  letter-spacing: 0.03em;
-  cursor: pointer;
-}
-
-.pdfButton:hover {
-  background: rgba(155, 74, 46, 0.06);
-}
-
-.pdfLink:disabled,
-.pdfButton:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.pdfHint,
-.pdfError {
-  font: 0.75em/1.5 var(--text);
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.pdfError {
-  color: #8a2b1a;
 }
