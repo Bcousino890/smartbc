@@ -79,6 +79,8 @@ jobs:
         run: npm run test:api-session-policy && npm run test:cron-secret && npm run test:infra-action
       - name: "Permisos: términos de búsqueda de clientes acotados (offline)"
         run: npm run test:search-term
+      - name: "Permisos: alcance Ver/Editar por sección (offline)"
+        run: npm run test:permission-scope
 
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build

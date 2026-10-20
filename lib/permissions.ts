@@ -632,6 +632,7 @@ export function getViewRestriction(
   const isScopedBusinessData =
     resource === "clientes" ||
     resource === "solicitudes" ||
+    resource === "documentacion" ||
     resource === "viewing_collections";
 
   switch (role) {
