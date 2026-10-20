@@ -50,6 +50,7 @@ Exploración en `6e677c2` (código idéntico a `c79d8d7`); la implementación pa
 | D15 | La QA integrada y la medición de D13, en el CRM actual y por Fabricio. |
 | D16 | Solo España; caducidad de 60 días (1–365); reservadas marcadas, vendidas o archivadas fuera; las fichas de PDF con `published_web = false`. |
 | D17 | Dirección visual **C · Boutique**: Fraunces y Karla, papel cálido, tinta marrón, portada con arco, fotos enmarcadas y pies en cursiva. HOME con estantería de portadas y en Lato. |
+| D17-bis (20-10-2026) | **Enmienda visual:** la dirección C · Boutique queda sustituida para el catálogo (lector, portada y miniaturas, PDF) por la publicación del itinerario `/v` como referencia exacta. Ver [`2026-10-20-bcp-01-catalogo-visual/enmienda.md`](../2026-10-20-bcp-01-catalogo-visual/enmienda.md). La HOME sigue en Lato. |
 
 Ajustes aprobados a la v3:
 
