@@ -7,11 +7,14 @@ import { AdsPanel, type AdActions } from "../ads-panel";
 import { ContactFields } from "../contact-fields";
 import { MeasurePanel, type HomeMeasure } from "../measure-panel";
 import { SharePanel, type ShareActions, type ShareView } from "../share-panel";
+import { ClientLinksPanel } from "../client-links-panel";
+import type { ClientLinkActions } from "@/lib/catalogs/feedback-rules";
 import { ConflictNote } from "./conflict-note";
 import type { FormDraft } from "./use-form-draft";
 
 // Compartir (BCP-01 E2, plan §3.10): contacto que ve el cliente, el enlace
-// (crear, duración, copiar, renovar, revocar; igual que antes), los anuncios
+// (crear, duración, copiar, renovar, revocar; igual que antes), «Asignar a
+// cliente» con los enlaces personales (0218), los anuncios
 // de origen como organización interna (plegados; nunca llegan al lector) y,
 // con ?medir=1, el panel de medición.
 
@@ -24,6 +27,7 @@ export function ShareSection({
   shareNotice,
   share,
   shareActions,
+  clientLinkActions,
   onShareChange,
   ads,
   adActions,
@@ -39,6 +43,7 @@ export function ShareSection({
   shareNotice: string | null;
   share: ShareView | null;
   shareActions?: ShareActions;
+  clientLinkActions?: ClientLinkActions;
   onShareChange: (s: ShareView | null) => void;
   ads: CatalogAdView[];
   adActions: AdActions;
@@ -91,6 +96,7 @@ export function ShareSection({
           </p>
         ) : null}
         {shareActions ? <SharePanel catalogId={catalogId} share={share} archived={archived} actions={shareActions} onChange={onShareChange} /> : null}
+        {clientLinkActions ? <ClientLinksPanel catalogId={catalogId} archived={archived} actions={clientLinkActions} /> : null}
         {pdf ? (
           <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="pdf-title" data-testid="pdf-section" data-check-overflow="pdf">
             <h2 id="pdf-title" className="crm-label-sm flex items-center gap-1.5 text-ink/70">

@@ -7,6 +7,8 @@ import { CatalogManager, type CatalogManagerActions } from "@/components/admin/c
 import type { ShareActions } from "@/components/admin/catalogs/share-panel";
 import { parsePropertyRef, refErrorMessage } from "@/lib/catalogs/ref";
 import { parseShareDays } from "@/lib/catalogs/share";
+import { catalogErrorMessage } from "@/lib/catalogs/errors";
+import { clientLinkFromRow, normalizeClientQuery, type ClientLinkActions, type ClientOption } from "@/lib/catalogs/feedback-rules";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { normalizeCriteria, type CatalogCriteria, type CatalogOperation } from "@/lib/catalogs/criteria";
@@ -85,6 +87,44 @@ function instrument<T>(get: () => T, prefix = ""): T {
     }
   }
   return out as T;
+}
+
+/** 0218 · «Asignar a cliente» contra el almacén sintético del servidor (el
+ *  lector de fixtures abre esos enlaces personales). Mismos mensajes que las
+ *  acciones reales. */
+async function opiniones<T>(body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const res = await fetch("/dev-fixtures/api/opiniones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json().catch(() => null);
+  if (d?.ok) return { ok: true, data: d.data as T };
+  return { ok: false, error: catalogErrorMessage(String(d?.error ?? "")) };
+}
+
+function fixtureClientLinkActions(): ClientLinkActions {
+  return {
+    list: async ({ catalogId }) => {
+      const r = await opiniones<Record<string, unknown>[]>({ op: "list", catalogId });
+      return r.ok ? { ok: true as const, links: r.data.map((x) => clientLinkFromRow(x)) } : r;
+    },
+    search: async ({ q }) => {
+      const t = normalizeClientQuery(q);
+      if (!t) return { ok: true as const, clients: [] };
+      const r = await opiniones<ClientOption[]>({ op: "search", q: t });
+      return r.ok ? { ok: true as const, clients: r.data } : r;
+    },
+    create: async ({ catalogId, clientId, days }) => {
+      if (!parseShareDays(days).ok) return { ok: false as const, error: catalogErrorMessage("invalid_days") };
+      const r = await opiniones<Record<string, unknown>>({ op: "create", catalogId, clientId, days });
+      return r.ok ? { ok: true as const, link: clientLinkFromRow(r.data) } : r;
+    },
+    renew: async ({ linkId, days }) => {
+      const r = await opiniones<string>({ op: "renew", linkId, days });
+      return r.ok ? { ok: true as const, expiresAt: r.data } : r;
+    },
+    revoke: async ({ linkId }) => {
+      const r = await opiniones<null>({ op: "revoke", linkId });
+      return r.ok ? { ok: true as const } : r;
+    },
+  };
 }
 
 const invalid = { ok: false as const, error: "Revisa los criterios: zonas reconocidas, precio con operación (venta o alquiler), mínimo ≤ máximo y entre 1 y 24 viviendas." };
@@ -546,6 +586,7 @@ export function FixtureCatalogManager({
     renew: async ({ days }) => ({ ok: true as const, token: liveToken ?? "fixtureMainToken000000000001", expiresAt: new Date(Date.now() + days * 86_400_000).toISOString() }),
     revoke: async () => ({ ok: true as const }),
   };
+  const clientLinkActions = useMemo(() => fixtureClientLinkActions(), []);
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
   const shareRef = useRef(shareActions);
@@ -581,6 +622,7 @@ export function FixtureCatalogManager({
       onLocalAdd={onLocalAdd}
       share={liveToken ? { token: liveToken, expiresAt: new Date(Date.now() + 60 * 86_400_000).toISOString(), expired: false } : null}
       shareActions={fx.current.share}
+      clientLinkActions={clientLinkActions}
       measureMode={measureMode}
       texts={fxTexts.views()}
       storyHref={() => "#historia-de-prueba"}
