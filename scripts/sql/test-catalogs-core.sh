@@ -225,6 +225,29 @@ echo "== 2v. 0218 sobre los tests del título (0217)"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $S/test-catalog-title-pre.sql $M12 $M13 $S/test-catalog-title.sql
 
+echo "== 2w. 0219: biblioteca de textos aprobados y reutilización (aplicada dos veces, concurrencia, reversión y reaplicación)"
+M14=supabase/migrations/0219_catalog_copy_library.sql
+D19=docs/changes/2026-10-21-bcp-01-ampliacion-textos-idiomas
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M14 $S/test-catalog-copy.sql
+$R sql $S/test-catalog-copy-conc-a.sql &
+CONC_A=$!
+sleep 0.5
+$R sql $S/test-catalog-copy-conc-b.sql
+wait $CONC_A
+$R sql $S/test-catalog-copy-conc-check.sql
+$R sql $D19/rollback-0219.sql $S/test-rollback-0219.sql $M14 $M14
+$R sql $S/test-util.sql
+echo "   0219 se vuelve a aplicar tras su reversión"
+
+echo "== 2x. 0219 sobre los tests del título (0217), de las opiniones (0218) y de la conversión (0213)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $S/test-catalog-title-pre.sql $M12 $M13 $M14 $S/test-catalog-title.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $S/test-catalog-feedback-pre.sql $M13 $M14 $S/test-catalog-feedback.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $S/test-catalog-conversion.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
