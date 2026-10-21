@@ -251,12 +251,16 @@ const WORDS: Rule[] = [
 const CONTINUATION_RE =
   /^(ademas|tambien|asimismo|igualmente|todo ello|este|esta|estos|estas|ese|esa|esos|esas|sus?|dich[oa]s?|el cual|la cual|los cuales|las cuales|lo que|cuenta con|dispone de|tiene|incluye|con|y|e|ambos|ambas|aqui|alli|todo|desde (el|ella|ellos|ellas|ahi|aqui))\b/;
 
+/** Una calle con el nombre de la zona no habla del barrio (DA37): «la calle
+ *  Goya», «el paseo de la Castellana», «la plaza de Olavide». */
+const STREET_BEFORE = "(?<!\\b(?:calle|c\\/|paseo|avenida|avda\\.?|plaza|pza\\.?|glorieta|ronda|travesia)\\s+(?:(?:de|del|la|las|los|el)\\s+){0,2})";
+
 /** Nombres de la zona verificada que cuentan como palabra clave (DE9). */
 function areaRules(area: string | null): Rule[] {
   const words = fold(area ?? "")
     .split(/[^a-z0-9ñ]+/)
     .filter((w) => w.length >= 4);
-  return words.map((w) => ["barrio", new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"), 2]);
+  return words.map((w) => ["barrio", new RegExp(`${STREET_BEFORE}\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"), 2]);
 }
 
 /** Puntuación por tema de una frase: frases hechas (consumidas) y palabras. */

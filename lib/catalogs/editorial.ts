@@ -53,6 +53,9 @@ export interface EditorialInput {
   square_meters: number | string | null;
   zone: string | null;
   subzone: string | null;
+  /** 0220: zona confirmada por el dueño y vigente (`name` null = «sin zona
+   *  verificada»). Sin ella, «Vivir en …» usa la zona de la ficha. */
+  area?: { name: string | null; level?: string | null } | null;
   /** Descripción limpia ya validada (null si no hay o no es vigente). */
   cleanDescription: string | null;
   /** Características limpias ya validadas ([] si no hay o no son vigentes). */
@@ -145,9 +148,16 @@ function alternatePhotos(sections: EditorialSection[], photos: EditorialPhoto[],
   });
 }
 
+/** Zona de «Vivir en …» y de sus palabras clave (DE9). Con confirmación
+ *  vigente del dueño (0220), el nombre del registro (o ninguno: «El barrio»);
+ *  sin ella, como siempre, la subzona o la zona de la ficha. */
+export function livingAreaName(it: Pick<EditorialInput, "zone" | "subzone" | "area">): string | null {
+  if (it.area) return typeof it.area.name === "string" && it.area.name.trim() ? it.area.name.trim() : null;
+  return [it.subzone, it.zone].map((x) => (typeof x === "string" ? x.trim() : "")).find(Boolean) ?? null;
+}
+
 function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
-  // Zona verificada de la ficha para «Vivir en …» y sus palabras clave (DE9).
-  const area = [it.subzone, it.zone].map((x) => (typeof x === "string" ? x.trim() : "")).find(Boolean) ?? null;
+  const area = livingAreaName(it);
   const manual = (it.features_manual ?? []).filter((f) => typeof f === "string" && f.trim() && isPublicSafe(f)).map((f) => f.trim());
   const features: string[] = [];
   const seenF = new Set<string>();
@@ -224,9 +234,8 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       const wanted = CHAPTER_PHOTO_CLASSES[chapter] ?? [];
       const idx = wanted.length ? it.photos.findIndex((p, i) => !used.has(i) && !!p.k && wanted.includes(p.k)) : -1;
       if (idx >= 0) used.add(idx);
-      const place = it.subzone || it.zone;
       sections.push({
-        heading: chapter === "barrio" ? (place ? `Vivir en ${place}` : CHAPTER_HEADINGS.barrio) : CHAPTER_HEADINGS[chapter],
+        heading: chapter === "barrio" ? (area ? `Vivir en ${area}` : CHAPTER_HEADINGS.barrio) : CHAPTER_HEADINGS[chapter],
         text: t,
         photo: idx >= 0 ? idx : null,
       });

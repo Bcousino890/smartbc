@@ -248,6 +248,22 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $S/test-catalog-conversion.sql
 
+echo "== 2y. 0220: registro de zonas y confirmación (enlace previo + aplicada dos veces, reversión y reaplicación)"
+M15=supabase/migrations/0220_catalog_areas.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $S/test-catalog-areas-pre.sql $M15 $M15 $S/test-catalog-areas.sql
+$R sql $D19/rollback-0220.sql $S/test-rollback-0220.sql $M15 $M15
+$R sql $S/test-util.sql
+echo "   0220 se vuelve a aplicar tras su reversión"
+
+echo "== 2z. 0220 sobre los tests del título (0217), de la biblioteca (0219) y de las fotos (0202)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $S/test-catalog-title-pre.sql $M12 $M13 $M14 $M15 $S/test-catalog-title.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $S/test-catalog-copy.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M12 $M15 $S/test-catalog-photos.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

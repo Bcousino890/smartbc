@@ -47,6 +47,12 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 | 2.4 | `structure.ts`: el nombre de la zona deja de ser palabra clave cuando va precedido de calle, paseo, avenida o plaza. «Vivir en {zona}» usa el nombre del registro solo con clasificación confirmada o automática sin conflicto; si no, queda el comportamiento de hoy, sin presentarlo como verificado y sin plantilla (DA37). |
 | 2.5 | Pruebas: AC11 con Castellana, Goya, Lista, Almagro e Ibiza como calles; Chueca/Justicia; distrito en `subzone`; casi-duplicados; la estructura de #341 sigue en verde. |
 
+**Ajustes al implementar el PR2 (21-10-2026):**
+- **«Vivir en…» solo con confirmación humana vigente**, más prudente que 2.4. La clasificación automática se enseña solo en el gestor como sugerencia y nunca cambia sola un catálogo compartido. Sin confirmación, el lector queda como hoy. Una confirmación deja de valer si cambian la zona, el barrio o la dirección de la ficha. Motivo: DA37 y nada de cambios silenciosos en catálogos ya enviados.
+- **El clasificador solo existe en TS**, en el gestor y al leer. SQL guarda solo la confirmación y su huella. Así no hay dos clasificadores que mantener en paridad. Lo que se vigila es que el registro de `lib/catalogs/areas.ts` y las filas de 0220 no se separen.
+- **El cruce con `neighborhoods` pasa al PR3**, que es quien usa sus textos. `neighborhoods` incluye zonas de fuera del municipio, como Somosaguas o Torrelodones, que no están en el registro de Madrid.
+- **Confirmación por dueño:** vale en todos sus catálogos y nunca en los de otro dueño.
+
 ## PR3 · Plantillas «Vivir en…»
 
 | Tarea | Contenido |

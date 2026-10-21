@@ -67,6 +67,9 @@ jobs:
       # 0219: textos aprobados reutilizables (reglas puras y fuente). Sin BD.
       - name: "Catálogos (textos aprobados, offline)"
         run: npm run test:catalogs-copy
+      # 0220: registro de zonas y clasificación prudente (reglas puras y fuente). Sin BD.
+      - name: "Catálogos (zonas, offline)"
+        run: npm run test:catalogs-areas
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"

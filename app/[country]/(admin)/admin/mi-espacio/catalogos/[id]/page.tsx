@@ -51,6 +51,8 @@ import {
   searchClientsForCatalogAction,
   approveCatalogCopyAction,
   withdrawCatalogCopyAction,
+  confirmAreaAction,
+  clearAreaAction,
 } from "../../actions";
 import {
   createGroupAction,
@@ -156,6 +158,8 @@ export default async function CatalogPage({
             preview: previewCatalogTextAction,
             approveCopy: approveCatalogCopyAction,
             withdrawCopy: withdrawCatalogCopyAction,
+            confirmArea: confirmAreaAction,
+            clearArea: clearAreaAction,
           },
         }}
       />

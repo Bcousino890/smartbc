@@ -501,6 +501,7 @@ export type FixtureOp =
   | { op: "photo"; token: string; key: string }
   | { op: "cover"; token: string; choose: number | null }
   | { op: "text"; token: string; index: number; body: string | null; lead: string | null; itemTitle?: string | null }
+  | { op: "area"; token: string; index: number; area: { name: string | null; level: string | null } | null }
   | { op: "revoke"; token: string }
   | { op: "expire"; token: string; inMs?: number }
   | { op: "archive"; token: string }
@@ -592,6 +593,16 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
         const crm = rest.crm_title ?? rest.title;
         const titled = op.itemTitle === undefined ? rest : { ...rest, crm_title: crm, title: op.itemTitle ?? crm };
         snap.items[i] = op.body || op.lead ? { ...titled, text: { b: op.body, l: op.lead, h: [] } } : titled;
+      }
+      break;
+    }
+    case "area": {
+      // 0220: zona confirmada y vigente de la vivienda nº `index` (null = sin confirmar).
+      const i = snap.items.length ? op.index % snap.items.length : -1;
+      if (i >= 0) {
+        const { area: _old, ...rest } = snap.items[i];
+        void _old;
+        snap.items[i] = op.area ? { ...rest, area: op.area } : rest;
       }
       break;
     }

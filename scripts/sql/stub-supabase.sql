@@ -199,3 +199,6 @@ CREATE TABLE IF NOT EXISTS crm_notifications (
 );
 REVOKE ALL ON crm_notifications FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON crm_notifications TO service_role;
+
+-- ── Ampliación 0220: dirección de la ficha (en producción existe desde 0001) ──
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;

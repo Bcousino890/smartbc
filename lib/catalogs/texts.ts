@@ -9,6 +9,8 @@ import type { DraftSource } from "./ai-draft";
 import { isPublicSafe } from "./text-rules";
 import { getCopyLibraryState } from "./copy-library";
 import type { CopyLibraryView } from "./copy-rules";
+import { getAreaDecisions } from "./area-data";
+import { areaViewOf, confirmedAreaOf, type AreaDecision, type AreaView } from "./areas";
 
 // ============================================================================
 // Textos del catálogo en la gestión (BCP-01 ampliación C2, Z5). Solo LEE:
@@ -42,8 +44,12 @@ export interface CatalogTextView {
   /** Título de la ficha del CRM (el título propio del catálogo va en draft/published). */
   title: string;
   bcReference: string | null;
-  /** Zona verificada de la ficha (subzona o zona) para «Vivir en …» (DE9). */
+  /** Zona de «Vivir en …» (DE9): la confirmada y vigente (0220) o, sin
+   *  confirmación, la subzona o la zona de la ficha. null → «El barrio». */
   area: string | null;
+  /** 0220 · Sugerencia y confirmación de la zona (null: 0220 aún no está
+   *  aplicada). Nada de esto escribe en la ficha del CRM. */
+  zone: AreaView | null;
   inList: boolean;
   /** Lo que ve hoy el lector para esta vivienda. */
   level: EditorialLevel;
@@ -61,7 +67,7 @@ export interface CatalogTextView {
 }
 
 const PROP_COLUMNS =
-  "id, slug, title, bc_reference, zone, subzone, operation, operations, bedrooms, bathrooms, square_meters, floor_override, description, features, features_manual";
+  "id, slug, title, bc_reference, zone, subzone, address, operation, operations, bedrooms, bathrooms, square_meters, floor_override, description, features, features_manual";
 
 interface PropertyRow {
   id: string;
@@ -70,6 +76,7 @@ interface PropertyRow {
   bc_reference: string | null;
   zone: string | null;
   subzone: string | null;
+  address: string | null;
   operation: string | null;
   operations: string[] | null;
   bedrooms: number | null;
@@ -144,6 +151,7 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
       title: p.title,
       bcReference: p.bc_reference ?? null,
       area: (p.subzone ?? "").trim() || (p.zone ?? "").trim() || null,
+      zone: null,
       inList: r.in_list === true,
       level: publishedCurrent && (t?.pub_body || t?.pub_lead) ? "text" : story === "current" ? "story" : clean.status === "current" ? "clean" : "facts",
       source: { hasText: !!(p.description ?? "").trim(), clean: clean.status, story },
@@ -172,6 +180,18 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
     for (const v of out) v.library = lib.get(v.propertyId) ?? null;
   } catch (err) {
     console.warn("[catalogos] biblioteca de textos:", err instanceof Error ? err.message : err);
+  }
+  // 0220 · Zona de cada vivienda. Si la lectura falla (p. ej. 0220 sin
+  // aplicar), el gestor funciona igual, sin el bloque de la zona.
+  try {
+    const decisions = await getAreaDecisions(ownerId, out.map((v) => v.propertyId));
+    for (const v of out) {
+      const p = src.props.get(v.propertyId)!;
+      v.zone = areaViewOf(p, decisions.get(v.propertyId) ?? null);
+      v.area = v.zone.living;
+    }
+  } catch (err) {
+    console.warn("[catalogos] zonas:", err instanceof Error ? err.message : err);
   }
   // Primero las de la lista (en el orden en que llegan), después la reserva.
   return out.sort((a, b) => Number(b.inList) - Number(a.inList));
@@ -220,9 +240,18 @@ export async function previewJourney(
   propertyId: string,
   catalogId: string | null,
   text: { body: string | null; lead: string | null; highlights: string[] },
+  ownerId?: string,
 ): Promise<{ lead: string | null; highlights: string[]; sections: Array<{ heading: string | null; text: string; photo: boolean }>; words: number; copy: Array<{ heading: string | null; text: string }>; missing: string[] } | null> {
   const s = await textSourceFor(propertyId, catalogId);
   if (!s) return null;
+  let decision: AreaDecision | null = null;
+  if (ownerId) {
+    try {
+      decision = (await getAreaDecisions(ownerId, [propertyId])).get(propertyId) ?? null;
+    } catch {
+      decision = null;
+    }
+  }
   const ed = deriveEditorial({
     description: s.property.description,
     features: s.property.features,
@@ -232,6 +261,7 @@ export async function previewJourney(
     square_meters: s.property.square_meters,
     zone: s.property.zone,
     subzone: s.property.subzone,
+    area: confirmedAreaOf(decision),
     cleanDescription: s.clean.description,
     cleanFeatures: s.clean.features,
     text: text.body || text.lead ? { b: text.body, l: text.lead, h: text.highlights } : null,

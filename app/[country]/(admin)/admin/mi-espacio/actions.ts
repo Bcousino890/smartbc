@@ -45,6 +45,7 @@ import { listClientLinks, searchClientsInScope } from "@/lib/catalogs/client-lin
 import { normalizeClientQuery, type ClientLinkView, type ClientOption } from "@/lib/catalogs/feedback-rules";
 import { copyErrorMessage, type CopyPart, type CopyParts } from "@/lib/catalogs/copy-rules";
 import { copyLibraryPageData } from "@/lib/catalogs/copy-library";
+import { areaById, areaErrorMessage } from "@/lib/catalogs/areas";
 import type { CopyLibraryData } from "@/components/admin/catalogs/copy-library-page";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 
@@ -856,7 +857,7 @@ export async function previewCatalogTextAction(input: {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
     if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
-    const preview = await previewJourney(input.propertyId, input.catalogId, { body: input.body, lead: input.lead, highlights: input.highlights ?? [] });
+    const preview = await previewJourney(input.propertyId, input.catalogId, { body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, profile.id);
     const src = await textSourceFor(input.propertyId, input.catalogId);
     if (!preview || !src) return fail("property_not_found");
     return { ok: true as const, preview, check: checkDraft({ title: input.title ?? null, body: input.body, lead: input.lead, highlights: input.highlights ?? [] }, src.source) };
@@ -1057,5 +1058,38 @@ export async function loadCopyLibraryPageAction(): Promise<ActionResult<CopyLibr
     } catch {
       return fail(null);
     }
+  }));
+}
+
+// ── Zona de la vivienda (0220) ───────────────────────────────────────────────
+// La confirma una persona (DA23, DA37): la sugerencia nunca se aplica sola.
+// Vale para todos los catálogos del dueño y no escribe en la ficha del CRM.
+
+function areaFail(err: { message?: string } | null | undefined): { ok: false; error: string } {
+  return { ok: false, error: areaErrorMessage(err?.message) ?? catalogErrorMessage(err ?? null) };
+}
+
+/** Confirma la zona (`areaId` null = «Sin zona verificada»: «El barrio»). */
+export async function confirmAreaAction(input: { catalogId: string; propertyId: string; areaId: string | null } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (input.areaId !== null && !areaById(input.areaId)) return areaFail({ message: "area_not_found" });
+    if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { error } = await db().rpc("catalog_area_confirm", { p_actor: profile.id, p_property: input.propertyId, p_area: input.areaId });
+    if (error) return areaFail(error);
+    return saved(profile.id, input.catalogId, 0, before, input);
+  }));
+}
+
+/** Quita la confirmación: «Vivir en …» vuelve a la zona de la ficha. */
+export async function clearAreaAction(input: { catalogId: string; propertyId: string } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (!(await textAllowed(profile.id, input.catalogId, input.propertyId))) return fail("not_in_catalog");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { error } = await db().rpc("catalog_area_clear", { p_actor: profile.id, p_property: input.propertyId });
+    if (error) return areaFail(error);
+    return saved(profile.id, input.catalogId, 0, before, input);
   }));
 }
