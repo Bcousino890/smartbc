@@ -2,6 +2,9 @@ import type { Scraper } from "../types";
 import { testScraper } from "./_test";
 import { housingoScraper } from "./housingo";
 import { houselyScraper } from "./housely";
+import { inneaScraper } from "./innea";
+import { esrivScraper } from "./esriv";
+import { enfokaScraper } from "./enfoka";
 import { levelRealEstateScraper } from "./level-real-estate";
 import { terrahomesScraper } from "./terrahomes";
 import { urbantechomeScraper } from "./urbantechome";
@@ -15,6 +18,9 @@ const REGISTRY: Record<string, Scraper> = {
   housingo: housingoScraper,
   urbantechome: urbantechomeScraper,
   housely: houselyScraper,
+  innea: inneaScraper,
+  esriv: esrivScraper,
+  enfoka: enfokaScraper,
 };
 
 export function getScraperByKey(key: string): Scraper | null {
