@@ -4,9 +4,10 @@
 -- Un particular que da su piso en Idealista y, después, una agencia que capta
 -- ese mismo piso y lo publica como profesional. Ambos anuncios son filas de
 -- `particulares` (advertiser_type particular / professional). Esta tabla guarda
--- el emparejamiento sin tocar `particulares` ni `particulares_links`:
---   · cierto:   mismo precio, m², habitaciones, operación, dirección Y teléfono.
---   · probable: mismo precio, m², habitaciones, operación y dirección; teléfono distinto.
+-- el emparejamiento sin tocar `particulares` ni `particulares_links`.
+-- El teléfono NO sirve como criterio: el particular y la agencia casi nunca lo comparten.
+--   · cierto:   (reservado; aún sin regla que lo justifique)
+--   · probable: mismo precio, m², habitaciones, operación y dirección.
 -- Si una persona lo decide, `status` pasa a confirmado/descartado y el job no lo toca.
 -- Idempotente. Se puede revertir con `drop table particulares_listing_pairs`.
 -- ============================================================
