@@ -17,6 +17,7 @@ const es: Strings = {
   "common.any": "Cualquiera",
   "common.applyFilters": "Aplicar filtros",
   "common.priceUnit": "/mes",
+  "common.priceOnRequest": "Precio a consultar",
   "common.close": "Cerrar",
   "common.cancel": "Cancelar",
 
@@ -1532,6 +1533,7 @@ const en: Strings = {
   "common.any": "Any",
   "common.applyFilters": "Apply filters",
   "common.priceUnit": "/month",
+  "common.priceOnRequest": "Price on request",
   "common.close": "Close",
   "common.cancel": "Cancel",
 
@@ -3012,6 +3014,7 @@ const fr: Strings = {
   "common.any": "Indifférent",
   "common.applyFilters": "Appliquer les filtres",
   "common.priceUnit": "/mois",
+  "common.priceOnRequest": "Prix sur demande",
   "common.close": "Fermer",
   "common.cancel": "Annuler",
 
@@ -4479,6 +4482,7 @@ const de: Strings = {
   "common.any": "Beliebig",
   "common.applyFilters": "Filter anwenden",
   "common.priceUnit": "/Monat",
+  "common.priceOnRequest": "Preis auf Anfrage",
   "common.close": "Schließen",
   "common.cancel": "Abbrechen",
 

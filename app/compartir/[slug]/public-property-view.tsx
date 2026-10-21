@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { formatPrice } from "@/lib/format";
+import { PRICE_ON_REQUEST_LABEL } from "@/lib/country-config";
 import { shareSlug } from "@/lib/share-slug";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { splitDescriptionForFactsLed } from "@/lib/services/story/fallback";
@@ -181,8 +182,10 @@ export function PublicPropertyView({
     experienceState,
   });
 
-  const isRent = property.operation === "alquiler";
-  const price = formatPrice(property.price);
+  // Precio 0 = la agencia no lo publica: "Precio a consultar", sin "/mes".
+  const hasPrice = property.price > 0;
+  const isRent = property.operation === "alquiler" && hasPrice;
+  const price = hasPrice ? `${formatPrice(property.price)} €` : PRICE_ON_REQUEST_LABEL;
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.bcousinoprop.com";
   const shareUrl =
@@ -377,7 +380,7 @@ export function PublicPropertyView({
             </div>
             <div className="shrink-0 text-left md:text-right">
               <p className="crm-number text-3xl text-ink md:text-4xl">
-                {price} €
+                {price}
                 {isRent && (
                   <span className="ml-1 text-base font-normal text-ink/55">/mes</span>
                 )}

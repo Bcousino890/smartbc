@@ -422,7 +422,7 @@ export function PropertiesAdminClient({
   const copyForClients = () => {
     const text = selectedProps
       .map((p) => {
-        const price = `${config.formatPrice(p.price, p.currency)}${p.operation === "alquiler" ? "/mes" : ""}`;
+        const price = `${config.formatPrice(p.price, p.currency)}${p.operation === "alquiler" && p.price > 0 ? "/mes" : ""}`;
         return `🏠 ${p.title}\n💰 ${price} · ${p.zone}\n🔗 ${shareUrl(p.id)}`;
       })
       .join("\n\n");
@@ -872,7 +872,8 @@ function PropertyRow({
 }) {
   const t = useT();
   const [photosOpen, setPhotosOpen] = useState(false);
-  const isRent = property.operation === "alquiler";
+  // Sin "al mes" cuando no hay precio ("Precio a consultar").
+  const isRent = property.operation === "alquiler" && property.price > 0;
   const formatted = config.formatPrice(property.price, property.currency);
   const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
   const photoCount = property.photos?.length ?? 0;
