@@ -43,6 +43,9 @@ import { notifyCatalogChanged } from "@/lib/catalogs/sync-hub-instance";
 import { isUuid, isValidOrder, normalizeIntro, normalizeTitle } from "@/lib/catalogs/validate";
 import { listClientLinks, searchClientsInScope } from "@/lib/catalogs/client-links";
 import { normalizeClientQuery, type ClientLinkView, type ClientOption } from "@/lib/catalogs/feedback-rules";
+import { copyErrorMessage, type CopyPart, type CopyParts } from "@/lib/catalogs/copy-rules";
+import { copyLibraryPageData } from "@/lib/catalogs/copy-library";
+import type { CopyLibraryData } from "@/components/admin/catalogs/copy-library-page";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -984,5 +987,75 @@ export async function revokeClientLinkAction(input: { catalogId: string; linkId:
     // El lector abierto con ese enlace pasa a «no disponible» al momento.
     notifyCatalogChanged();
     return { ok: true as const };
+  }));
+}
+
+// ── Textos aprobados de las viviendas (0219) ───────────────────────────────
+// Publicar y aprobar para reutilizar son acciones distintas (N1). Aprobar
+// toma lo PUBLICADO en un catálogo; título y descripción por separado (DA32).
+// Nada de esto cambia lo que ven los clientes: no toca catálogos ni el CRM.
+
+type CopyResult = ActionResult<{ version: number; status: "created" | "unchanged"; seq: number; publicChange: false }>;
+
+function copyFail(err: { message?: string } | null | undefined): { ok: false; error: string } {
+  return { ok: false, error: copyErrorMessage(err?.message) ?? catalogErrorMessage(err ?? null) };
+}
+
+export async function approveCatalogCopyAction(input: { catalogId: string; propertyId: string; parts: CopyParts }): Promise<CopyResult> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    if (!["title", "body", "both"].includes(input.parts)) return copyFail({ message: "invalid_parts" });
+    const { data, error } = await db().rpc("catalog_copy_approve", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_parts: input.parts,
+    });
+    if (error || !data) return copyFail(error);
+    revalidateCatalog(input.catalogId);
+    return { ok: true as const, version: 0, status: data.status === "unchanged" ? ("unchanged" as const) : ("created" as const), seq: Number(data.seq), publicChange: false as const };
+  }));
+}
+
+export async function withdrawCatalogCopyAction(input: { catalogId?: string | null; propertyId: string; part: CopyPart }): Promise<CopyResult> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.propertyId)) return fail("forbidden");
+    if (!["title", "body", "all"].includes(input.part)) return copyFail({ message: "invalid_parts" });
+    const { data, error } = await db().rpc("catalog_copy_withdraw", { p_actor: profile.id, p_property: input.propertyId, p_part: input.part });
+    if (error || !data) return copyFail(error);
+    if (input.catalogId && isUuid(input.catalogId)) revalidateCatalog(input.catalogId);
+    revalidatePath(`${HOME_PATH}/textos-aprobados`);
+    return { ok: true as const, version: 0, status: data.status === "unchanged" ? ("unchanged" as const) : ("created" as const), seq: Number(data.seq), publicChange: false as const };
+  }));
+}
+
+/** Siembra en bloque (sin IA): aprueba cada candidato elegido por el dueño.
+ *  Se para en el primer error y dice cuántos se aprobaron. */
+export async function approveCopyCandidatesAction(input: { items: Array<{ catalogId: string; propertyId: string; parts: CopyParts }> }): Promise<ActionResult<{ approved: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    const items = Array.isArray(input?.items) ? input.items.slice(0, 200) : [];
+    let approved = 0;
+    for (const it of items) {
+      if (!isUuid(it?.catalogId) || !isUuid(it?.propertyId) || !["title", "body", "both"].includes(it.parts)) return fail("forbidden");
+      const { error } = await db().rpc("catalog_copy_approve", { p_actor: profile.id, p_catalog: it.catalogId, p_property: it.propertyId, p_parts: it.parts });
+      if (error) {
+        const msg = copyFail(error).error;
+        return { ok: false as const, error: approved ? `Aprobados ${approved}; el siguiente falló: ${msg}` : msg };
+      }
+      approved++;
+    }
+    revalidatePath(`${HOME_PATH}/textos-aprobados`);
+    return { ok: true as const, approved };
+  }));
+}
+
+/** «Textos aprobados»: candidatos de la siembra y la biblioteca del dueño. */
+export async function loadCopyLibraryPageAction(): Promise<ActionResult<CopyLibraryData>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    try {
+      return { ok: true as const, ...(await copyLibraryPageData(profile.id)) };
+    } catch {
+      return fail(null);
+    }
   }));
 }

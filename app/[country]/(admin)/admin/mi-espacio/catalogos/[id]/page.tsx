@@ -49,6 +49,8 @@ import {
   renewClientLinkAction,
   revokeClientLinkAction,
   searchClientsForCatalogAction,
+  approveCatalogCopyAction,
+  withdrawCatalogCopyAction,
 } from "../../actions";
 import {
   createGroupAction,
@@ -152,6 +154,8 @@ export default async function CatalogPage({
             withdraw: withdrawCatalogTextAction,
             remove: deleteCatalogTextAction,
             preview: previewCatalogTextAction,
+            approveCopy: approveCatalogCopyAction,
+            withdrawCopy: withdrawCatalogCopyAction,
           },
         }}
       />

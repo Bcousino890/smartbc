@@ -7,6 +7,8 @@ import { clientDescriptionSrc } from "./to-public";
 import { deriveEditorial, highlightCandidates, type EditorialLevel, type EditorialPhoto } from "./editorial";
 import type { DraftSource } from "./ai-draft";
 import { isPublicSafe } from "./text-rules";
+import { getCopyLibraryState } from "./copy-library";
+import type { CopyLibraryView } from "./copy-rules";
 
 // ============================================================================
 // Textos del catálogo en la gestión (BCP-01 ampliación C2, Z5). Solo LEE:
@@ -53,6 +55,9 @@ export interface CatalogTextView {
   published: { title: string | null; body: string | null; lead: string | null; highlights: string[]; at: string | null; current: boolean; changed: string[] } | null;
   /** Puntos verificados que se pueden elegir (literales de la ficha). */
   candidates: string[];
+  /** 0219 · Texto aprobado de la vivienda en la biblioteca del dueño (null:
+   *  no hay, o 0219 aún no está aplicada). Nunca se publica solo aquí. */
+  library: CopyLibraryView | null;
 }
 
 const PROP_COLUMNS =
@@ -157,7 +162,16 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
           }
         : null,
       candidates: highlightCandidates(clean.features, manual),
+      library: null,
     });
+  }
+  // 0219 · Texto aprobado de cada vivienda. Si la lectura falla (p. ej. 0219
+  // sin aplicar), el gestor funciona igual, sin el bloque de la biblioteca.
+  try {
+    const lib = await getCopyLibraryState(ownerId, out.map((v) => v.propertyId));
+    for (const v of out) v.library = lib.get(v.propertyId) ?? null;
+  } catch (err) {
+    console.warn("[catalogos] biblioteca de textos:", err instanceof Error ? err.message : err);
   }
   // Primero las de la lista (en el orden en que llegan), después la reserva.
   return out.sort((a, b) => Number(b.inList) - Number(a.inList));
