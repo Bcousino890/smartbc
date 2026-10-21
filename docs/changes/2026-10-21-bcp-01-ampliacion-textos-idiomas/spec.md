@@ -1,10 +1,10 @@
 # BCP-01 · Ampliación: textos reutilizables, idiomas, «Vivir en…» y acabado visual — especificación
 
-**Estado:** especificación y plan preparados, **sin implementar**. Fase: exploración de solo lectura y preparación. Nada de esto está en el código todavía.
+**Estado:** **aprobado por Fabricio el 21 de octubre de 2026** con las decisiones N1–N4 cerradas y las correcciones DA31–DA37. Autoriza ejecutar el plan PR a PR (ver `plan.md`). La implementación empieza por el PR1; lo demás sigue sin implementar.
 **Base comprobada:** `origin/main` = `8b640e3b` (21 de octubre de 2026), con 0217 (título propio), 0218 (asignaciones y opiniones) y la descripción estructurada (#341). La última migración en `main` es la 0218; ningún PR abierto usa 0219 o posteriores (comprobado rama por rama).
 **Tamaño:** grande o sensible (migraciones, contenido público, IA de pago bajo demanda, recursos tipográficos nuevos).
 
-Las decisiones de Fabricio de este encargo se registran como **DA1–DA30** y no se vuelven a preguntar. Las únicas decisiones nuevas están en el apartado «Decisiones abiertas» (**N1–N4**), con recomendación.
+Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N4** (§6) y no se vuelven a preguntar. Queda abierta **N5**, que solo afecta al PR6 y se presentará antes de implementarlo.
 
 ## 1. Lo que se conserva (aprobado por Fabricio)
 
@@ -26,19 +26,22 @@ Las decisiones de Fabricio de este encargo se registran como **DA1–DA30** y no
 | **DA7** | Se respetan dueño y acceso: la biblioteca es del dueño (`owner_id`). Que una vivienda esté en catálogos de distintos usuarios no da acceso cruzado. |
 | **DA8** | De otro catálogo **nunca** se copian: cliente, contacto, valoraciones, ajustes de fotos ni criterios de selección. Solo título y descripción. |
 
-**Cómo se distingue «aprobado para reutilizar» de «publicado para un cliente».** Publicar en un catálogo sigue siendo lo que es hoy. Además, al publicar, una casilla **«Guardar como texto aprobado de la vivienda»** crea una versión en la biblioteca (su valor por defecto es la decisión **N1**). Desmarcarla mantiene ese texto solo en ese catálogo (p. ej. si habla del cliente). Una versión aprobada puede **retirarse** de la biblioteca sin tocar ningún catálogo.
+**Cómo se distingue «aprobado para reutilizar» de «publicado para un cliente».** Publicar en un catálogo sigue siendo lo que es hoy. Además, al publicar, una casilla **«Guardar como texto aprobado de la vivienda»**, **desmarcada por defecto** (N1), crea una versión en la biblioteca. También se puede aprobar después lo ya publicado, con un botón aparte. Sin marcarla, ese texto queda solo en ese catálogo (p. ej. si habla del cliente). Una versión aprobada puede **retirarse** de la biblioteca sin tocar ningún catálogo.
 
 **Siembra sin IA.** Una función de solo lectura lista como **candidatos** los textos ya publicados y vigentes (título y/o descripción) de los catálogos del dueño, agrupados por vivienda, con el catálogo de origen. Ningún candidato entra solo en la biblioteca: el dueño los confirma (uno a uno o en bloque), porque el sistema no puede saber si un texto publicado es personal. Los catálogos con asignaciones personales (0218) o cuyo texto nombra a un cliente se señalan como «posiblemente personalizado».
 
 **Versionado.**
-- Cada aprobación crea una **versión** inmutable (número correlativo por dueño y vivienda) con título, descripción, la huella de la ficha en ese momento (`catalog_source_hash`, la misma regla C2) y su origen.
-- **Solo título**: es una versión válida (DC6/DC7 de 0217); al reutilizarla se copia el título y la descripción queda como esté.
+- Cada aprobación crea una **versión** inmutable (número correlativo por dueño y vivienda) con título y descripción, y su origen.
+- **Título y descripción son partes independientes** (DA32). Aprobar solo el título crea una versión que **conserva la descripción aprobada antes** con su propia huella de la ficha. Aprobar la descripción guarda la huella de ese momento (`catalog_source_hash`, regla C2). Cada parte se puede sustituir o retirar por separado.
+- No se aprueba una descripción que ya no es vigente (su ficha cambió): primero se revisa y se vuelve a publicar.
 - Un contenido idéntico al de la versión vigente **no crea versión nueva** (idempotente).
 - **Traducciones** cuelgan de una versión concreta (ver §3): editar el español crea otra versión y las traducciones anteriores dejan de valer para ella.
 
 **Si cambian los datos de la ficha.** La versión se conserva tal cual. El gestor indica «Revisar: cambió la ficha (dormitorios…)» con la misma lista de cambios que ya calcula `catalog_text_states`. No se regenera ni se sobrescribe nada. Al copiarla a un catálogo nuevo se aplica la regla C2 de siempre: el título se ve (DC6) y la descripción solo si su huella coincide con la ficha actual; si no, el catálogo muestra el nivel siguiente (historia, limpia o datos) y el gestor pide revisar.
 
 **Concurrencia.** La aprobación se serializa por (dueño, vivienda) en la base de datos; dos aprobaciones simultáneas producen versiones en orden, nunca dos «vigentes». El guardado de borradores conserva su protección actual de revisión (`expected_rev`, conflicto con otra pestaña).
+
+**Dónde se reutiliza (DA33).** Solo al **añadir** una vivienda a un catálogo manual (`catalog_add_property`, el camino de «Añadir», del buscador y de la importación), y solo si ese catálogo **no tiene ya ningún texto** de esa vivienda (ni borrador, ni publicado, ni en reserva). Las conversiones de automático a manual y los cambios de modo no reutilizan nada: insertan sus viviendas por otro camino y conservan todo lo que había. Para una entrada existente, el editor ofrece «Usar el texto aprobado», que solo rellena el editor y se publica como siempre.
 
 **Relación con lo existente.** La prioridad de fuentes (texto propio → historia → limpia → datos) no cambia. La copia en el catálogo es un **texto publicado normal** del catálogo, con su huella; el título sigue siendo independiente de la huella (DC6). La descripción estructurada (#341) organiza la copia igual que cualquier texto.
 
@@ -67,10 +70,11 @@ Las decisiones de Fabricio de este encargo se registran como **DA1–DA30** y no
 
 **Cómo se cumple (diseño).**
 - **Unidad de traducción = la descripción ya organizada.** Se traduce bloque a bloque la salida del organizador español (introducción, Salón y luz, Cocina y comedor, Acabados y confort, La finca, Vivir en…), guardando la **clave de sección** de cada bloque. Los títulos de sección salen del diccionario del idioma; «Vivir en {zona}» conserva el nombre propio de la zona. Así no se reclasifica nunca texto traducido (DA18).
-- **Dos niveles, como en DA5.** Las traducciones de la biblioteca cuelgan de su versión aprobada. Cuando un catálogo activa un idioma, las traducciones aprobadas se **copian** al catálogo con la huella del texto español publicado de ese catálogo. Editar y republicar el español deja esas copias **desactualizadas**: el gestor lo dice, ofrece «Preparar traducción» y los enlaces en ese idioma siguen viendo la versión anterior completa hasta que se apruebe la nueva (DA14, DA16). Nunca se mezcla un idioma con otro en la misma vivienda.
+- **Dos fuentes de traducción (DA31).** Una versión aprobada de la biblioteca o la **publicación propia del catálogo** (identidad de versión propia, del dueño del catálogo). Traducir lo segundo no lo promociona a la biblioteca.
+- **Dos niveles, como en DA5.** Las traducciones de la biblioteca cuelgan de su versión aprobada. Cuando un catálogo activa un idioma, las traducciones aprobadas se **copian** al catálogo con la huella del texto español publicado de ese catálogo. Editar y republicar el español deja esas copias **desactualizadas**: el gestor lo dice y ofrece «Preparar traducción». La traducción anterior solo puede seguir mostrándose **mientras cumpla la regla C2**; nunca se presenta como vigente. Los datos operativos (viviendas, fotos, precios, disponibilidad y ficha técnica) salen **siempre** de la instantánea actual, en todos los idiomas (DA34). El caso de una vivienda sin traducción vigente es la decisión N5.
 - **Un idioma se activa en un enlace solo cuando está completo**: todas las viviendas con texto tienen traducción aprobada y vigente. Hasta entonces el enlace sigue en el idioma anterior y el gestor muestra el progreso.
 - **Características**: se traducen por cadena exacta de la ficha e idioma (tabla del dueño), con revisión; se conservan cifras y unidades.
-- **Una sola llamada por versión e idioma** (DA15): reserva en la base de datos con caducidad (fila «en preparación» única por versión e idioma); quien llega después espera ese resultado.
+- **Preparación sin duplicados (DA15, DA36)**: reserva única por fuente e idioma con caducidad y un identificador de trabajo. Quien llega después ve «en preparación» y no lanza otra. Un trabajo solo puede guardar si su reserva sigue siendo suya y vigente: uno caducado o cancelado no pisa uno más nuevo (su resultado se descarta y se registra). Un fallo o una respuesta incierta del proveedor (tiempo agotado tras enviar) queda como «resultado incierto»: **no se reintenta solo** y el gestor avisa de que la llamada pudo cobrarse. La reserva reduce las llamadas duplicadas, pero **no garantiza una sola llamada de pago**.
 - **Lectura pública**: el token decide el idioma (el del enlace personal o el del catálogo); la instantánea interna incluye el idioma y solo traducciones aprobadas y vigentes de ese idioma. La huella cambia con el idioma, así que el vigilante, la lectura coherente y la captura del PDF (que ya trabajan por token y huella) no pueden servir el idioma de otro enlace (DA19).
 - **PDF**: mismas fuentes por idioma, dirección del texto RTL en árabe y hebreo, mayúsculas y números según el idioma, y metadatos de idioma (hoy fijos en `es-ES`).
 
@@ -137,16 +141,34 @@ Las decisiones de Fabricio de este encargo se registran como **DA1–DA30** y no
    - filete dorado interior;
    - contraste del título medido en el peor 5 % del fondo: hoy 9,38:1, propuesta 7,94:1, ambos por encima de AA.
 
+**Estado (N4):** la dirección pasa a comparación con fotos reales (luminosa, realmente oscura y normal) antes de implementarse; el tratamiento concreto necesita la aceptación visual de Fabricio. Se activará **por catálogo**, nunca en bloque.
+
 **Coherencia**: el tono se aplica en el servicio de fotos (una variante tratada, cacheada, junto al original), así que lector, miniaturas, portada y PDF ven la misma foto. Los filetes, esquinas y degradados son CSS en el lector y se reproducen con formas vectoriales en el PDF.
 
-## 6. Decisiones abiertas (nuevas)
+## 6. Decisiones de Fabricio sobre N1–N4 (21-10-2026) y correcciones
+
+| | Decisión aprobada |
+| --- | --- |
+| **N1** | «Guardar como texto aprobado de la vivienda» viene **desmarcada por defecto en todos los catálogos**, también en los que no tienen asignaciones personales. Publicar en un catálogo y aprobar para reutilizar son acciones distintas. Una vez aprobada expresamente una versión, añadir la vivienda a un catálogo nuevo la reutiliza sola y sin IA. Borradores y textos personalizados nunca entran solos en la biblioteca. |
+| **N2** | En árabe y hebreo se reflejan navegación, flechas, dirección del teclado y del deslizamiento según la lectura de derecha a izquierda. Se conservan la composición foto y panel aprobada y las dos pantallas por vivienda. |
+| **N3** | Fuentes OFL aprobadas: **Noto Naskh Arabic**; **Frank Ruhl Libre** (títulos en hebreo) y **Noto Sans Hebrew** (texto en hebreo); y la cobertura ampliada de caracteres de **Playfair, Cinzel e Inter**. Se verifican licencias y cobertura real de glifos. Los idiomas que ya funcionan conservan su tipografía actual. |
+| **N4** | El acabado visual se **activa por catálogo**, con opción por foto para quitarlo. Nunca se activa en bloque ni cambia en silencio catálogos ya compartidos. La dirección propuesta pasa a comparación **con fotos reales** (una luminosa, una realmente oscura y una normal); el tratamiento exacto **no** está aprobado todavía y necesita su aceptación visual antes de implementarse. La mejora de resolución puede ir aparte. |
+
+| | Corrección obligatoria (21-10-2026) |
+| --- | --- |
+| **DA31** | **Traducir textos personalizados sin hacerlos reutilizables.** Un catálogo puede traducir su propio título y descripción aunque no estén en la biblioteca. El contenido propio del catálogo tiene **su propia identidad de versión** y el ámbito de su dueño. Traducirlo no exige aprobarlo para reutilizar ni lo promociona a la biblioteca. |
+| **DA32** | **Aprobar solo un título no descarta la descripción** aprobada antes. Título y descripción conservan su validez de fuente por separado: editar el título no vuelve vigente una descripción desactualizada. Sigue siendo posible sustituir o retirar cada parte de forma explícita. |
+| **DA33** | **Conservar el trabajo existente del catálogo.** Convertir un catálogo automático conserva textos, borradores, fotos, orden y ajustes. La reutilización solo **rellena lo que falta en una entrada nueva**: nunca pisa un texto, un borrador ni el texto en reserva de una vivienda que se quitó y se vuelve a añadir. |
+| **DA34** | **Las traducciones no congelan datos operativos.** Mantener una traducción publicada anterior nunca conserva una vivienda retirada, vendida o archivada, una foto excluida o quitada, un precio, operación, disponibilidad o dato técnico desactualizado, ni un texto que ya no cumple la regla C2. La regla C2 y la protección en vivo se aplican igual en todos los idiomas. No se mezclan idiomas en silencio, no se ocultan viviendas para tapar traducciones que faltan y nunca se llama vigente a una traducción desactualizada. |
+| **DA35** | **El PDF se comprueba por contenido completo, no por número de páginas.** Cada idioma puede ocupar distinto número de hojas. Se verifican contenido completo, destinos del índice correctos, tipografía legible, forma correcta de las letras y que no haya cortes ni bloques perdidos. El árabe y el hebreo se demuestran con PDF reales renderizados, sin rebajar la verificación porque cambie el orden de extracción. El lector sigue con dos pantallas por vivienda. |
+| **DA36** | **Reutilización y concurrencia de traducciones, explícitas.** Solo se traduce el idioma que pide el personal autorizado y se reutilizan traducciones aprobadas por versión de origen e idioma exactos. Visitas públicas, valoraciones y descargas de PDF nunca generan traducciones ni llaman a la IA. Se impide la preparación duplicada simultánea y que un trabajo caducado pise uno más nuevo; caducidad de la reserva, cancelación y resultados inciertos del proveedor se tratan expresamente. **No se promete una sola llamada de pago** solo por existir una reserva en la base de datos, y no hay reintentos automáticos sin control. |
+| **DA37** | **Clasificación geográfica prudente.** Una calle o un título comercial no prueban el barrio. Se usa información geográfica verificada y el flujo de confirmación para la ambigüedad. Ninguna plantilla ni etiqueta se presenta como «verificada» mientras la clasificación esté sin resolver. Plantillas independientes de grupos y criterios de búsqueda; se conservan las descripciones de zona propias y las copias congeladas de cada catálogo. |
+
+### Decisión abierta que hay que cerrar antes del PR6
 
 | | Pregunta | Recomendación |
 | --- | --- | --- |
-| **N1** | ¿La casilla «Guardar como texto aprobado de la vivienda» viene **marcada** al publicar? | **Marcada**, salvo en catálogos con asignaciones personales, donde viene desmarcada y avisa. Es lo que hace útil la reutilización sin arriesgar textos personales. |
-| **N2** | En árabe y hebreo, ¿se refleja la navegación? | **Sí la navegación y las flechas** («siguiente» a la izquierda, como hace el itinerario). **No la composición**: la foto y el panel quedan donde están. Así se respeta DA1 y la lectura es natural. |
-| **N3** | Familias tipográficas para árabe y hebreo (web y PDF), todas OFL 1.1. | Árabe: **Noto Naskh Arabic** (títulos y texto, de estilo clásico, cercano a Playfair). Hebreo: **Frank Ruhl Libre** (títulos) y **Noto Sans Hebrew** (texto). Para turco y francés, los subconjuntos «latin-ext» de las fuentes actuales. |
-| **N4** | Tras aprobar el acabado, ¿se aplica a todos los catálogos o se activa por catálogo? | **Activado por defecto en todos**, con un interruptor por catálogo y otro por foto para quitarlo. |
+| **N5** | En un catálogo con un idioma activo, ¿qué ve el cliente de una vivienda **sin traducción vigente** (porque se añadió después o porque la ficha cambió y su texto dejó de valer)? | La vivienda **se ve** con sus datos, fotos y etiquetas en el idioma, y en el lugar de la descripción un aviso visible en ese idioma: «Descripción en preparación». No se muestra el español ni se oculta la vivienda. El gestor lo marca y ofrece preparar la traducción. Alternativa: mostrar el texto español con un aviso visible «Disponible en español». |
 
 Todo lo demás son decisiones rutinarias de implementación y se anotan en el plan.
 
@@ -158,20 +180,21 @@ Rediseño o páginas nuevas; cambiar la ficha del CRM o sus campos de ubicación
 
 | | Criterio |
 | --- | --- |
-| **AC1** | Aprobar un texto en un catálogo y añadir la vivienda a otro copia título y descripción sin IA; el CRM y el primer catálogo no cambian. |
-| **AC2** | Aprobar una versión nueva no cambia catálogos existentes ni compartidos; los textos personales (casilla desmarcada) y los borradores nunca se copian. |
+| **AC1** | Aprobar expresamente un texto y añadir la vivienda a otro catálogo copia título y descripción sin IA; el CRM y el primer catálogo no cambian. Publicar sin aprobar no reutiliza nada. |
+| **AC2** | Aprobar una versión nueva no cambia catálogos existentes ni compartidos; los textos personales (casilla desmarcada) y los borradores nunca se copian. Aprobar solo el título conserva la descripción aprobada antes y su validez. |
+| **AC2b** | Convertir un catálogo automático, cambiar de modo o quitar y volver a añadir una vivienda conserva textos, borradores, reserva, fotos, orden y ajustes; la reutilización solo rellena entradas nuevas sin texto. |
 | **AC3** | Cambiar la ficha deja la versión intacta, marca «revisar» y aplica C2 en las copias; nada se regenera solo. |
-| **AC4** | Dos aprobaciones o peticiones simultáneas no producen versiones vigentes en conflicto ni dos llamadas a la IA por versión e idioma. |
+| **AC4** | Dos aprobaciones simultáneas no producen versiones vigentes en conflicto. Dos preparaciones simultáneas de la misma fuente e idioma lanzan un solo trabajo; un trabajo caducado o cancelado no pisa uno más nuevo; un resultado incierto no se reintenta solo. |
 | **AC5** | La biblioteca es del dueño: otro usuario no la ve ni la usa aunque comparta la vivienda. |
-| **AC6** | Un enlace personal en inglés y otro en español del mismo catálogo ven cada uno su idioma, en vivo y en PDF; sus valoraciones siguen atribuidas a su asignación. |
-| **AC7** | Editar el español deja las traducciones desactualizadas (no vigentes); los enlaces en ese idioma siguen viendo la versión anterior completa hasta aprobar la nueva. |
+| **AC6** | Un enlace personal en inglés y otro en español del mismo catálogo ven cada uno su idioma, en vivo y en PDF; sus valoraciones siguen atribuidas a su asignación. Un texto propio del catálogo se traduce sin entrar en la biblioteca. |
+| **AC7** | Editar el español deja las traducciones desactualizadas (nunca vigentes). Una vivienda retirada, una foto excluida, un precio o un dato cambiados se ven igual en todos los idiomas al momento; un texto que incumple C2 no se muestra en ningún idioma; una vivienda sin traducción vigente se comporta según N5. |
 | **AC8** | Ninguna visita pública, PDF público ni cambio a un idioma ya preparado llama a la IA (comprobado con IA simulada que cuenta llamadas). |
 | **AC9** | Las secciones conservan clave y orden en los 8 idiomas; nada se reclasifica tras traducir. |
-| **AC10** | Árabe y hebreo se leen RTL en escritorio, móvil y PDF, con letras unidas y sin cuadros vacíos; turco y francés sin glifos que falten; ar, tr y he muestran «sin revisión nativa» en el gestor. |
-| **AC11** | Clasificación geográfica: coincidencias exactas se clasifican; calles homónimas, barrios fuera del distrito y pistas sueltas quedan para confirmar; el CRM no se modifica. |
+| **AC10** | Árabe y hebreo se leen RTL en escritorio, móvil y PDF, con letras unidas y sin cuadros vacíos, demostrado con PDF renderizados; turco y francés sin glifos que falten; ar, tr y he muestran «sin revisión nativa» en el gestor. En cada idioma el PDF tiene el contenido completo, el índice apunta a la página correcta y no hay cortes ni bloques perdidos (el número de hojas puede variar). |
+| **AC11** | Clasificación geográfica: coincidencias exactas se clasifican; calles homónimas, barrios fuera del distrito y pistas sueltas quedan para confirmar y nada se presenta como verificado mientras tanto; el CRM no se modifica. |
 | **AC12** | Una plantilla aprobada entra en «Vivir en…» solo si no hay texto propio de zona; actualizarla no cambia catálogos ya compartidos; elegirla no gasta IA. |
 | **AC13** | Siguen exactamente dos pantallas por vivienda, la lectura completa en móvil y las suites actuales en verde (título, fotos, en vivo, opiniones). |
-| **AC14** | Acabado visual: originales intactos, desactivable, sin aumento de altas luces quemadas, título de portada ≥ 4,5:1, misma composición (comparación de capturas antes y después) y mismo tratamiento en lector y PDF. |
+| **AC14** | Acabado visual (tras su aceptación visual): activado solo en los catálogos que lo eligen, desactivable por foto, originales intactos, sin aumento de altas luces quemadas, título de portada ≥ 4,5:1, misma composición (comparación de capturas antes y después) y mismo tratamiento en lector y PDF. |
 
 ## 9. Pendientes que esta ampliación no cierra
 

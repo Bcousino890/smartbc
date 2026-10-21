@@ -1,6 +1,8 @@
 # BCP-01 · Ampliación: textos reutilizables, idiomas, «Vivir en…» y acabado visual — plan
 
-**Especificación:** [`spec.md`](spec.md) (DA1–DA30, N1–N4, AC1–AC14). **Estado:** propuesto, sin aprobar ni implementar.
+**Especificación:** [`spec.md`](spec.md) (DA1–DA37, N1–N4 cerradas, N5 abierta para el PR6, AC1–AC14). **Estado:** **aprobado por Fabricio el 21-10-2026** con las correcciones DA31–DA37. Se ejecuta PR a PR en orden de dependencias. En curso: **PR1**.
+
+**Antes de cada merge** Claude se detiene y entrega a Fabricio: el PR concreto, el resultado de la CI, los efectos de la migración, qué implica la reversión y las instrucciones de QA en producción. Fabricio hace el merge y la QA; después se sigue con el siguiente PR sin volver a pedir permisos ordinarios.
 
 ## Reglas comunes a todos los PR
 
@@ -25,13 +27,15 @@ PR7b Acabado visual (tras aprobar las propuestas)
 
 ## PR1 · Biblioteca de textos aprobados y reutilización
 
+Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobado el 21-10-2026; última migración 0218 y ningún PR abierto con 0219 o posterior).
+
 | Tarea | Contenido |
 | --- | --- |
-| 1.1 | Migración `0219_catalog_copy_library.sql` + reversión: `property_copy_versions` (dueño, vivienda, número, título, descripción, huella y hechos de la ficha, origen, retirada, huella del contenido); `catalog_texts.copy_version_id` (de qué versión salió la copia). |
-| 1.2 | Funciones del dueño: `copy_approve` (desde lo **publicado** del catálogo, serializada por dueño y vivienda, idempotente por huella de contenido), `copy_retire`, `copy_candidates` (siembra de solo lectura, con la marca «posiblemente personalizado» si el catálogo tiene asignaciones de 0218) y `copy_states` (vigente, revisar por cambio de ficha). |
-| 1.3 | Reutilizar al añadir: `catalog_add_property` y las altas por conversión (0213) copian la última versión vigente como texto **publicado** del catálogo, con la huella de la versión (regla C2 intacta). Sin versión: nada cambia. |
-| 1.4 | Gestor: casilla «Guardar como texto aprobado de la vivienda» al publicar (valor por defecto según N1); bloque «Texto aprobado» con versión, origen y «revisar»; pantalla de siembra con confirmación uno a uno o en bloque. |
-| 1.5 | Pruebas SQL y TS: AC1–AC5, títulos solos, contenido idéntico sin versión nueva, aprobación simultánea, otro dueño sin acceso, borrador y texto personal nunca copiados, ficha cambiada (C2), CRM intacto. |
+| 1.1 | Migración `0219_catalog_copy_library.sql` + `rollback-0219.sql`. Tabla `property_copy_versions` (dueño, vivienda, número correlativo, **título** y **descripción** como partes independientes, huella y hechos de la ficha **de la descripción**, catálogo de origen y fecha de cada parte, tipo de cambio, huella del contenido). Columna `catalog_texts.copy_version_id` (de qué versión salió una copia). RLS sin políticas, solo `service_role`. |
+| 1.2 | Funciones del dueño. `catalog_copy_approve(actor, catálogo, vivienda, partes)`: aprueba **lo publicado** en ese catálogo (título, descripción o ambos). Las partes no aprobadas se arrastran tal cual con su huella (DA32). Rechaza una descripción no vigente (`text_stale`). Es idempotente si el contenido no cambia y se serializa por dueño y vivienda. `catalog_copy_withdraw(actor, vivienda, parte)` retira el título, la descripción o todo. `catalog_copy_state(actor, viviendas)` devuelve la versión vigente, si su descripción sigue vigente y qué cambió. `catalog_copy_candidates(actor)` lista para la siembra lo publicado en sus catálogos, con la marca «posiblemente personalizado» si el catálogo tiene asignaciones. |
+| 1.3 | `catalog_add_property` (redefinida): tras añadir, **solo si el catálogo no tiene ningún texto de esa vivienda**, copia la última versión con contenido como texto publicado del catálogo. El borrador es igual a lo publicado y lleva la huella de la versión: C2 decide si la descripción se ve. Sin versión: todo igual. Conversión (0213) y cambio de modo (0196) no pasan por aquí: no reutilizan (DA33). |
+| 1.4 | Gestor: casilla «Guardar como texto aprobado de la vivienda», **desmarcada** (N1), junto a «Publicar». Bloque «Texto aprobado de la vivienda» en el editor: versión, origen, aviso «revisar» si la ficha cambió, «Aprobar lo publicado aquí» (título, descripción o ambos), «Usar en este catálogo» (solo rellena el editor) y «Retirar título / descripción». Página «Textos aprobados» de la HOME con la biblioteca y los candidatos de siembra (confirmación uno a uno o en bloque, sin IA). |
+| 1.5 | Pruebas SQL (Postgres temporal): aprobar y reutilizar; publicar sin aprobar no reutiliza; título solo conserva la descripción y su validez; retirar partes; idempotencia; aprobaciones simultáneas; otro dueño sin acceso; borrador nunca aprobable; descripción no vigente rechazada; reutilización con ficha cambiada (C2); entrada con texto, borrador o reserva no se pisa; conversión y cambio de modo sin cambios; CRM y otros catálogos intactos; permisos de anon y authenticated; reversión y reaplicación. Pruebas TS de la capa pura y QA en Chromium con fixtures. |
 
 ## PR2 · Registro de zonas y clasificación de viviendas
 
@@ -40,7 +44,7 @@ PR7b Acabado visual (tras aprobar las propuestas)
 | 2.1 | Migración `0220_catalog_areas.sql` + reversión: `catalog_areas` (id estable `madrid/<distrito>/<barrio>`, nivel, nombre, distrito, alias) generada desde la taxonomía de 0195 y cruzada con `neighborhoods`; `catalog_property_areas` (dueño, vivienda, zona, método, evidencia, estado: automática, confirmada, ambigua o sin clasificar). |
 | 2.2 | Clasificador determinista con paridad TS↔SQL: exacto sobre `subzone` y luego `zone`; conflicto si el barrio no es del distrito; ambiguo si el término es también calle y la dirección lo nombra como calle; pistas sueltas sin clasificar. Una decisión humana nunca se pisa. |
 | 2.3 | Gestor: aviso «Zona por confirmar» en la vivienda, con opciones. Nada escribe en `properties`. |
-| 2.4 | `structure.ts`: el nombre de la zona deja de ser palabra clave cuando va precedido de calle, paseo, avenida o plaza; «Vivir en {zona}» usa el nombre del registro si hay clasificación confirmada o automática sin conflicto (si no, el comportamiento de hoy). |
+| 2.4 | `structure.ts`: el nombre de la zona deja de ser palabra clave cuando va precedido de calle, paseo, avenida o plaza. «Vivir en {zona}» usa el nombre del registro solo con clasificación confirmada o automática sin conflicto; si no, queda el comportamiento de hoy, sin presentarlo como verificado y sin plantilla (DA37). |
 | 2.5 | Pruebas: AC11 con Castellana, Goya, Lista, Almagro e Ibiza como calles; Chueca/Justicia; distrito en `subzone`; casi-duplicados; la estructura de #341 sigue en verde. |
 
 ## PR3 · Plantillas «Vivir en…»
@@ -66,32 +70,36 @@ PR7b Acabado visual (tras aprobar las propuestas)
 
 | Tarea | Contenido |
 | --- | --- |
-| 5.1 | **Prueba técnica primero**: PDF de fixtures en árabe y hebreo con la fuente elegida; comprobar letras unidas, orden visual y extracción de texto con PDFKit. Si la extracción no devuelve orden lógico, se adapta la verificación (por ejemplo, comparar por bloque y no palabra a palabra) antes de seguir. |
-| 5.2 | Recursos nuevos en `lib/pdf/fonts/` con su OFL y su sha256 en el README: «latin-ext» de Playfair, Cinzel e Inter (mismo diseño) y las familias de N3. Se descargan una vez de Google Fonts o Fontsource como archivos estáticos (no variables); no se instala ningún paquete. |
+| 5.1 | **Prueba técnica primero** con PDF reales renderizados de fixtures en árabe y hebreo con las fuentes de N3: letras unidas, orden visual por línea (comprobado sobre la imagen de la página, no solo con la extracción), índice y enlaces internos. Si la extracción de PDFKit no devuelve orden lógico, la verificación se adapta **sin rebajarla**: contenido completo por bloque, orden visual comprobado en la imagen rasterizada y glifos presentes (DA35). |
+| 5.2 | Recursos nuevos en `lib/pdf/fonts/` con su OFL y sha256 en el README: Noto Naskh Arabic, Frank Ruhl Libre, Noto Sans Hebrew y la cobertura ampliada de Playfair, Cinzel e Inter. Archivos estáticos descargados una vez de Google Fonts o Fontsource. Se verifica con fontTools la cobertura real de glifos. Los idiomas que ya funcionan siguen usando exactamente sus fuentes actuales. |
 | 5.3 | `document.ts`: textos del diccionario, mayúsculas y números según el idioma, sin espaciado entre letras en árabe y hebreo, dirección RTL del texto, filas reflejadas a mano donde haga falta, metadatos de idioma. |
-| 5.4 | Verificación (`pdf-verify.mts`, `check-catalog-pdfs.mts`): cadenas esperadas por idioma, lista de fuentes permitidas ampliada, glifos por idioma (ğ İ ş, Ÿ, árabe, hebreo). |
-| 5.5 | Pruebas: AC10 en PDF; mismo número de páginas que en español para el mismo contenido corto; el hilo y sus protecciones intactos. |
+| 5.4 | Verificación (`pdf-verify.mts`, `check-catalog-pdfs.mts`): cadenas esperadas por idioma, fuentes permitidas por idioma, glifos por idioma (ğ İ ş, Ÿ, árabe, hebreo). |
+| 5.5 | Pruebas (DA35): en cada idioma, contenido completo, destinos del índice correctos, sin cortes ni bloques perdidos y tipografía legible. **No** se exige el mismo número de hojas que en español. El hilo del PDF y sus protecciones quedan intactos. |
 
 ## PR6 · Traducciones preparadas y revisadas
 
+**Requisito previo:** decisión **N5** de Fabricio (vivienda sin traducción vigente).
+
 | Tarea | Contenido |
 | --- | --- |
-| 6.1 | Migración `0223_catalog_translations.sql` + reversión: traducciones de versiones aprobadas (por versión e idioma, bloques con clave de sección, estado: en preparación con caducidad, borrador, aprobada o rechazada); traducciones de plantillas de zona; traducciones de características (por cadena exacta e idioma, del dueño); copias congeladas por catálogo, vivienda e idioma con la huella del texto español publicado. |
-| 6.2 | Preparar (solo al pulsar, solo el idioma pedido, solo lo que falta): reserva única por versión e idioma, IA configurada con instrucción de conservar nombres propios, cifras, precios y zonas, y comprobación determinista (cifras, contactos y precios como en `checkDraft`). Nunca escribe en `property_client_descriptions`. |
-| 6.3 | Revisión en el gestor: texto original y traducción por bloque, editar, aprobar o rechazar; progreso por idioma; aviso «sin revisión nativa» en ar, tr y he. |
-| 6.4 | Activación: el idioma de un enlace o del catálogo solo cambia cuando está completo; republicar el español deja la traducción desactualizada y el enlace en ese idioma sigue con la versión anterior completa (DA14, DA16). |
-| 6.5 | Lectura pública por idioma (instantánea con idioma, huella por idioma; vigilante, lectura coherente y PDF por token); valoraciones sin cambios. |
-| 6.6 | Pruebas: AC6–AC9 con IA simulada que cuenta llamadas (cero en lo público y una por versión e idioma con peticiones simultáneas), dos clientes en dos idiomas a la vez, en vivo y PDF, desactualización al republicar. |
+| 6.1 | Migración + reversión. Fuentes de traducción con identidad de versión (DA31): una versión de la biblioteca o la publicación propia del catálogo, del dueño. Traducciones por fuente e idioma con bloques por clave de sección. Traducciones de plantillas de zona y de características (por cadena exacta e idioma, del dueño). Copias por catálogo, vivienda e idioma con la huella del texto español publicado. Trabajos de preparación con estado: reservado (caducidad e identificador), cancelado, incierto, fallido o terminado. |
+| 6.2 | Preparar solo al pulsar, solo el idioma pedido y solo lo que falta. Reserva única por fuente e idioma: quien llega después ve «en preparación». Al terminar, solo guarda el trabajo cuya reserva siga vigente y sea suya; el resultado de uno caducado o cancelado se descarta y se registra. Un tiempo agotado tras enviar queda como **incierto**, sin reintento automático, y el gestor avisa de que pudo cobrarse. Instrucción que conserva nombres propios, cifras, precios y zonas, más la comprobación determinista de cifras, contactos y precios. Nunca escribe en `property_client_descriptions`. |
+| 6.3 | Revisión en el gestor: original y traducción por bloque; editar, aprobar o rechazar; progreso por idioma; aviso «sin revisión nativa» en ar, tr y he. |
+| 6.4 | Activación y vigencia: el idioma de un enlace o del catálogo cambia cuando está completo. Republicar el español deja la traducción desactualizada (nunca vigente). Los datos operativos salen siempre de la instantánea actual y C2 se aplica en cada idioma (DA34). Vivienda sin traducción vigente: según N5. |
+| 6.5 | Lectura pública por idioma: instantánea con idioma y huella por idioma; vigilante, lectura coherente y PDF por token. Visitas, valoraciones y PDF públicos nunca preparan ni llaman a la IA. Valoraciones sin cambios. |
+| 6.6 | Pruebas con IA simulada que cuenta llamadas: cero en lo público; peticiones simultáneas que lanzan un solo trabajo; trabajo caducado que no pisa; cancelación; resultado incierto sin reintento; dos clientes en dos idiomas en vivo y PDF; texto propio traducido sin entrar en la biblioteca; vivienda retirada, foto excluida y precio cambiado en idioma activo; C2 en cada idioma. |
 
 ## PR7a · Resolución de portada y PDF (sin cambio de diseño)
 
 `srcset` en la portada del lector y anchos de foto del PDF acordes a su tamaño impreso (portada a página completa). Pruebas: cabecera de variante del proxy, peso por página y número de páginas del PDF iguales.
 
-## PR7b · Acabado visual (tras aprobar las propuestas)
+## PR7b · Acabado visual (tras su aceptación visual)
+
+**Requisito previo:** comparación con **fotos reales de catálogos**: una luminosa, una realmente oscura y una normal, incluida la del ejemplo de Fabricio. Las tiene que aportar o señalar Fabricio, porque los agentes no acceden a fotos de producción. Tras esa comparación, aceptación visual de Fabricio del tratamiento concreto (N4).
 
 | Tarea | Contenido |
 | --- | --- |
-| 7.1 | Variante tratada en el servicio de fotos `/p` (parámetro propio, cacheada, original intacto), con la receta adaptativa aprobada y medidas por foto; interruptor por catálogo y por foto (N4). |
+| 7.1 | Variante tratada en el servicio de fotos `/p` (parámetro propio, cacheada, original intacto), con la receta aceptada y medidas por foto. **Activación por catálogo** (desactivada por defecto en todos, también en los existentes) y opción por foto para quitarla (N4). |
 | 7.2 | Acabados CSS aprobados en apertura y portada; equivalentes vectoriales en el PDF. |
 | 7.3 | Pruebas: AC14, comparación de capturas de las dos pantallas (posiciones y tamaños iguales), contraste del título de portada ≥ 4,5:1 con fotos claras, altas luces quemadas no aumentan, rendimiento (peso por foto). |
 
@@ -108,12 +116,16 @@ PR7b Acabado visual (tras aprobar las propuestas)
 
 ## Decisiones de producto pendientes
 
-N1–N4 de la especificación, y la aprobación visual de las propuestas (DA30).
+- **N5** (antes del PR6).
+- La aceptación visual del acabado con fotos reales (antes del PR7b).
 
-## Pasos de entorno que el plan necesitará (para aprobar con él)
+N1–N4 ya están cerradas.
+
+## Pasos de entorno (aprobados con el plan el 21-10-2026)
 
 - Worktree por PR desde `origin/main` y `node_modules` clonado de un worktree con el mismo `package-lock.json` (sin `npm install`).
 - Postgres 16 temporal local (`BCP_PG_DIR` en el scratchpad).
 - Servidor de fixtures (`scripts/dev-fixtures.sh`).
 - Chromium de Playwright ya en caché.
-- Descarga única de los archivos de fuentes OFL de N3 desde Google Fonts o Fontsource (PR5 y PR4). Es la única petición de red nueva y no ejecuta código.
+- Descarga única de los archivos de fuentes OFL de N3 desde Google Fonts o Fontsource (PR4 y PR5). Es la única petición de red nueva y no ejecuta código.
+- Sin archivos `.env` del repositorio en el entorno de pruebas (el servidor de fixtures se niega a arrancar si los hay). Sin credenciales heredadas, paquetes nuevos ni servicios de pago. Ninguna llamada real a la IA.
