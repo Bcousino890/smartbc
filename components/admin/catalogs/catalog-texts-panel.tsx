@@ -6,6 +6,7 @@ import type { DraftCheck, DraftProposal } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { organizeDescription, paragraphsOf, SECTION_LABELS } from "@/lib/catalogs/structure";
 import { approvableParts, changedLabel, partsLabel, publishedMatchesLibrary, type CopyPart, type CopyParts } from "@/lib/catalogs/copy-rules";
+import { areaById, areaLabel, areaOptions } from "@/lib/catalogs/areas";
 import {
   editTextDraft,
   isEdited,
@@ -66,6 +67,10 @@ export interface TextActions {
   approveCopy: (i: { catalogId: string; propertyId: string; parts: CopyParts }) => Promise<CopyRes>;
   /** 0219 · Retirar el título, la descripción o todo de la biblioteca. */
   withdrawCopy: (i: { catalogId: string; propertyId: string; part: CopyPart }) => Promise<CopyRes>;
+  /** 0220 · Confirmar la zona (`areaId` null = «Sin zona verificada»). */
+  confirmArea: (i: { catalogId: string; propertyId: string; areaId: string | null; skipNotify?: boolean }) => Promise<Res>;
+  /** 0220 · Quitar la confirmación (vuelve la zona de la ficha). */
+  clearArea: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
 }
 type CopyRes = ActionResult<{ version: number; status: "created" | "unchanged"; seq: number; publicChange: false }>;
 
@@ -354,6 +359,7 @@ export function TextEditor({
         </span>
       </label>
       <StructurePreview body={body} lead={lead} area={view.area} />
+      <AreaBlock catalogId={catalogId} view={view} actions={actions} run={run} pending={pending || busy} />
       <details className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-more" open={!!(lead || highlights.length) || undefined}>
         <summary className="cursor-pointer text-xs text-ink/70">Más opciones (entrada y puntos de la versión anterior; no hacen falta para publicar)</summary>
         <label className="mt-2 block">
@@ -673,6 +679,117 @@ function CopyLibraryBlock({
           Aprobar lo publicado aquí ({partsLabel(pendingParts)})
         </button>
       ) : null}
+    </section>
+  );
+}
+
+const AREA_STATUS: Record<NonNullable<CatalogTextView["zone"]>["suggestion"]["status"], string> = {
+  auto: "Sugerida",
+  ambigua: "Zona por confirmar",
+  conflicto: "Zona por confirmar",
+  sin_clasificar: "Sin clasificar",
+};
+
+/** 0220 · Zona de la vivienda (DA23, DA37). La sugerencia nunca se aplica
+ *  sola: hasta que el dueño la confirma, «Vivir en …» usa la zona de la ficha
+ *  como siempre. Confirmar vale para todos sus catálogos y no toca el CRM. */
+function AreaBlock({
+  catalogId,
+  view,
+  actions,
+  run,
+  pending,
+}: {
+  catalogId: string;
+  view: CatalogTextView;
+  actions: TextActions;
+  run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
+  pending: boolean;
+}) {
+  const z = view.zone;
+  const [choosing, setChoosing] = useState(false);
+  const [choice, setChoice] = useState<string>("");
+  if (!z) return null;
+  const sug = z.suggestion;
+  const suggested = sug.areaId ? areaById(sug.areaId) : null;
+  const decided = z.decision;
+  const decidedArea = decided?.areaId ? areaById(decided.areaId) : null;
+  const confirm = (areaId: string | null) => {
+    const what = areaId ? `«Vivir en ${areaById(areaId)?.name ?? ""}»` : "«El barrio»";
+    run(() => actions.confirmArea({ catalogId, propertyId: view.propertyId, areaId }), `Zona confirmada: el apartado se llama ${what} en todos tus catálogos.`, () => setChoosing(false), undefined, "zona");
+  };
+  const clear = () =>
+    run(() => actions.clearArea({ catalogId, propertyId: view.propertyId }), "Confirmación quitada: vuelve la zona de la ficha.", undefined, undefined, "zona");
+  const heading = z.living ? `«Vivir en ${z.living}»` : "«El barrio»";
+  const btn = "rounded-lg border border-gold/40 bg-white px-2.5 py-1 text-ink/80 hover:bg-cream-50 disabled:opacity-50";
+  return (
+    <section className="space-y-2 rounded-lg border border-gold/20 bg-cream-50/60 px-3 py-2 text-xs" data-testid="area-block">
+      <p className="crm-label-sm text-ink/70">Zona de la vivienda</p>
+      {z.verified ? (
+        <p className="text-ink/80" data-testid="area-confirmed">
+          Confirmada: <strong>{decidedArea ? areaLabel(decidedArea) : "sin zona verificada"}</strong>. El apartado se llama {heading} en todos tus catálogos.
+        </p>
+      ) : (
+        <>
+          {decided && !decided.current ? (
+            <p className="rounded bg-amber-50 px-2 py-1 text-amber-900" data-testid="area-stale">
+              Revisar: la zona, el barrio o la dirección de la ficha cambiaron desde que confirmaste {decidedArea ? areaLabel(decidedArea) : "«sin zona verificada»"}. Mientras tanto se usa la zona de la ficha.
+            </p>
+          ) : null}
+          <p className="text-ink/60" data-testid="area-today">
+            Hoy el apartado se llama {heading}, con la zona de la ficha sin verificar.
+          </p>
+          <p className={sug.status === "auto" ? "text-ink/80" : "rounded bg-amber-50 px-2 py-1 text-amber-900"} data-testid={`area-suggestion-${sug.status}`}>
+            <strong>{AREA_STATUS[sug.status]}</strong>
+            {suggested ? <>: {areaLabel(suggested)}</> : null}. {sug.reason}
+          </p>
+        </>
+      )}
+      {choosing ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={choice} onChange={(e) => setChoice(e.target.value)} className="rounded-lg border border-gold/30 bg-white px-2 py-1 text-xs" data-testid="area-select" aria-label="Zona de la vivienda">
+            <option value="">Elige una zona…</option>
+            <option value="__none__">Sin zona verificada («El barrio»)</option>
+            {areaOptions().map(({ district, barrios }) => (
+              <optgroup key={district.id} label={district.name}>
+                <option value={district.id}>{district.name} (todo el distrito)</option>
+                {barrios.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <button type="button" disabled={pending || !choice} onClick={() => confirm(choice === "__none__" ? null : choice)} className={btn} data-testid="area-save">
+            Guardar zona
+          </button>
+          <button type="button" disabled={pending} onClick={() => setChoosing(false)} className="rounded-lg px-2 py-1 text-ink/60 underline">
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {!z.verified && suggested ? (
+            <button type="button" disabled={pending} onClick={() => confirm(suggested.id)} className={btn} data-testid="area-confirm">
+              Confirmar {suggested.name}
+            </button>
+          ) : null}
+          <button type="button" disabled={pending} onClick={() => { setChoice(z.verified ? decided?.areaId ?? "__none__" : sug.areaId ?? ""); setChoosing(true); }} className={btn} data-testid="area-change">
+            {z.verified ? "Cambiar" : suggested ? "Elegir otra" : "Elegir zona"}
+          </button>
+          {!z.verified ? (
+            <button type="button" disabled={pending} onClick={() => confirm(null)} className="rounded-lg px-2 py-1 text-ink/60 underline disabled:opacity-50" data-testid="area-none">
+              Sin zona verificada
+            </button>
+          ) : null}
+          {decided ? (
+            <button type="button" disabled={pending} onClick={clear} className="rounded-lg px-2 py-1 text-ink/60 underline disabled:opacity-50" data-testid="area-clear">
+              Quitar confirmación
+            </button>
+          ) : null}
+        </div>
+      )}
     </section>
   );
 }

@@ -73,6 +73,8 @@ export interface InternalItem {
   pp?: { x: string[]; o: string | null } | null;
   /** 0197 (C2): texto publicado del catálogo, solo si es vigente. */
   text?: { b: string | null; l: string | null; h: string[] | null } | null;
+  /** 0220: zona confirmada por el dueño y vigente (solo si la hay). */
+  area?: { name: string | null; level: string | null } | null;
   /** 0197 (C2): historia aprobada (huella, entrada, capítulos aprobados). */
   story?: { h: string | null; p: string | null; ph?: string | null; b: Array<{ c: string; t: string }> | null } | null;
 }
@@ -176,6 +178,7 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): Pu
     square_meters: it.square_meters,
     zone: it.zone,
     subzone: it.subzone,
+    area: it.area ?? null,
     cleanDescription: cleanValid ? (clean!.description ?? "").trim() || null : null,
     cleanFeatures: cleanValid ? cleanStrings(clean!.features) : [],
     text: it.text ?? null,

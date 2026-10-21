@@ -7,6 +7,7 @@ import { checkDraft, pendingWarnings, type DraftSource } from "@/lib/catalogs/ai
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { organizeDescription, paragraphsOf } from "@/lib/catalogs/structure";
 import { copyErrorMessage, type CopyLibraryView } from "@/lib/catalogs/copy-rules";
+import { areaById, areaErrorMessage, areaViewOf, confirmedAreaOf, type AreaDecision } from "@/lib/catalogs/areas";
 import { sentences } from "@/lib/catalogs/text-rules";
 import type { CatalogItemView } from "@/lib/catalogs/types";
 
@@ -39,6 +40,17 @@ function sourceOf(it: CatalogItemView, i: number) {
   };
 }
 
+/** 0220 · Ubicación sintética de la ficha (zona, barrio, dirección) para
+ *  probar cada caso del clasificador: exacta, calle con nombre de barrio,
+ *  barrio de otro distrito y sin zona. */
+const LOCATIONS: Record<string, { zone: string | null; subzone: string | null; address: string | null }> = {
+  "e0000000-0000-0000-0000-000000000001": { zone: "Retiro", subzone: "Jerónimos", address: "Calle Antonio Maura 5" },
+  "e0000000-0000-0000-0000-000000000002": { zone: "Chamberí", subzone: "Almagro", address: "Calle Almagro 20" },
+  "e0000000-0000-0000-0000-000000000003": { zone: null, subzone: null, address: null },
+  "e0000000-0000-0000-0000-000000000004": { zone: "Chamberí", subzone: "Recoletos", address: "Calle Serrano 40" },
+};
+const locationOf = (it: CatalogItemView) => LOCATIONS[it.propertyId] ?? { zone: it.zone, subzone: null, address: null };
+
 export function createFixtureTexts(opts: {
   items: () => CatalogItemView[];
   live: (body: Record<string, unknown> & { skipNotify?: boolean }) => Promise<{ ok: true; version: number; fingerprint: string | null; publicChange: boolean }>;
@@ -63,6 +75,15 @@ export function createFixtureTexts(opts: {
   };
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  // ── 0220 · Zona confirmada por vivienda (en memoria, mismas reglas que SQL) ──
+  /** Confirmación + versión de la ubicación cuando se confirmó. */
+  const decisions = new Map<string, { areaId: string | null; locRev: number }>();
+  const locRev = new Map<string, number>();
+  const decisionOf = (pid: string): AreaDecision | null => {
+    const d = decisions.get(pid);
+    return d ? { areaId: d.areaId, current: d.locRev === (locRev.get(pid) ?? 0), decidedAt: null } : null;
+  };
+
   const views = (): CatalogTextView[] => {
     const items = opts.items();
     const list = items.map((it, i) => ({ it, i, inList: true }));
@@ -73,7 +94,11 @@ export function createFixtureTexts(opts: {
       const hasPubText = !!st?.published && !!(st.published.body || st.published.lead);
       const current = !!st?.published && (!hasPubText || st.published.sourceAtPublish === (sourceRev.get(it.propertyId) ?? 0));
       return {
-        propertyId: it.propertyId, slug: it.slug, title: it.title, bcReference: it.bcReference, area: it.zone, inList,
+        propertyId: it.propertyId, slug: it.slug, title: it.title, bcReference: it.bcReference, inList,
+        ...(() => {
+          const zone = areaViewOf(locationOf(it), decisionOf(it.propertyId));
+          return { zone, area: zone.living };
+        })(),
         level: current && hasPubText ? "text" : s.clean === "current" ? "clean" : "facts",
         source: { hasText: s.hasText, clean: s.clean, story: s.story },
         draft: st ? { ...st.draft, updatedAt: null } : null,
@@ -192,12 +217,27 @@ export function createFixtureTexts(opts: {
       const ownLead = (lead ?? "").trim() || null;
       const restSentences = ownLead ? all : all.slice(1);
       const sections = restSentences.length ? [{ heading: null, text: restSentences.join(" "), photo: !!f.it.photoUrl }] : [];
-      const organized = organizeDescription({ lead: ownLead && !(body ?? "").includes(ownLead) ? ownLead : null, paragraphs: paragraphsOf(body), area: f.it.zone });
+      const organized = organizeDescription({ lead: ownLead && !(body ?? "").includes(ownLead) ? ownLead : null, paragraphs: paragraphsOf(body), area: areaViewOf(locationOf(f.it), decisionOf(propertyId)).living });
       return {
         ok: true as const,
         preview: { lead: ownLead ?? all[0] ?? null, highlights: highlights.length ? highlights : sourceOf(f.it, f.i).features.slice(0, 3), sections, words: (body ?? "").split(/\s+/).filter(Boolean).length, copy: organized.copy, missing: organized.missing },
         check: checkDraft({ title: title ?? null, body, lead, highlights }, draftSource(f.it, f.i)),
       };
+    },
+    confirmArea: async ({ propertyId, areaId, skipNotify }) => {
+      if (areaId !== null && !areaById(areaId)) return { ok: false as const, error: areaErrorMessage("area_not_found")! };
+      const f = find(propertyId);
+      if (!f) return { ok: false as const, error: "Esa vivienda no está en este catálogo." };
+      decisions.set(propertyId, { areaId, locRev: locRev.get(propertyId) ?? 0 });
+      opts.onChange();
+      return opts.live({ op: "area", index: f.i, area: confirmedAreaOf(decisionOf(propertyId)), skipNotify });
+    },
+    clearArea: async ({ propertyId, skipNotify }) => {
+      const f = find(propertyId);
+      if (!f) return { ok: false as const, error: "Esa vivienda no está en este catálogo." };
+      if (!decisions.delete(propertyId)) return opts.unchanged();
+      opts.onChange();
+      return opts.live({ op: "area", index: f.i, area: null, skipNotify });
     },
     approveCopy: async ({ propertyId, parts }) => {
       const st = store.get(propertyId);
@@ -241,6 +281,8 @@ export function createFixtureTexts(opts: {
     },
   };
 
+  /** Solo pruebas (0220): cambia la dirección de la ficha (la confirmación deja de valer). */
+  const changeLocation = (propertyId: string) => locRev.set(propertyId, (locRev.get(propertyId) ?? 0) + 1);
   /** Solo pruebas: simula que la ficha cambió (el publicado deja de valer). */
   const changeSource = (propertyId: string) => sourceRev.set(propertyId, (sourceRev.get(propertyId) ?? 0) + 1);
   /** E2 · solo pruebas: otro guardado del borrador (sube la revisión). */
@@ -249,5 +291,5 @@ export function createFixtureTexts(opts: {
     const st = store.get(propertyId);
     store.set(propertyId, { draft: { title: st?.draft.title ?? null, body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
   };
-  return { actions, views, changeSource, externalSave, seedLibrary, reuseOnAdd };
+  return { actions, views, changeSource, changeLocation, externalSave, seedLibrary, reuseOnAdd };
 }

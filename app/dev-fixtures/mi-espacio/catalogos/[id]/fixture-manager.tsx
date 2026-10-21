@@ -218,6 +218,15 @@ export function FixtureCatalogManager({
       bump((n) => n + 1);
       await live({ op: "text", index: i, body: null, lead: null });
     };
+    // 0220 · solo pruebas: cambia la dirección de la ficha i (la zona
+    // confirmada deja de valer y el lector vuelve a la zona de la ficha).
+    (w as unknown as { __fxChangeLocation?: (i: number) => Promise<void> }).__fxChangeLocation = async (i: number) => {
+      const it = catRef.current.items[i];
+      if (!it) return;
+      fxTexts.changeLocation(it.propertyId);
+      bump((n) => n + 1);
+      await live({ op: "area", index: i, area: null });
+    };
     // E3: ajustes de fotos de prueba (p. ej. claves que ya no existen, como
     // tras reimportar en el CRM) para comprobar el aviso de E3-5.
     (w as unknown as { __fxPhotoPrefs?: (pid: string, prefs: PhotoPrefs) => void }).__fxPhotoPrefs = (pid, prefs) => {
