@@ -5,6 +5,7 @@ import type { ActionResult } from "@/lib/catalogs/access";
 import type { DraftCheck, DraftProposal } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { organizeDescription, paragraphsOf, SECTION_LABELS } from "@/lib/catalogs/structure";
+import { approvableParts, changedLabel, partsLabel, publishedMatchesLibrary, type CopyPart, type CopyParts } from "@/lib/catalogs/copy-rules";
 import {
   editTextDraft,
   isEdited,
@@ -61,7 +62,12 @@ export interface TextActions {
   withdraw: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
   remove: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
   preview: (i: { catalogId: string; propertyId: string; title?: string | null; body: string | null; lead: string | null; highlights: string[] }) => Promise<Preview>;
+  /** 0219 · Aprobar lo PUBLICADO como texto de la vivienda (biblioteca). */
+  approveCopy: (i: { catalogId: string; propertyId: string; parts: CopyParts }) => Promise<CopyRes>;
+  /** 0219 · Retirar el título, la descripción o todo de la biblioteca. */
+  withdrawCopy: (i: { catalogId: string; propertyId: string; part: CopyPart }) => Promise<CopyRes>;
 }
+type CopyRes = ActionResult<{ version: number; status: "created" | "unchanged"; seq: number; publicChange: false }>;
 
 export const LEVEL: Record<CatalogTextView["level"], string> = {
   text: "Texto del catálogo",
@@ -155,6 +161,8 @@ export function TextEditor({
   const { check, confirmed, proposal, origin } = sess;
   const [error, setError] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<null | "prepare" | "draft">(null);
+  // N1 · desmarcada por defecto en todos los catálogos.
+  const [approveOnPublish, setApproveOnPublish] = useState(false);
   const [busy] = useTransition();
   const req = useRef(0);
 
@@ -228,6 +236,24 @@ export function TextEditor({
   function cancelAi() {
     req.current++;
     setAiBusy(null);
+  }
+
+  function publish() {
+    const parts = approveOnPublish ? approvableParts({ title: value.title, body: value.body, lead: value.lead }) : null;
+    run(
+      async () => {
+        const r = await actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed });
+        if (!r.ok || !parts) return r;
+        const a = await actions.approveCopy({ catalogId, propertyId: view.propertyId, parts });
+        if (!a.ok) return { ok: false as const, error: `Publicado, pero no se ha guardado como texto aprobado: ${a.error}` };
+        setApproveOnPublish(false);
+        return r;
+      },
+      parts ? `Publicado y guardado como texto aprobado de la vivienda (${partsLabel(parts)}).` : "Publicado: el cliente ya lo ve.",
+      undefined,
+      undefined,
+      "publicación",
+    );
   }
 
   function save() {
@@ -366,6 +392,18 @@ export function TextEditor({
         </fieldset>
       </details>
 
+      <CopyLibraryBlock
+        catalogId={catalogId}
+        view={view}
+        actions={actions}
+        run={run}
+        pending={pending || busy}
+        onUse={(lib) => {
+          setValue({ title: lib.title ?? "", body: lib.body ?? "", lead: lib.lead ?? "" });
+          setSess(() => ({ origin: "manual", check: null, confirmed: [], proposal: null }));
+        }}
+      />
+
       <div className="flex flex-wrap gap-2">
         {aiBusy ? (
           <>
@@ -485,15 +523,23 @@ export function TextEditor({
         </button>
         <button
           type="button"
-          onClick={() =>
-            run(() => actions.publish({ catalogId, propertyId: view.propertyId, expectedRev: rev ?? 0, confirmed }), "Publicado: el cliente ya lo ve.", undefined, undefined, "publicación")
-          }
+          onClick={publish}
           disabled={pending || busy || !canPublish}
           title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}
           className="rounded-lg border border-gold bg-white px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
         >
           Publicar
         </button>
+        <label className="flex items-center gap-1.5 text-xs text-ink/70" title="Si la marcas, al publicar se guarda también como texto aprobado de la vivienda y se reutilizará al añadirla a catálogos nuevos. No la marques si el texto es personal para un cliente.">
+          <input
+            type="checkbox"
+            checked={approveOnPublish}
+            onChange={(e) => setApproveOnPublish(e.target.checked)}
+            disabled={pending || busy}
+            data-testid="text-approve-on-publish"
+          />
+          Guardar como texto aprobado de la vivienda
+        </label>
         {edited ? (
           <span className="text-xs font-semibold text-amber-800" data-testid="text-unsaved">
             Cambios sin guardar
@@ -532,5 +578,101 @@ function StructurePreview({ body, lead, area }: { body: string; lead: string; ar
         ) : null}
       </div>
     </details>
+  );
+}
+
+/** 0219 · «Texto aprobado de la vivienda»: la versión vigente de la
+ *  biblioteca del dueño, aprobar lo publicado aquí, usarla en este catálogo
+ *  (solo rellena el editor) y retirar partes. Nada cambia lo que ve el cliente. */
+function CopyLibraryBlock({
+  catalogId,
+  view,
+  actions,
+  run,
+  pending,
+  onUse,
+}: {
+  catalogId: string;
+  view: CatalogTextView;
+  actions: TextActions;
+  run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
+  pending: boolean;
+  onUse: (lib: NonNullable<CatalogTextView["library"]>) => void;
+}) {
+  const lib = view.library;
+  const pub = view.published ? { title: view.published.title, body: view.published.body, lead: view.published.lead } : null;
+  const same = publishedMatchesLibrary(pub ?? { title: null, body: null, lead: null }, lib);
+  const pubParts = pub ? approvableParts(pub) : null;
+  // Lo publicado que aún NO es el texto aprobado (una descripción no vigente no se ofrece: C2).
+  const pendingParts: CopyParts | null = (() => {
+    if (!pub || !pubParts) return null;
+    const t = !!pub.title && !same.title;
+    const b = !!(pub.body || pub.lead) && !same.body && view.published?.current === true;
+    return t && b ? "both" : t ? "title" : b ? "body" : null;
+  })();
+  const approve = (parts: CopyParts) =>
+    run(() => actions.approveCopy({ catalogId, propertyId: view.propertyId, parts }), `Guardado como texto aprobado de la vivienda (${partsLabel(parts)}).`, undefined, undefined, "texto aprobado");
+  const withdraw = (part: CopyPart) => {
+    const what = part === "all" ? "el texto aprobado" : part === "title" ? "el título aprobado" : "la descripción aprobada";
+    if (!window.confirm(`¿Retirar ${what} de esta vivienda? Los catálogos que ya lo usan no cambian; solo deja de copiarse a catálogos nuevos.`)) return;
+    run(() => actions.withdrawCopy({ catalogId, propertyId: view.propertyId, part }), "Retirado del texto aprobado. Ningún catálogo ha cambiado.", undefined, undefined, "texto aprobado");
+  };
+  if (!lib && !pendingParts) return null;
+  return (
+    <section className="space-y-2 rounded-lg border border-gold/20 bg-cream-50/60 px-3 py-2" data-testid="copy-library">
+      <p className="crm-label-sm text-ink/70">Texto aprobado de la vivienda</p>
+      {lib ? (
+        <>
+          <p className="text-xs text-ink/60" data-testid="copy-library-version">
+            Versión {lib.seq}. Se copia sola al añadir esta vivienda a un catálogo nuevo; los catálogos ya creados no cambian.
+          </p>
+          {lib.title ? (
+            <p className="text-xs text-ink/80">
+              <span className="text-ink/50">Título:</span> <strong>{lib.title}</strong>
+              {lib.titleCatalogTitle ? <span className="text-ink/45"> · de «{lib.titleCatalogTitle}»</span> : null}
+            </p>
+          ) : null}
+          {lib.body || lib.lead ? (
+            <p className="line-clamp-3 text-xs text-ink/80">
+              <span className="text-ink/50">Descripción:</span> {[lib.lead, lib.body].filter(Boolean).join(" ")}
+              {lib.bodyCatalogTitle ? <span className="text-ink/45"> · de «{lib.bodyCatalogTitle}»</span> : null}
+            </p>
+          ) : null}
+          {lib.bodyCurrent === false ? (
+            <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900" data-testid="copy-library-stale">
+              Revisar: desde que se aprobó la descripción cambió {changedLabel(lib.changed) || "la ficha"}. Al copiarla a un catálogo nuevo no se verá hasta que la revises y la publiques.
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button type="button" disabled={pending} onClick={() => onUse(lib)} className="rounded-lg border border-gold/40 px-2.5 py-1 text-ink/80 hover:bg-white disabled:opacity-50" data-testid="copy-library-use">
+              Usar en este catálogo
+            </button>
+            {lib.title ? (
+              <button type="button" disabled={pending} onClick={() => withdraw("title")} className="rounded-lg px-2 py-1 text-ink/60 underline disabled:opacity-50">
+                Retirar título
+              </button>
+            ) : null}
+            {lib.body || lib.lead ? (
+              <button type="button" disabled={pending} onClick={() => withdraw("body")} className="rounded-lg px-2 py-1 text-ink/60 underline disabled:opacity-50">
+                Retirar descripción
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-ink/60">Esta vivienda aún no tiene texto aprobado. Lo publicado aquí solo vale para este catálogo.</p>
+      )}
+      {pendingParts ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => approve(pendingParts)}
+          className="rounded-lg border border-gold/40 bg-white px-2.5 py-1 text-xs text-ink/80 hover:bg-cream-50 disabled:opacity-50"
+          data-testid="copy-library-approve"
+        >
+          Aprobar lo publicado aquí ({partsLabel(pendingParts)})
+        </button>
+      ) : null}
+    </section>
   );
 }

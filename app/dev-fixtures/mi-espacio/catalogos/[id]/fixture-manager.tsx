@@ -178,6 +178,16 @@ export function FixtureCatalogManager({
     });
   }
   const fxTexts = textsRef.current;
+  // 0219 · solo pruebas: una vivienda del universo que NO está en el catálogo
+  // trae un texto aprobado «desde otro catálogo» (para ver la reutilización).
+  const seededRef = useRef(false);
+  if (!seededRef.current) {
+    seededRef.current = true;
+    const inCat = new Set(catalog.items.map((x) => x.propertyId));
+    const target = pool.find((p) => !inCat.has(p.id) && (p.status === "available" || p.status === "reserved"));
+    if (target) fxTexts.seedLibrary(target.id, `${target.title.split(",")[0]} · texto aprobado`, "Texto aprobado en otro catálogo.\n\nEl salón es muy luminoso.", "Selección de prueba anterior");
+    (globalThis as { __fxSeededCopy?: string }).__fxSeededCopy = target?.id;
+  }
   // Solo pruebas locales: simula que cambió la ficha de la vivienda i (el texto
   // publicado deja de valer y el lector de prueba vuelve al siguiente nivel).
   useEffect(() => {
@@ -338,8 +348,12 @@ export function FixtureCatalogManager({
       }
       if (manualRef.current.some((x) => x.propertyId === propertyId)) return { ok: false as const, error: "Esa propiedad ya está en este catálogo." };
       const p = byId.get(propertyId);
-      if (p) manualRef.current = [...manualRef.current, fixtureView(p, 100, catRef.current.criteria.operation)];
-      return live({ op: "add", title: p?.title ?? "Propiedad de prueba", skipNotify });
+      const view = p ? fixtureView(p, 100, catRef.current.criteria.operation) : undefined;
+      if (view) manualRef.current = [...manualRef.current, view];
+      const r = await live({ op: "add", title: p?.title ?? "Propiedad de prueba", skipNotify });
+      // 0219 · como catalog_add_property: una entrada nueva sin texto recibe el texto aprobado.
+      await fxTexts.reuseOnAdd(propertyId, view);
+      return r;
     },
     // BCP-01 P3 · buscador nuevo (sobre el universo sintético) y operación.
     catalogSearch: {

@@ -6,8 +6,21 @@ import type { TextActions } from "@/components/admin/catalogs/catalog-texts-pane
 import { checkDraft, pendingWarnings, type DraftSource } from "@/lib/catalogs/ai-draft";
 import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { organizeDescription, paragraphsOf } from "@/lib/catalogs/structure";
+import { copyErrorMessage, type CopyLibraryView } from "@/lib/catalogs/copy-rules";
 import { sentences } from "@/lib/catalogs/text-rules";
 import type { CatalogItemView } from "@/lib/catalogs/types";
+
+/** 0219 · Versión de la biblioteca (en memoria, mismas reglas que SQL). */
+interface LibVersion {
+  seq: number;
+  title: string | null;
+  titleFrom: string | null;
+  body: string | null;
+  lead: string | null;
+  /** Versión de la «fuente» cuando se aprobó la descripción (C2). */
+  bodySourceRev: number | null;
+  bodyFrom: string | null;
+}
 
 interface Stored {
   draft: { title: string | null; body: string | null; lead: string | null; highlights: string[]; rev: number; origin: string };
@@ -66,6 +79,7 @@ export function createFixtureTexts(opts: {
         draft: st ? { ...st.draft, updatedAt: null } : null,
         published: st?.published ? { title: st.published.title, body: st.published.body, lead: st.published.lead, highlights: st.published.highlights, at: st.published.at, current, changed: current ? [] : ["los dormitorios"] } : null,
         candidates: s.features,
+        library: libView(it.propertyId),
       };
     });
   };
@@ -73,6 +87,41 @@ export function createFixtureTexts(opts: {
   const reserved = new Map<string, CatalogItemView>();
   const remember = () => {
     for (const it of opts.items()) reserved.set(it.propertyId, it);
+  };
+
+  // ── 0219 · Biblioteca de textos aprobados (en memoria) ──────────────────
+  const library = new Map<string, LibVersion>();
+  const libView = (pid: string): CopyLibraryView | null => {
+    const v = library.get(pid);
+    if (!v || (!v.title && !v.body && !v.lead)) return null;
+    const hasBody = !!(v.body || v.lead);
+    const current = hasBody ? v.bodySourceRev === (sourceRev.get(pid) ?? 0) : null;
+    return {
+      versionId: `fx-${pid}-${v.seq}`, seq: v.seq, title: v.title, body: v.body, lead: v.lead,
+      bodyCurrent: current, changed: current === false ? ["bedrooms"] : [],
+      titleApprovedAt: null, bodyApprovedAt: null, titleCatalogTitle: v.titleFrom, bodyCatalogTitle: v.bodyFrom,
+    };
+  };
+  const same = (a: LibVersion | undefined, b: LibVersion) =>
+    !!a && a.title === b.title && a.body === b.body && a.lead === b.lead && a.bodySourceRev === b.bodySourceRev;
+  /** Solo pruebas: una versión aprobada «desde otro catálogo». */
+  const seedLibrary = (pid: string, title: string | null, body: string | null, from: string) => {
+    library.set(pid, { seq: 1, title, titleFrom: title ? from : null, body, lead: null, bodySourceRev: body ? sourceRev.get(pid) ?? 0 : null, bodyFrom: body ? from : null });
+  };
+  /** Como catalog_add_property (0219): solo una entrada SIN texto recibe la versión aprobada. */
+  const reuseOnAdd = async (pid: string, it: CatalogItemView | undefined) => {
+    if (store.has(pid)) return;
+    const v = library.get(pid);
+    if (!v || (!v.title && !v.body && !v.lead)) return;
+    if (it) reserved.set(pid, it);
+    store.set(pid, {
+      draft: { title: v.title, body: v.body, lead: v.lead, highlights: [], rev: 1, origin: "manual" },
+      published: v.title || v.body || v.lead ? { title: v.title, body: v.body, lead: v.lead, highlights: [], at: new Date().toISOString(), sourceAtPublish: v.bodySourceRev ?? sourceRev.get(pid) ?? 0 } : null,
+    });
+    opts.onChange();
+    const i = opts.items().findIndex((x) => x.propertyId === pid);
+    const current = (v.bodySourceRev ?? -1) === (sourceRev.get(pid) ?? 0);
+    await opts.live({ op: "text", index: Math.max(0, i), body: current ? v.body : null, lead: current ? v.lead : null, itemTitle: v.title, skipNotify: true });
   };
 
   const actions: TextActions = {
@@ -150,6 +199,46 @@ export function createFixtureTexts(opts: {
         check: checkDraft({ title: title ?? null, body, lead, highlights }, draftSource(f.it, f.i)),
       };
     },
+    approveCopy: async ({ propertyId, parts }) => {
+      const st = store.get(propertyId);
+      const pub = st?.published;
+      if (!pub) return { ok: false as const, error: copyErrorMessage("text_not_found")! };
+      const wantT = parts === "title" || parts === "both";
+      const wantB = parts === "body" || parts === "both";
+      if (wantT && !pub.title) return { ok: false as const, error: copyErrorMessage("title_not_published")! };
+      if (wantB && !pub.body && !pub.lead) return { ok: false as const, error: copyErrorMessage("body_not_published")! };
+      if (wantB && pub.sourceAtPublish !== (sourceRev.get(propertyId) ?? 0)) return { ok: false as const, error: copyErrorMessage("text_stale")! };
+      const prev = library.get(propertyId);
+      const next: LibVersion = {
+        seq: (prev?.seq ?? 0) + 1,
+        title: wantT ? pub.title : prev?.title ?? null,
+        titleFrom: wantT ? "este catálogo" : prev?.titleFrom ?? null,
+        body: wantB ? pub.body : prev?.body ?? null,
+        lead: wantB ? pub.lead : prev?.lead ?? null,
+        bodySourceRev: wantB ? pub.sourceAtPublish : prev?.bodySourceRev ?? null,
+        bodyFrom: wantB ? "este catálogo" : prev?.bodyFrom ?? null,
+      };
+      if (same(prev, next)) return { ok: true as const, version: 1, status: "unchanged" as const, seq: prev!.seq, publicChange: false as const };
+      library.set(propertyId, next);
+      opts.onChange();
+      return { ok: true as const, version: 1, status: "created" as const, seq: next.seq, publicChange: false as const };
+    },
+    withdrawCopy: async ({ propertyId, part }) => {
+      const prev = library.get(propertyId);
+      if (!prev) return { ok: false as const, error: copyErrorMessage("copy_not_found")! };
+      const t = part === "title" || part === "all";
+      const b = part === "body" || part === "all";
+      const next: LibVersion = {
+        ...prev,
+        seq: prev.seq + 1,
+        ...(t ? { title: null, titleFrom: null } : {}),
+        ...(b ? { body: null, lead: null, bodySourceRev: null, bodyFrom: null } : {}),
+      };
+      if (same(prev, next)) return { ok: true as const, version: 1, status: "unchanged" as const, seq: prev.seq, publicChange: false as const };
+      library.set(propertyId, next);
+      opts.onChange();
+      return { ok: true as const, version: 1, status: "created" as const, seq: next.seq, publicChange: false as const };
+    },
   };
 
   /** Solo pruebas: simula que la ficha cambió (el publicado deja de valer). */
@@ -160,5 +249,5 @@ export function createFixtureTexts(opts: {
     const st = store.get(propertyId);
     store.set(propertyId, { draft: { title: st?.draft.title ?? null, body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
   };
-  return { actions, views, changeSource, externalSave };
+  return { actions, views, changeSource, externalSave, seedLibrary, reuseOnAdd };
 }
