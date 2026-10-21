@@ -60,6 +60,9 @@ export interface StructureInput {
   chapters?: Array<{ chapter: StoryChapter; text: string }>;
   /** Zona verificada de la ficha (subzona o zona), o null. */
   area: string | null;
+  /** 0222 · Plantilla «Vivir en…» de este catálogo: solo se usa si el texto
+   *  no tiene ya material de la zona (DA25). */
+  areaText?: string | null;
 }
 
 export interface Structured {
@@ -410,6 +413,11 @@ export function organizeDescription(input: StructureInput): Structured {
     if (key) parts[key].push(text);
     else intro.push(text);
   }
+
+  // DA25: la plantilla de la zona entra solo si la descripción propia no
+  // habla ya de la zona (nunca se repite ni sustituye a lo propio).
+  const tpl = (input.areaText ?? "").trim();
+  if (tpl && parts.barrio.length === 0) parts.barrio.push(tpl);
 
   const copy: CopyBlock[] = [];
   if (intro.length) copy.push({ heading: null, text: intro.join("\n\n") });

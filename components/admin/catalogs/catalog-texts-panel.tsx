@@ -7,6 +7,7 @@ import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { organizeDescription, paragraphsOf, SECTION_LABELS } from "@/lib/catalogs/structure";
 import { approvableParts, changedLabel, partsLabel, publishedMatchesLibrary, type CopyPart, type CopyParts } from "@/lib/catalogs/copy-rules";
 import { areaById, areaLabel, areaOptions } from "@/lib/catalogs/areas";
+import { areaTextLabel } from "@/lib/catalogs/area-texts";
 import {
   editTextDraft,
   isEdited,
@@ -71,6 +72,10 @@ export interface TextActions {
   confirmArea: (i: { catalogId: string; propertyId: string; areaId: string | null; skipNotify?: boolean }) => Promise<Res>;
   /** 0220 · Quitar la confirmación (vuelve la zona de la ficha). */
   clearArea: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
+  /** 0222 · Guardar en este catálogo su copia de la plantilla de la zona. */
+  applyAreaText: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
+  /** 0222 · Quitar la plantilla de este catálogo. */
+  removeAreaText: (i: { catalogId: string; propertyId: string; skipNotify?: boolean }) => Promise<Res>;
 }
 type CopyRes = ActionResult<{ version: number; status: "created" | "unchanged"; seq: number; publicChange: false }>;
 
@@ -358,7 +363,7 @@ export function TextEditor({
           Escribe con naturalidad: el catálogo la organiza solo en «Salón y luz», «Cocina y comedor», «Acabados y confort», «La finca» y «Vivir en {view.area ?? "…"}» según lo que diga cada frase. Separa los párrafos con una línea en blanco.
         </span>
       </label>
-      <StructurePreview body={body} lead={lead} area={view.area} />
+      <StructurePreview body={body} lead={lead} area={view.area} areaText={view.areaText?.copy?.shown ? view.areaText.copy.body : null} />
       <AreaBlock catalogId={catalogId} view={view} actions={actions} run={run} pending={pending || busy} />
       <details className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-more" open={!!(lead || highlights.length) || undefined}>
         <summary className="cursor-pointer text-xs text-ink/70">Más opciones (entrada y puntos de la versión anterior; no hacen falta para publicar)</summary>
@@ -561,11 +566,11 @@ export function TextEditor({
 
 /** DE10 · Vista previa organizada EN VIVO con la misma función que el lector y
  *  el PDF (sin servidor ni IA), y las partes que quedan sin material. */
-function StructurePreview({ body, lead, area }: { body: string; lead: string; area: string | null }) {
+function StructurePreview({ body, lead, area, areaText = null }: { body: string; lead: string; area: string | null; areaText?: string | null }) {
   const organized = useMemo(() => {
     const l = lead.replace(/\s+/g, " ").trim();
-    return organizeDescription({ lead: l && !body.includes(l) ? l : null, paragraphs: paragraphsOf(body), area });
-  }, [body, lead, area]);
+    return organizeDescription({ lead: l && !body.includes(l) ? l : null, paragraphs: paragraphsOf(body), area, areaText });
+  }, [body, lead, area, areaText]);
   if (!body.trim() && !lead.trim()) return null;
   return (
     <details open className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-structure">
@@ -790,6 +795,82 @@ function AreaBlock({
           ) : null}
         </div>
       )}
+      <AreaTextPart catalogId={catalogId} view={view} actions={actions} run={run} pending={pending} />
     </section>
+  );
+}
+
+/** 0222 · Plantilla «Vivir en…» de este catálogo. Solo con la zona
+ *  confirmada (DA37); entra en el lector solo si el texto propio no habla ya
+ *  de la zona (DA25). Actualizar la plantilla no cambia esta copia (DA27). */
+function AreaTextPart({
+  catalogId,
+  view,
+  actions,
+  run,
+  pending,
+}: {
+  catalogId: string;
+  view: CatalogTextView;
+  actions: TextActions;
+  run: (fn: () => Promise<Res>, ok: string, onOk?: () => void, onFail?: () => void, label?: string) => void;
+  pending: boolean;
+}) {
+  const at = view.areaText;
+  if (!at) return null;
+  const { copy, available } = at;
+  const apply = (msg: string) => run(() => actions.applyAreaText({ catalogId, propertyId: view.propertyId }), msg, undefined, undefined, "plantilla de zona");
+  const remove = () => {
+    if (!window.confirm("¿Quitar la plantilla de la zona de este catálogo? La plantilla sigue en tu biblioteca.")) return;
+    run(() => actions.removeAreaText({ catalogId, propertyId: view.propertyId }), "Plantilla quitada de este catálogo.", undefined, undefined, "plantilla de zona");
+  };
+  const newer = !!copy && !!available && copy.versionId !== available.versionId;
+  const btn = "rounded-lg border border-gold/40 bg-white px-2.5 py-1 text-ink/80 hover:bg-cream-50 disabled:opacity-50";
+  if (!copy && !available) {
+    return view.zone?.verified ? (
+      <p className="border-t border-gold/15 pt-2 text-ink/55" data-testid="area-text-none">
+        No hay plantilla aprobada para esta zona. Puedes prepararla en «Mi espacio → Plantillas de zona».
+      </p>
+    ) : null;
+  }
+  return (
+    <div className="space-y-1.5 border-t border-gold/15 pt-2" data-testid="area-text">
+      <p className="crm-label-sm text-ink/60">Plantilla «Vivir en…»</p>
+      {copy ? (
+        <>
+          <p className="text-ink/80" data-testid="area-text-copy">
+            Aplicada en este catálogo: {areaTextLabel(copy.areaId)}
+            {copy.seq ? `, versión ${copy.seq}` : ""}. Solo se ve si la descripción no habla ya de la zona.
+          </p>
+          <p className="line-clamp-3 text-ink/60">{copy.body}</p>
+          {!copy.shown ? (
+            <p className="rounded bg-amber-50 px-2 py-1 text-amber-900" data-testid="area-text-hidden">
+              No se ve: la zona confirmada de la vivienda ya no es {areaTextLabel(copy.areaId)} o no está vigente.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-ink/80" data-testid="area-text-available">
+          Disponible: {areaTextLabel(available!.areaId)}, versión {available!.seq}. Se guarda una copia en este catálogo; si después cambias la plantilla, este catálogo no cambia.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {!copy && available ? (
+          <button type="button" disabled={pending} onClick={() => apply("Plantilla aplicada en este catálogo.")} className={btn} data-testid="area-text-apply">
+            Aplicar plantilla
+          </button>
+        ) : null}
+        {newer ? (
+          <button type="button" disabled={pending} onClick={() => apply(`Plantilla actualizada a la versión ${available!.seq} en este catálogo.`)} className={btn} data-testid="area-text-update">
+            Usar la versión {available!.seq}
+          </button>
+        ) : null}
+        {copy ? (
+          <button type="button" disabled={pending} onClick={remove} className="rounded-lg px-2 py-1 text-ink/60 underline disabled:opacity-50" data-testid="area-text-remove">
+            Quitar plantilla
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }

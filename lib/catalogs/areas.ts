@@ -95,6 +95,13 @@ function byTerm(term: string): Area | null {
   return BY_TERM.get(term) ?? null;
 }
 
+/** Zona del registro que nombra exactamente un texto («Barrio de Salamanca»
+ *  → el distrito), o null. */
+export function areaForName(raw: string | null | undefined): Area | null {
+  const t = stripZonePrefix(catalogFold((raw ?? "").trim()));
+  return t ? byTerm(t) : null;
+}
+
 /** Nombre para «Vivir en …» y para el gestor («Recoletos (Salamanca)»). */
 export function areaLabel(a: Area): string {
   const d = a.districtId ? areaById(a.districtId) : null;

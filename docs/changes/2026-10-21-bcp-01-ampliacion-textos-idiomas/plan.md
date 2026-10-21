@@ -63,6 +63,19 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 | 3.4 | Al copiar un texto aprobado (PR1) o con «Aplicar plantilla», el catálogo guarda su copia; actualizar la plantilla no cambia catálogos compartidos. |
 | 3.5 | Pruebas: AC12, sin duplicar con texto propio de zona, cero llamadas a la IA al elegir, PDF y lector con la misma sección. |
 
+**Ajustes al implementar el PR3 (21–22-10-2026):**
+- **Migración 0222, no 0221.** La 0221 la ocupó otro cambio (particulares) que entró en `main` antes.
+- **La copia del catálogo va en una tabla propia** (`catalog_area_copies`), no en columnas de `catalog_texts`. Así «Borrar texto», la regla de reutilización del PR1 («solo entradas sin ningún texto») y el diagnóstico de textos no cambian de significado.
+- **Solo se aplica con la zona confirmada y vigente** (PR2, DA37). Se usa la plantilla del barrio o, si el barrio no tiene, la de su distrito (DA23).
+  - Si después cambia o caduca la confirmación, la copia deja de verse, se conserva y el editor avisa.
+- **Siembra con un botón y sin IA.** Está en «Mi espacio → Plantillas de zona» y lee `neighborhoods` en ese momento, así que también recoge filas añadidas en producción.
+  - Asigna a una zona del registro solo por nombre exacto y con el distrito compatible.
+  - Las 5 de fuera del municipio de Madrid se enseñan y no se traen.
+  - Nunca toca una zona que ya tenga versiones.
+- **La ficha breve («solo datos») no cambia:** sin descripción no se inventa un apartado solo con la zona.
+- **«Borrador con IA» devuelve una propuesta que rellena el cuadro.** Hay que guardarla como borrador y aprobarla a mano.
+- **Aprobar exige que el borrador sea exactamente el que se vio** (`draft_changed`). Los avisos de DA26 (distancias, vistas, servicios del edificio, estancias, agencia) piden confirmación; contacto y precio bloquean.
+
 ## PR4 · Base multilingüe del lector (sin IA)
 
 | Tarea | Contenido |

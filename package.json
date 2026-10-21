@@ -71,6 +71,7 @@
     "test:catalogs-structure": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-structure.mts",
     "test:catalogs-copy": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-copy.mts",
     "test:catalogs-areas": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-areas.mts",
+    "test:catalogs-area-texts": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-area-texts.mts",
     "test:housely": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-housely-scraper.mts"
   },
   "dependencies": {

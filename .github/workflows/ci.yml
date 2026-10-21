@@ -70,6 +70,9 @@ jobs:
       # 0220: registro de zonas y clasificación prudente (reglas puras y fuente). Sin BD.
       - name: "Catálogos (zonas, offline)"
         run: npm run test:catalogs-areas
+      # 0222: plantillas «Vivir en…» (reglas puras, IA falsa y fuente). Sin BD.
+      - name: "Catálogos (plantillas de zona, offline)"
+        run: npm run test:catalogs-area-texts
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"

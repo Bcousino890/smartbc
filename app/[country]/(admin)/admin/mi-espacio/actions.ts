@@ -46,6 +46,8 @@ import { normalizeClientQuery, type ClientLinkView, type ClientOption } from "@/
 import { copyErrorMessage, type CopyPart, type CopyParts } from "@/lib/catalogs/copy-rules";
 import { copyLibraryPageData } from "@/lib/catalogs/copy-library";
 import { areaById, areaErrorMessage } from "@/lib/catalogs/areas";
+import { areaTextsPageData, type AreaTextsPageData } from "@/lib/catalogs/area-text-data";
+import { AREA_TEXT_MAX, areaTextErrorMessage, draftAreaText } from "@/lib/catalogs/area-texts";
 import type { CopyLibraryData } from "@/components/admin/catalogs/copy-library-page";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 
@@ -1091,5 +1093,122 @@ export async function clearAreaAction(input: { catalogId: string; propertyId: st
     const { error } = await db().rpc("catalog_area_clear", { p_actor: profile.id, p_property: input.propertyId });
     if (error) return areaFail(error);
     return saved(profile.id, input.catalogId, 0, before, input);
+  }));
+}
+
+// ── Plantillas «Vivir en…» (0222) ────────────────────────────────────────────
+// Biblioteca del dueño por zona del registro. Aprobar o retirar una plantilla
+// no cambia ningún catálogo: cada catálogo guarda SU copia al aplicarla (DA27).
+
+const PLANTILLAS_PATH = `${HOME_PATH}/plantillas-zona`;
+
+function areaTextFail(err: { message?: string } | null | undefined): { ok: false; error: string } {
+  return { ok: false, error: areaTextErrorMessage(err?.message) ?? areaErrorMessage(err?.message) ?? catalogErrorMessage(err ?? null) };
+}
+
+/** «Aplicar plantilla»: este catálogo guarda su copia de la plantilla que toca
+ *  hoy por la zona confirmada de la vivienda. */
+export async function applyAreaTextAction(input: { catalogId: string; propertyId: string } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_area_text_apply", { p_actor: profile.id, p_catalog: input.catalogId, p_property: input.propertyId });
+    if (error) return areaTextFail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** «Quitar plantilla» de este catálogo. */
+export async function removeAreaTextAction(input: { catalogId: string; propertyId: string } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !isUuid(input?.propertyId)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_area_text_remove", { p_actor: profile.id, p_catalog: input.catalogId, p_property: input.propertyId });
+    if (error) return areaTextFail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+export async function loadAreaTextsPageAction(): Promise<ActionResult<AreaTextsPageData>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    try {
+      return { ok: true as const, ...(await areaTextsPageData(profile.id)) };
+    } catch {
+      return fail(null);
+    }
+  }));
+}
+
+export async function saveAreaTextDraftAction(input: { areaId: string; body: string; origin?: "manual" | "ai_draft" }): Promise<ActionResult<{ seq: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!areaById(input?.areaId)) return areaTextFail({ message: "area_not_found" });
+    if (typeof input.body !== "string" || input.body.length > AREA_TEXT_MAX) return areaTextFail({ message: "text_too_long" });
+    const { data, error } = await db().rpc("catalog_area_text_save_draft", {
+      p_actor: profile.id, p_area: input.areaId, p_body: input.body, p_origin: input.origin === "ai_draft" ? "ai_draft" : "manual",
+    });
+    if (error || !data) return areaTextFail(error);
+    revalidatePath(PLANTILLAS_PATH);
+    return { ok: true as const, seq: Number(data.seq) };
+  }));
+}
+
+/** Aprueba el borrador tal como lo vio el dueño (`body`). */
+export async function approveAreaTextAction(input: { areaId: string; body: string }): Promise<ActionResult<{ seq: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!areaById(input?.areaId)) return areaTextFail({ message: "area_not_found" });
+    const { data, error } = await db().rpc("catalog_area_text_approve", { p_actor: profile.id, p_area: input.areaId, p_body: input.body ?? "" });
+    if (error || !data) return areaTextFail(error);
+    revalidatePath(PLANTILLAS_PATH);
+    return { ok: true as const, seq: Number(data.seq) };
+  }));
+}
+
+export async function retireAreaTextAction(input: { areaId: string }): Promise<ActionResult<{ changed: boolean }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!areaById(input?.areaId)) return areaTextFail({ message: "area_not_found" });
+    const { data, error } = await db().rpc("catalog_area_text_retire", { p_actor: profile.id, p_area: input.areaId });
+    if (error) return areaTextFail(error);
+    revalidatePath(PLANTILLAS_PATH);
+    return { ok: true as const, changed: data === true };
+  }));
+}
+
+export async function discardAreaTextDraftAction(input: { areaId: string }): Promise<ActionResult<{ changed: boolean }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!areaById(input?.areaId)) return areaTextFail({ message: "area_not_found" });
+    const { data, error } = await db().rpc("catalog_area_text_discard", { p_actor: profile.id, p_area: input.areaId });
+    if (error) return areaTextFail(error);
+    revalidatePath(PLANTILLAS_PATH);
+    return { ok: true as const, changed: data === true };
+  }));
+}
+
+/** Siembra BORRADORES desde los textos de barrios (sin IA). El plan se
+ *  recalcula aquí: nunca se fía de lo que mande el navegador. */
+export async function seedAreaTextsAction(): Promise<ActionResult<{ created: number; skipped: number }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    let plan;
+    try {
+      plan = (await areaTextsPageData(profile.id)).seed;
+    } catch {
+      return fail(null);
+    }
+    const { data, error } = await db().rpc("catalog_area_text_seed", { p_actor: profile.id, p_items: plan.items });
+    if (error || !data) return areaTextFail(error);
+    revalidatePath(PLANTILLAS_PATH);
+    return { ok: true as const, created: Number(data.created), skipped: Number(data.skipped) };
+  }));
+}
+
+/** «Borrador con IA» (solo al pulsar): devuelve una PROPUESTA; no guarda nada. */
+export async function draftAreaTextAiAction(input: { areaId: string }): Promise<ActionResult<{ body: string }>> {
+  return finish(await withHomeAccess(ownerDeps, async () => {
+    const area = areaById(input?.areaId);
+    if (!area) return areaTextFail({ message: "area_not_found" });
+    try {
+      return { ok: true as const, body: await draftAreaText(area, realAi, AbortSignal.timeout(AI_TIMEOUT_MS)) };
+    } catch (err) {
+      return { ok: false as const, error: aiError(err) };
+    }
   }));
 }

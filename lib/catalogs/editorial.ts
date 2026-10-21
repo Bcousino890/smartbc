@@ -56,6 +56,9 @@ export interface EditorialInput {
   /** 0220: zona confirmada por el dueño y vigente (`name` null = «sin zona
    *  verificada»). Sin ella, «Vivir en …» usa la zona de la ficha. */
   area?: { name: string | null; level?: string | null } | null;
+  /** 0222: plantilla «Vivir en…» de este catálogo (solo llega con la zona
+   *  confirmada y vigente). Solo entra si el texto no habla ya de la zona. */
+  areaText?: string | null;
   /** Descripción limpia ya validada (null si no hay o no es vigente). */
   cleanDescription: string | null;
   /** Características limpias ya validadas ([] si no hay o no son vigentes). */
@@ -158,6 +161,7 @@ export function livingAreaName(it: Pick<EditorialInput, "zone" | "subzone" | "ar
 
 function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
   const area = livingAreaName(it);
+  const areaText = typeof it.areaText === "string" && it.areaText.trim() && isPublicSafe(it.areaText) ? it.areaText.trim() : null;
   const manual = (it.features_manual ?? []).filter((f) => typeof f === "string" && f.trim() && isPublicSafe(f)).map((f) => f.trim());
   const features: string[] = [];
   const seenF = new Set<string>();
@@ -201,6 +205,7 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       lead: tl && noContact(tl) && !(tb ?? "").includes(tl) ? tl : null,
       paragraphs: paragraphsOf(tb).filter(noContact),
       area,
+      areaText,
     });
     return {
       level: "text",
@@ -245,7 +250,7 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
     // La historia ES la descripción (DC3): su entrada y sus capítulos, en la
     // estructura estándar (DE7: los capítulos compatibles conservan su título;
     // los demás van a la introducción). La limpia no se repite debajo.
-    const organized = organizeDescription({ lead: safePrelude, paragraphs: [], chapters, area });
+    const organized = organizeDescription({ lead: safePrelude, paragraphs: [], chapters, area, areaText });
     return {
       level: "story",
       lead: safePrelude ?? leadFrom(it.cleanDescription).lead,
@@ -266,7 +271,7 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       it.photos,
       used,
     );
-    const organized = organizeDescription({ lead: null, paragraphs: paragraphsOf(it.cleanDescription).filter(isPublicSafe), area });
+    const organized = organizeDescription({ lead: null, paragraphs: paragraphsOf(it.cleanDescription).filter(isPublicSafe), area, areaText });
     return {
       level: "clean",
       lead: lead && isPublicSafe(lead) ? lead : null,

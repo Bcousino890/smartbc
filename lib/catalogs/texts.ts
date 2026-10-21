@@ -11,6 +11,8 @@ import { getCopyLibraryState } from "./copy-library";
 import type { CopyLibraryView } from "./copy-rules";
 import { getAreaDecisions } from "./area-data";
 import { areaViewOf, confirmedAreaOf, type AreaDecision, type AreaView } from "./areas";
+import { getAreaTextEntries, getCatalogAreaCopies } from "./area-text-data";
+import { copyShown, templateFor } from "./area-texts";
 
 // ============================================================================
 // Textos del catálogo en la gestión (BCP-01 ampliación C2, Z5). Solo LEE:
@@ -50,6 +52,13 @@ export interface CatalogTextView {
   /** 0220 · Sugerencia y confirmación de la zona (null: 0220 aún no está
    *  aplicada). Nada de esto escribe en la ficha del CRM. */
   zone: AreaView | null;
+  /** 0222 · Plantilla «Vivir en…»: la copia de ESTE catálogo (y si se ve) y
+   *  la plantilla aprobada que toca hoy por la zona confirmada (null: 0222
+   *  aún no está aplicada). */
+  areaText: {
+    copy: { areaId: string; body: string; seq: number | null; versionId: string | null; shown: boolean } | null;
+    available: { areaId: string; seq: number; versionId: string; body: string } | null;
+  } | null;
   inList: boolean;
   /** Lo que ve hoy el lector para esta vivienda. */
   level: EditorialLevel;
@@ -152,6 +161,7 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
       bcReference: p.bc_reference ?? null,
       area: (p.subzone ?? "").trim() || (p.zone ?? "").trim() || null,
       zone: null,
+      areaText: null,
       inList: r.in_list === true,
       level: publishedCurrent && (t?.pub_body || t?.pub_lead) ? "text" : story === "current" ? "story" : clean.status === "current" ? "clean" : "facts",
       source: { hasText: !!(p.description ?? "").trim(), clean: clean.status, story },
@@ -192,6 +202,22 @@ export async function listCatalogTexts(ownerId: string, catalogId: string): Prom
     }
   } catch (err) {
     console.warn("[catalogos] zonas:", err instanceof Error ? err.message : err);
+  }
+  // 0222 · Plantillas de zona. Si la lectura falla (p. ej. 0222 sin aplicar),
+  // el gestor funciona igual, sin ese apartado.
+  try {
+    const [entries, copies] = await Promise.all([getAreaTextEntries(ownerId), getCatalogAreaCopies(catalogId)]);
+    for (const v of out) {
+      const d = v.zone?.decision ?? null;
+      const c = copies.get(v.propertyId);
+      const tpl = d?.current ? templateFor(entries, d.areaId) : null;
+      v.areaText = {
+        copy: c ? { areaId: c.areaId, body: c.body, seq: c.seq, versionId: c.versionId, shown: copyShown(c.areaId, d) } : null,
+        available: tpl ? { areaId: tpl.area.id, seq: tpl.version.seq, versionId: tpl.version.id, body: tpl.version.body } : null,
+      };
+    }
+  } catch (err) {
+    console.warn("[catalogos] plantillas de zona:", err instanceof Error ? err.message : err);
   }
   // Primero las de la lista (en el orden en que llegan), después la reserva.
   return out.sort((a, b) => Number(b.inList) - Number(a.inList));
@@ -252,6 +278,15 @@ export async function previewJourney(
       decision = null;
     }
   }
+  let areaText: string | null = null;
+  if (ownerId && catalogId) {
+    try {
+      const c = (await getCatalogAreaCopies(catalogId, [propertyId])).get(propertyId);
+      areaText = c && copyShown(c.areaId, decision) ? c.body : null;
+    } catch {
+      areaText = null;
+    }
+  }
   const ed = deriveEditorial({
     description: s.property.description,
     features: s.property.features,
@@ -262,6 +297,7 @@ export async function previewJourney(
     zone: s.property.zone,
     subzone: s.property.subzone,
     area: confirmedAreaOf(decision),
+    areaText,
     cleanDescription: s.clean.description,
     cleanFeatures: s.clean.features,
     text: text.body || text.lead ? { b: text.body, l: text.lead, h: text.highlights } : null,

@@ -501,7 +501,7 @@ export type FixtureOp =
   | { op: "photo"; token: string; key: string }
   | { op: "cover"; token: string; choose: number | null }
   | { op: "text"; token: string; index: number; body: string | null; lead: string | null; itemTitle?: string | null }
-  | { op: "area"; token: string; index: number; area: { name: string | null; level: string | null } | null }
+  | { op: "area"; token: string; index: number; area: { name: string | null; level: string | null } | null; at?: string | null }
   | { op: "revoke"; token: string }
   | { op: "expire"; token: string; inMs?: number }
   | { op: "archive"; token: string }
@@ -597,12 +597,15 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       break;
     }
     case "area": {
-      // 0220: zona confirmada y vigente de la vivienda nº `index` (null = sin confirmar).
+      // 0220: zona confirmada y vigente de la vivienda nº `index` (null = sin
+      // confirmar). 0222: `at` = plantilla de este catálogo que se ve (null =
+      // ninguna; sin el campo, se deja como estaba).
       const i = snap.items.length ? op.index % snap.items.length : -1;
       if (i >= 0) {
-        const { area: _old, ...rest } = snap.items[i];
+        const { area: _old, at: _oldAt, ...rest } = snap.items[i];
         void _old;
-        snap.items[i] = op.area ? { ...rest, area: op.area } : rest;
+        const at = op.at === undefined ? _oldAt : op.at;
+        snap.items[i] = { ...rest, ...(op.area ? { area: op.area } : {}), ...(at ? { at } : {}) };
       }
       break;
     }

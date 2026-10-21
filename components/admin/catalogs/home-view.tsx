@@ -90,6 +90,17 @@ export function HomeView({
               <span className="block text-xs text-ink/55">Títulos y descripciones que se reutilizan en catálogos nuevos</span>
             </span>
           </Link>
+          <Link
+            href={`${basePath}/plantillas-zona`}
+            className="flex items-center gap-3 rounded-xl border border-gold/25 bg-white/55 px-4 py-3 transition hover:border-gold/45 hover:bg-white/80"
+            data-testid="home-area-texts"
+          >
+            <BookOpen className="h-5 w-5 shrink-0 text-gold" aria-hidden="true" />
+            <span>
+              <span className="crm-body-strong block text-ink">Plantillas de zona</span>
+              <span className="block text-xs text-ink/55">Textos «Vivir en…» de cada barrio o distrito</span>
+            </span>
+          </Link>
           <div className="rounded-xl border border-dashed border-gold/30 bg-white/30 px-4 py-3 text-ink/50">
             <span className="crm-body-strong block">Próximos módulos</span>
             <span className="block text-xs">Se definirán uno a uno</span>
