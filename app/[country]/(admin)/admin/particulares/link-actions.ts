@@ -38,6 +38,6 @@ export async function setParticularLinkStatus(
   const run = await runParticularesLinking();
   if (!run.ok) return { ok: false, error: run.error ?? "No se pudo recalcular la agrupación" };
 
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true };
 }

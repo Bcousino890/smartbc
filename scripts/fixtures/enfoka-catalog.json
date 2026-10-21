@@ -1,0 +1,592 @@
+{
+ "_comment": "Respuestas REALES de la API REST de WordPress de enfoka.es (2026-10-21), recortadas: 5 inmuebles, taxonomías y media de Pelayo 42.",
+ "properties": [
+  {
+   "id": 20853,
+   "link": "https://www.enfoka.es/property/cristo-de-la-luz-5/",
+   "modified": "2026-10-20T09:11:34",
+   "title": {
+    "rendered": "Cristo de la Luz, 5"
+   },
+   "property_label": [
+    159
+   ],
+   "property_status": [],
+   "property_type": [
+    70
+   ],
+   "property_area": [
+    161
+   ],
+   "property_feature": [
+    16,
+    188,
+    78,
+    166,
+    174,
+    167,
+    53,
+    170,
+    80
+   ],
+   "featured_media": 20887,
+   "yoast_head_json": {
+    "title": "Piso en Rentabilidad en Usera, Madrid | EnfoKa",
+    "description": "Piso de 65m² en Usera, Madrid. Reformado, alquilado y con gestión integral desde el primer día. EnfoKa inversión inmobiliaria."
+   },
+   "property_meta": {
+    "fave_property_price": [
+     "Rentabilidad del 5,5% al 6% Alquiler estimado: 1.600€"
+    ],
+    "fave_property_size": [
+     "65"
+    ],
+    "fave_property_size_prefix": [
+     "m2"
+    ],
+    "fave_property_bedrooms": [
+     "3"
+    ],
+    "fave_property_bathrooms": [
+     "2"
+    ],
+    "fave_property_map_address": [
+     "Calle Cristo de la Luz, Almendrales, Usera, Madrid, Comunidad de Madrid, 28026, España"
+    ],
+    "fave_property_address": [
+     "Cristo de la Luz"
+    ],
+    "fave_property_zip": [
+     "28026"
+    ],
+    "fave_property_images": [
+     "20894",
+     "20854",
+     "20889",
+     "20893",
+     "20890",
+     "20892"
+    ]
+   }
+  },
+  {
+   "id": 20687,
+   "link": "https://www.enfoka.es/property/argumosa-27/",
+   "modified": "2026-08-13T10:46:44",
+   "title": {
+    "rendered": "Argumosa, 27"
+   },
+   "property_label": [
+    159
+   ],
+   "property_status": [],
+   "property_type": [
+    70
+   ],
+   "property_area": [
+    184
+   ],
+   "property_feature": [
+    16,
+    187,
+    78,
+    166,
+    174,
+    53,
+    170,
+    80
+   ],
+   "featured_media": 20787,
+   "yoast_head_json": {
+    "title": "Piso en Rentabilidad en Lavapiés, Madrid | EnfoKa",
+    "description": "Piso de 55 m² en Lavapiés, Madrid. Reformado, alquilado y con gestión integral desde el primer día. EnfoKa inversión inmobiliaria."
+   },
+   "property_meta": {
+    "fave_property_price": [
+     "Rentabilidad del 4% al 4,5% Alquiler estimado: 1.400€"
+    ],
+    "fave_property_size": [
+     "55"
+    ],
+    "fave_property_size_prefix": [
+     "m2"
+    ],
+    "fave_property_bedrooms": [
+     "1"
+    ],
+    "fave_property_bathrooms": [
+     "1"
+    ],
+    "fave_property_map_address": [
+     "27, Calle de Argumosa, Lavapiés, Embajadores, Centro, Madrid, Comunidad de Madrid, 28012, España"
+    ],
+    "fave_property_address": [
+     "Calle Argumosa, 27"
+    ],
+    "fave_property_zip": [
+     "28012"
+    ],
+    "fave_property_images": [
+     "20786",
+     "20783",
+     "20785",
+     "20784",
+     "20707"
+    ]
+   }
+  },
+  {
+   "id": 20195,
+   "link": "https://www.enfoka.es/property/calle-de-pelayo-42/",
+   "modified": "2026-09-18T12:53:31",
+   "title": {
+    "rendered": "Pelayo, 42"
+   },
+   "property_label": [
+    158
+   ],
+   "property_status": [],
+   "property_type": [
+    70
+   ],
+   "property_area": [],
+   "property_feature": [
+    16,
+    187,
+    78,
+    166,
+    174,
+    167,
+    53,
+    170,
+    173,
+    171
+   ],
+   "featured_media": 20630,
+   "yoast_head_json": {
+    "title": "Exclusiva vivienda a estrenar en Justicia-Chueca, Madrid - Enfoka",
+    "description": "Exclusivo piso de lujo de 174m2 a estrenar en Madrid, ubicado en la calle Pelayo 42, en el barrio de Justicia-Chueca. Acabados premium."
+   },
+   "property_meta": {
+    "fave_property_price": [
+     "Precio: 1.890.000€"
+    ],
+    "fave_property_bedrooms": [
+     "3"
+    ],
+    "fave_property_bathrooms": [
+     "3+1"
+    ],
+    "fave_property_map_address": [
+     "42, Calle de Pelayo, Chueca, Justicia, Centro, Madrid, Comunidad de Madrid, 28004, España"
+    ],
+    "fave_property_address": [
+     "Pelayo 42"
+    ],
+    "fave_property_zip": [
+     "28004"
+    ],
+    "fave_property_size": [
+     "174"
+    ],
+    "fave_property_size_prefix": [
+     "m2"
+    ],
+    "fave_property_images": [
+     "20353",
+     "20629",
+     "20635",
+     "20632",
+     "20637",
+     "20640",
+     "20639",
+     "20641",
+     "20642"
+    ]
+   }
+  },
+  {
+   "id": 19928,
+   "link": "https://www.enfoka.es/property/calle-hortaleza-96-3o/",
+   "modified": "2025-10-29T12:32:11",
+   "title": {
+    "rendered": "Hortaleza, 96"
+   },
+   "property_label": [
+    158
+   ],
+   "property_status": [
+    156
+   ],
+   "property_type": [],
+   "property_area": [
+    92
+   ],
+   "property_feature": [
+    16,
+    187,
+    166,
+    174,
+    167,
+    172,
+    53,
+    173,
+    77
+   ],
+   "featured_media": 20016,
+   "yoast_head_json": {
+    "title": "Hortaleza, 96 - Enfoka",
+    "description": "Somos una compañía inmobiliaria con más de 10 años en el sector, especializada en la venta de viviendas de alta rentabilidad y bajo riesgo en Madrid"
+   },
+   "property_meta": {
+    "fave_property_price": [
+     "Precio: 1.500.000€"
+    ],
+    "fave_property_size": [
+     "150"
+    ],
+    "fave_property_size_prefix": [
+     "m2"
+    ],
+    "fave_property_bedrooms": [
+     "2"
+    ],
+    "fave_property_bathrooms": [
+     "3"
+    ],
+    "fave_renta-mensual": [
+     "6.000€"
+    ],
+    "fave_property_map_address": [
+     "96, Calle de Hortaleza, Chueca, Justicia, Centro, Madrid, Comunidad de Madrid, 28004, España"
+    ],
+    "fave_property_address": [
+     "Calle Hortaleza, 96"
+    ],
+    "fave_property_zip": [
+     "28004"
+    ],
+    "fave_property_images": [
+     "20020",
+     "19937",
+     "20013",
+     "20010",
+     "20011",
+     "20012",
+     "20015"
+    ]
+   }
+  },
+  {
+   "id": 19302,
+   "link": "https://www.enfoka.es/property/san-bernardo-117-4o-b/",
+   "modified": "2025-10-30T08:32:00",
+   "title": {
+    "rendered": "San Bernardo, 117"
+   },
+   "property_label": [
+    158
+   ],
+   "property_status": [
+    156
+   ],
+   "property_type": [
+    70,
+    55
+   ],
+   "property_area": [
+    109,
+    107
+   ],
+   "property_feature": [
+    16,
+    78,
+    166,
+    174,
+    167,
+    172,
+    53,
+    170,
+    173,
+    175,
+    171
+   ],
+   "featured_media": 19492,
+   "yoast_head_json": {
+    "title": "San Bernardo, 117 - Enfoka",
+    "description": "Somos una compañía inmobiliaria con más de 10 años en el sector, especializada en la venta de viviendas de alta rentabilidad y bajo riesgo en Madrid"
+   },
+   "property_meta": {
+    "fave_property_size": [
+     "252"
+    ],
+    "fave_property_size_prefix": [
+     "m2"
+    ],
+    "fave_property_bedrooms": [
+     "3+1"
+    ],
+    "fave_property_bathrooms": [
+     "3+1"
+    ],
+    "fave_property_map_address": [
+     "117, Calle de San Bernardo, Arapiles, Chamberí, Madrid, Comunidad de Madrid, 28010, España"
+    ],
+    "fave_property_address": [
+     "San Bernardo 117"
+    ],
+    "fave_property_zip": [
+     "28010"
+    ],
+    "fave_property_price": [
+     "Precio: 2.100.000 €"
+    ],
+    "fave_property_images": [
+     "19495",
+     "19313",
+     "19496",
+     "19497",
+     "19494",
+     "19493",
+     "19492"
+    ]
+   }
+  }
+ ],
+ "property_status": [
+  {
+   "id": 165,
+   "count": 0,
+   "name": "Fotos Referencia",
+   "slug": "fotos-referencia"
+  },
+  {
+   "id": 185,
+   "count": 0,
+   "name": "Resercado",
+   "slug": "resercado"
+  },
+  {
+   "id": 186,
+   "count": 0,
+   "name": "Reservado",
+   "slug": "reservado"
+  },
+  {
+   "id": 156,
+   "count": 28,
+   "name": "Vendido",
+   "slug": "vendido"
+  }
+ ],
+ "property_type": [
+  {
+   "id": 59,
+   "count": 0,
+   "name": "Casa unifamiliar",
+   "slug": "casa-unifamiliar"
+  },
+  {
+   "id": 61,
+   "count": 1,
+   "name": "Estudio",
+   "slug": "estudio"
+  },
+  {
+   "id": 70,
+   "count": 25,
+   "name": "Piso",
+   "slug": "piso"
+  },
+  {
+   "id": 55,
+   "count": 8,
+   "name": "Residencial",
+   "slug": "residencial"
+  }
+ ],
+ "property_area": [
+  {
+   "id": 109,
+   "count": 1,
+   "name": "Arapiles",
+   "slug": "arapiles"
+  },
+  {
+   "id": 92,
+   "count": 2,
+   "name": "Centro",
+   "slug": "centro"
+  },
+  {
+   "id": 107,
+   "count": 1,
+   "name": "Chamberí",
+   "slug": "chamberi"
+  },
+  {
+   "id": 143,
+   "count": 1,
+   "name": "Goya",
+   "slug": "goya"
+  },
+  {
+   "id": 184,
+   "count": 3,
+   "name": "Lavapies",
+   "slug": "lavapies"
+  },
+  {
+   "id": 141,
+   "count": 1,
+   "name": "Salamanca",
+   "slug": "salamanca"
+  },
+  {
+   "id": 161,
+   "count": 2,
+   "name": "Usera",
+   "slug": "usera"
+  },
+  {
+   "id": 164,
+   "count": 5,
+   "name": "Vallecas",
+   "slug": "vallecas"
+  }
+ ],
+ "property_feature": [
+  {
+   "id": 16,
+   "name": "Aire acondicionado",
+   "slug": "aire-acondicionado"
+  },
+  {
+   "id": 188,
+   "name": "Balcón",
+   "slug": "balcon"
+  },
+  {
+   "id": 187,
+   "name": "Balcones",
+   "slug": "balcones"
+  },
+  {
+   "id": 176,
+   "name": "Calefacción Central",
+   "slug": "calefaccion-central"
+  },
+  {
+   "id": 79,
+   "name": "Calefactores eléctricos",
+   "slug": "calefactores-electricos"
+  },
+  {
+   "id": 78,
+   "name": "Campana extractora",
+   "slug": "campana-extractora"
+  },
+  {
+   "id": 166,
+   "name": "Horno",
+   "slug": "horno"
+  },
+  {
+   "id": 174,
+   "name": "Lavadora",
+   "slug": "lavadora"
+  },
+  {
+   "id": 167,
+   "name": "Lavaplatos",
+   "slug": "lavaplatos"
+  },
+  {
+   "id": 172,
+   "name": "Microondas",
+   "slug": "microondas"
+  },
+  {
+   "id": 53,
+   "name": "Nevera congelador",
+   "slug": "nevera-congelador"
+  },
+  {
+   "id": 170,
+   "name": "Placa Inducción",
+   "slug": "placa-induccion"
+  },
+  {
+   "id": 173,
+   "name": "Secadora",
+   "slug": "secadora"
+  },
+  {
+   "id": 80,
+   "name": "Termo",
+   "slug": "termo"
+  },
+  {
+   "id": 175,
+   "name": "Terraza",
+   "slug": "terraza"
+  },
+  {
+   "id": 171,
+   "name": "Vinoteca",
+   "slug": "vinoteca"
+  },
+  {
+   "id": 77,
+   "name": "Vitrocerámica",
+   "slug": "vitroceramica"
+  }
+ ],
+ "media": [
+  {
+   "id": 20642,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-112332-0124-HDR-copia-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20641,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-121329-0259-HDR-1-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20640,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-122033-0283-HDR-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20639,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-115419-0201-HDR-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20637,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-115809-0215-HDR-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20635,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-114904-0181-HDR-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20632,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-114234-0166-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20629,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/20260217-113017-0137-HDR-scaled.jpg",
+   "mime_type": "image/jpeg"
+  },
+  {
+   "id": 20353,
+   "source_url": "https://www.enfoka.es/wp-content/uploads/2025/07/Plano-Pelayo.png",
+   "mime_type": "image/png"
+  }
+ ]
+}

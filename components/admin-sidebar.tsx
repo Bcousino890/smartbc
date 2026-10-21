@@ -60,7 +60,7 @@ const NAV_ITEMS: NavItem[] = [
   // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
   // La configuración de scrapers (zonas, claves, presupuesto, salud) vive en
   // Sindicación → pestañas «Portales inmobiliarios», «Particulares» y «Salud».
-  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
+  { href: "/admin/captaciones",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
   // Antes apuntaba a "properties": el toggle "Publicación" del panel de
   // permisos no controlaba este enlace ni coincidía con el recurso que ya
   // usan las rutas /api/admin/publicacion/* (requirePermission("publicacion", ...)).
@@ -234,7 +234,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                 (href !== dashboardHref && pathname.startsWith(`${href}/`));
               const isCalendario = href.endsWith("/admin/calendario");
               const isMensajes = href.endsWith("/admin/mensajes");
-              const isCaptaciones = href.endsWith("/admin/captaciones");
+              const isCaptaciones = country === "cl" && href.endsWith("/admin/captaciones");
               return (
                 <li key={href}>
                   <Link

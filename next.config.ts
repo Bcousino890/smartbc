@@ -43,6 +43,22 @@ const nextConfig: NextConfig = {
     if (isServer) config.output = { ...config.output, workerPublicPath: "./" };
     return config;
   },
+  async redirects() {
+    // "Particulares" pasa a llamarse "Captaciones" (España): las URLs antiguas
+    // (marcadores, enlaces de correos) siguen funcionando.
+    return [
+      {
+        source: "/es/admin/particulares",
+        destination: "/es/admin/captaciones",
+        permanent: false,
+      },
+      {
+        source: "/es/admin/particulares/:path*",
+        destination: "/es/admin/captaciones/:path*",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

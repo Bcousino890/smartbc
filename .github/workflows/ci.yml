@@ -98,10 +98,11 @@ jobs:
       - name: "Permisos: alcance Ver/Editar por sección (offline)"
         run: npm run test:permission-scope
 
-      # Sindicación de Housely: mapeo eGO → propiedad contra una respuesta
-      # real de su API (fotos sin marca de agua, descripción sin su marca).
-      - name: Scraper de Housely (fixture real, offline)
-        run: npm run test:housely
+      # Sindicación de agencias (Housely, INNEA, ESRIV, ENFOKA): mapeo contra
+      # respuestas reales de sus webs/APIs (fotos sin marca de agua, descripción
+      # sin su marca, filtros de Madrid/vendido). Sin red.
+      - name: Scrapers de sindicación (fixtures reales, offline)
+        run: npm run test:sindicacion
 
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build

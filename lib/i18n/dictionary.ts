@@ -348,7 +348,7 @@ const es: Strings = {
   "adminCorreo.title": "Correo",
   "adminCorreo.subtitle": "Tu buzón @bcousinoprop.com, sin salir del CRM.",
   "admin.nav.sindicacion": "Sindicación y scrapers",
-  "admin.nav.particulares": "Particulares",
+  "admin.nav.particulares": "Captaciones",
   "admin.nav.scraperIdealista": "Scraper Idealista",
   "admin.nav.publicacion": "Publicación",
   "admin.nav.captaciones": "Captaciones",
