@@ -1,0 +1,896 @@
+{
+ "_comment": "Respuesta REAL de websiteapi.egorealestate.com/v1/Properties para INNEA Properties (2026-10-21), recortada a 6 inmuebles, 3 fotos cada uno.",
+ "TotalRecords": 6,
+ "Properties": [
+  {
+   "ID": 25974832,
+   "Reference": "PIS_256",
+   "Title": "Piso reformado en Conde de Peñalver, Barrio de Salamanca",
+   "Description": "Ubicado en la prestigiosa calle Conde de Peñalver, en pleno corazón del Barrio de Salamanca, este exclusivo piso reformado a estrenar representa una excelente oportunidad para quienes buscan una vivienda elegante, luminosa y lista para entrar a vivir en una de las zonas más demandadas de Madrid.\r\n\r\nSituado en una tercera planta exterior de una finca señorial perfectamente conservada, con servicio de portería y ascensor, la vivienda disfruta de una agradable orientación este que aporta una magnífica entrada de luz natural durante gran parte del día.\r\n\r\nCon una superficie de 105 m2, la propiedad ha sido diseñada para ofrecer amplitud, funcionalidad y confort. La zona de día se articula en torno a un espacioso salón-comedor de concepto abierto que se integra con una moderna cocina equipada con península, completamente amueblada y dotada de gran capacidad de almacenamiento, creando un espacio ideal tanto para el día a día como para recibir invitados.\r\n\r\nLa zona de descanso está compuesta por dos amplios dormitorios dobles, ambos con cuarto de baño en suite, garantizando privacidad y comodidad. Además, la vivienda dispone de un elegante aseo de cortesía para invitados.\r\n\r\nLa reforma integral, ejecutada con especial atención al detalle y materiales de alta calidad, combina diseño contemporáneo, funcionalidad y acabados cuidadosamente seleccionados, ofreciendo una vivienda sofisticada y lista para estrenar.\r\n\r\nSu privilegiada ubicación permite disfrutar de una amplia oferta de comercios, restaurantes, zonas de ocio y excelentes conexiones de transporte, consolidando esta propiedad como una magnífica opción tanto como residencia habitual como inversión patrimonial en una de las áreas más exclusivas de Madrid.\r\n\r\nUna vivienda excepcional en el Barrio de Salamanca, donde diseño, ubicación y calidad se unen para crear un hogar único.",
+   "Type": "Piso",
+   "Parish": "Barrio de Salamanca",
+   "District": "Madrid",
+   "Municipality": "Madrid",
+   "Rooms": 2,
+   "Bathrooms": 3,
+   "GrossArea": 105,
+   "NetArea": 0,
+   "Images": [
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30314237/Tphoto/IDfd8ece01-0000-0500-0000-00001aa8aedc.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30314237/Tphoto/IDfd8ece01-0000-0500-0000-00001aa8aedc.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30314237/Tphoto/IDfd8ece01-0000-0500-0000-00001aa8aedd.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30314237/Tphoto/IDfd8ece01-0000-0500-0000-00001aa8aedd.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30314237/Tphoto/IDfd8ece01-0000-0500-0000-00001aa8aedf.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30314237/Tphoto/IDfd8ece01-0000-0500-0000-00001aa8aedf.jpg"
+    }
+   ],
+   "PropertyBusiness": [
+    {
+     "BusinessID": 1,
+     "BusinessName": "Venta",
+     "Prices": [
+      {
+       "PriceValue": 1250000
+      }
+     ]
+    }
+   ],
+   "Features": [
+    {
+     "Title": "Distribución",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Aseo",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_SERVICE_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Baños",
+       "Value": "3",
+       "Unit": "",
+       "Tag": ";PROPERTY_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Total dormitorios",
+       "Value": "2",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_BEDROOM;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Seguridad",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Portería",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_RECEPTION;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Equipamientos",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Ascensor",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_ELEVATOR;FREE_SEARCH;CASASAPO_ELEVATOR_8388608;SUPERCASA_ELEVATOR_4;SEARCH_HASELEVATOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Extras",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Interior/Exterior",
+       "Value": "Exterior",
+       "Unit": "",
+       "Tag": ";BUILDING;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Planta",
+       "Value": "3",
+       "Unit": "",
+       "Tag": ";PROPERTY_FLOOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Áreas - Superficies",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Superficie Construida",
+       "Value": "105.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_B;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "ID": 26150560,
+   "Reference": "PIS_259",
+   "Title": "Piso de lujo en Martínez Campos, Almagro",
+   "Description": "Ubicada en una de las direcciones más prestigiosas del barrio de Almagro, en pleno distrito de Chamberí, esta excepcional vivienda de 218 m2 construidos representa una oportunidad única para disfrutar de un estilo de vida sofisticado en una de las zonas más demandadas de Madrid.\r\n\r\nSituada en una segunda planta exterior de una finca representativa con ascensor y servicio de portería, la propiedad ha sido completamente reformada a estrenar con materiales de primera calidad, cuidando cada detalle para ofrecer el máximo nivel de confort, diseño y funcionalidad.\r\n\r\nLa vivienda destaca por su espectacular zona social, un espacio amplio y luminoso concebido para el disfrute y la vida cotidiana, con acceso directo a una agradable terraza que aporta amplitud y conexión con el exterior. La cocina, integrada mediante una elegante isla central, combina diseño contemporáneo, capacidad de almacenamiento y equipamiento de alta gama.\r\n\r\nLa zona de descanso se compone de tres amplios dormitorios dobles, todos ellos con baño en suite, garantizando privacidad y comodidad para cada miembro de la familia o invitado. La distribución se completa con un aseo de cortesía, un cuarto de lavandería independiente y un distinguido hall de entrada que aporta una magnífica sensación de bienvenida desde el primer momento.\r\n\r\nComo valor añadido, la propiedad incluye plaza de garaje y trastero, dos elementos especialmente apreciados en una ubicación tan exclusiva como Almagro.\r\n\r\nUna vivienda única que combina amplitud, elegancia y una ubicación privilegiada en uno de los enclaves residenciales más codiciados de Madrid, rodeada de edificios señoriales, embajadas, restaurantes de referencia y excelentes comunicaciones.\n",
+   "Type": "Piso",
+   "Parish": "Chamberí",
+   "District": "Madrid",
+   "Municipality": "Madrid",
+   "Rooms": 3,
+   "Bathrooms": 4,
+   "GrossArea": 218,
+   "NetArea": 0,
+   "Images": [
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30523940/Tphoto/ID24c2d101-0000-0500-0000-00001aa8a6ca.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30523940/Tphoto/ID24c2d101-0000-0500-0000-00001aa8a6ca.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30523940/Tphoto/ID24c2d101-0000-0500-0000-00001aa8a6cc.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30523940/Tphoto/ID24c2d101-0000-0500-0000-00001aa8a6cc.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30523940/Tphoto/ID24c2d101-0000-0500-0000-00001aa8a6cd.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30523940/Tphoto/ID24c2d101-0000-0500-0000-00001aa8a6cd.jpg"
+    }
+   ],
+   "PropertyBusiness": [
+    {
+     "BusinessID": 1,
+     "BusinessName": "Venta",
+     "Prices": [
+      {
+       "PriceValue": 2600000
+      }
+     ]
+    }
+   ],
+   "Features": [
+    {
+     "Title": "Distribución",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Aseo",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_SERVICE_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Baños",
+       "Value": "4",
+       "Unit": "",
+       "Tag": ";PROPERTY_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Total dormitorios",
+       "Value": "3",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_BEDROOM;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Seguridad",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Portería",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_RECEPTION;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Equipamientos",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Ascensor",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_ELEVATOR;FREE_SEARCH;CASASAPO_ELEVATOR_8388608;SUPERCASA_ELEVATOR_4;SEARCH_HASELEVATOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Extras",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Interior/Exterior",
+       "Value": "Exterior",
+       "Unit": "",
+       "Tag": ";BUILDING;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Planta",
+       "Value": "2",
+       "Unit": "",
+       "Tag": ";PROPERTY_FLOOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Áreas - Superficies",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Superficie Construida",
+       "Value": "218.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_B;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Instalaciones",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Garaje",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_GARAGE;CASASAPO_GARAGE_2;FREE_SEARCH;PROPERTY_HAS_GARAGE;GARAGE;PROPERTY_NUM_PARKING_SPACES;SUPERCASA_GARAGE_16;SE;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Terraza",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_TERRACE;CASASAPO_TERRACE_262144;FREE_SEARCH;TERRACE;SUPERCASA_TERRACE_128;SEARCH_HASTERRACE;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Trastero",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_STORAGE;CASASAPO_STORAGE_4;STORAGE;SUPERCASA_STORAGE_2;SEARCH_HASSTORAGE;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "ID": 26031329,
+   "Reference": "EST_257",
+   "Title": "Loft reformado con alta rentabilidad potencial en Arganzuela",
+   "Description": "Ubicado en una de las zonas con mayor proyección de la capital, este exclusivo loft en venta en Delicias-Arganzuela representa una excelente oportunidad tanto para quienes buscan su primera vivienda en Madrid como para inversores que desean incorporar un activo con gran potencial de rentabilidad a su cartera.\r\n\r\nSituado dentro de la M-30 y a menos de dos kilómetros de Atocha, el inmueble disfruta de una ubicación estratégica, perfectamente conectada con el centro de la ciudad y rodeada de una amplia oferta de servicios, comercios, zonas verdes y transporte público.\r\n\r\nLa vivienda, ubicada en planta baja con orientación exterior, cuenta con aproximadamente 50 m2 distribuidos en un espacio diáfano cuidadosamente diseñado para maximizar la funcionalidad y la sensación de amplitud. Se entrega completamente reformado a estrenar, con una moderna cocina totalmente equipada, amplias capacidades de almacenamiento y un elegante baño completo de diseño contemporáneo.\r\n\r\nGracias a su ubicación, tipología y nivel de acabados, este activo resulta especialmente atractivo para estrategias de inversión orientadas al alquiler de media estancia, alquiler corporativo o profesionales desplazados, segmentos que mantienen una elevada demanda en esta zona de Madrid. La proximidad a Atocha, Madrid Río, Méndez Álvaro y los principales centros empresariales y educativos de la ciudad contribuye a una sólida demanda de arrendamiento durante todo el año.\r\n\r\nAdemás, la propiedad ofrece una oportunidad poco habitual en el mercado: existen cuatro unidades disponibles con características similares, pudiendo adquirirse de forma individual o mediante la compra en lote, una alternativa especialmente interesante para inversores patrimonialistas o compradores que busquen generar economías de escala en la gestión de alquileres.\r\n\r\nUn producto versátil, moderno y estratégicamente ubicado que combina el atractivo de una vivienda completamente renovada con el potencial de una inversión inmobiliaria en una de las zonas con mayor demanda de alquiler de Madrid.\r\n\r\nDisponible para compra individual o en lote. Consúltenos para más información sobre rentabilidades estimadas y condiciones de adquisición.",
+   "Type": "Estudio",
+   "Parish": "Arganzuela",
+   "District": "Madrid",
+   "Municipality": "Madrid",
+   "Rooms": 1,
+   "Bathrooms": 1,
+   "GrossArea": 50,
+   "NetArea": 0,
+   "Images": [
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30373398/Tphoto/ID1676cf01-0000-0500-0000-00001a9fd1b2.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30373398/Tphoto/ID1676cf01-0000-0500-0000-00001a9fd1b2.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30373398/Tphoto/ID1676cf01-0000-0500-0000-00001a9fd1b3.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30373398/Tphoto/ID1676cf01-0000-0500-0000-00001a9fd1b3.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30373398/Tphoto/ID1676cf01-0000-0500-0000-000019a66ff0.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30373398/Tphoto/ID1676cf01-0000-0500-0000-000019a66ff0.jpg"
+    }
+   ],
+   "PropertyBusiness": [
+    {
+     "BusinessID": 1,
+     "BusinessName": "Venta",
+     "Prices": [
+      {
+       "PriceValue": 325000
+      }
+     ]
+    }
+   ],
+   "Features": [
+    {
+     "Title": "Distribución",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Baños",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Total dormitorios",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_BEDROOM;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Extras",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Interior/Exterior",
+       "Value": "Exterior",
+       "Unit": "",
+       "Tag": ";BUILDING;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Planta",
+       "Value": "0",
+       "Unit": "",
+       "Tag": ";PROPERTY_FLOOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Áreas - Superficies",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Superficie Construida",
+       "Value": "50.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_B;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "ID": 26257700,
+   "Reference": "XAL_270",
+   "Title": "Chalet de lujo en Somosaguas, Pozuelo de Alarcón",
+   "Description": "Ubicada en Somosaguas, una de las urbanizaciones más prestigiosas y demandadas de Madrid, esta magnífica villa independiente representa una oportunidad excepcional para quienes buscan una vivienda de lujo en un entorno privilegiado, rodeado de naturaleza, privacidad y seguridad, a escasos minutos del centro de Madrid.\r\n\r\nLa propiedad se levanta sobre una espectacular parcela de 2.545 m2 y dispone de 657 m2 construidos, ofreciendo espacios amplios, luminosos y cuidadosamente diseñados para disfrutar de una extraordinaria calidad de vida. Su arquitectura atemporal, los grandes ventanales y la excelente conexión entre el interior y el exterior convierten esta vivienda en un hogar elegante, funcional y lleno de luz natural.\r\n\r\nLa zona principal de la vivienda ofrece varias estancias de generosas dimensiones, con amplios salones y comedores que crean ambientes cálidos y sofisticados. Los grandes ventanales permiten contemplar el jardín desde prácticamente cualquier estancia y proporcionan una agradable sensación de amplitud durante todo el año. La distribución ha sido concebida para combinar comodidad, privacidad y una perfecta integración con los espacios exteriores.\r\n\r\nLa zona de descanso alberga cuatro amplios dormitorios y cinco baños. La espectacular suite principal destaca por su gran tamaño, un espacioso vestidor, baño en suite y acceso directo al jardín, convirtiéndose en un auténtico refugio privado. La vivienda cuenta además con numerosos armarios empotrados y amplias zonas de almacenamiento que aportan una excelente funcionalidad.\r\n\r\nEl exterior constituye uno de los grandes atractivos de la propiedad. Su consolidado jardín, cuidadosamente diseñado y rodeado de arbolado maduro, ofrece diferentes ambientes para disfrutar durante todo el año gracias a sus terrazas y porches cubiertos. La piscina privada se integra perfectamente en el conjunto, proporcionando un espacio ideal para el descanso, el ocio y las reuniones familiares con absoluta privacidad.\r\n\r\nEntre sus excelentes calidades destacan el aire acondicionado por conductos, calefacción, una elegante chimenea y acabados de alto nivel que garantizan el máximo confort en cualquier época del año.\r\n\r\nVivir en Somosaguas, Pozuelo de Alarcón, supone disfrutar de una de las zonas residenciales más exclusivas de Madrid, reconocida por sus amplias avenidas, zonas verdes, colegios internacionales de prestigio, universidades, excelentes comunicaciones y una oferta de servicios de primer nivel.\r\n\r\nUna propiedad verdaderamente única por la amplitud de su parcela, la calidad de su construcción, la privacidad de su entorno y la exclusividad de su ubicación, ideal para quienes desean adquirir un chalet de lujo en venta en Somosaguas o una villa independiente en Pozuelo de Alarcón que combine elegancia, confort y una calidad de vida excepcional.",
+   "Type": "Chalet",
+   "Parish": "Somosaguas",
+   "District": "Madrid",
+   "Municipality": "Pozuelo de Alarcón",
+   "Rooms": 6,
+   "Bathrooms": 8,
+   "GrossArea": 657,
+   "NetArea": 0,
+   "Images": [
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30644275/Tphoto/ID3398d301-0000-0500-0000-000019ec62b4.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30644275/Tphoto/ID3398d301-0000-0500-0000-000019ec62b4.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30644275/Tphoto/ID3398d301-0000-0500-0000-000019ec62b5.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30644275/Tphoto/ID3398d301-0000-0500-0000-000019ec62b5.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30644275/Tphoto/ID3398d301-0000-0500-0000-000019ec62b6.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30644275/Tphoto/ID3398d301-0000-0500-0000-000019ec62b6.jpg"
+    }
+   ],
+   "PropertyBusiness": [
+    {
+     "BusinessID": 1,
+     "BusinessName": "Venta",
+     "Prices": [
+      {
+       "PriceValue": 4400000
+      }
+     ]
+    }
+   ],
+   "Features": [
+    {
+     "Title": "Distribución",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Aseo",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_SERVICE_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Baños",
+       "Value": "8",
+       "Unit": "",
+       "Tag": ";PROPERTY_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Terraza con jardín",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_GREEN_ROOF;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Total dormitorios",
+       "Value": "6",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_BEDROOM;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Entorno",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Transportes públicos",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_TXT_GENERAL_AREA;CASASAPO_PUBLIC_TRANSPORT_AREA_64;FREE_SEARCH;TRANSPORT_AREA;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Seguridad",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Sistema de Control de Accesos",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_ACCESS_CONTROL_SYSTEM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Vigilancia",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_VIGILANCE;CASASAPO_VIGILANCE_8;FREE_SEARCH;VIGILANCE;SUPERCASA_VIGILANCE_512;SEARCH_HASVIGILANCE;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Áreas - Superficies",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Superficie Construida",
+       "Value": "657.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_B;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Superfície parcela",
+       "Value": "2593.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_T;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Instalaciones",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Garaje",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_GARAGE;CASASAPO_GARAGE_2;FREE_SEARCH;PROPERTY_HAS_GARAGE;GARAGE;PROPERTY_NUM_PARKING_SPACES;SUPERCASA_GARAGE_16;SE;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Jardín",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_GARDEN;FREE_SEARCH;PROPERTY_HAS_GARDEN;CASASAPO_GARDEN_1048576;GARDEN;SUPERCASA_GARDEN_8;SEARCH_HASGARDEN;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Piscina",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_POOL;FREE_SEARCH;CASASAPO_POOL_16;SUPERCASA_POOL_32;SEARCH_HASPOOL;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "ID": 24975809,
+   "Reference": "OFI_190",
+   "Title": "Oficina en calle Velázquez, Barrio de Salamanca",
+   "Description": "En una de las ubicaciones más consolidadas y demandadas de Madrid, Recoletos, a tan sólo 1 km de la Puerta de Alcalá, se encuentra este activo singular actualmente en comercialización.\r\n\r\nSe trata de una oficina de 291 m2 que ocupa la totalidad de la planta, situada en un edificio representativo con portero físico, dos ascensores, en la calle Velázquez.\r\n\r\nEl activo presenta un doble atractivo: para empresas, que busquen un espacio amplio y representativo en una ubicación prime. Para inversores, ya que el inmueble permite cambio de uso de oficina a residencial, con la posibilidad de segregar en dos viviendas.\r\n\r\nUna oportunidad poco habitual en una de las zonas más estables y líquidas del mercado inmobiliario madrileño.",
+   "Type": "Oficina",
+   "Parish": "Barrio de Salamanca",
+   "District": "Madrid",
+   "Municipality": "Madrid",
+   "Rooms": -2147483648,
+   "Bathrooms": 2,
+   "GrossArea": 291,
+   "NetArea": 0,
+   "Images": [
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P29173051/Tphoto/ID3b25bd01-0000-0500-0000-00001839a5f6.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P29173051/Tphoto/ID3b25bd01-0000-0500-0000-00001839a5f6.jpg"
+    }
+   ],
+   "PropertyBusiness": [
+    {
+     "BusinessID": 1,
+     "BusinessName": "Venta",
+     "Prices": [
+      {
+       "PriceValue": 3250000
+      }
+     ]
+    }
+   ],
+   "Features": [
+    {
+     "Title": "Distribución",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Aseo",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_SERVICE_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Baños",
+       "Value": "2",
+       "Unit": "",
+       "Tag": ";PROPERTY_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Salas",
+       "Value": "6",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_LIVROOM;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Seguridad",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Portería",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_RECEPTION;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Equipamientos",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Ascensor",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_ELEVATOR;FREE_SEARCH;CASASAPO_ELEVATOR_8388608;SUPERCASA_ELEVATOR_4;SEARCH_HASELEVATOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Extras",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Interior/Exterior",
+       "Value": "Exterior",
+       "Unit": "",
+       "Tag": ";BUILDING;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Planta",
+       "Value": "3",
+       "Unit": "",
+       "Tag": ";PROPERTY_FLOOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Áreas - Superficies",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Superficie Construida",
+       "Value": "291.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_B;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "ID": 26305205,
+   "Reference": "PIS_279",
+   "Title": "Oportunidad de inversión en el centro de Madrid",
+   "Description": "En un mercado donde cada vez resulta más difícil encontrar activos con potencial de revalorización y una elevada demanda de arrendamiento, esta vivienda representa una excelente oportunidad para quienes buscan invertir en el centro de Madrid con una visión patrimonial a largo plazo.\r\n\r\nSituada en la calle Colón, en pleno barrio de Universidad (Malasaña), uno de los enclaves con mayor dinamismo y demanda residencial de la capital, esta propiedad combina una ubicación privilegiada con un formato especialmente atractivo para el mercado del alquiler. Una zona consolidada, rodeada de universidades, empresas, comercios, restaurantes, espacios culturales y perfectamente comunicada con el resto de la ciudad.\r\n\r\nUbicada en la planta baja interior de un elegante edificio clásico de 1900 con ascensor, la vivienda ofrece 68 m2 catastrales distribuidos de forma inteligente para aprovechar al máximo cada estancia. Su configuración resulta especialmente interesante para el mercado del alquiler, tanto de larga duración como para perfiles desplazados por motivos profesionales o académicos.\r\n\r\nEl inmueble dispone de un acogedor salón con cocina totalmente equipada, dos dormitorios y un baño completo, ofreciendo una distribución muy demandada por parejas, jóvenes profesionales, estudiantes de posgrado y pequeños núcleos familiares.\r\n\r\nSe entrega completamente amueblado y equipado, listo para comenzar a generar rentabilidad desde el primer día, minimizando tiempos de comercialización e inversión adicional. Además, cuenta con aire acondicionado por split y termo eléctrico, proporcionando un elevado nivel de confort para sus futuros ocupantes.\r\n\r\nInvertir en el barrio de Universidad significa hacerlo en uno de los mercados de alquiler más líquidos y resilientes de Madrid, con una demanda constante y una oferta limitada. La combinación de ubicación, tipología, superficie y estado de conservación convierte esta vivienda en un activo especialmente atractivo para quienes desean preservar patrimonio, diversificar su cartera inmobiliaria y obtener ingresos recurrentes mediante el alquiler.\r\n\r\nEn INNEA Properties seleccionamos oportunidades que no solo destacan por su ubicación, sino también por su capacidad para generar valor a largo plazo. Si estás buscando un piso para invertir en el centro de Madrid con un gran potencial de rentabilidad y revalorización, estaremos encantados de facilitarte toda la información y acompañarte durante el proceso de adquisición.",
+   "Type": "Piso",
+   "Parish": "Centro",
+   "District": "Madrid",
+   "Municipality": "Madrid",
+   "Rooms": 2,
+   "Bathrooms": 1,
+   "GrossArea": 68,
+   "NetArea": 0,
+   "Images": [
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30695090/Tphoto/IDb25ed401-0000-0500-0000-000019fb1f3f.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30695090/Tphoto/IDb25ed401-0000-0500-0000-000019fb1f3f.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30695090/Tphoto/IDb25ed401-0000-0500-0000-000019fb1f40.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30695090/Tphoto/IDb25ed401-0000-0500-0000-000019fb1f40.jpg"
+    },
+    {
+     "Original": "https://images.egorealestate.com/ZOriginal/OAYES/S5/C31572/P30695090/Tphoto/IDb25ed401-0000-0500-0000-000019fb1f41.jpg",
+     "Thumbnail": "https://images.egorealestate.com/Z512x384/OAYES/S5/C31572/P30695090/Tphoto/IDb25ed401-0000-0500-0000-000019fb1f41.jpg"
+    }
+   ],
+   "PropertyBusiness": [
+    {
+     "BusinessID": 1,
+     "BusinessName": "Venta",
+     "Prices": [
+      {
+       "PriceValue": 629000
+      }
+     ]
+    }
+   ],
+   "Features": [
+    {
+     "Title": "Distribución",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Baños",
+       "Value": "1",
+       "Unit": "",
+       "Tag": ";PROPERTY_BATHROOM;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Total dormitorios",
+       "Value": "2",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_BEDROOM;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Equipamientos",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Ascensor",
+       "Value": "",
+       "Unit": "",
+       "Tag": ";PROPERTY_HAS_ELEVATOR;FREE_SEARCH;CASASAPO_ELEVATOR_8388608;SUPERCASA_ELEVATOR_4;SEARCH_HASELEVATOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Extras",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Interior/Exterior",
+       "Value": "Interior",
+       "Unit": "",
+       "Tag": ";BUILDING;",
+       "GroupID": null,
+       "Childs": null
+      },
+      {
+       "Title": "Planta",
+       "Value": "0",
+       "Unit": "",
+       "Tag": ";PROPERTY_FLOOR;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    },
+    {
+     "Title": "Áreas - Superficies",
+     "Value": "",
+     "Unit": "",
+     "Tag": ";;",
+     "GroupID": "1000",
+     "Childs": [
+      {
+       "Title": "Superficie Construida",
+       "Value": "68.00",
+       "Unit": "m²",
+       "Tag": ";AREAS;AREA_B;",
+       "GroupID": null,
+       "Childs": null
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
