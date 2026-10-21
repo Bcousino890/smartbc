@@ -5,6 +5,7 @@ import { houselyScraper } from "./housely";
 import { inneaScraper } from "./innea";
 import { esrivScraper } from "./esriv";
 import { enfokaScraper } from "./enfoka";
+import { rentalshdScraper } from "./rentalshd";
 import { levelRealEstateScraper } from "./level-real-estate";
 import { terrahomesScraper } from "./terrahomes";
 import { urbantechomeScraper } from "./urbantechome";
@@ -21,6 +22,7 @@ const REGISTRY: Record<string, Scraper> = {
   innea: inneaScraper,
   esriv: esrivScraper,
   enfoka: enfokaScraper,
+  rentalshd: rentalshdScraper,
 };
 
 export function getScraperByKey(key: string): Scraper | null {
