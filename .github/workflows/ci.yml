@@ -64,6 +64,9 @@ jobs:
       # Descripción estructurada (DE1–DE9): organizador determinista, sin IA.
       - name: "Catálogos (descripción estructurada, offline)"
         run: npm run test:catalogs-structure
+      # 0219: textos aprobados reutilizables (reglas puras y fuente). Sin BD.
+      - name: "Catálogos (textos aprobados, offline)"
+        run: npm run test:catalogs-copy
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
