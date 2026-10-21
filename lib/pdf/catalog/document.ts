@@ -32,6 +32,14 @@ const A4_W = 595.28;
 const A4_H = 841.89;
 const MARGIN = 51; // 18 mm
 const CONTENT_W = A4_W - 2 * MARGIN;
+/** Cajas impresas de las fotos, en puntos (PR7a): de aquí salen los anchos de
+ *  foto de generate.ts (300 ppi). Portada a sangre en todo el A4; apertura a
+ *  todo el ancho de texto y 300 pt de alto; «Más fotos» en dos columnas. */
+export const PRINT_BOXES = {
+  page: { w: A4_W, h: A4_H },
+  opening: { w: CONTENT_W, h: 300 },
+  more: { w: (CONTENT_W - 12) / 2, h: 175 },
+} as const;
 
 export type PdfPhoto = { ok: true; data: Buffer; width: number; height: number } | { ok: false };
 
@@ -314,7 +322,7 @@ function itemPage(input: CatalogPdfInput, item: PublicItem, i: number): ReactEle
   );
   parts.push(h(View, { key: "mark" }, chapterMark(i, input.catalog.items.length)));
   if (x.opening !== null) {
-    parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, photoBlock(ph(x.opening), CONTENT_W, 300), T({ ...S.photoCap, marginTop: 5 }, `Foto ${x.opening + 1} de ${total}`)));
+    parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, photoBlock(ph(x.opening), PRINT_BOXES.opening.w, PRINT_BOXES.opening.h), T({ ...S.photoCap, marginTop: 5 }, `Foto ${x.opening + 1} de ${total}`)));
   } else {
     parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, missing("Sin fotos", CONTENT_W, 180)));
   }
@@ -367,8 +375,8 @@ function itemPage(input: CatalogPdfInput, item: PublicItem, i: number): ReactEle
 
   // Más fotos (hasta 6, P2), de dos en dos; el título va con la primera fila.
   if (x.more.length) {
-    const cellW = (CONTENT_W - 12) / 2;
-    const cell = (idx: number) => h(View, { key: idx, style: { width: cellW, alignItems: "center" } }, photoBlock(ph(idx), cellW, 175), T({ ...S.photoCap, marginTop: 5 }, `Foto ${idx + 1} de ${total}`));
+    const cellW = PRINT_BOXES.more.w;
+    const cell = (idx: number) => h(View, { key: idx, style: { width: cellW, alignItems: "center" } }, photoBlock(ph(idx), cellW, PRINT_BOXES.more.h), T({ ...S.photoCap, marginTop: 5 }, `Foto ${idx + 1} de ${total}`));
     for (let r = 0; r < x.more.length; r += 2) {
       const row = h(View, { key: `r${r}`, style: { flexDirection: "row", justifyContent: "space-between", marginTop: r ? 12 : 8 } }, ...x.more.slice(r, r + 2).map(cell));
       parts.push(r === 0 ? h(View, { key: "mg0", wrap: false, style: { marginTop: 20 } }, kicker("MÁS FOTOS", 0), row) : h(View, { key: `mg${r}`, wrap: false }, row));
