@@ -77,6 +77,10 @@ jobs:
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
         run: npm run test:pdf-extract
+      # PR5 (N3): las fuentes de lib/pdf/fonts están en su README con su sha256
+      # y traen los glifos de cada idioma (es/tr/fr/ar/he), leído con fontkit. Sin red.
+      - name: "PDF del catálogo: fuentes y cobertura de glifos (offline)"
+        run: npm run test:pdf-fonts
       - name: "Catálogos: buscador (filtros, URL, texto y planta, paginación; offline)"
         run: npm run test:catalog-search
       - name: "Propiedades: filtro de la lista (caracterización) y búsqueda por referencia (offline)"

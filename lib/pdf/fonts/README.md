@@ -1,21 +1,47 @@
 # Fuentes del PDF del catálogo (identidad de la publicación del itinerario)
 
-Archivos **estáticos** (react-pdf no admite fuentes variables) de las tres familias del catálogo, incluidos en el repositorio para que generar un PDF **no dependa de Google Fonts** ni de la red. Son las mismas familias que el layout raíz carga en el navegador con `next/font` (Playfair Display, Cinzel e Inter): enmienda visual [`docs/changes/2026-10-20-bcp-01-catalogo-visual/enmienda.md`](../../../docs/changes/2026-10-20-bcp-01-catalogo-visual/enmienda.md) (DV11).
+Archivos **estáticos** (react-pdf no admite fuentes variables) incluidos en el repositorio para que generar un PDF **no dependa de Google Fonts** ni de la red. Las tres familias del catálogo son las mismas que el layout raíz carga en el navegador con `next/font` (Playfair Display, Cinzel e Inter): enmienda visual [`docs/changes/2026-10-20-bcp-01-catalogo-visual/enmienda.md`](../../../docs/changes/2026-10-20-bcp-01-catalogo-visual/enmienda.md) (DV11). La ampliación multilingüe (expediente [`2026-10-21-bcp-01-ampliacion-textos-idiomas`](../../../docs/changes/2026-10-21-bcp-01-ampliacion-textos-idiomas/spec.md), decisión **N3**) añade el subconjunto «latin-ext» de esas tres familias (turco y francés) y las familias árabe (Noto Naskh Arabic) y hebrea (Frank Ruhl Libre para títulos, Noto Sans Hebrew para texto).
 
-| Archivo | Fuente | Peso / estilo | sha256 |
-| --- | --- | --- | --- |
-| `playfair-display-latin-400-normal.woff` | Playfair Display | 400 normal | `3afd64d114a27e2f6604684c30f72d6dbb6ba3e6f6b1675f15a942efc7a56410` |
-| `playfair-display-latin-400-italic.woff` | Playfair Display | 400 cursiva | `cc638df9f516b3cbfd87d5012d0b657c81dec4e52dd5a8c9e0b87a2b39697bd9` |
-| `playfair-display-latin-500-normal.woff` | Playfair Display | 500 normal | `29bceb26218e4d06f84792d571112cb7447448ef375ac3c07a367a14f756bd37` |
-| `playfair-display-latin-600-normal.woff` | Playfair Display | 600 normal | `5798aa5a8bab09880d5e1dd9bfbc8e952fb0c80ec78e695cc339e15f006e8bb8` |
-| `cinzel-latin-400-normal.woff` | Cinzel | 400 normal | `99c6477f06f0c717d31f2bb41013582c347be65366179d5726d107ad908ff3b0` |
-| `cinzel-latin-500-normal.woff` | Cinzel | 500 normal | `9a9d232ab20440ff2571ebd2ef69ef562ff16b85af6a4c4eb62c1a75f986fa0f` |
-| `cinzel-latin-600-normal.woff` | Cinzel | 600 normal | `7cffb40d1c02861fd0f2fedf9446f36b9d38ce312c723927667ebcffc8690894` |
-| `inter-latin-400-normal.woff` | Inter | 400 normal | `e20fa0b4fd2dd26e4d14b3ac3cc922509c3a63fa5e910e90c614544aa042dd45` |
-| `inter-latin-500-normal.woff` | Inter | 500 normal | `9b42c108da48b5ed55a3072e815ffee2d271562e6c0dd6998910e8f9c09e0a3d` |
-| `inter-latin-600-normal.woff` | Inter | 600 normal | `6a9cb3a509b4eeaf12b7dda6c4aacac3e85d07f4201bf4dd716e332e692b87bd` |
+**Origen de todos los archivos:** paquetes npm de Fontsource, versión **5.3.0** de cada uno, archivos `files/<archivo>` tal cual (sin recomprimir). La URL exacta de cada archivo es `https://cdn.jsdelivr.net/npm/@fontsource/<paquete>@5.3.0/files/<archivo>`; en la tabla va el paquete. Los diez de los subconjuntos «latin» se bajaron con `npm pack` el 20-10-2026 (sha256 de los `.tgz`: `playfair-display` `564e61951ecc3e962793cd50395f718cda6350cb934f9000dbe0139c768dc023`, `cinzel` `b80629f715b4603fd099c0ceaa94cc7a15308a75a9cf52f0613a312ee6d53c28`, `inter` `02034af8d41dcc67ac8eab88f642e129bb8a2e8922abf30229c32725f54d8fd6`) y el 22-10-2026 se comprobó que son byte a byte los del CDN; los dieciséis restantes se bajaron del CDN el 22-10-2026 (prueba técnica del PR5). **Ninguno** es dependencia del proyecto. `npm run test:pdf-fonts` ([`scripts/pdf-fonts-coverage.mts`](../../../scripts/pdf-fonts-coverage.mts)) comprueba en la CI, sin red, que cada archivo de esta carpeta está en esta tabla con su sha256 y que trae los glifos de su subconjunto.
 
-- **Procedencia:** paquetes npm `@fontsource/playfair-display@5.3.0` (sha256 del `.tgz`: `564e61951ecc3e962793cd50395f718cda6350cb934f9000dbe0139c768dc023`), `@fontsource/cinzel@5.3.0` (`b80629f715b4603fd099c0ceaa94cc7a15308a75a9cf52f0613a312ee6d53c28`) y `@fontsource/inter@5.3.0` (`02034af8d41dcc67ac8eab88f642e129bb8a2e8922abf30229c32725f54d8fd6`). Se bajaron una vez con `npm pack` (20 de octubre de 2026) y se copiaron solo estos archivos; **no** son dependencias del proyecto.
-- **Subconjunto «latin»:** U+0000–00FF, la puntuación general (U+2000–206F), € y otros. Comprobado con fontkit (20-10-2026) que las tres familias traen á é í ó ú ñ ü ¿ ¡ « » € ² º ª · — – ’: ya no hace falta pintar «º» y «ª» con otra fuente. El ornamento ✦ no está: se dibuja como vector.
-- **Licencia:** SIL Open Font License 1.1 ([`OFL-PlayfairDisplay.txt`](OFL-PlayfairDisplay.txt), [`OFL-Cinzel.txt`](OFL-Cinzel.txt), [`OFL-Inter.txt`](OFL-Inter.txt)). La OFL permite incrustarlas en documentos.
-- Las usa `lib/pdf/catalog/fonts.ts` (`Font.register`). Las fuentes anteriores (Fraunces y Karla, dirección C · Boutique) se retiraron en la enmienda visual.
+| Archivo | Familia | Peso / estilo | Subconjunto | Paquete (`@fontsource/…@5.3.0`) | sha256 |
+| --- | --- | --- | --- | --- | --- |
+| `playfair-display-latin-400-normal.woff` | Playfair Display | 400 normal | latin | `playfair-display` | `3afd64d114a27e2f6604684c30f72d6dbb6ba3e6f6b1675f15a942efc7a56410` |
+| `playfair-display-latin-400-italic.woff` | Playfair Display | 400 cursiva | latin | `playfair-display` | `cc638df9f516b3cbfd87d5012d0b657c81dec4e52dd5a8c9e0b87a2b39697bd9` |
+| `playfair-display-latin-500-normal.woff` | Playfair Display | 500 normal | latin | `playfair-display` | `29bceb26218e4d06f84792d571112cb7447448ef375ac3c07a367a14f756bd37` |
+| `playfair-display-latin-600-normal.woff` | Playfair Display | 600 normal | latin | `playfair-display` | `5798aa5a8bab09880d5e1dd9bfbc8e952fb0c80ec78e695cc339e15f006e8bb8` |
+| `playfair-display-latin-ext-400-normal.woff` | Playfair Display | 400 normal | latin-ext | `playfair-display` | `e5fb3069334a8d37927d192f0bfc55983a788dd7905876321fda576a6a4a7bc2` |
+| `playfair-display-latin-ext-400-italic.woff` | Playfair Display | 400 cursiva | latin-ext | `playfair-display` | `8a2b40aad8d339ee5a19974b33f4b4ae3e340bfa0996ad65cf8060cc5462f628` |
+| `playfair-display-latin-ext-500-normal.woff` | Playfair Display | 500 normal | latin-ext | `playfair-display` | `7d5f0f9219d842b6dfc75b9cecaa2114a7463246ef00ace1ddef9454a9de957f` |
+| `playfair-display-latin-ext-600-normal.woff` | Playfair Display | 600 normal | latin-ext | `playfair-display` | `ae65def2e5cd939e1fc964bebb85528728b36d10502d59427a58affbce64aa10` |
+| `cinzel-latin-400-normal.woff` | Cinzel | 400 normal | latin | `cinzel` | `99c6477f06f0c717d31f2bb41013582c347be65366179d5726d107ad908ff3b0` |
+| `cinzel-latin-500-normal.woff` | Cinzel | 500 normal | latin | `cinzel` | `9a9d232ab20440ff2571ebd2ef69ef562ff16b85af6a4c4eb62c1a75f986fa0f` |
+| `cinzel-latin-600-normal.woff` | Cinzel | 600 normal | latin | `cinzel` | `7cffb40d1c02861fd0f2fedf9446f36b9d38ce312c723927667ebcffc8690894` |
+| `cinzel-latin-ext-400-normal.woff` | Cinzel | 400 normal | latin-ext | `cinzel` | `92a7ae1bae4213eff4bd574b5d0161b11fa226b70d299716b1870fdd076ba027` |
+| `cinzel-latin-ext-500-normal.woff` | Cinzel | 500 normal | latin-ext | `cinzel` | `e3585dcfc461b5af11b925c720977a07af166a5b7058038b6ef008c3460f4d2a` |
+| `cinzel-latin-ext-600-normal.woff` | Cinzel | 600 normal | latin-ext | `cinzel` | `a63b4e0285c06622db095f5847f25b4577ef2f9c1b3d6efbd9a71dbb0d80fd6e` |
+| `inter-latin-400-normal.woff` | Inter | 400 normal | latin | `inter` | `e20fa0b4fd2dd26e4d14b3ac3cc922509c3a63fa5e910e90c614544aa042dd45` |
+| `inter-latin-500-normal.woff` | Inter | 500 normal | latin | `inter` | `9b42c108da48b5ed55a3072e815ffee2d271562e6c0dd6998910e8f9c09e0a3d` |
+| `inter-latin-600-normal.woff` | Inter | 600 normal | latin | `inter` | `6a9cb3a509b4eeaf12b7dda6c4aacac3e85d07f4201bf4dd716e332e692b87bd` |
+| `inter-latin-ext-400-normal.woff` | Inter | 400 normal | latin-ext | `inter` | `22ae8360fbad24d2af7c6c9898a346c881774dc87f7cf94bd262c48ad58d7116` |
+| `inter-latin-ext-500-normal.woff` | Inter | 500 normal | latin-ext | `inter` | `30d2903ce97f8a89ea0e9c083b42cb8bf97e7bbb5607e7f00352815f19cb0d5b` |
+| `inter-latin-ext-600-normal.woff` | Inter | 600 normal | latin-ext | `inter` | `22ff20a6170674fb9637c2a072227be86303bb6ec52b829b9d7077405f7196a6` |
+| `noto-naskh-arabic-arabic-400-normal.woff` | Noto Naskh Arabic | 400 normal | arabic | `noto-naskh-arabic` | `3f3d49ef3202e3fe1ce4501bb194b9480b937fe4375da826b816b1dab0650ce2` |
+| `noto-naskh-arabic-arabic-500-normal.woff` | Noto Naskh Arabic | 500 normal | arabic | `noto-naskh-arabic` | `703fa6ef2898683e54d4aafa875cb0f8de52971d7eb751d6f5baf3899787486c` |
+| `noto-naskh-arabic-arabic-600-normal.woff` | Noto Naskh Arabic | 600 normal | arabic | `noto-naskh-arabic` | `e546b8ba70233b1a99388c6c9de90e48fb7d70f98b3cf06c2bf5caeae5f59e51` |
+| `frank-ruhl-libre-hebrew-400-normal.woff` | Frank Ruhl Libre | 400 normal | hebrew | `frank-ruhl-libre` | `5c520bac766948bf557645e1325220e3c265fb3c8dccfcad22322f3ccd42f397` |
+| `frank-ruhl-libre-hebrew-500-normal.woff` | Frank Ruhl Libre | 500 normal | hebrew | `frank-ruhl-libre` | `0e9bca3193fd3a5d56b5442d63e774343b5744fded0d17b6b569f064acbd291a` |
+| `frank-ruhl-libre-hebrew-600-normal.woff` | Frank Ruhl Libre | 600 normal | hebrew | `frank-ruhl-libre` | `8373e3f0410e15a081b5abad28bb277237f2fc49e8ecf41bd7faa250f276e867` |
+| `noto-sans-hebrew-hebrew-400-normal.woff` | Noto Sans Hebrew | 400 normal | hebrew | `noto-sans-hebrew` | `50e545f6b9e4300a49ecf975baf4b1316e41ff287f1ceaf90861f9e0206185cf` |
+| `noto-sans-hebrew-hebrew-500-normal.woff` | Noto Sans Hebrew | 500 normal | hebrew | `noto-sans-hebrew` | `933aeafa0a08a2f2f5b16a89a2d7272a687922f9629cd595152c5b6f8ebb61fa` |
+| `noto-sans-hebrew-hebrew-600-normal.woff` | Noto Sans Hebrew | 600 normal | hebrew | `noto-sans-hebrew` | `e7bd7053e465e34b2eccb4e25559fd62fdf78d9a9d662f122691dbcc4638e018` |
+
+## Subconjuntos y cobertura (comprobada con fontkit, `npm run test:pdf-fonts`)
+
+- **«latin»** (los diez de siempre): U+0000–00FF, la puntuación general (U+2000–206F), € y otros. Las tres familias traen á é í ó ú ñ ü ¿ ¡ « » € ² º ª · — – ’ y los dígitos: ya no hace falta pintar «º» y «ª» con otra fuente. El ornamento ✦ no está: se dibuja como vector. **Los idiomas que ya funcionan (es, en, fr, it, de) siguen usando exactamente estos archivos.**
+- **«latin-ext»** (los diez nuevos, mismo diseño y versión que los «latin»): solo los caracteres latinos extendidos (U+0100–024F y otros): ğ Ğ ı İ ş Ş del turco y «Ÿ» del francés. **No** traen el alfabeto básico ni cifras: se usan **detrás** de su hermano «latin» en la lista de respaldo de react-pdf (`fontFamily: [latin, latin-ext]`), que elige la fuente carácter a carácter (textkit `fontSubstitution`). Entre un glifo «latin» y uno «latin-ext» se pierde el interletrado (kern) de ese par; no se ha visto a simple vista.
+- **«arabic»** (Noto Naskh Arabic 400/500/600): letras U+0621–064A, tashkil U+064B–0652, cifras arábigo-índicas U+0660–0669 y U+06F0–06F9, «،» «؟», espacio y espacio duro; GSUB `init`/`medi`/`fina`/`rlig`/`liga` (las letras salen unidas). **No** trae dígitos latinos, «·», «—», «€» ni «²»: las cifras y precios (que el catálogo escribe siempre con dígitos latinos, `-u-nu-latn`) van por la familia latina de detrás en la pila.
+- **«hebrew»** (Frank Ruhl Libre y Noto Sans Hebrew 400/500/600): letras U+05D0–05EA, niqqud U+05B0–05C7 (completo en Noto Sans Hebrew; Frank Ruhl Libre trae 21 de 24: faltan U+05C4 y U+05C5, los puntos masoréticos, y U+05C6 ׆, que no se usan en texto corriente; el catálogo no escribe vocales), «₪», espacio y espacio duro. Igual que el árabe, sin dígitos ni puntuación latina: pila `[hebrea, latina]`.
+- **Espacio fino U+202F** (separador de millares que `Intl.NumberFormat` usa en francés): **no está en ninguna de las 26 fuentes** (tampoco en las «latin-ext»). El PDF lo normaliza a espacio duro U+00A0 (presente en todas) al maquetar; el script lo informa y, si algún día una fuente lo trae, avisa de que la normalización puede retirarse.
+- **Licencia:** SIL Open Font License 1.1 en todas ([`OFL-PlayfairDisplay.txt`](OFL-PlayfairDisplay.txt), [`OFL-Cinzel.txt`](OFL-Cinzel.txt), [`OFL-Inter.txt`](OFL-Inter.txt), [`OFL-NotoNaskhArabic.txt`](OFL-NotoNaskhArabic.txt), [`OFL-FrankRuhlLibre.txt`](OFL-FrankRuhlLibre.txt), [`OFL-NotoSansHebrew.txt`](OFL-NotoSansHebrew.txt); son los `LICENSE` de los paquetes). La OFL permite incrustarlas en documentos.
+- Las usa `lib/pdf/catalog/fonts.ts` (`Font.register`). Las fuentes anteriores (Fraunces y Karla, dirección C · Boutique) se retiraron en la enmienda visual. Hasta que el PR5 registre las nuevas familias, solo las lee `scripts/pdf-rtl-spike.mts` (prueba técnica).
