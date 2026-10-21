@@ -225,7 +225,12 @@ export function FixtureCatalogManager({
       if (!it) return;
       fxTexts.changeLocation(it.propertyId);
       bump((n) => n + 1);
-      await live({ op: "area", index: i, area: null });
+      await live({ op: "area", index: i, area: null, at: fxTexts.atShown(it.propertyId) });
+    };
+    // 0222 · solo pruebas: se aprueba una versión nueva de una plantilla.
+    (w as unknown as { __fxNewTemplate?: (areaId: string, body: string) => void }).__fxNewTemplate = (areaId, body) => {
+      fxTexts.newTemplateVersion(areaId, body);
+      bump((n) => n + 1);
     };
     // E3: ajustes de fotos de prueba (p. ej. claves que ya no existen, como
     // tras reimportar en el CRM) para comprobar el aviso de E3-5.

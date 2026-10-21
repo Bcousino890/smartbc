@@ -8,6 +8,7 @@ import type { CatalogTextView } from "@/lib/catalogs/texts";
 import { organizeDescription, paragraphsOf } from "@/lib/catalogs/structure";
 import { copyErrorMessage, type CopyLibraryView } from "@/lib/catalogs/copy-rules";
 import { areaById, areaErrorMessage, areaViewOf, confirmedAreaOf, type AreaDecision } from "@/lib/catalogs/areas";
+import { areaTextErrorMessage, copyShown, templateFor, type AreaTextEntry } from "@/lib/catalogs/area-texts";
 import { sentences } from "@/lib/catalogs/text-rules";
 import type { CatalogItemView } from "@/lib/catalogs/types";
 
@@ -84,6 +85,36 @@ export function createFixtureTexts(opts: {
     return d ? { areaId: d.areaId, current: d.locRev === (locRev.get(pid) ?? 0), decidedAt: null } : null;
   };
 
+  // ── 0222 · Plantillas «Vivir en…» (en memoria, mismas reglas que SQL) ──
+  /** Plantilla aprobada por zona (biblioteca del dueño). */
+  const templates = new Map<string, { versionId: string; seq: number; body: string }>([
+    ["madrid/retiro/jeronimos", { versionId: "fx-tpl-jer-1", seq: 1, body: "Los Jerónimos es un barrio de calles tranquilas y edificios señoriales, entre el parque del Retiro y el eje del Prado." }],
+    ["madrid/chamberi", { versionId: "fx-tpl-cham-1", seq: 1, body: "Chamberí conserva el Madrid de fincas clásicas, plazas de barrio y comercio de proximidad." }],
+  ]);
+  /** Copia de cada vivienda en ESTE catálogo. */
+  const copies = new Map<string, { areaId: string; body: string; versionId: string; seq: number }>();
+  const entries = (): Map<string, AreaTextEntry> =>
+    new Map([...templates].map(([areaId, t]) => [areaId, { areaId, draft: null, approved: { id: t.versionId, seq: t.seq, body: t.body, origin: "manual" as const, sourceKey: null, updatedAt: null, approvedAt: null } }]));
+  const atShown = (pid: string): string | null => {
+    const c = copies.get(pid);
+    return c && copyShown(c.areaId, decisionOf(pid)) ? c.body : null;
+  };
+  const areaTextOf = (pid: string): CatalogTextView["areaText"] => {
+    const d = decisionOf(pid);
+    const c = copies.get(pid);
+    const tpl = d?.current ? templateFor(entries(), d.areaId) : null;
+    return {
+      copy: c ? { ...c, shown: copyShown(c.areaId, d) } : null,
+      available: tpl ? { areaId: tpl.area.id, seq: tpl.version.seq, versionId: tpl.version.id, body: tpl.version.body } : null,
+    };
+  };
+  /** Solo pruebas: aprueba una versión nueva de la plantilla de una zona. */
+  const newTemplateVersion = (areaId: string, body: string) => {
+    const prev = templates.get(areaId);
+    const seq = (prev?.seq ?? 0) + 1;
+    templates.set(areaId, { versionId: `fx-tpl-${areaId}-${seq}`, seq, body });
+  };
+
   const views = (): CatalogTextView[] => {
     const items = opts.items();
     const list = items.map((it, i) => ({ it, i, inList: true }));
@@ -97,7 +128,7 @@ export function createFixtureTexts(opts: {
         propertyId: it.propertyId, slug: it.slug, title: it.title, bcReference: it.bcReference, inList,
         ...(() => {
           const zone = areaViewOf(locationOf(it), decisionOf(it.propertyId));
-          return { zone, area: zone.living };
+          return { zone, area: zone.living, areaText: areaTextOf(it.propertyId) };
         })(),
         level: current && hasPubText ? "text" : s.clean === "current" ? "clean" : "facts",
         source: { hasText: s.hasText, clean: s.clean, story: s.story },
@@ -217,7 +248,7 @@ export function createFixtureTexts(opts: {
       const ownLead = (lead ?? "").trim() || null;
       const restSentences = ownLead ? all : all.slice(1);
       const sections = restSentences.length ? [{ heading: null, text: restSentences.join(" "), photo: !!f.it.photoUrl }] : [];
-      const organized = organizeDescription({ lead: ownLead && !(body ?? "").includes(ownLead) ? ownLead : null, paragraphs: paragraphsOf(body), area: areaViewOf(locationOf(f.it), decisionOf(propertyId)).living });
+      const organized = organizeDescription({ lead: ownLead && !(body ?? "").includes(ownLead) ? ownLead : null, paragraphs: paragraphsOf(body), area: areaViewOf(locationOf(f.it), decisionOf(propertyId)).living, areaText: atShown(propertyId) });
       return {
         ok: true as const,
         preview: { lead: ownLead ?? all[0] ?? null, highlights: highlights.length ? highlights : sourceOf(f.it, f.i).features.slice(0, 3), sections, words: (body ?? "").split(/\s+/).filter(Boolean).length, copy: organized.copy, missing: organized.missing },
@@ -230,14 +261,31 @@ export function createFixtureTexts(opts: {
       if (!f) return { ok: false as const, error: "Esa vivienda no está en este catálogo." };
       decisions.set(propertyId, { areaId, locRev: locRev.get(propertyId) ?? 0 });
       opts.onChange();
-      return opts.live({ op: "area", index: f.i, area: confirmedAreaOf(decisionOf(propertyId)), skipNotify });
+      return opts.live({ op: "area", index: f.i, area: confirmedAreaOf(decisionOf(propertyId)), at: atShown(propertyId), skipNotify });
     },
     clearArea: async ({ propertyId, skipNotify }) => {
       const f = find(propertyId);
       if (!f) return { ok: false as const, error: "Esa vivienda no está en este catálogo." };
       if (!decisions.delete(propertyId)) return opts.unchanged();
       opts.onChange();
-      return opts.live({ op: "area", index: f.i, area: null, skipNotify });
+      return opts.live({ op: "area", index: f.i, area: null, at: null, skipNotify });
+    },
+    applyAreaText: async ({ propertyId, skipNotify }) => {
+      const f = find(propertyId);
+      if (!f) return { ok: false as const, error: "Esa vivienda no está en este catálogo." };
+      const d = decisionOf(propertyId);
+      const tpl = d?.current ? templateFor(entries(), d.areaId) : null;
+      if (!tpl) return { ok: false as const, error: areaTextErrorMessage("area_text_unavailable")! };
+      copies.set(propertyId, { areaId: tpl.area.id, body: tpl.version.body, versionId: tpl.version.id, seq: tpl.version.seq });
+      opts.onChange();
+      return opts.live({ op: "area", index: f.i, area: confirmedAreaOf(d), at: atShown(propertyId), skipNotify });
+    },
+    removeAreaText: async ({ propertyId, skipNotify }) => {
+      const f = find(propertyId);
+      if (!f) return { ok: false as const, error: "Esa vivienda no está en este catálogo." };
+      if (!copies.delete(propertyId)) return { ok: false as const, error: areaTextErrorMessage("area_text_not_found")! };
+      opts.onChange();
+      return opts.live({ op: "area", index: f.i, area: confirmedAreaOf(decisionOf(propertyId)), at: null, skipNotify });
     },
     approveCopy: async ({ propertyId, parts }) => {
       const st = store.get(propertyId);
@@ -291,5 +339,5 @@ export function createFixtureTexts(opts: {
     const st = store.get(propertyId);
     store.set(propertyId, { draft: { title: st?.draft.title ?? null, body, lead: null, highlights: [], rev: (st?.draft.rev ?? 0) + 1, origin: "manual" }, published: st?.published ?? null });
   };
-  return { actions, views, changeSource, changeLocation, externalSave, seedLibrary, reuseOnAdd };
+  return { actions, views, changeSource, changeLocation, externalSave, seedLibrary, reuseOnAdd, newTemplateVersion, atShown };
 }

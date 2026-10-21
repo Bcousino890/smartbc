@@ -53,6 +53,8 @@ import {
   withdrawCatalogCopyAction,
   confirmAreaAction,
   clearAreaAction,
+  applyAreaTextAction,
+  removeAreaTextAction,
 } from "../../actions";
 import {
   createGroupAction,
@@ -160,6 +162,8 @@ export default async function CatalogPage({
             withdrawCopy: withdrawCatalogCopyAction,
             confirmArea: confirmAreaAction,
             clearArea: clearAreaAction,
+            applyAreaText: applyAreaTextAction,
+            removeAreaText: removeAreaTextAction,
           },
         }}
       />

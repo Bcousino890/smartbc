@@ -264,6 +264,24 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M12 $M15 $S/test-catalog-photos.sql
 
+echo "== 2za. 0222: plantillas «Vivir en…» y copias de los catálogos (enlace previo + aplicada dos veces, reversión y reaplicación)"
+M16=supabase/migrations/0222_catalog_area_texts.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $S/test-catalog-area-texts-pre.sql $M16 $M16 $S/test-catalog-area-texts.sql
+$R sql $D19/rollback-0222.sql $S/test-rollback-0222.sql $M16 $M16
+$R sql $S/test-util.sql
+echo "   0222 se vuelve a aplicar tras su reversión"
+
+echo "== 2zb. 0222 sobre los tests de zonas (0220), biblioteca (0219), título (0217) y fotos (0202)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $S/test-catalog-areas-pre.sql $M15 $M16 $S/test-catalog-areas.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $S/test-catalog-copy.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $S/test-catalog-title-pre.sql $M12 $M13 $M14 $M15 $M16 $S/test-catalog-title.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $S/test-catalog-photos.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

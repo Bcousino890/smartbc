@@ -126,6 +126,72 @@ Capturas en [`capturas-pr2/`](capturas-pr2/).
 4. Pulsa «Cambiar», elige «Sin zona verificada» y guarda. El apartado pasa a «El barrio». Abre otro catálogo tuyo con esa vivienda: también ha cambiado.
 5. Pulsa «Quitar confirmación». Vuelve la zona de la ficha. En el CRM, la zona, el barrio y la dirección de la ficha no han cambiado en ningún paso.
 
+## PR3 · Plantillas «Vivir en…» por zona
+
+- **Rama:** `fabri/bcp-01-plantillas-zona`, desde `origin/main` = `afa0be41`.
+  - Antes de empezar se comprobó que la última migración en `main` es la 0221 (particulares, ajena a esta ampliación) y que ningún PR abierto usa la 0222 o posterior.
+- **Migración:** `0222_catalog_area_texts.sql`, con [`rollback-0222.sql`](rollback-0222.sql). Sin dependencias nuevas.
+
+### Qué hace
+
+- **Biblioteca de plantillas por dueño y zona del registro** (`area_text_versions`, DA22). Cada zona tiene como mucho un borrador y una versión aprobada; las anteriores quedan retiradas como historial. Se gestiona en la nueva página **«Mi espacio → Plantillas de zona»**:
+  - **Traer borradores de los textos de barrios** (`neighborhoods`, sin IA). En producción, 24 de las 29 introducciones encajan con una zona del registro. Las 5 de fuera de Madrid (Somosaguas, Prado de Somosaguas, Torrelodones, Pozuelo y La Moraleja) se enseñan y no se traen. Llegan como **borradores**.
+  - **Comprobación DA26.** Contacto, URL y precio bloquean. Las distancias, vistas, servicios del edificio, estancias o menciones de agencia se señalan, con la cita, para revisarlos. Las introducciones de Chamberí («en pocos minutos de metro») y Retiro («a un paseo») salen señaladas.
+  - **Escribir a mano, «Borrador con IA»** (solo al pulsar: rellena el cuadro y no guarda), **Aprobar**, **Descartar borrador** y **Retirar plantilla**.
+- **En el editor del catálogo,** dentro de «Zona de la vivienda», aparece el apartado «Plantilla «Vivir en…»». Solo sale con la zona confirmada y vigente:
+  - «Aplicar plantilla» guarda **la copia de este catálogo**. Usa la del barrio o, si el barrio no tiene, la de su distrito.
+  - Si la plantilla cambia después, el catálogo **no cambia** (DA27) y se ofrece «Usar la versión N».
+  - «Quitar plantilla».
+  - Si la zona confirmada cambia o caduca, la copia no se ve y se avisa.
+- **Lector y PDF.** La plantilla entra en «Vivir en {zona}» **solo si la descripción propia no habla ya de la zona** (DA25), con el mismo organizador (DA28).
+  - La ficha breve («solo datos») no cambia.
+  - Aplicar o quitar cambia la huella, así que los lectores abiertos se actualizan solos.
+- **Al añadir una vivienda con texto aprobado** (reutilización del PR1), llega también la copia de la plantilla de su zona confirmada. No pisa nunca una copia que el catálogo ya tuviera.
+- **Elegir o aplicar una plantilla no usa IA** (AC12).
+- **Sin cambios en otras partes:**
+  - No escribe en la ficha del CRM ni en `neighborhoods`.
+  - Las plantillas no dependen de los grupos ni de la búsqueda.
+
+### Verificación
+
+| Comprobación | Resultado |
+| --- | --- |
+| SQL en Postgres 16 temporal, secciones 2za y 2zb de `scripts/sql/test-catalogs-core.sh` (41 comprobaciones de `test-catalog-area-texts.sql`), con 0222 aplicada dos veces sobre un enlace ya creado:<br>• sin copias, la misma huella<br>• un solo borrador por zona<br>• contacto y precio bloqueados<br>• aprobar exactamente lo visto (`draft_changed`)<br>• aplicar solo con zona confirmada (`area_text_unavailable`)<br>• la copia entra en la instantánea y cambia la huella<br>• actualizar o retirar la plantilla no cambia la copia<br>• otra zona o la ficha cambiada ocultan la copia, y vuelve con la zona<br>• plantilla del distrito para un barrio sin plantilla, y preferencia por el barrio<br>• quitar<br>• cada dueño, sus plantillas<br>• la siembra crea 1 y salta 3 (zona con versiones, zona inexistente, teléfono), solo borradores y sin duplicar<br>• descartar<br>• la reutilización al añadir trae la copia y no pisa la propia al volver a añadir<br>• permisos de anon y authenticated<br>• `neighborhoods` y la ficha intactas<br>• reversión y reaplicación<br>• zonas (0220), biblioteca (0219), título (0217) y fotos (0202) en verde con 0222<br>• suite SQL completa en verde | ✅ |
+| `test:catalogs-area-texts` (56 comprobaciones, nuevo en la CI):<br>• DA25 en el organizador y en el lector (texto propio, descripción limpia, agencia, ficha breve)<br>• avisos DA26 sin falsos positivos en «la vivienda de media altura» ni en «referencia verde»<br>• las 29 introducciones reales (24 asignadas y 5 fuera)<br>• plan de siembra<br>• barrio antes que distrito y copia solo con zona vigente<br>• «Borrador con IA» con IA falsa (prompt, una llamada, respuesta vacía)<br>• aplicar y sembrar sin IA<br>• fuente de 0222 | ✅ |
+| Todas las suites de la CI (26), `tsc` y `lint-migrations.py` | ✅ |
+| QA en Chromium con fixtures (29 comprobaciones):<br>• siembra de borradores con Pozuelo fuera<br>• aviso de distancia y editar sin avisos<br>• aprobar solo lo guardado<br>• teléfono bloqueado<br>• «Borrador con IA» con 1 llamada falsa y sin guardar<br>• retirar<br>• sin zona confirmada no hay plantilla<br>• aplicar: editor y lector con «Vivir en Jerónimos»<br>• versión nueva: el catálogo sigue con su copia<br>• otra zona: oculta y avisada; vuelve con la zona<br>• texto propio de zona: manda lo propio<br>• quitar<br>• distrito para Almagro<br>• móvil sin desbordes<br>• sin errores de consola | ✅ |
+| QA anteriores repetidas: zonas (19), estructura (15), textos aprobados (17), título (7) y lector (24) | ✅ |
+| `next build` (`NEXT_BUILD_DIR=.next.qa`, sin `.env.production`) | ✅ «Compiled successfully» |
+
+Capturas en [`capturas-pr3/`](capturas-pr3/).
+
+### Efectos de la migración al fusionar
+
+- Crea `area_text_versions` y `catalog_area_copies`, **vacías**, y las funciones `catalog_area_text_*`.
+- Redefine `catalog_internal_snapshot`: es la de 0220 más la copia de la plantilla con zona vigente.
+- Redefine `catalog_add_property`: es la de 0219 más la copia de la plantilla al reutilizar un texto aprobado.
+- **Ningún catálogo ni ninguna huella cambian al desplegar:** sin plantillas aprobadas y aplicadas no hay nada que enseñar.
+- **No siembra nada sola:** los borradores se traen con el botón.
+
+### Reversión
+
+[`rollback-0222.sql`](rollback-0222.sql):
+- Devuelve la instantánea de 0220 y `catalog_add_property` de 0219, y borra las funciones y las dos tablas.
+- **Se pierden las plantillas y las copias de los catálogos.** Si hay que conservarlas, antes `SELECT * FROM area_text_versions; SELECT * FROM catalog_area_copies;`.
+- Si se revierte la base de datos antes que el código:
+  - El editor oculta el apartado de plantilla sin romperse.
+  - La página «Plantillas de zona» dice que no puede leerlas.
+  - El lector deja de enseñar las copias.
+
+### QA en producción (Fabricio)
+
+1. En «Mi espacio» sale el acceso «Plantillas de zona». Ábrelo: debe ofrecer traer **24 borradores** y listar las 5 zonas de fuera de Madrid como «No se traen».
+2. Pulsa «Traer 24 borradores». Llegan como borradores, sin aprobar ninguno. Revisa los de Chamberí y Retiro, que salen con aviso de distancia; edita, guarda y aprueba, por ejemplo, el de Recoletos.
+3. En «Alquiler en Barrio de Salamanca», abre una vivienda de Recoletos con la zona **confirmada**. Debe aparecer «Plantilla «Vivir en…» · Disponible: Recoletos (Salamanca), versión 1». Pulsa «Aplicar plantilla».
+4. Con el enlace del cliente abierto, si el texto de esa vivienda **no habla del barrio**, debe aparecer «Vivir en Recoletos» con la plantilla. Si **sí habla del barrio**, se queda su texto y la plantilla no se repite.
+5. Edita y aprueba una versión 2 de Recoletos. El catálogo del paso 3 no cambia y su editor ofrece «Usar la versión 2».
+6. «Quitar plantilla» la quita de ese catálogo. La ficha del CRM y los textos de barrios del SmartLink no cambian en ningún paso.
+
 ### Pendientes que siguen igual
 
 G-ALQ, diagnóstico original de Recoletos, D13 en producción y validación de la importación con PDF representativos reales: sin cambios, esta ampliación no los cierra.

@@ -202,3 +202,19 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON crm_notifications TO service_role;
 
 -- ── Ampliación 0220: dirección de la ficha (en producción existe desde 0001) ──
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
+
+-- ── Ampliación 0222: barrios curados del SmartLink (0144/0145; solo se leen) ──
+CREATE TABLE IF NOT EXISTS neighborhoods (
+  id           uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+  country      text    NOT NULL DEFAULT 'es',
+  zone_key     text    NOT NULL UNIQUE,
+  display_name text    NOT NULL,
+  intro        text    NOT NULL,
+  aliases      text[]  NOT NULL DEFAULT '{}',
+  district     text,
+  municipality text    NOT NULL DEFAULT 'Madrid',
+  active       boolean NOT NULL DEFAULT true
+);
+INSERT INTO neighborhoods (zone_key, display_name, intro, district) VALUES
+  ('almagro', 'Almagro', 'Almagro, en Chamberí, reúne palacetes y fincas clásicas.', 'Chamberí')
+ON CONFLICT (zone_key) DO NOTHING;
