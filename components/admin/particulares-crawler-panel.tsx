@@ -24,13 +24,13 @@ export function ParticularesCrawlerPanel() {
         </ul>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
-            href="/es/admin/particulares"
+            href="/es/admin/captaciones"
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-cream-50 hover:bg-ink/90"
           >
             <ExternalLink size={15} aria-hidden /> Ver anuncios de particulares
           </Link>
           <Link
-            href="/es/admin/particulares?retired=1"
+            href="/es/admin/captaciones?retired=1"
             className="inline-flex h-11 items-center rounded-xl border border-ink/15 bg-white px-4 text-sm font-medium text-ink hover:bg-ink/[0.04]"
           >
             Ver anuncios retirados

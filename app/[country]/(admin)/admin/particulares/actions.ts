@@ -58,7 +58,7 @@ export async function updateParticularPhone(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true };
 }
 
@@ -294,7 +294,7 @@ export async function logParticularContact(
     .single();
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true, id: data.id };
 }
 
@@ -327,7 +327,7 @@ export async function assignParticular(
     .eq("id", particularId);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true };
 }
 
@@ -366,7 +366,7 @@ export async function setParticularActive(
 
   // El historial (baja/reactivación) lo escribe el disparador `particulares_active_log` (migración 0180).
 
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true };
 }
 
@@ -401,7 +401,7 @@ export async function markParticularAsVerified(
   if (error) return { ok: false, error: error.message };
 
   const updated = (data as { id: string }[])?.length ?? 0;
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true, updated };
 }
 
@@ -473,7 +473,7 @@ export async function rescrapeParticularPhones(
   if (error) return { ok: false, error: error.message };
 
   const updated = (data as { id: string }[])?.length ?? 0;
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true, updated };
 }
 
@@ -512,7 +512,7 @@ export async function undoParticularEnrichment(enrichmentId: string): Promise<En
   });
   if (error) return { ok: false, error: error.message };
   if (!data?.ok) return { ok: false, error: enrichReason(data?.reason) };
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true };
 }
 
@@ -576,6 +576,6 @@ export async function resolveParticularEnrichmentCandidate(
       .eq("particular_id", particularId);
     if (error) return { ok: false, error: error.message };
   }
-  revalidatePath("/admin/particulares");
+  revalidatePath("/admin/captaciones");
   return { ok: true };
 }

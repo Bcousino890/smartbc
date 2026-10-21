@@ -8,17 +8,25 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getPipelinesForCountry, getStagesForPipeline } from "@/lib/captaciones/pipeline";
 import { getAutoDistributionConfig, type AutoDistributionConfig } from "@/lib/captaciones/auto-distribution";
 import { createAdminClient } from "@/lib/db/admin";
+import ParticularesPage from "../particulares/particulares-page";
 
 export const dynamic = "force-dynamic";
 
 export default async function CaptacionesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ country: Country }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { country } = await params;
+  // En España, "Captaciones" es la lista de particulares (anuncios de Idealista).
+  // La ruta /es/admin/captaciones la sirve esa pantalla.
+  if (country === "es") {
+    return <ParticularesPage params={params} searchParams={searchParams} />;
+  }
   // Captaciones es un módulo exclusivo de Chile (flujo captación→propiedad
-  // vía Portal Inmobiliario). En España no aplica.
+  // vía Portal Inmobiliario).
   if (country !== "cl") redirect(getCountryConfig(country).prefix);
 
   const profile = await getCurrentProfile();
