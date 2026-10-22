@@ -73,6 +73,10 @@ jobs:
       # 0222: plantillas «Vivir en…» (reglas puras, IA falsa y fuente). Sin BD.
       - name: "Catálogos (plantillas de zona, offline)"
         run: npm run test:catalogs-area-texts
+      # 0223 (PR4): diccionario del lector en 8 idiomas, formatos por idioma y
+      # el español exactamente como antes. Sin BD, red ni IA.
+      - name: "Catálogos (idiomas, offline)"
+        run: npm run test:catalogs-i18n
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"

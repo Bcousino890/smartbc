@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePdfDownload } from "@/lib/catalogs/export/download-client";
 import { cn } from "@/lib/utils";
+import { useReaderLang } from "./lang-context";
 
 // PDF del catálogo en el lector (expediente 2026-10-16-bcp-01-pdf): en el
 // índice (enlace discreto) y en el cierre (acción de filete fino, como las de
@@ -20,9 +21,12 @@ export interface ReaderPdf {
 }
 
 export function useReaderPdf(token: string): ReaderPdf {
-  const { busy, download } = usePdfDownload(`/api/seleccion/${encodeURIComponent(token)}/pdf`, {
-    notFound: "Este enlace ya no está disponible.",
-  });
+  const { dict } = useReaderLang();
+  const texts = useMemo(
+    () => ({ changing: dict.pdfChanging, rateLimited: dict.pdfRateLimited, otherInProgress: dict.pdfOtherInProgress, failed: dict.pdfFailed, busy: dict.pdfBusy, downloaded: dict.pdfDownloaded, network: dict.pdfNetwork }),
+    [dict],
+  );
+  const { busy, download } = usePdfDownload(`/api/seleccion/${encodeURIComponent(token)}/pdf`, { notFound: dict.pdfNotFound, texts });
   const [message, setMessage] = useState<ReaderPdf["message"]>(null);
   const start = useCallback(
     (place: PdfPlace) => {
@@ -35,8 +39,9 @@ export function useReaderPdf(token: string): ReaderPdf {
 }
 
 export function PdfDownload({ pdf, variant }: { pdf: ReaderPdf; variant: PdfPlace }) {
+  const { dict } = useReaderLang();
   const message = pdf.message?.place === variant ? pdf.message : null;
-  const label = pdf.busy ? "Preparando el PDF…" : "Descargar en PDF";
+  const label = pdf.busy ? dict.pdfPreparing : dict.pdfDownload;
   const note = message ? (
     <span
       className={cn("block max-w-[36ch] font-sans text-[12px] leading-relaxed", message.ok ? "text-ink/50" : "text-[#8a2b1a]")}
@@ -77,7 +82,7 @@ export function PdfDownload({ pdf, variant }: { pdf: ReaderPdf; variant: PdfPlac
       >
         {label}
       </button>
-      {note ?? <span className="block max-w-[36ch] font-sans text-[12px] leading-relaxed text-ink/50">Una copia de esta selección tal como está hoy, para guardarla o imprimirla.</span>}
+      {note ?? <span className="block max-w-[36ch] font-sans text-[12px] leading-relaxed text-ink/50">{dict.pdfHint}</span>}
     </div>
   );
 }

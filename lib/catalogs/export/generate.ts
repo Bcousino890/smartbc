@@ -42,9 +42,11 @@ export interface BuiltPdf {
   fileName: string;
 }
 
+// PR4 (idiomas): el PDF sigue en español pase lo que pase con el idioma del
+// enlace; el PR5 (PDF multilingüe y fuentes) es quien le pasa `snapshot.lang`.
 /** Fotos que necesita el PDF, con su versión en S1 (`u`) y su ancho. */
 export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperation): Map<string, PhotoNeed> {
-  const catalog = toPublicCatalog(snapshot, operation);
+  const catalog = toPublicCatalog(snapshot, operation, "es");
   const needs = new Map<string, PhotoNeed>();
   const internal = new Map((snapshot.items ?? []).map((it) => [String(it.key), it]));
   const needOf = (itemKey: string, photoKey: string, width: number): PhotoNeed | null => {
@@ -96,7 +98,7 @@ async function loadAll(needs: Map<string, PhotoNeed>, signal: AbortSignal): Prom
 
 /** Construye el PDF de una captura. «changed» si una foto ya no es la de S1. */
 export async function buildCatalogPdf(cap: Cap, signal: AbortSignal): Promise<{ pdf: Buffer; fileName: string } | { changed: true }> {
-  const catalog = toPublicCatalog(cap.snapshot, cap.operation);
+  const catalog = toPublicCatalog(cap.snapshot, cap.operation, "es");
   // La maquetación va en un hilo aparte (expediente 2026-10-17-bcp-01-pdf-worker).
   // Se lanza YA, para que arranque mientras se descargan las fotos; no recibe
   // nada hasta que las fotos están listas y él ha dicho «ready». La señal del

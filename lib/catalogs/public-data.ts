@@ -4,6 +4,7 @@ import type { PublicCatalogState } from "./public-contract";
 import { toPublicCatalog, type InternalSnapshot } from "./to-public";
 import { readCoherent, readCoherentBatch, type CatalogMeta } from "./coherent-read";
 import { composeFingerprint } from "./public-fingerprint";
+import { snapshotLang } from "./i18n";
 import { isShareToken } from "./share";
 import { isCatalogFixtureMode } from "./fixture-mode";
 
@@ -16,6 +17,9 @@ import { isCatalogFixtureMode } from "./fixture-mode";
 // K1 (§3.2/§3.3): la operación del catálogo se lee aparte con una guarda por
 // catalogs.version (coherent-read.ts), y la huella pública la incluye
 // (public-fingerprint.ts). Mismo camino con la BD y con el almacén sintético.
+// PR4 (0223): el idioma del enlace (personal o del catálogo) viene DENTRO de
+// la instantánea (`lang`), así que ya está en la huella del SQL: el lector,
+// el vigilante y la captura del PDF no pueden servir el idioma de otro enlace.
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -112,7 +116,7 @@ export async function getPublicCatalogState(token: string): Promise<PublicCatalo
   return {
     fingerprint: composeFingerprint(r.snapshot.fingerprint, r.operation),
     expiresAt: r.snapshot.expiresAt,
-    catalog: toPublicCatalog(r.snapshot.snapshot, r.operation),
+    catalog: toPublicCatalog(r.snapshot.snapshot, r.operation, snapshotLang(r.snapshot.snapshot.lang)),
   };
 }
 

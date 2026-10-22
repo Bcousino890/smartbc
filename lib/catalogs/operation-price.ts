@@ -1,4 +1,5 @@
 import { formatMoney, operationLabel, priceLabel } from "./format";
+import { catalogDictionary, type CatalogLanguage } from "./i18n";
 
 // ============================================================================
 // Operación e importe de una vivienda en un catálogo (BCP-01 K1/K2; D-QA14 y
@@ -64,8 +65,8 @@ export function operationPrice(p: OperationPriceInput, op: CatalogOperation): nu
   return positiveAmount(p.price);
 }
 
-function monthly(n: number, currency?: string | null): string {
-  return `${formatMoney(n, currency)}/mes`;
+function monthly(n: number, currency?: string | null, lang: CatalogLanguage = "es"): string {
+  return catalogDictionary(lang).perMonth(formatMoney(n, currency, lang));
 }
 
 /** Aviso interno (solo gestión) de una vivienda SOLO de alquiler con un
@@ -98,16 +99,19 @@ export function managerPriceFields(
 /** Operación y precio de una vivienda en un catálogo de operación `op`
  *  (DS-1/DS-2): en venta o alquiler, la del catálogo con su importe; una
  *  inclusión de otra operación, con su operación y su precio reales; en
- *  «venta y alquiler», como siempre. Nunca se inventa un importe. */
-export function priceDisplay(p: OperationPriceInput, op: CatalogOperation): PriceDisplay {
+ *  «venta y alquiler», como siempre. Nunca se inventa un importe. `lang`
+ *  (PR4) traduce la operación y el formato del precio; «también en…» es
+ *  solo del gestor y sigue en español. */
+export function priceDisplay(p: OperationPriceInput, op: CatalogOperation, lang: CatalogLanguage = "es"): PriceDisplay {
+  const d = catalogDictionary(lang);
   const real = {
-    operation: operationLabel(p.operation, p.operations),
-    price: priceLabel({ operation: p.operation, operations: p.operations, price: p.price, rentPrice: p.rent_price, currency: p.currency }),
+    operation: operationLabel(p.operation, p.operations, lang),
+    price: priceLabel({ operation: p.operation, operations: p.operations, price: p.price, rentPrice: p.rent_price, currency: p.currency }, lang),
   };
   if (op === "any") return { ...real, also: null, contextual: true };
   if (!fitsOperation(p, op)) return { ...real, also: null, contextual: false };
   const amount = operationPrice(p, op);
-  const price = amount === null ? NO_PRICE : op === "rent" ? monthly(amount, p.currency) : formatMoney(amount, p.currency);
+  const price = amount === null ? d.priceNoData : op === "rent" ? monthly(amount, p.currency, lang) : formatMoney(amount, p.currency, lang);
   let also: string | null = null;
   if (isProperDual(p)) {
     if (op === "rent") {
@@ -118,5 +122,5 @@ export function priceDisplay(p: OperationPriceInput, op: CatalogOperation): Pric
       also = rent === null ? "También en alquiler · precio sin dato" : `También en alquiler: ${monthly(rent, p.currency)}`;
     }
   }
-  return { operation: op === "rent" ? "Alquiler" : "Venta", price, also, contextual: true };
+  return { operation: op === "rent" ? d.rent : d.sale, price, also, contextual: true };
 }

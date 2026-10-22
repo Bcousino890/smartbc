@@ -22,6 +22,16 @@ export interface CatalogCoverData {
   countLabel?: string | null;
 }
 
+/** Etiquetas fijas de la portada (PR4: el lector las pasa en el idioma del
+ *  enlace; la HOME y Diseño usan las de siempre, en español). */
+export interface CatalogCoverLabels {
+  kicker: string;
+  preparedBy: string;
+  begin: string;
+}
+
+const DEFAULT_LABELS: CatalogCoverLabels = { kicker: "Selección privada", preparedBy: "Preparada por", begin: "Comenzar" };
+
 const ES_WORDS = ["", "Una", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve", "Diez", "Once", "Doce"];
 
 /** «Cuatro viviendas», «Una vivienda», «24 viviendas». */
@@ -36,8 +46,10 @@ export function CatalogCover({
   className,
   readable = false,
   onBegin,
+  labels = DEFAULT_LABELS,
 }: {
   data: CatalogCoverData;
+  labels?: CatalogCoverLabels;
   className?: string;
   /** En el lector: textos auxiliares de 12 px mínimo, foto prioritaria y el
    *  movimiento de la referencia (la miniatura de la HOME conserva su escala). */
@@ -45,7 +57,7 @@ export function CatalogCover({
   /** «Comenzar» (solo en el lector). */
   onBegin?: () => void;
 }) {
-  const kicker = ["Selección privada", data.numberLabel].filter(Boolean).join(" · ");
+  const kicker = [labels.kicker, data.numberLabel].filter(Boolean).join(" · ");
   return (
     <div className={`${styles.frame}${readable ? ` ${styles.readable}` : ""}${className ? ` ${className}` : ""}`}>
       <div className={styles.cover}>
@@ -72,13 +84,17 @@ export function CatalogCover({
               -webkit-box del recorte a cuatro líneas se «bloquificaba» y el
               título quedaba con cero líneas (comprobado en Chromium). */}
           <div className={`w-full${readable ? " vc-cover-in vc-cover-in-d1" : ""}`}>
-            <h2 className={styles.title}>{data.title}</h2>
+            <h2 className={styles.title}>
+              <bdi>{data.title}</bdi>
+            </h2>
           </div>
           <span className={`${styles.ornament}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`} aria-hidden="true" />
           {data.preparedBy ? (
             <>
-              <p className={`${styles.preparedLabel}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>Preparada por</p>
-              <p className={`${styles.preparedBy}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>{data.preparedBy}</p>
+              <p className={`${styles.preparedLabel}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>{labels.preparedBy}</p>
+              <p className={`${styles.preparedBy}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>
+                <bdi>{data.preparedBy}</bdi>
+              </p>
             </>
           ) : null}
           <div className={`${styles.meta}${readable ? " vc-cover-in vc-cover-in-d3" : ""}`}>
@@ -91,7 +107,7 @@ export function CatalogCover({
 
         {onBegin ? (
           <button type="button" onClick={onBegin} className={`${styles.begin}${readable ? " vc-cover-in vc-cover-in-d4" : ""}`}>
-            <span className={styles.beginLabel}>Comenzar</span>
+            <span className={styles.beginLabel}>{labels.begin}</span>
             <span className={styles.beginLine} aria-hidden="true" />
           </button>
         ) : null}

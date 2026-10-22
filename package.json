@@ -72,6 +72,7 @@
     "test:catalogs-copy": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-copy.mts",
     "test:catalogs-areas": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-areas.mts",
     "test:catalogs-area-texts": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-area-texts.mts",
+    "test:catalogs-i18n": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-i18n.mts",
     "test:housely": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-housely-scraper.mts",
     "test:innea": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-innea-scraper.mts",
     "test:esriv": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-esriv-scraper.mts",

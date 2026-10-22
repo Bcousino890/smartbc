@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ImgHTMLAttributes } from "react";
+import { useReaderLang } from "./lang-context";
 import styles from "./reader.module.css";
 
 // Foto del lector con estados (BCP-01 E1, L4). Una foto puede estar:
@@ -23,6 +24,7 @@ export function ReaderImage({
   variant: "frame" | "thumb" | "gallery";
   alt: string;
 }) {
+  const { dict } = useReaderLang();
   const ref = useRef<HTMLImageElement>(null);
   const [state, setState] = useState<ImageState>("loading");
   const src = img.src;
@@ -48,12 +50,12 @@ export function ReaderImage({
       />
       {state === "loading" ? (
         <span className={`${styles.imgLoading} ${variant === "thumb" ? styles.imgLoadingQuiet : ""} ${variant === "gallery" ? styles.imgOnInk : ""}`} aria-hidden="true">
-          {variant === "thumb" ? null : "Cargando foto…"}
+          {variant === "thumb" ? null : dict.loadingPhoto}
         </span>
       ) : null}
       {state === "error" ? (
-        <span className={`${styles.imgError} ${variant === "thumb" ? styles.imgErrorThumb : ""} ${variant === "gallery" ? styles.imgOnInk : ""}`} role={variant === "thumb" ? undefined : "img"} aria-label={variant === "thumb" ? undefined : "Foto no disponible"} data-testid="img-error">
-          {variant === "thumb" ? "—" : variant === "gallery" ? "Esta foto no se puede mostrar" : "Foto no disponible"}
+        <span className={`${styles.imgError} ${variant === "thumb" ? styles.imgErrorThumb : ""} ${variant === "gallery" ? styles.imgOnInk : ""}`} role={variant === "thumb" ? undefined : "img"} aria-label={variant === "thumb" ? undefined : dict.photoUnavailable} data-testid="img-error">
+          {variant === "thumb" ? "—" : variant === "gallery" ? dict.photoCannotShow : dict.photoUnavailable}
         </span>
       ) : null}
     </>

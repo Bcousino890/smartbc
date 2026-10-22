@@ -32,6 +32,8 @@ import { ClosingPage, ColophonPage, CoverPage, DetailSpread, IndexPage, OpeningS
 import { FeedbackBox } from "./feedback-box";
 import type { PersonalFeedbackView, SavedFeedback } from "@/lib/catalogs/feedback-rules";
 import { ReaderImage } from "./reader-image";
+import { ReaderLangProvider, readerLangOf } from "./lang-context";
+import { readerFontClasses } from "./fonts";
 import styles from "./reader.module.css";
 
 // Lector del catálogo compartido (BCP-01 T8/T9/T10; C2 Z6; enmienda visual
@@ -41,6 +43,13 @@ import styles from "./reader.module.css";
 // «reducir movimiento», actualizaciones en vivo con D12/E4 y, con ?medir=1,
 // la medición de D13. Cada vivienda tiene exactamente dos pantallas, apertura
 // y detalle (expediente 2026-10-20-bcp-01-compacto-y-opiniones, DC1).
+// Idiomas (PR4, expediente 2026-10-21-bcp-01-ampliacion-textos-idiomas): el
+// idioma viene en el contrato público (`catalog.lang`, el del enlace) y fija
+// `lang` y `dir` en la raíz, las etiquetas del diccionario y, en árabe y
+// hebreo, la lectura de derecha a izquierda: flechas, teclado y deslizar se
+// reflejan (N2); la composición foto | panel y las dos pantallas por vivienda
+// no cambian (reader.module.css). Las familias árabe y hebrea solo se aplican
+// en esos idiomas (fonts.ts).
 
 type Action =
   | { type: "goto"; page: PageRef }
@@ -79,9 +88,6 @@ const SPREAD_QUERY = "(min-width: 900px) and (min-height: 620px)";
 /** El libro se sirve allí donde CABE una página entera (el mismo criterio
  *  que la referencia): por debajo, el recorrido vertical. */
 const BOOK_QUERY = "(min-height: 620px)";
-
-const NAV_LABELS = { previous: "Anterior", next: "Siguiente", contents: "Índice", pageOf: "de" };
-const GALLERY_DICT = { closeGallery: "Cerrar galería", galleryAll: "Todas las fotografías", previous: "Anterior", next: "Siguiente" };
 
 function pageRef(p: PageRef): string {
   return p.kind === "item" ? `item:${p.key}:${p.part}` : p.kind;
@@ -150,6 +156,12 @@ export function CatalogReader({
   const [mosaic, setMosaic] = useState(false);
   const url = usePhotoUrl(photoBase);
   const { turn, begin, opened } = useBookTurn({ page: PAGE_TURN_MS, cover: BOOK_COVER_TURN_MS });
+  // Idioma del enlace: etiquetas, dirección y familias. Cambia en vivo con
+  // el contenido (DA19): llega en la misma actualización que la huella.
+  const lang = state.catalog.lang;
+  const { dict, rtl } = useMemo(() => readerLangOf(lang), [lang]);
+  const rtlRef = useRef(false);
+  rtlRef.current = rtl;
 
   const rootRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef(state);
@@ -378,8 +390,11 @@ export function CatalogReader({
       // texto (no pasan de página); las flechas ← → siguen pasando página.
       if ((e.key === "PageDown" || e.key === "PageUp") && t?.closest("[data-scroll-region]")) return;
       const all = pagesOf(s.catalog, s.layout);
-      if (e.key === "ArrowRight" || e.key === "PageDown") stepBy(1);
-      else if (e.key === "ArrowLeft" || e.key === "PageUp") stepBy(-1);
+      // N2: en árabe y hebreo las flechas siguen la lectura: ← avanza, → retrocede.
+      const fwd = rtlRef.current ? "ArrowLeft" : "ArrowRight";
+      const back = rtlRef.current ? "ArrowRight" : "ArrowLeft";
+      if (e.key === fwd || e.key === "PageDown") stepBy(1);
+      else if (e.key === back || e.key === "PageUp") stepBy(-1);
       else if (e.key === "Home") go(all[0]);
       else if (e.key === "End") go(all[all.length - 1]);
       else return;
@@ -435,7 +450,11 @@ export function CatalogReader({
     swipe.current = null;
     if (!s || stateRef.current.gallery) return;
     const dx = e.clientX - s.x;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(e.clientY - s.y) * 1.5) stepBy(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(e.clientY - s.y) * 1.5) {
+      // N2: en RTL se avanza deslizando hacia la derecha.
+      const forward = rtlRef.current ? dx > 0 : dx < 0;
+      stepBy(forward ? 1 : -1);
+    }
   };
 
   // ── Páginas
@@ -479,13 +498,14 @@ export function CatalogReader({
     return wrap(key, <OpeningSpread item={item} index={i} total={c.items.length} url={url} flipped={i % 2 === 1} onOpenGallery={gallery} />);
   }
 
-  const rootClass = cn(styles.root, "font-sans text-ink", lowMotion && styles.lowMotion);
+  const rootClass = cn(styles.root, "font-sans text-ink", lowMotion && styles.lowMotion, readerFontClasses(lang));
+  const rootLang = { lang, dir: rtl ? ("rtl" as const) : ("ltr" as const) };
 
   if (unavailable) {
     return (
-      <div className={cn(rootClass, styles.standalone, "min-h-screen bg-cream-50")} data-testid="reader-unavailable">
-        <StatePage kicker="Enlace" title="Este enlace ya no está disponible">
-          <p>Si necesitas volver a ver la selección, pide un enlace nuevo a tu asesor.</p>
+      <div {...rootLang} className={cn(rootClass, styles.standalone, "min-h-screen bg-cream-50")} data-testid="reader-unavailable">
+        <StatePage kicker={dict.linkKicker} title={dict.linkUnavailable}>
+          <p>{dict.linkUnavailableHint}</p>
         </StatePage>
       </div>
     );
@@ -499,17 +519,20 @@ export function CatalogReader({
     return k === "cover" || k === "colophon" ? "bg-ink" : "bg-cream-50";
   };
 
+  const noticeText = state.notice === "item_removed" ? dict.itemRemoved : state.notice === "item_removed_last" ? dict.itemRemovedLast : state.notice === "photo_removed" ? dict.photoRemoved : null;
+  const navLabels = { previous: dict.previous, next: dict.next, contents: dict.contents, pageOf: dict.pageOf };
+
   const banners = (
     <>
       {connectivity === "offline" ? (
         <div className={styles.banner} role="status" data-testid="offline-banner">
-          <span>Sin conexión. Lo que ves puede no estar al día; se actualizará en cuanto vuelva la conexión.</span>
+          <span>{dict.offline}</span>
         </div>
       ) : null}
-      {state.notice ? (
+      {noticeText ? (
         <div className={styles.banner} role="status" data-testid="notice">
-          <span>{state.notice}</span>
-          <button type="button" onClick={() => dispatch({ type: "dismiss" })} aria-label="Cerrar aviso">
+          <span>{noticeText}</span>
+          <button type="button" onClick={() => dispatch({ type: "dismiss" })} aria-label={dict.closeNotice}>
             ×
           </button>
         </div>
@@ -525,23 +548,24 @@ export function CatalogReader({
       data-testid="mode-toggle"
       className="vc-focus font-display text-[10px] font-medium uppercase vc-tracked-sm opacity-45 transition-opacity duration-300 hover:opacity-90"
     >
-      {scrollMode ? "Páginas" : "Desplazar"}
+      {scrollMode ? dict.modePages : dict.modeScroll}
     </button>
   );
 
   return (
-    <div ref={rootRef} className={rootClass} data-huella={state.fingerprint} data-testid="reader" data-page={current + 1} data-mode={scrollMode ? "scroll" : "pages"}>
+    <ReaderLangProvider lang={lang}>
+    <div ref={rootRef} {...rootLang} className={rootClass} data-huella={state.fingerprint} data-testid="reader" data-page={current + 1} data-mode={scrollMode ? "scroll" : "pages"}>
       {scrollMode ? (
         <div className={styles.flow}>
           {banners}
           {pages.map((p) => renderPage(p, true))}
           <BookNav
             className={styles.navFlow}
-            ariaLabel="Navegación de la selección"
+            ariaLabel={dict.navLabel}
             current={current}
             total={pages.length}
             isDark={false}
-            labels={NAV_LABELS}
+            labels={navLabels}
             arrows={false}
             onPrev={() => stepBy(-1)}
             onNext={() => stepBy(1)}
@@ -553,15 +577,15 @@ export function CatalogReader({
       ) : (
         <div className={cn(styles.book, isDark && styles.dark)} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
           {banners}
-          <BookStage count={pages.length} current={current} turn={turn} renderPage={(idx) => renderPage(pages[idx], false)} sheetBg={sheetBg} opened={opened.current} />
+          <BookStage count={pages.length} current={current} turn={turn} renderPage={(idx) => renderPage(pages[idx], false)} sheetBg={sheetBg} opened={opened.current} rtl={rtl} />
           {/* Navegación editorial. Oculta en la portada: allí manda «Comenzar». */}
           {current > 0 ? (
             <BookNav
-              ariaLabel="Navegación de la selección"
+              ariaLabel={dict.navLabel}
               current={current}
               total={pages.length}
               isDark={isDark}
-              labels={NAV_LABELS}
+              labels={navLabels}
               onPrev={() => stepBy(-1)}
               onNext={() => stepBy(1)}
               onContents={() => go({ kind: "index" })}
@@ -580,7 +604,8 @@ export function CatalogReader({
           title={galleryItem.title}
           photos={galleryItem.photos.map((p) => url(p.src, 1600))}
           thumbs={galleryItem.photos.map((p) => url(p.src, 640))}
-          dict={GALLERY_DICT}
+          dict={{ closeGallery: dict.closeGallery, galleryAll: dict.galleryAll, previous: dict.previous, next: dict.next }}
+          rtl={rtl}
           startIndex={state.gallery.photo}
           index={mosaic ? null : state.gallery.photo}
           onIndexChange={(i) => {
@@ -592,10 +617,10 @@ export function CatalogReader({
           }}
           imageComponent={GalleryImage}
           notice={
-            state.notice ? (
+            noticeText ? (
               <div className={styles.galleryNotice} role="status" data-testid="gallery-notice">
-                <span>{state.notice}</span>
-                <button type="button" onClick={() => dispatch({ type: "dismiss" })} aria-label="Cerrar aviso">
+                <span>{noticeText}</span>
+                <button type="button" onClick={() => dispatch({ type: "dismiss" })} aria-label={dict.closeNotice}>
                   ×
                 </button>
               </div>
@@ -616,5 +641,6 @@ export function CatalogReader({
         </div>
       ) : null}
     </div>
+    </ReaderLangProvider>
   );
 }

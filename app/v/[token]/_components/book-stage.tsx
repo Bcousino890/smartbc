@@ -188,7 +188,7 @@ export function BookNav({
         >
           {labels.contents}
         </button>
-        <span className="font-display text-[10.5px] font-medium vc-nums opacity-70" aria-label={`${current + 1} ${labels.pageOf} ${total}`}>
+        <span dir="ltr" className="font-display text-[10.5px] font-medium vc-nums opacity-70" aria-label={`${current + 1} ${labels.pageOf} ${total}`}>
           {String(current + 1).padStart(2, "0")}
           <span className="mx-1.5 opacity-50">/</span>
           {String(total).padStart(2, "0")}

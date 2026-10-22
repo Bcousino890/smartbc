@@ -11,6 +11,7 @@
 // ============================================================================
 
 import type { ContactRole } from "./contact-format";
+import type { CatalogLanguage } from "./i18n";
 
 export type PhotoOrientation = "landscape" | "portrait" | "square" | "unknown";
 
@@ -48,6 +49,9 @@ export interface PublicItem {
   bathrooms: number | null;
   squareMeters: number | null;
   floor: string;
+  /** PR4 · La planta en forma breve para los datos clave («7», «baja»,
+   *  «Ático»); null sin dato. En el idioma del enlace, como `floor`. */
+  floorShort: string | null;
   /** DC3 · La descripción completa del catálogo, íntegra y una sola vez, por
    *  prioridad: texto publicado del catálogo (si está vigente) → historia
    *  aprobada vigente → descripción limpia para clientes vigente → []. Nunca
@@ -61,6 +65,11 @@ export interface PublicItem {
 }
 
 export interface PublicCatalog {
+  /** PR4 (0223) · Idioma del ENLACE: el del enlace personal si lo tiene, si
+   *  no el del catálogo. Decide las etiquetas fijas, la dirección (ar y he en
+   *  RTL) y el formato de cifras y fechas. El contenido sigue en español
+   *  hasta el PR6. Entra en la huella: cambiarlo actualiza el lector. */
+  lang: CatalogLanguage;
   title: string;
   intro: string | null;
   /** «Otoño 2026» */
