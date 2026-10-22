@@ -16,9 +16,9 @@
 // títulos (y en mayúsculas, İ); el francés lleva «L'Haÿ-les-Roses» en el
 // título del catálogo «pdf» (en mayúsculas, «Ÿ»), escrito a propósito para
 // probar ese glifo.
-import { FIXTURE_TOKENS, fixtureMutate, fixtureOwnerToken, fixtureTranslations } from "../../lib/catalogs/fixture-store.ts";
+import { FIXTURE_TOKENS, fixtureOwnerToken, fixtureTranslations } from "../../lib/catalogs/fixture-store.ts";
 import type { CatalogLanguage } from "../../lib/catalogs/i18n.ts";
-import { META_KEY, approveItem, loadPanel, prepareItem, setLanguage } from "../../lib/catalogs/translation-service.ts";
+import { META_KEY, autoUnit, loadPanel, setLanguage } from "../../lib/catalogs/translation-service.ts";
 import type { TargetLanguage, TrAiFn } from "../../lib/catalogs/translations.ts";
 
 type Bank = { sentences: string[]; titles: string[]; features: Record<string, string>; meta: Record<string, string>; intro: string };
@@ -220,13 +220,12 @@ export function catalogIdOf(token: string): string {
 }
 
 /**
- * Prepara, aprueba y deja vigentes las traducciones de prueba de un catálogo
- * de las fixtures en `lang`, por el mismo camino que el gestor.
- *   · Sin `skip`: activa el idioma en el catálogo con setLanguage (la misma
- *     comprobación de «completo» que producción).
+ * Traduce y publica las traducciones de prueba de un catálogo de las
+ * fixtures en `lang`, por el mismo camino que la traducción automática
+ * («Preparar ahora»: autoUnit), y elige ese idioma para el catálogo con
+ * setLanguage (al momento, 0228).
  *   · Con `skip` (claves de vivienda): esas viviendas quedan SIN traducción
- *     (N5) y el idioma se fija como lo haría SQL (fixtureMutate «lang»), ya
- *     que el gestor no deja activar un idioma incompleto.
+ *     (N5).
  * No resetea nada: quien llama decide (fixtureMutate({ op: "reset" })).
  */
 export async function translateFixtureCatalog(token: string, lang: TargetLanguage, opts: { skip?: string[] } = {}): Promise<{ catalogId: string; translated: string[]; skipped: string[] }> {
@@ -236,13 +235,11 @@ export async function translateFixtureCatalog(token: string, lang: TargetLanguag
   const skip = new Set(opts.skip ?? []);
   const keys = (await loadPanel(mem, catalogId, lang)).items.map((i) => i.key).filter((k) => !skip.has(k));
   for (const key of keys) {
-    const out = await prepareItem(mem, { ai, timeoutMs: 10_000 }, { catalogId, key, lang });
-    if (out.kind !== "saved" && out.kind !== "ready") throw new Error(`pdf-translations: preparar ${key} en ${lang} → ${out.kind}`);
-    const it = (await loadPanel(mem, catalogId, lang)).items.find((i) => i.key === key)!;
-    await approveItem(mem, { catalogId, key, lang, textRev: it.text!.rev, areaRev: it.area?.rev ?? null, confirmed: it.check?.warnings.map((w) => w.id) ?? [] });
+    const out = await autoUnit(mem, { ai, timeoutMs: 10_000, spend: () => true }, { catalogId, key, lang, manual: true });
+    const ok = out.kind === "published" || (out.kind === "ai" && out.published) || (out.kind === "skipped" && out.reason === "current");
+    if (!ok) throw new Error(`pdf-translations: traducir ${key} en ${lang} → ${JSON.stringify(out)}`);
   }
-  if (skip.size === 0) await setLanguage(mem, catalogId, null, lang as CatalogLanguage);
-  else await fixtureMutate({ op: "lang", token, lang } as never);
+  await setLanguage(mem, catalogId, null, lang as CatalogLanguage);
   return { catalogId, translated: keys.filter((k) => k !== META_KEY), skipped: [...skip] };
 }
 

@@ -26,11 +26,15 @@ export default async function FixtureCatalogPage({ searchParams }: { searchParam
   const base = large ? fixtureLargeCatalogDetail() : fixtureCatalogDetail;
   // BCP-01 P3/P4: ?auto=1 abre el mismo catálogo como AUTOMÁTICO antiguo (con
   // criterios), para comprobar que su panel no cambia y para la conversión.
-  const catalog = auto === "1" ? { ...base, mode: "auto" as const, criteria: { ...base.criteria, operation: "sale" as const, max: 12 } } : base;
-  // PR6 · N5: aviso de «Contenido» con las viviendas sin traducción vigente en un idioma activo.
+  const withMode = auto === "1" ? { ...base, mode: "auto" as const, criteria: { ...base.criteria, operation: "sale" as const, max: 12 } } : base;
+  // N5: aviso de «Contenido» con las viviendas sin traducción vigente en un idioma activo.
   const { fixtureTranslations } = await import("@/lib/catalogs/fixture-store");
   const { activeLanguageGaps } = await import("@/lib/catalogs/translation-service");
-  const translationGaps = await activeLanguageGaps((await fixtureTranslations()).mem, catalog.id).catch(() => []);
+  const mem = (await fixtureTranslations()).mem;
+  const translationGaps = await activeLanguageGaps(mem, withMode.id).catch(() => []);
+  // 0228: el idioma del catálogo sintético (selector junto a «Compartir»).
+  const defaultLang = (await mem.esState(withMode.id).catch(() => null))?.defaultLang ?? "es";
+  const catalog = { ...withMode, defaultLang };
   return (
     <div className="crm-root relative min-h-screen bg-cream-50">
       <div className="relative z-10">

@@ -21,6 +21,7 @@
  *     scripts/test-catalogs-i18n.mts
  */
 import { readFileSync } from "node:fs";
+import { translationGaps } from "../lib/catalogs/auto-translate.ts";
 import {
   CATALOG_LANGUAGES,
   TRANSLATION_REVIEW_REQUIRED,
@@ -242,12 +243,19 @@ function snap(over: Partial<InternalSnapshot> = {}): InternalSnapshot {
   eq(ar.items[0].title, catalogDictionary("ar").homeIn("Recoletos"), "ar sin traducción: título provisional en el idioma (N5)");
   eq(toPublicCatalog(snap({ lang: "ar", items: [item({ title: "  ", zone: null, subzone: null })] })).items[0].title, catalogDictionary("ar").untitled, "ar sin zona: «Sin título» en el idioma");
   ok(/^[0-9,]+ €$/.test(ar.items[0].price), "ar: precio con dígitos latinos", ar.items[0].price);
-  // PR6: fuera del español el contenido sale SOLO de la traducción aprobada y
-  // vigente; sin ella, el aviso N5 (nunca el español).
+  // PR6 + traducción automática (22-10-2026): fuera del español el contenido
+  // sale SOLO de la traducción publicada y vigente; mientras se traduce sola
+  // en segundo plano (primera visita), el aviso N5 (nunca el español).
   const withText = item({ text: { b: "Piso luminoso. El salón da a la calle. Vivir aquí es cómodo.", l: null, h: [] } });
   const enCopy = toPublicItem(withText, "any", "en").copy;
   eq(enCopy.map((b) => b.heading), [catalogDictionary("en").descriptionPreparing], "en sin traducción: aviso «Description in preparation» (N5), sin el español");
   ok(toPublicItem(withText, "any", "es").copy[0].text.startsWith("Piso luminoso"), "es: la descripción de siempre");
+  // Lo que encarga una visita: solo fuera del español y solo si falta algo.
+  ok(translationGaps(snap({ lang: "en", items: [withText] })) && !translationGaps(snap({ lang: "es", items: [withText] })), "una visita en inglés sin traducción encarga la traducción; en español, nunca");
+  ok(!translationGaps(snap({ lang: "pt", items: [withText] })), "un idioma desconocido (se lee como español) no encarga nada");
+  for (const l of ["fr", "it", "de", "ar", "tr", "he"] as const) {
+    ok(toPublicItem(withText, "any", l).copyPending === true && toPublicItem(withText, "any", l).copy[0].heading === catalogDictionary(l).descriptionPreparing, `${l}: N5 en el idioma mientras se traduce`);
+  }
   // Las claves prohibidas siguen fuera; «lang» y «floorShort» son los únicos campos nuevos.
   eq(Object.keys(en).sort(), ["coverPhoto", "edition", "intro", "items", "lang", "phone", "phoneHref", "preparedBy", "role", "title"], "campos del catálogo público");
   ok("floorShort" in en.items[0], "floorShort en la vivienda pública");

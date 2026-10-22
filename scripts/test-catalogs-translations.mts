@@ -1,9 +1,11 @@
 /**
- * Tests de las traducciones preparadas y revisadas del catálogo (expediente
- * 2026-10-21-bcp-01-ampliacion-textos-idiomas, PR6). Puros: sin base de
- * datos, red ni IA real. La «IA» es FALSA y cuenta llamadas. Las reglas de la
- * base de datos (0226), con concurrencia real, se prueban en
- * scripts/sql/test-catalog-translations*.sql; aquí, la orquestación sobre el
+ * Tests de las traducciones del catálogo (expediente
+ * 2026-10-21-bcp-01-ampliacion-textos-idiomas: PR6 y la traducción
+ * AUTOMÁTICA «como en itinerarios», decisión de Fabricio del 22-10-2026).
+ * Puros: sin base de datos, red ni IA real. La «IA» es FALSA y cuenta
+ * llamadas. Las reglas de la base de datos (0226/0228), con concurrencia
+ * real, se prueban en scripts/sql/test-catalog-translations*.sql; aquí, el
+ * traductor en segundo plano (auto-translate.ts) y la orquestación sobre el
  * almacén en memoria con las mismas reglas (translation-memory.ts), la
  * lectura por idioma (N5, DA18, DA34) y las comprobaciones.
  *
@@ -30,18 +32,19 @@ import {
 import { MemoryTranslations } from "../lib/catalogs/translation-memory.ts";
 import {
   activeLanguageGaps,
-  approveItem,
+  autoUnit,
   loadPanel,
+  markItemReviewed,
   META_KEY,
   prepareItem,
-  prepareMessage,
-  saveReview,
+  saveAndPublish,
   setLanguage,
-  useApproved,
   type EsState,
   type LinkRow,
 } from "../lib/catalogs/translation-service.ts";
-import { fakeTranslationAi } from "../lib/catalogs/translation-fake-ai.ts";
+import { AutoTranslator, translationGaps, type AutoTarget } from "../lib/catalogs/auto-translate.ts";
+import { AUTO_LIMITS, autoRetryState, isTargetLanguage, type AutoLimits, type TrAiFn } from "../lib/catalogs/translations.ts";
+import { fakeTranslationAi, type FakeAi } from "../lib/catalogs/translation-fake-ai.ts";
 
 let failures = 0;
 let passes = 0;
@@ -190,18 +193,19 @@ console.log("· respuesta de la IA y comprobaciones");
   eq(classifyAiFailure(new Error("IA 500: boom")), "failed", "error del proveedor → fallido");
   eq(classifyAiFailure(new Error("x"), () => true), "not_configured", "IA sin configurar → sin llamada");
   eq(classifyAiFailure(new Error("algo raro")), "uncertain", "lo desconocido se trata como incierto (pudo cobrarse)");
-  ok(translationErrorMessage("ERROR: lang_incomplete")?.includes("completo"), "mensajes de error del gestor");
+  ok(translationErrorMessage("ERROR: text_has_price")?.includes("precio") && translationErrorMessage("ERROR: lang_incomplete") === null, "mensajes de error del gestor (ya no existe «incompleto»)");
 }
 
-// ── 4. Orquestación con reserva, sobre el almacén en memoria ────────────────
-console.log("· preparar, revisar, aprobar, activar (IA falsa que cuenta llamadas)");
+
+// ── 4. Traducción automática: el mundo de pruebas ───────────────────────────
 interface Cat {
   id: string;
   snapshot: InternalSnapshot;
   map: Array<{ p: string; k: string; av: string | null }>;
   version: number;
   lang: CatalogLanguage;
-  links: Array<{ id: string; name: string; lang: CatalogLanguage | null }>;
+  links: Array<{ id: string; name: string; lang: CatalogLanguage | null; token: string }>;
+  token: string;
   library?: Record<string, string>;
 }
 function world() {
@@ -230,236 +234,465 @@ function world() {
     libraryVersionOf: (id, p) => cats.get(id)?.library?.[p] ?? null,
     now: () => clock,
   });
-  /** Lo que sirve get_public_catalog para un enlace (idioma del enlace o del catálogo). */
-  const publicOf = (id: string, linkId: string | null = null) => {
-    const c = cats.get(id)!;
-    const lang = (linkId ? c.links.find((l) => l.id === linkId)?.lang : null) ?? c.lang;
-    return toPublicCatalog(mem.mergeSnapshot(id, c.map, { ...structuredClone(c.snapshot), lang }, lang));
+  const byToken = (token: string) => {
+    for (const c of cats.values()) {
+      if (c.token === token) return { c, link: null };
+      const link = c.links.find((l) => l.token === token);
+      if (link) return { c, link };
+    }
+    return null;
   };
-  return { cats, mem, publicOf, tick: (ms: number) => { clock += ms; } };
+  /** Lo que sirve get_public_catalog para un token: idioma del enlace o del catálogo. */
+  const snapOf = (token: string): InternalSnapshot => {
+    const r = byToken(token)!;
+    const lang = r.link?.lang ?? r.c.lang;
+    return mem.mergeSnapshot(r.c.id, r.c.map, { ...structuredClone(r.c.snapshot), lang }, lang);
+  };
+  /** Como resolveToken de la instancia: el idioma lo decide la base de datos. */
+  const resolve = async (token: string): Promise<AutoTarget | null> => {
+    const r = byToken(token);
+    if (!r) return null;
+    const lang = r.link?.lang ?? r.c.lang;
+    return isTargetLanguage(lang) ? { catalogId: r.c.id, ownerId: "owner", lang } : null;
+  };
+  return { cats, mem, snapOf, resolve, tick: (ms: number) => { clock += ms; }, now: () => clock };
 }
-{
-  const w = world();
-  const fake = fakeTranslationAi();
-  const deps = { ai: fake.ai };
-  const it2 = item({ key: "k2", slug: "piso-2", title: "Piso en Goya", subzone: "Goya", features_manual: ["Ascensor"], text: { b: "Piso tranquilo con cocina reformada.", l: null, h: [] }, area: null });
-  w.cats.set("C1", {
-    id: "C1", snapshot: snap([item(), it2]), map: [{ p: "P1", k: "k1", av: null }, { p: "P2", k: "k2", av: null }], version: 10, lang: "es",
-    links: [{ id: "L1", name: "Ana", lang: null }, { id: "L2", name: "Luis", lang: null }],
+type World = ReturnType<typeof world>;
+
+/** El traductor en segundo plano sobre el mundo (una «instancia de proceso»). */
+function translator(w: World, ai: TrAiFn | null, limits?: Partial<AutoLimits>) {
+  let notified = 0;
+  const t = new AutoTranslator({ resolve: w.resolve, backend: () => w.mem, ai, notify: () => { notified++; }, now: w.now, schedule: () => {}, limits, timeoutMs: 5_000 });
+  return { t, notified: () => notified };
+}
+
+/** Una VISITA pública: la respuesta sale al momento (sin esperar a la IA) y
+ *  encarga lo que falte, como getPublicCatalogState({ visit: true }). */
+function visit(w: World, t: AutoTranslator, token: string) {
+  const snap = w.snapOf(token);
+  const pub = toPublicCatalog(snap);
+  t.request(token, snap);
+  return pub;
+}
+
+function item2(): InternalItem {
+  return item({ key: "k2", slug: "piso-2", title: "Piso en Goya", subzone: "Goya", features_manual: ["Ascensor"], text: { b: "Piso tranquilo con cocina reformada.", l: null, h: [] }, area: null });
+}
+function addCat(w: World, id: string, items: InternalItem[], over: Partial<Cat> = {}) {
+  w.cats.set(id, {
+    id, snapshot: snap(items), map: items.map((it, i) => ({ p: `${id}-P${i + 1}`, k: String(it.key), av: null })), version: 10, lang: "es",
+    links: [{ id: `${id}-L1`, name: "Ana", lang: null, token: `${id}-tok-ana` }, { id: `${id}-L2`, name: "Luis", lang: null, token: `${id}-tok-luis` }],
+    token: `${id}-tok`, ...over,
   });
-
-  // Panel inicial: nada preparado; progreso 0.
-  let panel = await loadPanel(w.mem, "C1", "en");
-  ok(panel.items.length === 3 && panel.items[0].key === META_KEY && panel.items.every((i) => i.state === "none"), "panel: el catálogo y las dos viviendas, sin traducción");
-  ok(panel.progress.find((p) => p.lang === "en")?.complete === false && fake.calls() === 0, "progreso en inglés incompleto; ninguna llamada al cargar");
-
-  // Dos peticiones simultáneas de lo mismo: UNA llamada (DA15).
-  const [a, b] = await Promise.all([prepareItem(w.mem, deps, { catalogId: "C1", key: "k1", lang: "en" }), prepareItem(w.mem, deps, { catalogId: "C1", key: "k1", lang: "en" })]);
-  eq([a.kind, b.kind].sort(), ["busy", "saved"], "dos «Preparar» a la vez: uno guarda y el otro ve «en preparación»");
-  eq(fake.calls(), 1, "una sola llamada a la IA");
-  ok(/inglés/.test(fake.last()!.system) && JSON.parse(fake.last()!.userText).bloques.length === 3, "la instrucción lleva el idioma y los bloques con su clave");
-  ok(prepareMessage(b).text.includes("No se ha lanzado otra"), "el gestor lo explica");
-  // Otra vez: no falta nada → sin IA.
-  const again = await prepareItem(w.mem, deps, { catalogId: "C1", key: "k1", lang: "en" });
-  ok(again.kind === "ready" && fake.calls() === 1, "preparar lo ya preparado: sin llamada");
-  // Solo el idioma pedido.
-  ok(w.mem.texts.every((t) => t.lang === "en") && w.mem.features.every((f) => f.lang === "en"), "solo el idioma pedido");
-
-  // Revisión: avisos y aprobación.
-  panel = await loadPanel(w.mem, "C1", "en");
-  let p1 = panel.items.find((i) => i.key === "k1")!;
-  ok(p1.state === "review" && p1.text?.status === "draft" && p1.features.every((f) => f.status === "draft"), "pendiente de revisar: texto y características en borrador");
-  await saveReview(w.mem, "C1", { key: "k1", lang: "en", text: { id: p1.text!.id, rev: p1.text!.rev, title: "Penthouse with a terrace in Recoletos", blocks: p1.es.blocks.map((x) => `EN: ${x.es.replace(/142/, "124")}`) } });
-  panel = await loadPanel(w.mem, "C1", "en");
-  p1 = panel.items.find((i) => i.key === "k1")!;
-  ok(p1.text?.rev === 2 && p1.text.origin === "manual" && p1.check!.warnings.some((x) => x.kind === "number"), "editar a mano: nueva revisión y el aviso de la cifra");
-  await throwsCode(approveItem(w.mem, { catalogId: "C1", key: "k1", lang: "en", textRev: 2, areaRev: null, confirmed: [] }), "tr_unconfirmed", "aprobar con avisos sin confirmar: no");
-  await throwsCode(approveItem(w.mem, { catalogId: "C1", key: "k1", lang: "en", textRev: 1, areaRev: null, confirmed: p1.check!.warnings.map((x) => x.id) }), "translation_changed", "aprobar una revisión vieja: no");
-  await saveReview(w.mem, "C1", { key: "k1", lang: "en", text: { id: p1.text!.id, rev: 2, title: "Penthouse with a terrace in Recoletos", blocks: p1.es.blocks.map((x) => `EN: ${x.es}`) } });
-  panel = await loadPanel(w.mem, "C1", "en");
-  p1 = panel.items.find((i) => i.key === "k1")!;
-  const v0 = w.cats.get("C1")!.version;
-  await approveItem(w.mem, { catalogId: "C1", key: "k1", lang: "en", textRev: p1.text!.rev, areaRev: null, confirmed: p1.check?.warnings.map((x) => x.id) ?? [] });
-  ok(w.cats.get("C1")!.version === v0 + 1, "aprobar copia al catálogo (sube la versión)");
-  panel = await loadPanel(w.mem, "C1", "en");
-  ok(panel.items.find((i) => i.key === "k1")?.state === "current", "la vivienda queda vigente en inglés");
-
-  // Activar: incompleto → no; el enlace sigue en español.
-  await throwsCode(setLanguage(w.mem, "C1", null, "en"), "lang_incomplete", "activar el inglés incompleto: no");
-  await throwsCode(setLanguage(w.mem, "C1", "L1", "en"), "lang_incomplete", "tampoco en un enlace personal");
-  eq(w.publicOf("C1").lang, "es", "hasta entonces, el enlace sigue en español");
-  // Completar: p2 y el catálogo.
-  for (const key of ["k2", META_KEY]) {
-    await prepareItem(w.mem, deps, { catalogId: "C1", key, lang: "en" });
-    const pi = (await loadPanel(w.mem, "C1", "en")).items.find((i) => i.key === key)!;
-    await approveItem(w.mem, { catalogId: "C1", key, lang: "en", textRev: pi.text!.rev, areaRev: null, confirmed: pi.check?.warnings.map((x) => x.id) ?? [] });
-  }
-  panel = await loadPanel(w.mem, "C1", "en");
-  ok(panel.progress.find((p) => p.lang === "en")?.complete === true, "progreso: inglés completo");
-  await setLanguage(w.mem, "C1", "L1", "en");
-  const calls = fake.calls();
-  const ana = w.publicOf("C1", "L1");
-  const luis = w.publicOf("C1", "L2");
-  ok(ana.lang === "en" && ana.items[0].title === "Penthouse with a terrace in Recoletos" && ana.title === "Salamanca and Chamberí", "Ana (inglés) ve su idioma");
-  ok(luis.lang === "es" && luis.items[0].title === "Ático con terraza en Recoletos", "Luis (sin idioma propio) sigue en español (DA17)");
-  ok(ana.items[1].copy[0].text.startsWith("[en]") && ana.items[1].features.length === 1, "p2 en inglés con su característica");
-  // Francés para Luis: incompleto → no cambia.
-  await throwsCode(setLanguage(w.mem, "C1", "L2", "fr"), "lang_incomplete", "francés para Luis, incompleto: no");
-  // Lecturas públicas repetidas: CERO llamadas (AC8).
-  for (let i = 0; i < 5; i++) {
-    w.publicOf("C1", "L1");
-    w.publicOf("C1", "L2");
-    w.publicOf("C1");
-  }
-  eq(fake.calls(), calls, "visitas públicas en dos idiomas: cero llamadas a la IA");
-
-  // DA34: precio, foto excluida y vivienda retirada, al momento en inglés.
-  const c1 = w.cats.get("C1")!;
-  c1.snapshot.items[0].price = 1500000;
-  c1.snapshot.items[0].pp = { x: ["fb"], o: null };
-  let enNow = w.publicOf("C1", "L1");
-  ok(enNow.items[0].price === "€1,500,000" && enNow.items[0].photos.length === 1 && enNow.items[0].copyPending === undefined, "precio y foto excluida: al momento en inglés, la traducción sigue vigente");
-  c1.snapshot.items = c1.snapshot.items.filter((x) => x.key !== "k2");
-  enNow = w.publicOf("C1", "L1");
-  ok(enNow.items.length === 1, "vivienda retirada: fuera también en inglés");
-  c1.snapshot.items.push(it2);
-  // Español republicado → desactualizada (nunca vigente) → N5; el gestor lo marca.
-  c1.snapshot.items[0] = { ...c1.snapshot.items[0], text: { b: "Ático exterior renovado y luminoso.", l: null, h: [] } };
-  enNow = w.publicOf("C1", "L1");
-  ok(enNow.items[0].copyPending === true && enNow.items[0].title === "Home in Recoletos", "español republicado: N5 en inglés (sin español ni traducción vieja)");
-  panel = await loadPanel(w.mem, "C1", "en");
-  const st = panel.items.find((i) => i.key === "k1")!;
-  ok(st.state === "outdated" && st.outdated && !st.current, "el gestor la marca «desactualizada»");
-  const gaps = await activeLanguageGaps(w.mem, "C1");
-  ok(gaps.some((g) => g.lang === "en" && g.pending.length === 1), "y el aviso de «Contenido» la cuenta");
-  // Preparar de nuevo: solo lo que falta (las características ya están).
-  await prepareItem(w.mem, deps, { catalogId: "C1", key: "k1", lang: "en" });
-  ok(JSON.parse(fake.last()!.userText).caracteristicas === undefined, "re-preparar: no vuelve a pedir las características ya traducidas");
 }
 
-// ── 5. Cancelar, caducar, incierto, fallos ──────────────────────────────────
-console.log("· cancelación, caducidad e incierto");
+// ── 5. Primera visita, segunda visita, varias a la vez ──────────────────────
+console.log("· traducción automática: primera y segunda visita, simultáneas, idiomas no elegidos");
 {
   const w = world();
-  w.cats.set("C2", { id: "C2", snapshot: snap([item()]), map: [{ p: "P1", k: "k1", av: null }], version: 1, lang: "es", links: [] });
-  // Cancelar mientras la IA trabaja: la respuesta se descarta y se registra.
+  addCat(w, "C1", [item(), item2()]);
+  const fake = fakeTranslationAi();
+  const { t, notified } = translator(w, fake.ai);
+
+  // Español: nada que traducir, ni una llamada.
+  ok(!translationGaps(w.snapOf("C1-tok")), "en español no falta nada (sin traducción automática)");
+  visit(w, t, "C1-tok");
+  await t.whenIdle();
+  eq(fake.calls(), 0, "visitas en español: cero llamadas");
+
+  // El dueño elige inglés para el enlace de Ana: se aplica AL MOMENTO.
+  await setLanguage(w.mem, "C1", "C1-L1", "en");
+  eq(w.cats.get("C1")!.links[0].lang, "en", "elegir el idioma de un enlace se aplica al momento (sin «completo»)");
+  await setLanguage(w.mem, "C1", null, "fr");
+  eq(w.cats.get("C1")!.lang, "fr", "y el del catálogo también");
+  await setLanguage(w.mem, "C1", null, "es");
+
+  // Primera visita en inglés: responde YA con N5 y encarga en segundo plano.
+  const first = visit(w, t, "C1-tok-ana");
+  ok(first.lang === "en" && first.items.every((x) => x.copyPending === true) && fake.calls() === 0, "primera visita: responde al momento con «Description in preparation» (N5) y sin esperar a la IA");
+  ok(!JSON.stringify(first).includes("Ático exterior"), "N5: nunca el español en otro idioma");
+  await t.whenIdle();
+  eq(fake.calls(), 3, "en segundo plano: una llamada por vivienda y otra por el título del catálogo");
+  ok(notified() === 3, "cada publicación avisa al vigilante (los lectores abiertos se actualizan solos)");
+  const second = visit(w, t, "C1-tok-ana");
+  ok(second.items.every((x) => !x.copyPending) && second.items[0].title.startsWith("[en]") && second.title === "Salamanca and Chamberí", "segunda visita: traducido (vivienda y título del catálogo)");
+  await t.whenIdle();
+  eq(fake.calls(), 3, "segunda visita: cero llamadas nuevas");
+  w.tick(AUTO_LIMITS.requestThrottleMs + 1);
+  visit(w, t, "C1-tok-ana");
+  await t.whenIdle();
+  eq(fake.calls(), 3, "y más visitas, tampoco");
+  const panel = await loadPanel(w.mem, "C1", "en", w.now());
+  ok(panel.items.every((i) => i.state === "current" && i.text?.approval === "auto"), "el gestor las ve «Traducida» y publicadas solas (approval «auto»)");
+  ok(w.mem.jobs.every((j) => j.auto), "los trabajos quedan marcados como automáticos (lanzados por una visita)");
+  ok(w.mem.texts.every((tx) => tx.lang === "en"), "solo el idioma del enlace");
+
+  // DA17/DA19: Luis sigue en español; el general también.
+  ok(toPublicCatalog(w.snapOf("C1-tok-luis")).lang === "es" && toPublicCatalog(w.snapOf("C1-tok")).items[0].title === "Ático con terraza en Recoletos", "el idioma de Ana no cambia el de Luis ni el general (DA17)");
+
+  // Idioma no elegido por el dueño: no se traduce nada.
+  const fr = { ...w.snapOf("C1-tok-luis"), lang: "fr" };
+  t.request("C1-tok-luis", fr);
+  await t.whenIdle();
+  eq(fake.calls(), 3, "un idioma que no eligió el dueño (instantánea manipulada): cero llamadas (manda la base de datos)");
+  t.request("C1-tok-inventado", { ...w.snapOf("C1-tok-ana") });
+  await t.whenIdle();
+  eq(fake.calls(), 3, "un token que no existe: cero llamadas");
+}
+{
+  // Visitas simultáneas: una vez por vivienda, también entre dos «procesos».
+  const w = world();
+  const items = [item(), item2(), item({ key: "k3", slug: "piso-3", title: "Estudio en Chamberí", text: { b: "Estudio luminoso.", l: null, h: [] } })];
+  addCat(w, "C2", items, { lang: "de" });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const fake = fakeTranslationAi({ gate: () => gate });
+  const A = translator(w, fake.ai);
+  const B = translator(w, fake.ai);
+  for (let i = 0; i < 5; i++) visit(w, A.t, "C2-tok");
+  visit(w, A.t, "C2-tok-ana");
+  visit(w, A.t, "C2-tok-luis");
+  visit(w, B.t, "C2-tok");
+  visit(w, B.t, "C2-tok-ana");
+  await new Promise((r) => setTimeout(r, 30));
+  release();
+  await Promise.all([A.t.whenIdle(), B.t.whenIdle()]);
+  eq(fake.calls(), 4, "visitas simultáneas (también desde dos procesos): un solo trabajo por vivienda y por el título (4)");
+  ok(visit(w, A.t, "C2-tok-luis").items.every((x) => !x.copyPending), "y todas publicadas");
+  await A.t.whenIdle();
+}
+
+// ── 6. Filtros: bloqueo, aviso, edición a mano, español cambiado ────────────
+console.log("· publicación automática: bloqueos, avisos, edición a mano y español cambiado");
+{
+  const w = world();
+  addCat(w, "C3", [item(), item2()], { lang: "en" });
+  const fake = fakeTranslationAi();
+  // Bloqueo en k1 la primera vez (contacto); aviso en k2 (cifra añadida).
+  let blockedOnce = false;
+  const ai: TrAiFn = async (o) => {
+    const r = JSON.parse(await fake.ai(o));
+    if (r.title?.includes("Ático") && !blockedOnce) {
+      blockedOnce = true;
+      r.blocks[0].x += " Call 612 345 678.";
+    }
+    if (r.title?.includes("Goya")) r.blocks[0].x += " 3 bedrooms.";
+    return JSON.stringify(r);
+  };
+  const { t } = translator(w, ai);
+  visit(w, t, "C3-tok");
+  await t.whenIdle();
+  let pub = visit(w, t, "C3-tok");
+  await t.whenIdle();
+  const k1 = pub.items.find((x) => x.key === "k1")!;
+  const k2 = pub.items.find((x) => x.key === "k2")!;
+  ok(k1.copyPending === true && !JSON.stringify(k1).includes("612"), "bloqueo (contacto): NO se publica; el cliente sigue con N5");
+  ok(!k2.copyPending && k2.copy[0].text.includes("3 bedrooms"), "aviso (cifra añadida): se publica igual");
+  let panel = await loadPanel(w.mem, "C3", "en", w.now());
+  const p1 = panel.items.find((i) => i.key === "k1")!;
+  const p2 = panel.items.find((i) => i.key === "k2")!;
+  ok(p1.state === "blocked" && p1.check!.blockers.some((b) => b.code === "text_has_contact"), "el gestor la marca «No publicada: corrígela»");
+  ok(p2.state === "review" && p2.check!.warnings.some((x) => x.id.startsWith("number+:")), "y la del aviso, «Traducida · revisar»");
+  const calls = fake.calls();
+  w.tick(AUTO_LIMITS.requestThrottleMs + 1);
+  visit(w, t, "C3-tok");
+  await t.whenIdle();
+  eq(fake.calls(), calls, "una bloqueada no se vuelve a traducir sola (no se paga otra vez)");
+  // «Dar por revisada».
+  await markItemReviewed(w.mem, "C3", "k2", "en");
+  panel = await loadPanel(w.mem, "C3", "en", w.now());
+  ok(panel.items.find((i) => i.key === "k2")!.state === "current", "«Dar por revisada» quita la marca");
+  // Corregir a mano la bloqueada: se publica al momento como manual.
+  await saveAndPublish(w.mem, "C3", { key: "k1", lang: "en", text: { id: p1.text!.id, rev: p1.text!.rev, title: "Penthouse with a terrace in Recoletos", blocks: p1.es.blocks.filter((b) => !b.area).map((b) => `EN: ${b.es}`) } });
+  pub = toPublicCatalog(w.snapOf("C3-tok"));
+  ok(!pub.items[0].copyPending && pub.items[0].title === "Penthouse with a terrace in Recoletos", "corregida y guardada: publicada al momento");
+  panel = await loadPanel(w.mem, "C3", "en", w.now());
+  ok(panel.items[1].state === "current" && panel.items[1].text?.approval === "manual" && panel.items[1].text.origin === "manual", "lo editado a mano queda «manual»");
+  try {
+    const p = panel.items[1];
+    await saveAndPublish(w.mem, "C3", { key: "k1", lang: "en", text: { id: p.text!.id, rev: p.text!.rev, title: "Precio: 900.000 €", blocks: p.es.blocks.filter((b) => !b.area).map(() => "x") } });
+    ok(false, "guardar con precio: no");
+  } catch (e) {
+    ok(e instanceof Error && e.message === "text_has_price", "guardar a mano con un precio: se rechaza");
+  }
+  // La edición manual no se pisa: más visitas, cero llamadas, el texto igual.
+  const before = fake.calls();
+  w.tick(AUTO_LIMITS.requestThrottleMs + 1);
+  visit(w, t, "C3-tok");
+  await t.whenIdle();
+  ok(fake.calls() === before && toPublicCatalog(w.snapOf("C3-tok")).items[0].title === "Penthouse with a terrace in Recoletos", "lo editado a mano no lo pisa ninguna traducción automática");
+  // El español cambia: desactualizada → N5 → retraducción en la siguiente visita.
+  const c3 = w.cats.get("C3")!;
+  c3.snapshot.items[0] = { ...c3.snapshot.items[0], text: { b: "Ático exterior renovado y luminoso.", l: null, h: [] } };
+  w.tick(AUTO_LIMITS.requestThrottleMs + 1);
+  pub = visit(w, t, "C3-tok");
+  ok(pub.items[0].copyPending === true && pub.items[0].title === "Home in Recoletos", "español cambiado: desactualizada → N5 al momento (sin español ni traducción vieja)");
+  panel = await loadPanel(w.mem, "C3", "en", w.now());
+  ok(panel.items[1].state === "outdated", "el gestor la marca «Desactualizada»");
+  ok((await activeLanguageGaps(w.mem, "C3")).some((g) => g.lang === "en" && g.pending.length === 1), "y «Contenido» la cuenta");
+  await t.whenIdle();
+  eq(fake.calls(), before + 1, "la siguiente visita la retraduce sola (una llamada)");
+  ok(JSON.parse(fake.last()!.userText).caracteristicas === undefined, "solo lo que falta (las características ya estaban)");
+  pub = visit(w, t, "C3-tok");
+  ok(!pub.items[0].copyPending && pub.items[0].copy[0].text.includes("renovado"), "y se publica la nueva");
+  await t.whenIdle();
+}
+
+// ── 7. Fallos: espera creciente, parada, «Preparar ahora» ───────────────────
+console.log("· fallos: espera creciente sin bucles y «Preparar ahora»");
+{
+  const w = world();
+  addCat(w, "C4", [item()], { lang: "it" });
+  let mode: "ok" | "timeout" | "error" = "timeout";
+  const fake = fakeTranslationAi({ mode: () => mode });
+  const { t } = translator(w, fake.ai);
+  const round = async () => {
+    w.tick(AUTO_LIMITS.requestThrottleMs + 1);
+    visit(w, t, "C4-tok");
+    await t.whenIdle();
+    return fake.calls();
+  };
+  eq(await round(), 2, "incierto: una llamada por unidad y nada más");
+  let p = (await loadPanel(w.mem, "C4", "it", w.now())).items.find((i) => i.key === "k1")!;
+  ok(p.state === "waiting" && p.retry.failures === 1 && !!p.retry.until, "el gestor la marca «falló: se reintentará sola» con la hora");
+  eq(await round(), 2, "otra visita enseguida: no reintenta (espera 5 min)");
+  w.tick(5 * 60_000);
+  eq(await round(), 4, "pasados 5 min: otro intento");
+  w.tick(10 * 60_000);
+  eq(await round(), 4, "tras el segundo fallo, 10 min no bastan (espera 30 min)");
+  w.tick(20 * 60_000);
+  eq(await round(), 6, "a los 30 min: tercer intento");
+  mode = "error";
+  w.tick(2 * 3600_000);
+  eq(await round(), 8, "a las 2 h: cuarto (un error del proveedor también cuenta)");
+  w.tick(12 * 3600_000);
+  eq(await round(), 10, "a las 12 h: quinto");
+  w.tick(48 * 3600_000);
+  eq(await round(), 10, "tras 5 fallos seguidos ya no se reintenta solo");
+  p = (await loadPanel(w.mem, "C4", "it", w.now())).items.find((i) => i.key === "k1")!;
+  ok(p.state === "stopped" && p.retry.stopped, "el gestor: «Sin reintentos automáticos»");
+  mode = "ok";
+  await t.run({ catalogId: "C4", ownerId: "owner", lang: "it" }, { manual: true });
+  eq(fake.calls(), 12, "«Preparar ahora» del dueño sí lo intenta (sin espera)");
+  ok(!toPublicCatalog(w.snapOf("C4-tok")).items[0].copyPending, "y publica");
+  // La regla de la espera, pura (la misma que SQL).
+  const j = (status: string, min: number) => ({ status, reservedAt: new Date(Date.parse("2026-10-22T10:00:00Z") + min * 60_000).toISOString(), finishedAt: new Date(Date.parse("2026-10-22T10:00:00Z") + min * 60_000).toISOString(), expiresAt: "2026-10-22T11:00:00Z" });
+  const base = Date.parse("2026-10-22T10:00:00Z");
+  eq(autoRetryState([j("failed", 0)], base + 60_000).until, new Date(base + 300_000).toISOString(), "1 fallo → 5 min");
+  eq(autoRetryState([j("failed", 0), j("done", 1), j("uncertain", 2)], base + 3 * 60_000).failures, 1, "un trabajo terminado reinicia la cuenta");
+  eq(autoRetryState([j("cancelled", 0)], base).failures, 0, "una cancelación no cuenta como fallo");
+  eq(autoRetryState([j("expired", 0), j("failed", 1)], base + 2 * 60_000).until, new Date(base + 60_000 + 1_800_000).toISOString(), "una reserva caducada cuenta (pudo cobrarse) → 2 fallos, 30 min");
+}
+
+// ── 8. Límites: a la vez por catálogo, por visita y por día ─────────────────
+console.log("· límites contra el abuso y el coste");
+{
+  const w = world();
+  const many = Array.from({ length: 6 }, (_, i) => item({ key: `m${i}`, slug: `m-${i}`, title: `Piso ${i} en Recoletos`, text: { b: `Piso número ${i} con luz.`, l: null, h: [] } }));
+  addCat(w, "C5", many, { lang: "fr" });
+  const fake = fakeTranslationAi();
+  let inflight = 0;
+  let peak = 0;
+  const slow: TrAiFn = async (o) => {
+    inflight++;
+    peak = Math.max(peak, inflight);
+    await new Promise((r) => setTimeout(r, 15));
+    inflight--;
+    return fake.ai(o);
+  };
+  const { t } = translator(w, slow);
+  visit(w, t, "C5-tok");
+  await t.whenIdle();
+  ok(peak <= AUTO_LIMITS.maxActivePerCatalog && peak === 2 && fake.calls() === 7, `como mucho ${AUTO_LIMITS.maxActivePerCatalog} trabajos a la vez por catálogo (pico ${peak}, 7 llamadas)`);
+
+  // Tope por visita.
+  const w2 = world();
+  addCat(w2, "C6", many.slice(0, 5), { lang: "fr" });
+  const f2 = fakeTranslationAi();
+  const T2 = translator(w2, f2.ai, { maxAiPerVisit: 2 });
+  visit(w2, T2.t, "C6-tok");
+  await T2.t.whenIdle();
+  eq(f2.calls(), 2, "tope por visita: 2 llamadas en una visita");
+  visit(w2, T2.t, "C6-tok-ana"); // otro token del mismo catálogo; Ana sigue al catálogo (francés)
+  await T2.t.whenIdle();
+  eq(f2.calls(), 4, "la visita siguiente continúa");
+
+  // Tope diario por catálogo.
+  const w3 = world();
+  addCat(w3, "C7", many.slice(0, 5), { lang: "fr" });
+  const f3 = fakeTranslationAi();
+  const T3 = translator(w3, f3.ai, { dailyCapPerCatalog: 3 });
+  visit(w3, T3.t, "C7-tok");
+  await T3.t.whenIdle();
+  eq(f3.calls(), 3, "tope diario de trabajos automáticos por catálogo");
+  w3.tick(25 * 3600_000);
+  visit(w3, T3.t, "C7-tok");
+  await T3.t.whenIdle();
+  eq(f3.calls(), 6, "al día siguiente, otros tantos");
+
+  // Mismo token: una visita repetida no relanza nada antes de requestThrottleMs.
+  const w4 = world();
+  addCat(w4, "C8", [item()], { lang: "en" });
+  let resolves = 0;
+  const f4 = fakeTranslationAi({ mode: () => "error" });
+  const T4 = new AutoTranslator({ resolve: async (tk) => { resolves++; return w4.resolve(tk); }, backend: () => w4.mem, ai: f4.ai, notify: () => {}, now: w4.now, schedule: () => {} });
+  for (let i = 0; i < 20; i++) visit(w4, T4, "C8-tok");
+  await T4.whenIdle();
+  ok(resolves === 1 && f4.calls() === 2, "20 lecturas seguidas del mismo enlace (estado cada 500 ms): una sola comprobación");
+  // Si el dueño cambia el idioma, la siguiente visita lo encarga sin esperar.
+  await setLanguage(w4.mem, "C8", null, "fr");
+  visit(w4, T4, "C8-tok");
+  await T4.whenIdle();
+  ok(resolves === 2 && f4.calls() === 4, "el dueño cambia el idioma: la siguiente visita (enseguida) encarga el nuevo");
+  // Sin IA configurada: no se llama a nada y no se rompe nada.
+  const w5 = world();
+  addCat(w5, "C9", [item()], { lang: "en" });
+  const T5 = translator(w5, null);
+  visit(w5, T5.t, "C9-tok");
+  await T5.t.whenIdle();
+  ok(toPublicCatalog(w5.snapOf("C9-tok")).items[0].copyPending === true && w5.mem.jobs.length === 0, "sin IA: N5 y ningún trabajo");
+}
+
+// ── 9. DA34, C2 y PDF por token en cada idioma ──────────────────────────────
+console.log("· datos operativos, C2 y PDF por token en cada idioma");
+{
+  const w = world();
+  addCat(w, "D1", [item(), item2()]);
+  w.cats.get("D1")!.links[0].lang = "en";
+  w.cats.get("D1")!.links[1].lang = "ar";
+  const fake = fakeTranslationAi();
+  const { t } = translator(w, fake.ai);
+  visit(w, t, "D1-tok-ana");
+  visit(w, t, "D1-tok-luis");
+  await t.whenIdle();
+  eq(fake.calls(), 6, "dos enlaces en dos idiomas: cada uno el suyo (3 + 3)");
+  const ana = toPublicCatalog(w.snapOf("D1-tok-ana"));
+  const luis = toPublicCatalog(w.snapOf("D1-tok-luis"));
+  ok(ana.lang === "en" && luis.lang === "ar" && ana.items[0].title.startsWith("[en]") && ana.title === "Salamanca and Chamberí", "Ana en inglés");
+  ok(luis.items.every((x) => !x.copyPending) && luis.items[1].copy[0].text.startsWith("[ar]"), "Luis en árabe (DA19: ni contenido ni idioma de otro enlace)");
+  const c = w.cats.get("D1")!;
+  c.snapshot.items[0].price = 1500000;
+  c.snapshot.items[0].pp = { x: ["fb"], o: null };
+  let en = toPublicCatalog(w.snapOf("D1-tok-ana"));
+  ok(en.items[0].price === "€1,500,000" && en.items[0].photos.length === 1 && !en.items[0].copyPending, "precio y foto excluida: al momento en inglés (DA34), la traducción sigue vigente");
+  ok(toPublicCatalog(w.snapOf("D1-tok-luis")).items[0].photos.length === 1, "y en árabe");
+  c.snapshot.items = c.snapshot.items.filter((x) => x.key !== "k2");
+  ok(toPublicCatalog(w.snapOf("D1-tok-ana")).items.length === 1, "vivienda retirada: fuera también en inglés");
+  c.snapshot.items.push(item2());
+  c.snapshot.items[0] = { ...c.snapshot.items[0], text: null };
+  en = toPublicCatalog(w.snapOf("D1-tok-ana"));
+  ok(en.items[0].copy.length === 0 && !en.items[0].copyPending && toPublicCatalog(w.snapOf("D1-tok")).items[0].copy.length === 0, "C2: sin texto vigente en español, tampoco en inglés (ni aviso)");
+  // PDF por token: lee la MISMA instantánea del token (con su idioma).
+  const pdfSnap = w.snapOf("D1-tok-luis");
+  const pdf = toPublicCatalog(pdfSnap, "sale");
+  ok(pdf.lang === "ar" && pdf.items[1].copy[0].text.startsWith("[ar]") && pdf.items[1].price === toPublicCatalog(pdfSnap, "sale").items[1].price, "PDF por token: contenido traducido del idioma del enlace y datos actuales");
+}
+
+// ── 10. Cancelación, caducidad, fuentes y plantillas ────────────────────────
+console.log("· descartes, fuentes (DA31) y plantillas (DA27)");
+{
+  const w = world();
+  addCat(w, "E1", [item()]);
   let release!: () => void;
   const gate = new Promise<void>((r) => { release = r; });
   const slow = fakeTranslationAi({ gate: () => gate });
-  const run = prepareItem(w.mem, { ai: slow.ai }, { catalogId: "C2", key: "k1", lang: "de" });
+  const run = prepareItem(w.mem, { ai: slow.ai }, { catalogId: "E1", key: "k1", lang: "de" });
   await new Promise((r) => setTimeout(r, 10));
   const job = w.mem.jobs.find((j) => j.status === "reserved")!;
-  ok(await w.mem.cancel(job.id), "cancelar la preparación en curso");
+  ok(await w.mem.cancel(job.id), "cancelar una preparación en curso (0226)");
   release();
   const out = await run;
-  ok(out.kind === "discarded" && (out as { reason: string }).reason === "cancelled", "la respuesta tardía tras cancelar se descarta");
-  ok(!w.mem.texts.some((t) => t.lang === "de") && !!w.mem.jobs.find((j) => j.id === job.id)?.discardedAt, "nada guardado y queda registrado");
-  ok(prepareMessage(out).text.includes("pudo cobrarse"), "el gestor avisa de que pudo cobrarse");
-
+  ok(out.kind === "discarded" && !w.mem.texts.some((x) => x.lang === "de"), "lo que llega tras cancelar se descarta y no se guarda");
   // Caducada: un trabajo viejo no pisa uno más nuevo.
   let release2!: () => void;
   const gate2 = new Promise<void>((r) => { release2 = r; });
-  const slow2 = fakeTranslationAi({ gate: () => gate2 });
-  const old = prepareItem(w.mem, { ai: slow2.ai, ttlSeconds: 30 }, { catalogId: "C2", key: "k1", lang: "it" });
+  const old = prepareItem(w.mem, { ai: fakeTranslationAi({ gate: () => gate2 }).ai, ttlSeconds: 30 }, { catalogId: "E1", key: "k1", lang: "it" });
   await new Promise((r) => setTimeout(r, 10));
   w.tick(31_000);
-  const fresh = fakeTranslationAi();
-  const n = await prepareItem(w.mem, { ai: fresh.ai }, { catalogId: "C2", key: "k1", lang: "it" });
-  ok(n.kind === "saved", "con la reserva caducada, otra preparación reserva y guarda");
+  const waiting = await prepareItem(w.mem, { ai: fakeTranslationAi().ai }, { catalogId: "E1", key: "k1", lang: "it" });
+  ok(waiting.kind === "waiting", "una reserva caducada cuenta como fallo: una visita espera antes de reintentar");
+  const n = await prepareItem(w.mem, { ai: fakeTranslationAi().ai }, { catalogId: "E1", key: "k1", lang: "it", manual: true });
+  ok(n.kind === "saved", "el dueño sí: otro trabajo reserva y guarda");
   release2();
   const o = await old;
-  ok(o.kind === "discarded" && (o as { reason: string }).reason === "expired", "la vieja llega tarde: descartada (expired)");
-  eq(w.mem.texts.filter((t) => t.lang === "it").map((t) => t.rev), [1], "la nueva no se pisa");
-
-  // Incierto: sin reintento automático; solo con «Volver a preparar».
-  const to = fakeTranslationAi({ mode: () => "timeout" });
-  const u1 = await prepareItem(w.mem, { ai: to.ai }, { catalogId: "C2", key: "k1", lang: "fr" });
-  ok(u1.kind === "uncertain" && to.calls() === 1, "tiempo agotado tras enviar: incierto, una llamada");
-  ok(prepareMessage(u1).text.includes("pudo cobrarse") && prepareMessage(u1).text.includes("No se reintenta sola"), "aviso: pudo cobrarse, no se reintenta");
-  const u2 = await prepareItem(w.mem, { ai: to.ai }, { catalogId: "C2", key: "k1", lang: "fr" });
-  ok(u2.kind === "uncertain_pending" && to.calls() === 1, "pulsar otra vez «Preparar»: no llama (hay un incierto)");
-  const panel = await loadPanel(w.mem, "C2", "fr");
-  ok(panel.items.find((i) => i.key === "k1")?.state === "uncertain", "el gestor la marca «resultado incierto»");
-  const okAi = fakeTranslationAi();
-  const u3 = await prepareItem(w.mem, { ai: okAi.ai }, { catalogId: "C2", key: "k1", lang: "fr", retry: true });
-  ok(u3.kind === "saved" && okAi.calls() === 1, "«Volver a preparar»: ahora sí");
-  // Real timeout con AbortSignal.
-  const hang = fakeTranslationAi({ delayMs: () => 5_000 });
-  const t0 = Date.now();
-  const u4 = await prepareItem(w.mem, { ai: hang.ai, timeoutMs: 50 }, { catalogId: "C2", key: "k1", lang: "tr" });
-  ok(u4.kind === "uncertain" && Date.now() - t0 < 2_000, "el tiempo máximo corta de verdad la llamada y queda incierto");
-  // Proveedor con error / sin configurar / respuesta mala.
-  const e1 = await prepareItem(w.mem, { ai: fakeTranslationAi({ mode: () => "error" }).ai }, { catalogId: "C2", key: "k1", lang: "he" });
-  ok(e1.kind === "failed" && (e1 as { reason: string }).reason === "provider", "error del proveedor: fallido, se puede reintentar");
-  const e2 = await prepareItem(w.mem, { ai: async () => { throw new Error("no config"); }, isNotConfigured: () => true }, { catalogId: "C2", key: "k1", lang: "he" });
-  ok(e2.kind === "failed" && (e2 as { charged: boolean }).charged === false, "IA sin configurar: no se llamó");
-  const e3 = await prepareItem(w.mem, { ai: fakeTranslationAi({ mode: () => "bad" }).ai }, { catalogId: "C2", key: "k1", lang: "he" });
-  ok(e3.kind === "failed" && (e3 as { charged: boolean }).charged === true && !w.mem.texts.some((t) => t.lang === "he"), "claves cambiadas: se descarta (la llamada sí se hizo)");
+  ok(o.kind === "discarded" && w.mem.texts.filter((x) => x.lang === "it").length === 1 && w.mem.texts.find((x) => x.lang === "it")!.rev === 1, "el viejo llega tarde: descartado, el nuevo no se pisa");
+  // Dos «Preparar» a la vez sobre lo mismo: uno reserva, otro «en preparación».
+  const f = fakeTranslationAi();
+  const [a, b] = await Promise.all([prepareItem(w.mem, { ai: f.ai }, { catalogId: "E1", key: "k1", lang: "fr", manual: true }), prepareItem(w.mem, { ai: f.ai }, { catalogId: "E1", key: "k1", lang: "fr", manual: true })]);
+  eq([a.kind, b.kind].sort(), ["busy", "saved"], "dos a la vez: uno guarda y el otro ve «en preparación»");
+  eq(f.calls(), 1, "una sola llamada");
 }
-
-// ── 6. Fuentes: biblioteca reutilizable, texto propio no promocionado ───────
-console.log("· fuentes (DA31) y plantillas (DA27)");
 {
   const w = world();
   const shared = item();
-  w.cats.set("A", { id: "A", snapshot: snap([shared]), map: [{ p: "P1", k: "k1", av: null }], version: 1, lang: "es", links: [], library: { P1: "V1" } });
-  w.cats.set("B", { id: "B", snapshot: snap([{ ...shared, key: "kb" }]), map: [{ p: "P1", k: "kb", av: null }], version: 1, lang: "es", links: [], library: { P1: "V1" } });
-  w.cats.set("C", { id: "C", snapshot: snap([{ ...shared, key: "kc" }]), map: [{ p: "P1", k: "kc", av: null }], version: 1, lang: "es", links: [] });
+  addCat(w, "A", [shared], { library: { "A-P1": "V1" }, lang: "en" });
+  addCat(w, "B", [{ ...shared, key: "kb" }], { lang: "en" });
+  w.cats.get("B")!.map = [{ p: "A-P1", k: "kb", av: null }];
+  w.cats.get("B")!.library = { "A-P1": "V1" };
+  addCat(w, "C", [{ ...shared, key: "kc" }], { lang: "en" });
+  w.cats.get("C")!.map = [{ p: "A-P1", k: "kc", av: null }];
   const fake = fakeTranslationAi();
-  await prepareItem(w.mem, { ai: fake.ai }, { catalogId: "A", key: "k1", lang: "en" });
-  const pa = (await loadPanel(w.mem, "A", "en")).items.find((i) => i.key === "k1")!;
-  ok(pa.library === true, "texto copiado de la biblioteca: fuente reutilizable");
-  await approveItem(w.mem, { catalogId: "A", key: "k1", lang: "en", textRev: pa.text!.rev, areaRev: null, confirmed: pa.check?.warnings.map((x) => x.id) ?? [] });
-  const pb = (await loadPanel(w.mem, "B", "en")).items.find((i) => i.key === "kb")!;
-  ok(pb.state === "ready", "otro catálogo con la misma versión: «lista para usar (sin IA)»");
-  const r = await useApproved(w.mem, "B", "en");
-  ok(r.copied === 1 && fake.calls() === 1, "usar la ya aprobada en B: sin IA (DA12)");
-  const pc = (await loadPanel(w.mem, "C", "en")).items.find((i) => i.key === "kc")!;
-  ok(pc.state === "none" && pc.library === false, "texto propio de otro catálogo: no reutiliza nada (ni promociona a la biblioteca)");
-  ok(w.mem.sources.filter((s) => s.kind === "library").length === 1 && !w.mem.sources.some((s) => s.kind === "catalog"), "la traducción de A cuelga de la versión de la biblioteca");
-  // Plantilla: una traducción, reutilizada en otra vivienda con la misma plantilla.
+  const { t } = translator(w, fake.ai);
+  visit(w, t, "A-tok");
+  await t.whenIdle();
+  eq(fake.calls(), 2, "catálogo A: vivienda (de la biblioteca) y título");
+  visit(w, t, "B-tok");
+  await t.whenIdle();
+  eq(fake.calls(), 3, "catálogo B con la misma versión de la biblioteca: la vivienda SIN IA (solo su título)");
+  ok(!toPublicCatalog(w.snapOf("B-tok")).items[0].copyPending, "y se publica en B");
+  visit(w, t, "C-tok");
+  await t.whenIdle();
+  eq(fake.calls(), 5, "catálogo C con texto propio: no reutiliza la de la biblioteca (DA31)");
+  ok(w.mem.sources.filter((s) => s.kind === "library").length === 1 && w.mem.sources.some((s) => s.kind === "catalog" && s.catalogId === "C"), "la de A cuelga de la biblioteca; la de C es propia (no se promociona)");
+  // Plantilla: una traducción, reutilizada en otra vivienda.
   const T = "Recoletos es un barrio de fincas señoriales.";
   const t1 = item({ key: "t1", text: { b: "Ático exterior.\n\nEl salón es luminoso.", l: null, h: [] }, at: T });
   const t2 = item({ key: "t2", title: "Otro piso en Recoletos", text: { b: "Piso reformado.", l: null, h: [] }, at: T, features_manual: [] });
-  w.cats.set("T", { id: "T", snapshot: snap([t1, t2]), map: [{ p: "Q1", k: "t1", av: "AV1" }, { p: "Q2", k: "t2", av: "AV1" }], version: 1, lang: "es", links: [] });
+  addCat(w, "T", [t1, t2], { lang: "en" });
+  w.cats.get("T")!.map = [{ p: "Q1", k: "t1", av: "AV1" }, { p: "Q2", k: "t2", av: "AV1" }];
   const tf = fakeTranslationAi();
-  await prepareItem(w.mem, { ai: tf.ai }, { catalogId: "T", key: "t1", lang: "en" });
-  ok(JSON.parse(tf.last()!.userText).zona === T, "la plantilla viaja aparte");
-  await prepareItem(w.mem, { ai: tf.ai }, { catalogId: "T", key: "t2", lang: "en" });
-  ok(JSON.parse(tf.last()!.userText).zona === undefined, "la segunda vivienda con la misma plantilla no la vuelve a pedir");
-  let pt = (await loadPanel(w.mem, "T", "en")).items.find((i) => i.key === "t1")!;
-  ok(pt.es.blocks.some((b) => b.area && b.tr), "revisión: la plantilla con su traducción");
-  await approveItem(w.mem, { catalogId: "T", key: "t1", lang: "en", textRev: pt.text!.rev, areaRev: pt.area!.rev, confirmed: pt.check?.warnings.map((x) => x.id) ?? [] });
-  pt = (await loadPanel(w.mem, "T", "en")).items.find((i) => i.key === "t1")!;
-  const pt2 = (await loadPanel(w.mem, "T", "en")).items.find((i) => i.key === "t2")!;
-  ok(pt.state === "current" && pt2.area?.status === "approved", "aprobada una vez, vale para las dos");
-  const pub = toPublicCatalog(w.mem.mergeSnapshot("T", w.cats.get("T")!.map, { ...w.cats.get("T")!.snapshot, lang: "en" }, "en"));
-  ok(pub.items[0].copy.at(-1)?.heading === "Living in Recoletos" && pub.items[0].copy.at(-1)?.text.startsWith("[en] Recoletos"), "lector: la plantilla traducida en «Living in Recoletos»");
+  const T2 = translator(w, tf.ai, { maxActivePerCatalog: 1 });
+  visit(w, T2.t, "T-tok");
+  await T2.t.whenIdle();
+  const zonas = tf.calls();
+  ok(zonas === 3, "plantilla: se traduce una vez (con la primera vivienda) y la segunda la reutiliza");
+  const pub = toPublicCatalog(w.snapOf("T-tok"));
+  ok(pub.items.every((x) => x.copy.at(-1)?.heading === "Living in Recoletos" && !x.copyPending), "las dos con «Living in Recoletos» (nombre propio intacto)");
 }
 
-// ── 7. Fuente: lo público nunca prepara ni llama a la IA (DA12) ─────────────
+// ── 11. Fuente: lo público nunca espera a la IA (DA12 sustituida) ───────────
 console.log("· comprobaciones de fuente");
 {
   const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+  const strip = (src: string) => src.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
   const publicFiles = [
     "lib/catalogs/to-public.ts", "lib/catalogs/public-data.ts",
     "app/api/seleccion/[token]/estado/route.ts", "app/api/seleccion/[token]/eventos/route.ts",
     "app/api/seleccion/[token]/opiniones/route.ts", "app/api/seleccion/[token]/pdf/route.ts", "app/seleccion/[token]/page.tsx",
   ];
   for (const f of publicFiles) {
-    const src = read(f);
-    ok(!/aiComplete|translation-service|translation-data|translation-fake-ai|runPreparation|prepareItem/.test(src.replace(/^\s*\/\/.*$/gm, "")), `${f}: sin IA ni preparación`);
+    const src = strip(read(f));
+    ok(!/aiComplete|translation-service|translation-data|translation-fake-ai|runPreparation|prepareItem|autoUnit/.test(src), `${f}: sin IA ni preparación directa`);
   }
-  const mig = read("supabase/migrations/0226_catalog_translations.sql");
-  ok(!/property_client_descriptions\s*(SET|\(|VALUES)|INSERT INTO property_client_descriptions|UPDATE property_client_descriptions|UPDATE properties|INSERT INTO properties/i.test(mig), "0226: nunca escribe en properties ni en property_client_descriptions");
-  ok(/WHEN coalesce\(p_lang, 'es'\) = 'es' THEN x\.s \|\| jsonb_build_object\('lang', 'es'\)/.test(mig), "0226: en español, la instantánea de 0223");
-  ok(/catalog_tr_jobs_one_reserved ON catalog_tr_jobs \(source_id, lang\) WHERE status = 'reserved'/.test(mig), "0226: una reserva vigente por fuente e idioma");
-  ok(/REVOKE ALL ON TABLE catalog_tr_jobs FROM public, anon, authenticated/.test(mig) && /ENABLE ROW LEVEL SECURITY/.test(mig), "0226: RLS y solo service_role");
+  const pd = strip(read("lib/catalogs/public-data.ts"));
+  ok(/void import\("\.\/auto-translate-instance"\)/.test(pd) && !/await import\("\.\/auto-translate-instance"\)/.test(pd) && !/await\s+requestAutoTranslation/.test(pd), "public-data: encarga la traducción SIN esperarla (ni la carga del módulo)");
+  ok(/if \(opts\?\.visit\) requestTranslationsLater/.test(pd) && /readSnapshot: async \(\) => \{[\s\S]*requestTranslationsLater\(token, snap\)/.test(pd), "solo las visitas (y el PDF por token) la encargan");
+  for (const f of ["app/seleccion/[token]/page.tsx", "app/api/seleccion/[token]/estado/route.ts", "app/api/seleccion/[token]/eventos/route.ts"]) {
+    ok(/getPublicCatalogState\(token, \{ visit: true \}\)/.test(read(f)), `${f}: cuenta como visita`);
+  }
+  ok(/fetchContent: \(token\) => getPublicCatalogState\(token\)/.test(read("lib/catalogs/sync-hub-instance.ts")), "el vigilante NO cuenta como visita");
+  const inst = read("lib/catalogs/auto-translate-instance.ts");
+  ok(/isCatalogFixtureMode\(\) \? fixtureDeps\(\) : realDeps\(\)/.test(inst) && /ai: \(o\) => aiComplete\(o\)/.test(inst), "la app usa aiComplete; la IA falsa solo en los fixtures");
+  ok(/c\.status !== "active" \|\| row\.revoked_at \|\| new Date\(row\.expires_at\)/.test(inst) && /row\.lang \?\? c\.default_lang/.test(inst), "el idioma sale del enlace o del catálogo (base de datos), nunca de la URL");
+  const mig = read("supabase/migrations/0228_catalog_translations_auto.sql");
+  ok(!/property_client_descriptions|UPDATE properties|INSERT INTO properties/i.test(mig.replace(/--[^\n]*/g, "")), "0228: nunca escribe en properties ni en property_client_descriptions");
+  ok(/pg_advisory_xact_lock\(hashtextextended\('catalog_tr_auto:'/.test(mig) && /'limit'/.test(mig) && /'cap'/.test(mig) && /'waiting'/.test(mig) && /'stopped'/.test(mig), "0228: cerrojo por catálogo y los cuatro límites");
+  ok(/REVOKE ALL ON FUNCTION catalog_tr_reserve_auto/.test(mig) && /GRANT EXECUTE ON FUNCTION catalog_tr_publish\(uuid, uuid, uuid, text, text, jsonb, text\)\s+TO service_role/.test(mig), "0228: solo service_role");
   const actions = read("app/[country]/(admin)/admin/mi-espacio/actions.ts");
-  ok(/prepareTranslationAction[\s\S]*withHomeAccess[\s\S]*prepareItem\(sqlTranslations/.test(actions), "acciones: preparar solo desde la gestión, con la guarda del dueño");
-  ok(!/translation-fake-ai/.test(actions), "acciones reales: nunca la IA falsa");
+  ok(/prepareTranslationsNowAction[\s\S]*withHomeAccess[\s\S]*prepareNow\(profile\.id/.test(actions) && !/translation-fake-ai/.test(actions), "acciones: «Preparar ahora» con la guarda del dueño; nunca la IA falsa");
   const ui = read("components/admin/catalogs/manager/languages-section.tsx");
-  ok(/no garantiza una sola llamada de pago/.test(ui) && /sin revisión nativa/.test(ui) && /pudo cobrarse/.test(ui), "gestor: aviso de coste, incierto y sin revisión nativa");
+  ok(/sin revisión nativa/.test(ui) && /Preparar ahora/.test(ui) && /Dar por revisada/.test(ui) && !/Aprobar y usar/.test(ui), "gestor: opcional, «sin revisión nativa», «Preparar ahora», sin aprobar bloque a bloque");
+  ok(/share-lang-select/.test(read("components/admin/catalogs/manager/share-section.tsx")), "selector de idioma junto a «Compartir»");
   const pages = read("components/catalogs/reader/pages.tsx");
   ok(/copyPending/.test(pages) && /data-testid="copy-pending"/.test(pages), "lector: el aviso N5 en el sitio de la descripción");
 }
