@@ -162,3 +162,12 @@ node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
 | Motor actual | `actual-he-vivienda.jpg` (E2: cifras y párrafo corruptos), `actual-he-lineas-pdf-vs-chromium.png`, `actual-ar-minimo-e3.png` («بيت شقة»: PDF arriba y Chromium abajo), `actual-motor-e1-e2-e4.png`, `actual-tr-vivienda.jpg`, `actual-fr-vivienda.jpg` |
 | Con parche | `parche-ar-vivienda.jpg`, `parche-ar-indice.jpg`, `parche-ar-lineas-pdf-vs-chromium.png` (cada línea: PDF arriba y Chromium abajo), `parche-he-vivienda.jpg`, `parche-he-lineas-pdf-vs-chromium.png`, `parche-motor-e1-e2-e4.png` |
 | PDF | `actual-he.pdf`, `actual-tr.pdf`, `actual-fr.pdf`, `parche-ar.pdf`, `parche-he.pdf` |
+
+## Decisiones de Fabricio (22-10-2026)
+
+| | Decisión |
+| --- | --- |
+| **D1** | **Corrección local en el repo.** Se mantiene `@react-pdf` 4.5.1. La corrección de E2, E3, E4, E6 y E7 se aplica al cargar el motor: sin tocar `node_modules` ni instalar nada, con una comprobación de versión que falla si la librería cambia sin revisar la corrección. En producción se aplica también al hilo del PDF (loader propio en `next.config`). E1 se corrige en nuestro `fonts.ts`. |
+| **D2** | **ActualText.** El PDF guarda el texto original por bloque, para que copiar y buscar den el texto correcto en árabe (y en hebreo). |
+| **D3** | **Aceptada** la diferencia de forma de «في» (E8). Queda dentro de la marca «sin revisión nativa» (DA20) y se revisará con un hablante nativo. |
+| **D4** | **No aceptada.** Dentro de los textos en árabe y hebreo, las cifras, los precios y el alfabeto latino **no** se fijan a Inter/Playfair. El PR5 propondrá la tipografía concreta, con su cobertura comprobada, antes de cerrarla. |
