@@ -5,7 +5,10 @@ import type { NextConfig } from "next";
 // se aplica al código de @react-pdf/textkit y @react-pdf/render al
 // compilarlos, en TODOS los bundles (también el chunk del hilo del PDF).
 // Comprueba la versión: si cambia sin revisar la corrección, el build falla.
-const PDF_ENGINE_PATCH_LOADER = path.join(__dirname, "lib", "pdf", "engine-patch", "webpack-loader.cjs");
+// Next carga este archivo como CommonJS (__dirname existe); las pruebas en Node
+// lo importan como ESM desde la raíz del repositorio.
+const CONFIG_DIR = typeof __dirname === "string" ? __dirname : process.cwd();
+const PDF_ENGINE_PATCH_LOADER = path.join(CONFIG_DIR, "lib", "pdf", "engine-patch", "webpack-loader.cjs");
 const PDF_ENGINE_FILES = /[\\/]@react-pdf[\\/](?:textkit[\\/]lib[\\/]textkit|render[\\/]lib[\\/]index)\.js$/;
 
 const nextConfig: NextConfig = {
