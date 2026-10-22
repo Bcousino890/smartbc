@@ -1,3 +1,4 @@
+import type { CatalogLanguage } from "./i18n";
 // Tipos de la HOME y de la gestión de catálogos (BCP-01). Solo datos que ya
 // pasaron la guarda del dueño; nada de esto llega a ninguna superficie pública.
 
@@ -149,6 +150,9 @@ export interface CatalogDetail {
   cover: CatalogCoverState;
   /** PR7b (0227): acabado fotográfico del catálogo (apagado por defecto). */
   photoFinish: boolean;
+  /** 0223: idioma del catálogo (enlace general y personales sin idioma
+   *  propio). Se elige también junto a «Compartir». */
+  defaultLang?: CatalogLanguage;
   /** E2 (solo gestión, D-QA8): material de cada vivienda de la lista según lo
    *  que ve hoy el cliente, por propertyId. Sin entrada = sin diagnóstico. */
   material: Record<string, CatalogMaterial>;

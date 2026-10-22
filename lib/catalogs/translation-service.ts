@@ -1,17 +1,21 @@
 import { esUnitOfItem, type InternalItem, type InternalSnapshot } from "./to-public";
 import { catalogDictionary, type CatalogLanguage } from "./i18n";
 import { SECTION_HEADINGS } from "./structure";
+import { textBlockers } from "./text-rules";
 import {
+  AUTO_LIMITS,
+  autoRetryState,
   checkTranslation,
   headingFor,
   ITEM_STATE_LABEL,
   isTargetLanguage,
   languageProgress,
   metaSig,
-  pendingTranslationWarnings,
   RESERVATION_TTL_SECONDS,
+  reserveLimits,
   runPreparation,
   TARGET_LANGUAGES,
+  type AutoLimits,
   type CheckPair,
   type EsUnit,
   type FinishResult,
@@ -29,12 +33,20 @@ import {
 } from "./translations";
 
 // ============================================================================
-// Traducciones del catálogo en la GESTIÓN (PR6). Orquestación PURA sobre un
-// «backend» inyectado: en la app, las funciones SQL de 0226 (translation-
-// data.ts); en las pruebas y los fixtures, el almacén en memoria con las
-// MISMAS reglas (translation-memory.ts). La IA también llega inyectada y solo
-// se usa en `prepareItem` (al pulsar «Preparar»). Ninguna lectura pública pasa
-// por aquí.
+// Traducciones del catálogo en la GESTIÓN (PR6 + traducción automática,
+// 0228). Orquestación PURA sobre un «backend» inyectado: en la app, las
+// funciones SQL de 0226/0228 (translation-data.ts); en las pruebas y los
+// fixtures, el almacén en memoria con las MISMAS reglas
+// (translation-memory.ts). La IA también llega inyectada y solo se usa en
+// `prepareItem`, que lanza el traductor en SEGUNDO PLANO (auto-translate.ts)
+// tras una visita o «Preparar ahora». Ninguna petición pública espera aquí.
+//
+// Publicación automática (`autoUnit`): una traducción que pasa los filtros
+// deterministas (sin contacto ni precio) se publica sola en ESTE catálogo
+// (approval 'auto'); los avisos de cifras y nombres no la frenan, pero el
+// panel la marca «revisar». Con un bloqueo no se publica (estado «blocked»).
+// Lo editado a mano se publica como 'manual' y nunca lo pisa una traducción
+// automática: cada fuente se traduce una vez por versión del español.
 // ============================================================================
 
 export type SourceKind = "library" | "catalog" | "area" | "meta";
@@ -77,6 +89,8 @@ export interface TextRow {
   content: { t?: string | null; i?: string | null; b?: Array<{ k: string; x: string }> };
   rev: number;
   origin: "ai" | "manual";
+  /** 0228: cómo se publicó una aprobada ('auto' sola, 'manual' el dueño). */
+  approval: "auto" | "manual" | null;
   updatedAt: string | null;
 }
 
@@ -85,6 +99,9 @@ export interface FeatureRow {
   lang: TargetLanguage;
   tr: string;
   status: "draft" | "approved" | "rejected";
+  approval: "auto" | "manual" | null;
+  /** Quién la escribió: la IA o el dueño a mano. */
+  origin?: "ai" | "manual";
 }
 
 export interface JobRow {
@@ -97,6 +114,8 @@ export interface JobRow {
   finishedAt: string | null;
   discardedAt: string | null;
   note: string | null;
+  /** 0228: lo lanzó una visita (no el dueño). */
+  auto: boolean;
 }
 
 export interface CopyRow {
@@ -119,6 +138,8 @@ export interface LinkRow {
   lang: CatalogLanguage | null;
   state: "active" | "expired" | "revoked";
 }
+
+export type PublishMode = "auto" | "manual";
 
 export interface ApproveParts {
   text: { id: string; rev: number };
@@ -146,15 +167,14 @@ export interface TrBackend {
   }>;
   ensureSource(catalogId: string, propertyId: string | null, sig: string, es: object): Promise<{ id: string; kind: SourceKind }>;
   ensureAreaSource(areaVersionId: string, sig: string, es: object): Promise<string>;
-  reserve(i: { sourceId: string; lang: TargetLanguage; catalogId: string; propertyId: string | null; needs: PrepareNeeds; ttlSeconds: number; retry: boolean }): Promise<ReserveResult>;
+  /** catalog_tr_reserve_auto (0228): la reserva de 0226 con los límites. */
+  reserve(i: { sourceId: string; lang: TargetLanguage; catalogId: string; propertyId: string | null; needs: PrepareNeeds; ttlSeconds: number; limits: ReturnType<typeof reserveLimits> }): Promise<ReserveResult>;
   finish(i: { jobId: string; outcome: "done" | "failed" | "uncertain"; result: TranslationResult | null; note: string | null }): Promise<FinishResult>;
-  cancel(jobId: string): Promise<boolean>;
   saveText(textId: string, rev: number, content: object): Promise<number>;
   saveFeature(lang: TargetLanguage, es: string, tr: string): Promise<void>;
-  reject(textId: string): Promise<boolean>;
-  approve(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, parts: ApproveParts): Promise<number>;
-  copySet(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, textId: string, areaTextId: string | null, features: string[]): Promise<number>;
-  copyRemove(catalogId: string, propertyId: string | null, lang: TargetLanguage): Promise<number>;
+  /** catalog_tr_publish (0228): aprueba lo visto y lo copia a este catálogo. */
+  publish(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, parts: ApproveParts, mode: PublishMode): Promise<number>;
+  markReviewed(catalogId: string, lang: TargetLanguage, textIds: string[], features: string[]): Promise<number>;
   activate(catalogId: string, linkId: string | null, lang: CatalogLanguage | null, expectedVersion: number, required: ActivationRequired): Promise<number>;
 }
 
@@ -213,9 +233,11 @@ export interface PanelBlock {
   headingTr: string | null;
   es: string;
   tr: string | null;
-  /** Es la plantilla «Vivir en…» (se traduce y aprueba aparte, DA27). */
+  /** Es la plantilla «Vivir en…» (se traduce aparte y se reutiliza, DA27). */
   area: boolean;
 }
+
+type Approval = TextRow["approval"];
 
 export interface PanelItem {
   key: string;
@@ -226,19 +248,23 @@ export interface PanelItem {
   level: string;
   state: ItemTrState;
   stateLabel: string;
-  /** La copia de este catálogo es la vigente. */
+  /** La copia de este catálogo es la vigente (el cliente ve la traducción). */
   current: boolean;
-  /** Hay copia, pero de un español anterior (el cliente ve N5). */
+  /** Hay copia, pero de un español anterior (el cliente ve N5 hasta rehacerla). */
   outdated: boolean;
   /** La fuente es una versión aprobada de la biblioteca (se reutiliza). */
   library: boolean;
   sig: string;
   es: { title: string; intro: string | null; blocks: PanelBlock[]; features: string[] };
-  text: { id: string; rev: number; status: TextRow["status"]; title: string | null; intro: string | null; origin: TextRow["origin"] } | null;
-  area: { id: string; rev: number; status: TextRow["status"] } | null;
-  features: Array<{ es: string; tr: string | null; status: FeatureRow["status"] | null }>;
+  text: { id: string; rev: number; status: TextRow["status"]; title: string | null; intro: string | null; origin: TextRow["origin"]; approval: Approval } | null;
+  area: { id: string; rev: number; status: TextRow["status"]; approval: Approval } | null;
+  features: Array<{ es: string; tr: string | null; status: FeatureRow["status"] | null; approval: Approval }>;
   featuresMissing: number;
-  job: { id: string; status: JobRow["status"]; expiresAt: string; note: string | null; discarded: boolean; active: boolean } | null;
+  job: { id: string; status: JobRow["status"]; expiresAt: string; note: string | null; discarded: boolean; active: boolean; auto: boolean } | null;
+  /** Espera creciente tras fallos (0228): cuándo se reintenta y si ya no. */
+  retry: { failures: number; until: string | null; stopped: boolean };
+  /** Bloqueos y avisos de lo que NO revisó el dueño (borradores y lo
+   *  publicado solo). Lo publicado a mano no se vuelve a señalar. */
   check: TranslationCheck | null;
   names: string[];
 }
@@ -259,22 +285,31 @@ function latest<T extends { reservedAt: string }>(rows: T[]): T | null {
   return rows.reduce<T | null>((a, b) => (!a || b.reservedAt > a.reservedAt ? b : a), null);
 }
 
+/** Lo que el dueño no ha visto: un borrador o algo publicado solo. */
+const unseen = (r: { status: string; approval: Approval } | null | undefined): boolean => !!r && r.status !== "rejected" && (r.status === "draft" || r.approval !== "manual");
+
 function checkFor(item: { unit?: EsUnit; meta?: { title: string; intro: string | null } }, text: TextRow | null, areaText: TextRow | null, feats: FeatureRow[], names: string[]): TranslationCheck | null {
   const pairs: CheckPair[] = [];
   if (item.meta) {
-    if (!text) return null;
+    if (!text || !unseen(text)) return null;
     pairs.push({ where: "title", label: "Título del catálogo", es: item.meta.title, tr: text.content.t ?? "" });
     if (item.meta.intro) pairs.push({ where: "intro", label: "Introducción", es: item.meta.intro, tr: text.content.i ?? "" });
     return checkTranslation(pairs, names);
   }
   const unit = item.unit!;
-  if (text) {
+  if (text && unseen(text)) {
     pairs.push({ where: "title", label: "Título", es: unit.title, tr: text.content.t ?? "" });
     unit.ownBlocks.forEach((b, i) => pairs.push({ where: `block:${i}`, label: b.k === "intro" ? "Introducción" : SECTION_HEADINGS[b.k], es: b.x, tr: text.content.b?.[i]?.x ?? "" }));
   }
-  if (areaText && unit.areaText && areaText.status !== "approved") pairs.push({ where: "area", label: "Plantilla «Vivir en…»", es: unit.areaText, tr: areaText.content.b?.[0]?.x ?? "" });
-  for (const f of feats) if (f.status === "draft") pairs.push({ where: `feature:${f.es}`, label: `Característica «${f.es}»`, es: f.es, tr: f.tr });
+  if (areaText && unit.areaText && unseen(areaText)) pairs.push({ where: "area", label: "Plantilla «Vivir en…»", es: unit.areaText, tr: areaText.content.b?.[0]?.x ?? "" });
+  for (const f of feats) if (unseen(f)) pairs.push({ where: `feature:${f.es}`, label: `Característica «${f.es}»`, es: f.es, tr: f.tr });
   return pairs.length ? checkTranslation(pairs, names) : null;
+}
+
+/** Bloqueos que impiden publicar la unidad (los de una característica solo
+ *  dejan fuera esa característica). */
+function unitBlockers(check: TranslationCheck | null): TranslationCheck["blockers"] {
+  return (check?.blockers ?? []).filter((b) => !b.where.startsWith("feature:"));
 }
 
 export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLanguage, now = Date.now()): Promise<PanelState> {
@@ -304,23 +339,22 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
   });
 
   const dict = catalogDictionary(lang);
-  const jobFor = (sourceId: string | null) => {
-    const j = sourceId ? latest(work.jobs.filter((x) => x.sourceId === sourceId && x.lang === lang)) : null;
+  const jobsOf = (sourceId: string | null) => (sourceId ? work.jobs.filter((x) => x.sourceId === sourceId && x.lang === lang) : []);
+  const jobFor = (sourceId: string | null): PanelItem["job"] => {
+    const j = latest(jobsOf(sourceId));
     if (!j) return null;
     const active = j.status === "reserved" && new Date(j.expiresAt).getTime() > now;
-    return { id: j.id, status: j.status, expiresAt: j.expiresAt, note: j.note, discarded: !!j.discardedAt, active };
+    return { id: j.id, status: j.status, expiresAt: j.expiresAt, note: j.note, discarded: !!j.discardedAt, active, auto: j.auto };
   };
-  const stateOf = (o: { current: boolean; job: PanelItem["job"]; text: TextRow | null; needArea: boolean; area: TextRow | null; feats: FeatureRow[]; outdated: boolean }): ItemTrState => {
+  const stateOf = (o: { current: boolean; job: PanelItem["job"]; text: TextRow | null; needArea: boolean; area: TextRow | null; check: TranslationCheck | null; retry: PanelItem["retry"]; outdated: boolean }): ItemTrState => {
     if (o.job?.active) return "busy";
-    const drafts = o.text?.status === "draft" || (o.needArea && o.area?.status === "draft") || o.feats.some((f) => f.status === "draft");
-    if (drafts) return "review";
-    // Vigente: las características que falten se ven en `featuresMissing`.
-    if (o.current) return "current";
-    if (o.text?.status === "approved" && (!o.needArea || o.area?.status === "approved")) return "ready";
-    if (o.job?.status === "uncertain") return "uncertain";
-    if (o.job?.status === "failed") return "failed";
+    if (o.current) return o.check?.warnings.length ? "review" : "current";
+    const haveText = !!o.text && o.text.status !== "rejected";
+    const haveArea = !o.needArea || (!!o.area && o.area.status !== "rejected");
+    if (haveText && haveArea) return unitBlockers(o.check).length ? "blocked" : "ready";
+    if (o.retry.stopped) return "stopped";
+    if (o.retry.until) return "waiting";
     if (o.outdated) return "outdated";
-    if (o.text?.status === "rejected") return "rejected";
     return "none";
   };
 
@@ -332,7 +366,9 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
     const copy = copies.meta.find((m) => m.lang === lang) ?? null;
     const current = !!copy && copy.esSig === meta.sig;
     const job = jobFor(src?.id ?? null);
-    const state = stateOf({ current, job, text, needArea: false, area: null, feats: [], outdated: !!copy && !current });
+    const retry = autoRetryState(jobsOf(src?.id ?? null), now);
+    const check = text && text.status !== "rejected" ? checkFor({ meta }, text, null, [], []) : null;
+    const state = stateOf({ current, job, text, needArea: false, area: null, check, retry, outdated: !!copy && !current });
     panelItems.push({
       key: META_KEY,
       propertyId: null,
@@ -346,12 +382,13 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
       library: false,
       sig: meta.sig,
       es: { title: meta.title, intro: meta.intro, blocks: [], features: [] },
-      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: text.content.i ?? null, origin: text.origin } : null,
+      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: text.content.i ?? null, origin: text.origin, approval: text.approval } : null,
       area: null,
       features: [],
       featuresMissing: 0,
       job,
-      check: text && text.status !== "rejected" ? checkFor({ meta }, text, null, [], []) : null,
+      retry,
+      check,
       names: [],
     });
   }
@@ -375,15 +412,9 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
     const inCopy = new Set((copy?.features ?? []).map((p) => p[0]));
     const featuresMissing = x.unit.features.filter((f) => !current || !inCopy.has(f)).length;
     const job = jobFor(src?.id ?? null);
-    const state = stateOf({
-      current,
-      job,
-      text,
-      needArea: !!x.unit.areaText,
-      area,
-      feats: feats.filter((f): f is FeatureRow => !!f),
-      outdated: !!copy && !current,
-    });
+    const retry = autoRetryState(jobsOf(src?.id ?? null), now);
+    const check = checkFor({ unit: x.unit }, text && text.status !== "rejected" ? text : null, area, feats.filter((f): f is FeatureRow => !!f), x.names);
+    const state = stateOf({ current, job, text, needArea: !!x.unit.areaText, area, check, retry, outdated: !!copy && !current });
     // Bloques: los propios (con su traducción) y, si entra, la plantilla.
     const blocks: PanelBlock[] = x.unit.ownBlocks.map((b, i) => ({
       key: b.k,
@@ -416,12 +447,13 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
       library: src?.kind === "library",
       sig: x.unit.sig,
       es: { title: x.unit.title, intro: null, blocks, features: x.unit.features },
-      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: null, origin: text.origin } : null,
-      area: area ? { id: area.id, rev: area.rev, status: area.status } : null,
-      features: x.unit.features.map((f, i) => ({ es: f, tr: feats[i]?.tr ?? null, status: feats[i]?.status ?? null })),
+      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: null, origin: text.origin, approval: text.approval } : null,
+      area: area ? { id: area.id, rev: area.rev, status: area.status, approval: area.approval } : null,
+      features: x.unit.features.map((f, i) => ({ es: f, tr: feats[i]?.tr ?? null, status: feats[i]?.status ?? null, approval: feats[i]?.approval ?? null })),
       featuresMissing,
       job,
-      check: text?.status === "rejected" ? null : checkFor({ unit: x.unit }, text, area, feats.filter((f): f is FeatureRow => !!f), x.names),
+      retry,
+      check,
       names: x.names,
     });
   }
@@ -429,19 +461,24 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
   return { catalogId, version: es.version, defaultLang: es.defaultLang, lang, links, progress, active, items: panelItems };
 }
 
-// ── Preparar (solo al pulsar) ───────────────────────────────────────────────
+// ── Preparar (la llamada a la IA, con reserva y límites) ────────────────────
 
 export interface PrepareDeps {
   ai: TrAiFn;
   timeoutMs?: number;
   isNotConfigured?: (e: unknown) => boolean;
   ttlSeconds?: number;
+  limits?: Pick<AutoLimits, "maxActivePerCatalog" | "dailyCapPerCatalog" | "maxFailures" | "retryWaitsSeconds">;
 }
 
+/** UNA llamada a la IA para una vivienda (o el título del catálogo) en un
+ *  idioma, solo con lo que falta. `manual`: la lanza el dueño («Preparar
+ *  ahora»): sin espera creciente ni tope diario (sí con el límite de
+ *  trabajos a la vez por catálogo). */
 export async function prepareItem(
   be: TrBackend,
   deps: PrepareDeps,
-  input: { catalogId: string; key: string; lang: TargetLanguage; retry?: boolean },
+  input: { catalogId: string; key: string; lang: TargetLanguage; manual?: boolean },
 ): Promise<PrepareOutcome> {
   if (!isTargetLanguage(input.lang)) throw new Error("invalid_lang");
   const es = await be.esState(input.catalogId);
@@ -466,45 +503,100 @@ export async function prepareItem(
     needs = { text: true, area: areaSource, features: x.unit.features, meta: false };
   }
   const ttl = deps.ttlSeconds ?? RESERVATION_TTL_SECONDS;
+  const limits = reserveLimits(input.manual === true, deps.limits ?? AUTO_LIMITS);
   return runPreparation(
     {
       store: {
-        reserve: (i) => be.reserve({ sourceId: i.sourceId, lang: i.lang, catalogId: input.catalogId, propertyId, needs: i.needs, ttlSeconds: ttl, retry: i.retry }),
+        reserve: (i) => be.reserve({ sourceId: i.sourceId, lang: i.lang, catalogId: input.catalogId, propertyId, needs: i.needs, ttlSeconds: ttl, limits }),
         finish: (i) => be.finish(i),
       },
       ai: deps.ai,
       timeoutMs: deps.timeoutMs,
       isNotConfigured: deps.isNotConfigured,
     },
-    { sourceId, request, needs, retry: input.retry === true },
+    { sourceId, request, needs, manual: input.manual === true },
   );
 }
 
-/** Mensaje del gestor para cada resultado (DA36: dice cuándo pudo cobrarse). */
-export function prepareMessage(o: PrepareOutcome): { kind: "ok" | "info" | "error"; text: string } {
-  switch (o.kind) {
-    case "saved":
-      return { kind: "ok", text: "Traducción preparada. Revísala y apruébala antes de que la vea ningún cliente." };
-    case "ready":
-      return { kind: "info", text: "No faltaba nada que traducir: ya hay una traducción preparada o aprobada (no se ha llamado a la IA)." };
-    case "busy":
-      return { kind: "info", text: "Ya hay una preparación en curso para este texto e idioma. No se ha lanzado otra; espera a que termine." };
-    case "uncertain_pending":
-      return { kind: "error", text: "La preparación anterior quedó con resultado incierto (pudo cobrarse). No se reintenta sola: usa «Volver a preparar» si quieres lanzarla otra vez." };
-    case "discarded":
-      return { kind: "info", text: o.reason === "cancelled" ? "Llegó la respuesta de una preparación cancelada: se ha descartado y queda registrada (esa llamada pudo cobrarse)." : "Llegó una respuesta cuando su reserva ya había caducado: se ha descartado y queda registrada (esa llamada pudo cobrarse)." };
-    case "failed":
-      return o.reason === "not_configured"
-        ? { kind: "error", text: "La IA no está configurada (Configuración → IA). No se ha hecho ninguna llamada." }
-        : o.reason === "invalid"
-          ? { kind: "error", text: "La IA respondió, pero la traducción no respetaba los bloques del original y se ha descartado. Esa llamada sí se hizo (pudo cobrarse). Puedes volver a prepararla." }
-          : { kind: "error", text: "El proveedor de IA respondió con un error. Puedes volver a intentarlo." };
-    case "uncertain":
-      return { kind: "error", text: "Resultado incierto: se agotó el tiempo o se cortó la conexión después de enviar. La llamada pudo cobrarse. No se reintenta sola; revisa y, si quieres, vuelve a prepararla." };
-  }
+// ── Publicar (sola o a mano) ────────────────────────────────────────────────
+
+export type PublishResult = { kind: "published"; version: number } | { kind: "blocked"; code: string } | { kind: "nothing" } | { kind: "not_ready" };
+
+/** Publica en este catálogo lo traducido de una unidad. En 'auto', solo si
+ *  no tiene bloqueos (contacto o precio); los avisos no la frenan. Las
+ *  características con un bloqueo se quedan fuera (no se ven). */
+export async function publishItem(be: TrBackend, catalogId: string, lang: TargetLanguage, it: PanelItem, mode: PublishMode): Promise<PublishResult> {
+  if (!it.text || it.text.status === "rejected") return { kind: "not_ready" };
+  const needArea = it.es.blocks.some((b) => b.area);
+  if (needArea && (!it.area || it.area.status === "rejected")) return { kind: "not_ready" };
+  const blockers = unitBlockers(it.check);
+  if (blockers.length) return { kind: "blocked", code: blockers[0].code };
+  const featureParts = it.features
+    .filter((f): f is typeof f & { tr: string } => !!f.tr && f.status === "draft" && textBlockers(f.tr).length === 0)
+    .map((f) => ({ es: f.es, tr: f.tr }));
+  const copyMissing = it.featuresMissing > 0 && it.features.some((f) => f.status === "approved");
+  if (mode === "auto" && it.current && featureParts.length === 0 && !copyMissing) return { kind: "nothing" };
+  const version = await be.publish(catalogId, it.propertyId, lang, it.sig, {
+    text: { id: it.text.id, rev: it.text.rev },
+    area: needArea && it.area ? { id: it.area.id, rev: it.area.rev } : null,
+    features: it.kind === "meta" ? [] : featureParts,
+    list: it.kind === "meta" ? [] : it.es.features,
+  }, mode);
+  return { kind: "published", version };
 }
 
-// ── Revisar, aprobar, usar sin IA ───────────────────────────────────────────
+/** ¿Hay algo que hacer con esta unidad sin el dueño? */
+export function needsAutoWork(it: PanelItem, now = Date.now()): boolean {
+  if (it.state === "busy" || it.state === "blocked" || it.state === "stopped") return false;
+  if (it.state === "waiting") return !!it.retry.until && Date.parse(it.retry.until) <= now;
+  if (it.state === "current" || it.state === "review") {
+    // Vigente: solo si faltan características que se puedan traducir o copiar.
+    return it.featuresMissing > 0 && it.features.some((f) => f.status === null || f.status === "rejected" || (f.status === "draft" && !!f.tr && textBlockers(f.tr).length === 0) || f.status === "approved");
+  }
+  return true;
+}
+
+export type AutoUnitResult =
+  | { key: string; kind: "published" }
+  | { key: string; kind: "blocked"; code: string }
+  | { key: string; kind: "skipped"; reason: string }
+  | { key: string; kind: "ai"; outcome: PrepareOutcome["kind"]; published: boolean };
+
+/** Una unidad en segundo plano: publicar lo que ya se puede (sin IA) o, si
+ *  falta, UNA llamada a la IA (con reserva y límites) y publicar el
+ *  resultado si pasa los filtros. `spend()` decide si esta visita aún puede
+ *  lanzar otra llamada (tope por visita). */
+export async function autoUnit(
+  be: TrBackend,
+  deps: PrepareDeps & { spend: () => boolean; now?: () => number },
+  input: { catalogId: string; key: string; lang: TargetLanguage; manual?: boolean },
+): Promise<AutoUnitResult> {
+  const now = deps.now ?? Date.now;
+  const find = async () => (await loadPanel(be, input.catalogId, input.lang, now())).items.find((i) => i.key === input.key) ?? null;
+  let it = await find();
+  if (!it) return { key: input.key, kind: "skipped", reason: "not_in_catalog" };
+  if (!input.manual && !needsAutoWork(it, now())) return { key: input.key, kind: "skipped", reason: it.state };
+  if (input.manual && (it.state === "busy" || it.state === "blocked")) return { key: input.key, kind: "skipped", reason: it.state };
+  const first = await publishItem(be, input.catalogId, input.lang, it, "auto");
+  if (first.kind === "published") {
+    // Lo publicado puede seguir sin alguna característica traducida.
+    it = await find();
+    if (!it || !needsAutoWork(it, now()) || it.features.every((f) => f.status !== null && f.status !== "rejected")) return { key: input.key, kind: "published" };
+  } else if (first.kind === "blocked") {
+    return { key: input.key, kind: "blocked", code: first.code };
+  } else if (first.kind === "nothing" && !it.features.some((f) => f.status === null || f.status === "rejected")) {
+    return { key: input.key, kind: "skipped", reason: "current" };
+  }
+  if (!deps.spend()) return { key: input.key, kind: "skipped", reason: "visit_budget" };
+  const outcome = await prepareItem(be, deps, input);
+  if (outcome.kind !== "saved" && outcome.kind !== "ready") return { key: input.key, kind: "ai", outcome: outcome.kind, published: first.kind === "published" };
+  it = await find();
+  const after = it ? await publishItem(be, input.catalogId, input.lang, it, "auto") : { kind: "not_ready" as const };
+  if (after.kind === "blocked") return { key: input.key, kind: "blocked", code: after.code };
+  return { key: input.key, kind: "ai", outcome: outcome.kind, published: after.kind === "published" || first.kind === "published" };
+}
+
+// ── Editar a mano y dar por buena ───────────────────────────────────────────
 
 export interface ReviewEdit {
   key: string;
@@ -532,53 +624,31 @@ export async function saveReview(be: TrBackend, catalogId: string, edit: ReviewE
   for (const f of edit.features ?? []) if (f.tr.trim()) await be.saveFeature(edit.lang, f.es, f.tr.trim());
 }
 
-/** Aprueba lo que se revisó y lo copia a este catálogo. Bloqueos y avisos
- *  como al publicar: contacto o precio bloquean; cada aviso se confirma. */
-export async function approveItem(
-  be: TrBackend,
-  input: { catalogId: string; key: string; lang: TargetLanguage; textRev: number; areaRev: number | null; confirmed: string[] },
-): Promise<number> {
-  const panel = await loadPanel(be, input.catalogId, input.lang);
-  const it = panel.items.find((i) => i.key === input.key);
+/** «Guardar»: lo editado a mano se publica AL MOMENTO en este catálogo
+ *  (como 'manual': ninguna traducción automática lo pisa mientras el
+ *  español no cambie). Contacto o precio se rechazan al guardar. */
+export async function saveAndPublish(be: TrBackend, catalogId: string, edit: ReviewEdit): Promise<number | null> {
+  await saveReview(be, catalogId, edit);
+  const it = (await loadPanel(be, catalogId, edit.lang)).items.find((i) => i.key === edit.key);
   if (!it) throw new Error("not_in_catalog");
-  if (!it.text || it.text.status === "rejected") throw new Error("translation_not_found");
-  if (it.text.rev !== input.textRev) throw new Error("translation_changed");
-  if (it.check?.blockers.length) throw new Error(it.check.blockers[0].code);
-  if (it.check && pendingTranslationWarnings(it.check, input.confirmed).length) throw new Error("tr_unconfirmed");
-  if (it.kind === "meta") {
-    return be.approve(input.catalogId, null, input.lang, it.sig, { text: { id: it.text.id, rev: it.text.rev }, area: null, features: [], list: [] });
-  }
-  const needArea = it.es.blocks.some((b) => b.area);
-  if (needArea && !it.area) throw new Error("translation_not_found");
-  if (needArea && it.area && input.areaRev !== it.area.rev) throw new Error("translation_changed");
-  return be.approve(input.catalogId, it.propertyId, input.lang, it.sig, {
-    text: { id: it.text.id, rev: it.text.rev },
-    area: needArea && it.area ? { id: it.area.id, rev: it.area.rev } : null,
-    features: it.features.filter((f) => f.status === "draft" && f.tr).map((f) => ({ es: f.es, tr: f.tr! })),
-    list: it.es.features,
-  });
+  const r = await publishItem(be, catalogId, edit.lang, it, "manual");
+  if (r.kind === "blocked") throw new Error(r.code);
+  return r.kind === "published" ? r.version : null;
 }
 
-/** «Usar las ya aprobadas» (sin IA): copia al catálogo lo que ya tiene su
- *  traducción aprobada para el español de hoy. */
-export async function useApproved(be: TrBackend, catalogId: string, lang: TargetLanguage, onlyKey?: string): Promise<{ copied: number }> {
-  const panel = await loadPanel(be, catalogId, lang);
-  let copied = 0;
-  for (const it of panel.items) {
-    if (onlyKey && it.key !== onlyKey) continue;
-    const refresh = it.current && it.featuresMissing > 0 && it.features.some((f) => f.status === "approved" && f.tr);
-    if (it.state !== "ready" && !refresh) continue;
-    if (!it.text || it.text.status !== "approved") continue;
-    const needArea = it.es.blocks.some((b) => b.area);
-    if (needArea && it.area?.status !== "approved") continue;
-    await be.copySet(catalogId, it.propertyId, lang, it.sig, it.text.id, needArea ? it.area!.id : null, it.es.features);
-    copied++;
-  }
-  return { copied };
+/** «Dar por revisada»: quita la marca «revisar» de lo publicado solo. */
+export async function markItemReviewed(be: TrBackend, catalogId: string, key: string, lang: TargetLanguage): Promise<number> {
+  const it = (await loadPanel(be, catalogId, lang)).items.find((i) => i.key === key);
+  if (!it) throw new Error("not_in_catalog");
+  const texts = [it.text, it.area].filter((t): t is NonNullable<typeof t> => !!t && t.status === "approved" && t.approval === "auto").map((t) => t.id);
+  const feats = it.features.filter((f) => f.status === "approved" && f.approval === "auto").map((f) => f.es);
+  if (!texts.length && !feats.length) return 0;
+  return be.markReviewed(catalogId, lang, texts, feats);
 }
 
 /** Idioma del catálogo (`linkId` null) o de un enlace personal (`lang` null =
- *  el del catálogo). Fuera del español solo si está completo. */
+ *  el del catálogo). Se aplica AL MOMENTO (0228): lo que no esté traducido se
+ *  ve con el aviso N5 y se traduce solo en la primera visita. */
 export async function setLanguage(be: TrBackend, catalogId: string, linkId: string | null, lang: CatalogLanguage | null): Promise<number> {
   const es = await be.esState(catalogId);
   const meta = esMetaOf(es);
@@ -589,7 +659,8 @@ export async function setLanguage(be: TrBackend, catalogId: string, linkId: stri
   return be.activate(catalogId, linkId, lang, es.version, required);
 }
 
-/** Resumen para el aviso de «Contenido» (N5: el gestor lo marca). */
+/** Resumen para el aviso de «Contenido»: idiomas activos con viviendas que el
+ *  cliente ve ahora con «Descripción en preparación». */
 export async function activeLanguageGaps(be: TrBackend, catalogId: string): Promise<Array<{ lang: TargetLanguage; pending: string[] }>> {
   const es = await be.esState(catalogId);
   const links = await be.links(catalogId);

@@ -6,6 +6,7 @@ import { DEFAULT_CRITERIA, normalizeCriteria, type CatalogCriteria } from "./cri
 import { explainProperty, INCLUDED_UNAVAILABLE } from "./explain";
 import { type AdjustmentKind, type CandidateProperty, type Via } from "./selection";
 import { coverPhotoOf, type InternalSnapshot } from "./to-public";
+import { snapshotLang } from "./i18n";
 import { materialByProperty } from "./material-data";
 import { catalogPhotoData } from "./photo-data";
 import { photoSrc, withWidth } from "./photo-selection";
@@ -253,7 +254,7 @@ export async function listCoverPhotos(catalogId: string, propertyId: string): Pr
 export async function listCatalogPhotos(catalogId: string, propertyId: string): Promise<CatalogPhotosView | null> {
   const { data: prop } = await db().from("properties").select("slug").eq("id", propertyId).maybeSingle();
   if (!prop?.slug) return null;
-  const { data: cat } = await db().from("catalogs").select("cover_property_id, cover_photo_id, photo_finish").eq("id", catalogId).maybeSingle();
+  const { data: cat } = await db().from("catalogs").select("cover_property_id, cover_photo_id, photo_finish, default_lang").eq("id", catalogId).maybeSingle();
   const data = (await catalogPhotoData(catalogId, [propertyId])).get(propertyId);
   if (!data) return null;
   const eff = data.eff;
@@ -292,7 +293,7 @@ export async function listCatalogPhotos(catalogId: string, propertyId: string): 
 export async function getCatalogDetail(ownerId: string, catalogId: string): Promise<CatalogDetail | null> {
   const { data: cat, error } = await db()
     .from("catalogs")
-    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role, mode, criteria, cover_property_id, cover_photo_id, photo_finish")
+    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role, mode, criteria, cover_property_id, cover_photo_id, photo_finish, default_lang")
     .eq("id", catalogId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -348,6 +349,7 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     adjustments: { included, excluded, unavailable, overMax: included > criteria.max },
     cover: await coverState(catalogId, cat, snap),
     photoFinish: cat.photo_finish === true,
+    defaultLang: snapshotLang(cat.default_lang),
     // E2 (D-QA8): con la MISMA instantánea que ya se ha leído; sin consultas nuevas.
     material: materialByProperty(snap, effective),
   };

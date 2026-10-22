@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   if (!stateLimiter.allow(token)) return NextResponse.json({ error: "rate_limited" }, { status: 429, headers: HEADERS });
   let state;
   try {
-    state = await getPublicCatalogState(token);
+    state = await getPublicCatalogState(token, { visit: true });
   } catch (err) {
     console.error("[catalogos] estado:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "unavailable_backend" }, { status: 503, headers: HEADERS });

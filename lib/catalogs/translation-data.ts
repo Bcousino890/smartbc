@@ -6,6 +6,7 @@ import type { FinishResult, PrepareNeeds, ReserveResult, TargetLanguage, Transla
 import type {
   ActivationRequired,
   ApproveParts,
+  PublishMode,
   CopyRow,
   EsState,
   FeatureRow,
@@ -20,10 +21,12 @@ import type {
 import { listClientLinks } from "./client-links";
 
 // ============================================================================
-// Traducciones del catálogo (PR6): el «backend» de la gestión sobre las
-// funciones SQL de 0226 (service_role, con la guarda del dueño en cada una).
-// Solo lo usan las acciones del dueño; la lectura pública no pasa por aquí.
-// Nunca escribe en properties ni en property_client_descriptions.
+// Traducciones del catálogo (PR6 + 0228): el «backend» de la gestión sobre
+// las funciones SQL de 0226/0228 (service_role, con la guarda del dueño en
+// cada una). Lo usan las acciones del dueño y el traductor en segundo plano
+// (auto-translate-instance.ts, con el dueño del catálogo como actor); la
+// lectura pública nunca espera aquí. Nunca escribe en properties ni en
+// property_client_descriptions.
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -98,19 +101,19 @@ export function sqlTranslations(ownerId: string): TrBackend {
       const jobs: JobRow[] = [];
       for (const c of chunk(ids, 50)) {
         const [t, j] = await Promise.all([
-          db().from("catalog_tr_texts").select("id, source_id, lang, status, content, rev, origin, updated_at").in("source_id", c).eq("lang", lang),
-          db().from("catalog_tr_jobs").select("id, source_id, lang, status, reserved_at, expires_at, finished_at, discarded_at, note").in("source_id", c).eq("lang", lang).order("reserved_at", { ascending: false }).limit(200),
+          db().from("catalog_tr_texts").select("id, source_id, lang, status, content, rev, origin, approval, updated_at").in("source_id", c).eq("lang", lang),
+          db().from("catalog_tr_jobs").select("id, source_id, lang, status, reserved_at, expires_at, finished_at, discarded_at, note, auto").in("source_id", c).eq("lang", lang).order("reserved_at", { ascending: false }).limit(200),
         ]);
         if (t.error) raise(t.error, "catalog_tr_texts");
         if (j.error) raise(j.error, "catalog_tr_jobs");
-        for (const r of (t.data ?? []) as any[]) texts.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, content: r.content ?? {}, rev: Number(r.rev), origin: r.origin, updatedAt: r.updated_at ?? null });
-        for (const r of (j.data ?? []) as any[]) jobs.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, reservedAt: r.reserved_at, expiresAt: r.expires_at, finishedAt: r.finished_at ?? null, discardedAt: r.discarded_at ?? null, note: r.note ?? null });
+        for (const r of (t.data ?? []) as any[]) texts.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, content: r.content ?? {}, rev: Number(r.rev), origin: r.origin, approval: r.approval ?? null, updatedAt: r.updated_at ?? null });
+        for (const r of (j.data ?? []) as any[]) jobs.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, reservedAt: r.reserved_at, expiresAt: r.expires_at, finishedAt: r.finished_at ?? null, discardedAt: r.discarded_at ?? null, note: r.note ?? null, auto: r.auto === true });
       }
       const features: FeatureRow[] = [];
       for (const c of chunk(q.features, 40)) {
-        const f = await db().from("catalog_tr_features").select("es, lang, tr, status").eq("owner_id", ownerId).eq("lang", lang).in("es", c);
+        const f = await db().from("catalog_tr_features").select("es, lang, tr, status, approval, origin").eq("owner_id", ownerId).eq("lang", lang).in("es", c);
         if (f.error) raise(f.error, "catalog_tr_features");
-        for (const r of (f.data ?? []) as any[]) features.push({ es: r.es, lang: r.lang, tr: r.tr, status: r.status });
+        for (const r of (f.data ?? []) as any[]) features.push({ es: r.es, lang: r.lang, tr: r.tr, status: r.status, approval: r.approval ?? null, origin: r.origin });
       }
       return { sources, texts, features, jobs };
     },
@@ -122,9 +125,9 @@ export function sqlTranslations(ownerId: string): TrBackend {
       return String(await rpc("catalog_tr_area_source_ensure", { p_area_version: areaVersionId, p_es_sig: sig, p_es: es }));
     },
     async reserve(i): Promise<ReserveResult> {
-      const d = await rpc("catalog_tr_reserve", {
+      const d = await rpc("catalog_tr_reserve_auto", {
         p_source: i.sourceId, p_lang: i.lang, p_catalog: i.catalogId, p_property: i.propertyId,
-        p_needs: i.needs, p_ttl_seconds: i.ttlSeconds, p_retry: i.retry,
+        p_needs: i.needs, p_ttl_seconds: i.ttlSeconds, p_limits: i.limits,
       });
       if (d.state === "reserved") {
         const n = d.needs ?? {};
@@ -133,6 +136,10 @@ export function sqlTranslations(ownerId: string): TrBackend {
       }
       if (d.state === "busy") return { state: "busy", jobId: String(d.job), expiresAt: String(d.expires_at) };
       if (d.state === "uncertain") return { state: "uncertain", jobId: String(d.job) };
+      if (d.state === "limit") return { state: "limit" };
+      if (d.state === "cap") return { state: "cap" };
+      if (d.state === "waiting") return { state: "waiting", until: String(d.until), failures: Number(d.failures) };
+      if (d.state === "stopped") return { state: "stopped", failures: Number(d.failures) };
       return { state: "ready" };
     },
     async finish(i: { jobId: string; outcome: "done" | "failed" | "uncertain"; result: TranslationResult | null; note: string | null }): Promise<FinishResult> {
@@ -141,28 +148,17 @@ export function sqlTranslations(ownerId: string): TrBackend {
       if (d.state === "recorded") return { state: "recorded" };
       return { state: "discarded", reason: String(d.reason ?? "") };
     },
-    async cancel(jobId) {
-      return (await rpc("catalog_tr_cancel", { p_job: jobId })) === true;
-    },
     async saveText(textId, rev, content) {
       return Number(await rpc("catalog_tr_save", { p_text: textId, p_expected_rev: rev, p_content: content }));
     },
     async saveFeature(lang: TargetLanguage, es: string, tr: string) {
       await rpc("catalog_tr_feature_save", { p_lang: lang, p_es: es, p_tr: tr });
     },
-    async reject(textId) {
-      return (await rpc("catalog_tr_reject", { p_text: textId })) === true;
+    async publish(catalogId, propertyId, lang, sig, parts: ApproveParts, mode: PublishMode) {
+      return Number(await rpc("catalog_tr_publish", { p_catalog: catalogId, p_property: propertyId, p_lang: lang, p_es_sig: sig, p_parts: parts, p_mode: mode }));
     },
-    async approve(catalogId, propertyId, lang, sig, parts: ApproveParts) {
-      return Number(await rpc("catalog_tr_approve", { p_catalog: catalogId, p_property: propertyId, p_lang: lang, p_es_sig: sig, p_parts: parts }));
-    },
-    async copySet(catalogId, propertyId, lang, sig, textId, areaTextId, features) {
-      return Number(await rpc("catalog_tr_copy_set", {
-        p_catalog: catalogId, p_property: propertyId, p_lang: lang, p_es_sig: sig, p_text: textId, p_area_text: areaTextId, p_features: features,
-      }));
-    },
-    async copyRemove(catalogId, propertyId, lang) {
-      return Number(await rpc("catalog_tr_copy_remove", { p_catalog: catalogId, p_property: propertyId, p_lang: lang }));
+    async markReviewed(catalogId, lang, textIds, features) {
+      return Number(await rpc("catalog_tr_mark_reviewed", { p_catalog: catalogId, p_lang: lang, p_texts: textIds, p_features: features }));
     },
     async activate(catalogId, linkId, lang: CatalogLanguage | null, expectedVersion, required: ActivationRequired) {
       return Number(await rpc("catalog_tr_activate", { p_catalog: catalogId, p_link: linkId, p_lang: lang, p_expected_version: expectedVersion, p_required: required }));

@@ -17,7 +17,8 @@ export function catalogSyncHub(): SyncHub {
   if (!g[KEY]) {
     g[KEY] = new SyncHub({
       fetchStates: getCatalogTokenStates,
-      fetchContent: getPublicCatalogState,
+      // Sin `visit`: el vigilante no encarga traducciones (solo las visitas).
+      fetchContent: (token) => getPublicCatalogState(token),
       now: () => Date.now(),
       setInterval: (fn, ms) => setInterval(fn, ms),
       clearInterval: (h) => clearInterval(h as ReturnType<typeof setInterval>),
