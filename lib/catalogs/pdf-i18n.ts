@@ -114,6 +114,17 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogPdfDictionary> = {
   },
 };
 
+/** Claves del diccionario del lector (i18n.ts) que el PDF escribe, directa o
+ *  indirectamente (operación, precio, planta y edición llegan ya escritos en
+ *  la proyección). Las usan las pruebas de cobertura y la verificación. */
+export const PDF_SHARED_KEYS = [
+  "privateSelection", "preparedBy", "homesCount", "seasons", "introLabel", "greeting", "contents", "inThisSelection", "emptyTitle",
+  "placeNoData", "reserved", "noPhotos", "photoNofM", "surface", "bedrooms", "bathrooms", "floor", "features", "inDetail",
+  "description", "photoUnavailable", "contact", "letsTalk", "closingHint", "advisor", "call", "colophonLine", "untitled",
+  "sale", "rent", "saleAndRent", "operationNoData", "priceNoData", "priceEur", "perMonth", "floorShortN", "groundFloorShort",
+  "basement", "penthouse",
+] as const satisfies ReadonlyArray<keyof CatalogDictionary>;
+
 export function catalogPdfDictionary(lang: CatalogLanguage): CatalogPdfDictionary {
   return DICTIONARIES[lang] ?? DICTIONARIES.es;
 }

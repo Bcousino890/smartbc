@@ -18,10 +18,13 @@
 //   3. Con font.layout() sobre palabras árabes, los glifos que salen son las
 //      formas unidas (ids distintos de las formas aisladas; GSUB init/medi/
 //      fina presentes) en los tres pesos de Noto Naskh Arabic.
-//   4. Las pilas de fuentes por idioma (fuente del alfabeto + familia latina
-//      actual, que react-pdf resuelve carácter a carácter con fontFamily:
-//      [...]) cubren entre todas cifras, espacio, espacio duro, «·», «—»,
-//      «€», «²», «%», «+», «/» y paréntesis.
+//   4. Las pilas de fuentes por idioma QUE USA EL PDF (catalogFonts de
+//      lib/pdf/catalog/fonts.ts, que react-pdf resuelve carácter a carácter
+//      con fontFamily: [...]) cubren cifras, espacio, espacio duro, «·», «—»,
+//      «€», «²», «%», «+», «/» y paréntesis, y TODOS los caracteres de los
+//      textos del PDF en ese idioma (diccionarios, cifras, fechas, contenido
+//      en español). En ar y he (propuesta D4) nada sale de Inter/Playfair
+//      salvo «²», que sus familias no traen (respaldo de glifos).
 //   5. U+202F (espacio fino del formato numérico francés) NO está en ninguna
 //      fuente: se informa y queda documentado (se normaliza a U+00A0 al
 //      maquetar, que sí está en todas).
@@ -30,6 +33,9 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as fontkit from "fontkit";
+import { CATALOG_LANGUAGES, catalogDictionary, formatGrouped, formatNumber, intlLocale, type CatalogLanguage } from "../lib/catalogs/i18n.ts";
+import { PDF_SHARED_KEYS, catalogPdfDictionary, forPdf, pdfVersionDate } from "../lib/catalogs/pdf-i18n.ts";
+import { CATALOG_FONT_FACES, DISPLAY, LABEL, TEXT, catalogFonts, type FontFamily } from "../lib/pdf/catalog/fonts.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const DIR = join(ROOT, "lib", "pdf", "fonts");
@@ -54,9 +60,11 @@ const COMMON = cps("0123456789  ·—€²%+/()");
 const THIN_SPACE = 0x202f;
 
 /** Subconjunto por nombre de archivo y qué le exigimos. */
-type Subset = "latin" | "latin-ext" | "arabic" | "hebrew";
+type Subset = "latin" | "latin-ext" | "latin-rtl" | "arabic" | "hebrew";
 function subsetOf(file: string): Subset {
   if (/-latin-ext-/.test(file)) return "latin-ext";
+  // La parte latina de las familias árabe y hebrea (PR5, propuesta D4).
+  if (/^(noto-naskh-arabic|frank-ruhl-libre|noto-sans-hebrew)-latin-/.test(file)) return "latin-rtl";
   if (/-latin-/.test(file)) return "latin";
   if (/-arabic-/.test(file)) return "arabic";
   if (/-hebrew-/.test(file)) return "hebrew";
@@ -65,21 +73,10 @@ function subsetOf(file: string): Subset {
 const REQUIRED: Record<Subset, { name: string; list: number[] }[]> = {
   latin: [{ name: "es", list: LATIN_ES }, { name: "tr (ı)", list: LATIN_TR }],
   "latin-ext": [{ name: "tr", list: LATIN_EXT_TR }, { name: "fr", list: LATIN_EXT_FR }],
+  // Sin «²»: Noto Naskh Arabic y Noto Sans Hebrew no lo traen (se informa).
+  "latin-rtl": [{ name: "cifras y latín", list: LATIN_ES.filter((cp) => cp !== 0xb2) }],
   arabic: [{ name: "ar", list: ARABIC }],
   hebrew: [{ name: "he", list: HEBREW }],
-};
-
-/** Pilas por idioma (orden de respaldo de react-pdf, carácter a carácter). */
-const STACKS: Record<string, string[]> = {
-  "ar · texto": ["noto-naskh-arabic-arabic-400-normal.woff", "inter-latin-400-normal.woff"],
-  "ar · títulos y cifras": ["noto-naskh-arabic-arabic-500-normal.woff", "playfair-display-latin-400-normal.woff"],
-  "ar · etiquetas": ["noto-naskh-arabic-arabic-500-normal.woff", "cinzel-latin-500-normal.woff"],
-  "he · texto": ["noto-sans-hebrew-hebrew-400-normal.woff", "inter-latin-400-normal.woff"],
-  "he · títulos y cifras": ["frank-ruhl-libre-hebrew-400-normal.woff", "playfair-display-latin-400-normal.woff"],
-  "he · etiquetas": ["noto-sans-hebrew-hebrew-500-normal.woff", "cinzel-latin-500-normal.woff"],
-  "tr/fr · títulos": ["playfair-display-latin-400-normal.woff", "playfair-display-latin-ext-400-normal.woff"],
-  "tr/fr · etiquetas": ["cinzel-latin-500-normal.woff", "cinzel-latin-ext-500-normal.woff"],
-  "tr/fr · texto": ["inter-latin-400-normal.woff", "inter-latin-ext-400-normal.woff"],
 };
 
 let fails = 0;
@@ -99,7 +96,7 @@ for (const f of files) {
   else if (want !== sha) bad(`${f}: sha256 ${sha} ≠ README ${want}`);
 }
 for (const f of listed.keys()) if (!files.includes(f)) bad(`README.md lista ${f}, que no existe`);
-const expectedCount = 10 + 10 + 3 + 3 + 3;
+const expectedCount = 10 + 10 + 3 + 3 + 3 + 9;
 if (files.length !== expectedCount) bad(`${files.length} archivos .woff (se esperaban ${expectedCount})`);
 if (!fails) good(`${files.length} archivos, todos en README.md con su sha256 correcto`);
 for (const lic of ["OFL-PlayfairDisplay.txt", "OFL-Cinzel.txt", "OFL-Inter.txt", "OFL-NotoNaskhArabic.txt", "OFL-FrankRuhlLibre.txt", "OFL-NotoSansHebrew.txt"]) {
@@ -156,14 +153,59 @@ for (const f of files.filter((x) => subsetOf(x) === "arabic")) {
 }
 good("Noto Naskh Arabic (400/500/600): init/medi/fina presentes y «بيت», «شقة», «مكتب» cambian de forma al unirse");
 
-// ── 4 · Pilas por idioma ────────────────────────────────────────────────────
-console.log("\n· Pilas por idioma: cifras y signos comunes cubiertos entre todas");
-for (const [name, stack] of Object.entries(STACKS)) {
-  const fs = stack.map((f) => fonts.get(f) ?? open(f));
-  const missing = COMMON.filter((cp) => !fs.some((font) => font.hasGlyphForCodePoint(cp)));
-  if (missing.length) bad(`${name}: faltan ${missing.map(show).join(" ")}`);
+// ── 4 · Pilas por idioma (las del PDF real) ────────────────────────────────
+console.log("\n· Pilas por idioma del PDF (catalogFonts): cifras, signos y todos los textos del idioma");
+const faceFile = (family: string, weight: number, italic = false) =>
+  CATALOG_FONT_FACES.find((f) => f.family === family && f.weight === weight && f.italic === italic)?.file ??
+  CATALOG_FONT_FACES.find((f) => f.family === family && f.weight === weight)!.file;
+const list = (fam: FontFamily) => (Array.isArray(fam) ? fam : [fam]);
+/** Todo lo que el PDF puede escribir en un idioma: los dos diccionarios (con
+ *  argumentos de muestra), cifras, precios, fechas, marcas y el contenido en
+ *  español que llega de la proyección hasta el PR6. */
+function languageText(lang: CatalogLanguage): string {
+  const out: string[] = [];
+  const walk = (v: unknown) => {
+    if (typeof v === "string") out.push(v);
+    else if (typeof v === "function") for (const a of [1, 2, 3, 7, 12, 24]) out.push(String((v as (...x: unknown[]) => unknown)(a, 12)), String((v as (...x: unknown[]) => unknown)("Ático", "asesora")), String((v as (...x: unknown[]) => unknown)("asesor")));
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  const d = catalogDictionary(lang);
+  for (const k of PDF_SHARED_KEYS) walk(d[k]);
+  walk(catalogPdfDictionary(lang));
+  out.push(formatNumber(1234567, lang), formatGrouped(1450000, lang), formatNumber(168, lang) + " m²", pdfVersionDate(new Date("2026-10-16T17:40:00Z"), lang));
+  out.push("+34 641 457 123", "01  /  05", "··", "—", "PRIVATE CLIENT SERVICES", "BENJAMÍN COUSIÑO PROPIEDADES");
+  out.push("¿Ático único? ¡Sí! Pingüino «vistas» — 2.000 € · 80 m² · 1.ª planta y 2.º piso. Chamberí, Lavapiés, Ñuñoa, Güell");
+  const all = forPdf(out.join(" "));
+  return all + " " + all.toLocaleUpperCase(intlLocale(lang));
 }
-good(`${Object.keys(STACKS).length} pilas cubren «${String.fromCodePoint(...COMMON.filter((c) => c !== 0xa0 && c !== 0x20))}», espacio y espacio duro`);
+const fontByFile = (f: string) => fonts.get(f) ?? open(f);
+for (const lang of CATALOG_LANGUAGES) {
+  const cf = catalogFonts(lang);
+  const roles: [string, FontFamily, number, boolean][] = [["títulos", cf.display, 400, false], ["etiquetas", cf.label, 500, false], ["texto", cf.text, 400, false]];
+  if (cf.italic) roles.push(["cursiva", cf.display, 400, true]);
+  const chars = [...new Set([...languageText(lang)].filter((c) => !/\s/.test(c) || c === "\u00a0"))];
+  const catalogLatin = new Set([DISPLAY, LABEL, TEXT]);
+  for (const [role, fam, weight, italic] of roles) {
+    const stack = list(fam).map((family) => ({ family, font: fontByFile(faceFile(family, weight, italic)) }));
+    const pick = (cp: number) => stack.find((x) => x.font.hasGlyphForCodePoint(cp));
+    const missingCommon = COMMON.filter((cp) => !pick(cp));
+    if (missingCommon.length) bad(`${lang} · ${role}: faltan ${missingCommon.map(show).join(" ")}`);
+    const missing = chars.filter((c) => !pick(c.codePointAt(0)!));
+    if (missing.length) bad(`${lang} · ${role} (${list(fam).join(" → ")}): sin glifo para ${missing.map((c) => `«${c}» ${show(c.codePointAt(0)!)}`).join(" ")}`);
+    if (lang === "ar" || lang === "he") {
+      // D4: nada de cifras, precios ni latín con Inter/Playfair; solo el
+      // respaldo de glifos que la familia no trae.
+      const fromCatalog = chars.filter((c) => { const p = pick(c.codePointAt(0)!); return p && catalogLatin.has(p.family) && list(fam).length > 2; });
+      const allowed = fromCatalog.every((c) => c === "²");
+      if (!allowed) bad(`${lang} · ${role}: salen de la familia latina del catálogo ${fromCatalog.map((c) => `«${c}»`).join(" ")} (D4: solo «²»)`);
+      console.log(`  ℹ️  ${lang} · ${role}: ${list(fam).join(" → ")}; ${chars.length} caracteres cubiertos; respaldo del catálogo: ${fromCatalog.length ? fromCatalog.map((c) => `«${c}»`).join(" ") : "ninguno"}`);
+    }
+  }
+}
+good(`8 idiomas × sus pilas del PDF: cubren «${String.fromCodePoint(...COMMON.filter((c) => c !== 0xa0 && c !== 0x20))}», espacio duro y todos los caracteres de sus textos (ğ İ ş en tr, Ÿ en fr, árabe, hebreo)`);
+const stackFiles = [...new Set(CATALOG_FONT_FACES.map((f) => f.file))];
+if (stackFiles.length !== files.length || stackFiles.some((f) => !files.includes(f))) bad(`fonts.ts registra ${stackFiles.length} archivos y la carpeta tiene ${files.length}`);
+else good(`fonts.ts registra exactamente los ${files.length} archivos de la carpeta`);
 
 console.log(fails ? `\n❌ ${fails} fallos` : "\n✅ fuentes del PDF: integridad, licencias y cobertura en orden");
 process.exit(fails ? 1 : 0);

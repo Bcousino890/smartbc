@@ -83,6 +83,12 @@ const FAMILIES: FamilyDef[] = [
 
 export const CATALOG_FONT_FAMILIES: readonly string[] = FAMILIES.map((f) => f.family);
 
+/** Cada cara registrada (familia, archivo, peso, cursiva): para las pruebas
+ *  de cobertura (scripts/pdf-fonts-coverage.mts). */
+export const CATALOG_FONT_FACES: ReadonlyArray<{ family: string; file: string; weight: Weight; italic: boolean }> = FAMILIES.flatMap((fam) =>
+  fam.faces.map((f) => ({ family: fam.family, file: f.file, weight: f.weight, italic: !!f.italic })),
+);
+
 let registered = false;
 
 /** Rutas de los archivos de fuentes del catálogo (el hilo de maquetación

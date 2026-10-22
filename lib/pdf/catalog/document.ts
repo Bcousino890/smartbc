@@ -523,7 +523,11 @@ function closingPage(L: Lx, input: CatalogPdfInput): ReactElement {
           c.phone && c.phoneHref ? h(Link, { src: c.phoneHref, style: { textDecoration: "none", marginTop: 14 } }, L.N({ fontFamily: L.f.text, fontSize: 10, color: SOFT }, c.phone)) : null,
         )
       : null,
-    L.T({ ...S.soft, fontSize: 8, color: MUTED, marginTop: 36, textAlign: "center", lineHeight: 1.5, maxWidth: CONTENT_W * 0.7 }, L.p.closingNote(L.version(input.capturedAt))),
+    // En RTL, una línea por texto: textkit no quita el salto de línea de una
+    // línea reordenada y lo pintaría con la fuente de serie (Helvetica).
+    L.rtl
+      ? h(View, { style: { marginTop: 36, alignItems: "center", maxWidth: CONTENT_W * 0.7 } }, ...L.p.closingNote(L.version(input.capturedAt)).split("\n").map((line, k) => L.T({ ...S.soft, fontSize: 8, color: MUTED, textAlign: "center", lineHeight: 1.5 }, line, { key: k })))
+      : L.T({ ...S.soft, fontSize: 8, color: MUTED, marginTop: 36, textAlign: "center", lineHeight: 1.5, maxWidth: CONTENT_W * 0.7 }, L.p.closingNote(L.version(input.capturedAt))),
     h(View, { style: { flexGrow: 1 } }),
     sparkle(GOLD),
   );
