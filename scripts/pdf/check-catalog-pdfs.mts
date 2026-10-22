@@ -15,8 +15,12 @@
 //              revocado a mitad: nada
 //   y otro PDF del CRM con Helvetica sigue bien después de los del catálogo.
 //
+//   y (PR5) los mismos PDF en los 8 idiomas, por el hilo, con lo esperado
+//   sacado de los diccionarios de cada idioma (pdf-verify.mts).
+//
 //   NODE_ENV=development CATALOG_FIXTURES=1 node --experimental-strip-types \
-//     --import ./scripts/node-ts-loader.mjs scripts/pdf/check-catalog-pdfs.mts <carpeta-salida>
+//     --import ./scripts/node-ts-loader.mjs --import ./scripts/pdf/engine-patch-hook.mjs \
+//     scripts/pdf/check-catalog-pdfs.mts <carpeta-salida>
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -190,6 +194,18 @@ section("· cambios a mitad (PDF8)");
   ok("revocado a mitad → «not_found» (404), sin PDF", !r3.ok && r3.error === "not_found", r3.ok ? "ok" : r3.error);
   await fixtureMutate({ op: "reset" });
 }
+
+// PR5 · los demás idiomas por el mismo camino (captura, fotos, hilo).
+section("· 8 idiomas por el hilo (PR5, DA35)");
+for (const lang of ["en", "fr", "it", "de", "ar", "tr", "he"] as const) {
+  for (const k of ["pdf", "main"] as const) {
+    await fixtureMutate({ op: "reset" });
+    await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS[k], lang } as never);
+    const r = await checkCase({ ...link(k), tag: `${k}-${lang}` });
+    summary[`${k}-${lang}`] = { bytes: r.bytes, ms: r.ms, pages: r.pages };
+  }
+}
+await fixtureMutate({ op: "reset" });
 
 // Otro PDF del CRM (Helvetica) después de los del catálogo, en el mismo proceso.
 section("· PDF de propiedad (Helvetica) después de los del catálogo");

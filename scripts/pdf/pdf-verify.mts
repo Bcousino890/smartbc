@@ -13,6 +13,9 @@ import { FORBIDDEN_IN_PDF, photosOfExport, planItemExport } from "../../lib/cata
 import { toPublicCatalog, type InternalSnapshot } from "../../lib/catalogs/to-public.ts";
 import type { CatalogOperation } from "../../lib/catalogs/operation-price.ts";
 import type { PublicCatalog } from "../../lib/catalogs/public-contract.ts";
+import { catalogDictionary, intlLocale, isRtl } from "../../lib/catalogs/i18n.ts";
+import { catalogPdfDictionary, forPdf, pdfLangTag } from "../../lib/catalogs/pdf-i18n.ts";
+import { readPdf } from "./pdf-text.mts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 
@@ -143,9 +146,20 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
   const { file, outDir, tag, snapshot, operation, token, catalogId, isFailing, ok } = v;
   const extraForbidden = v.extraForbidden ?? [];
   const catalog = toPublicCatalog(snapshot, operation);
+  // PR5: todo lo esperado sale de los diccionarios del idioma del catálogo.
+  const lang = catalog.lang;
+  const d = catalogDictionary(lang);
+  const pd = catalogPdfDictionary(lang);
+  const up = (t: string) => forPdf(t.toLocaleUpperCase(intlLocale(lang)));
   const ins = inspect(file, join(outDir, `${tag}-png`));
   const obj = objects(file, join(outDir, `${tag}-jpg`));
-  const pages = ins.pages;
+  // En árabe y hebreo, PDFKit (macOS) no respeta /ActualText y da otras
+  // letras (E9) o parte palabras (E5): el texto sale del lector propio, que
+  // lee el ActualText (D2) como Acrobat, pdfium o poppler. Enlaces, tamaños e
+  // imágenes, de PDFKit como siempre.
+  const rtl = isRtl(lang);
+  const own = rtl ? readPdf(readFileSync(file)) : null;
+  const pages = own ? ins.pages.map((p, i) => ({ ...p, text: own.pages[i]?.text ?? "" })) : ins.pages;
   const all = pages.map((p) => p.text).join("\n");
   ok(`A4 vertical, ${pages.length} páginas`, pages.length > 0 && pages.every((p) => Math.round(p.w) === 595 && Math.round(p.h) === 842));
 
@@ -156,14 +170,15 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
   ok("índice: páginas en orden creciente", starts.every((p, i) => i === 0 || p > starts[i - 1]), starts.join(","));
   // Enmienda visual 2026-10-20: tras el cierre va el colofón (página oscura).
   const closingPage = pages.length - 1;
-  ok("el cierre es la penúltima página (CONTACTO · Hablemos)", /hablemos/i.test(pages[closingPage - 1].text));
-  ok("el colofón es la última página", /preparada para ti/i.test(pages[pages.length - 1].text) && !/hablemos/i.test(pages[pages.length - 1].text));
+  ok(`el cierre es la penúltima página (${up(d.contact)} · ${d.letsTalk})`, flat(pages[closingPage - 1].text).includes(flat(d.letsTalk)));
+  ok("el colofón es la última página", flat(pages[pages.length - 1].text).includes(flat(d.colophonLine)) && !flat(pages[pages.length - 1].text).includes(flat(d.letsTalk)));
   catalog.items.forEach((it, i) => {
     const s = starts[i];
     if (s === undefined) return;
     const startText = pages[s - 1].text;
     const prevText = s > 1 ? flat(pages[s - 2].text) : "";
-    ok(`nº ${n2(i)} «${it.title.slice(0, 30)}»: el enlace lleva a su primera página (p. ${s})`, flat(startText).includes(flat(`Nº ${n2(i)}`) + flat(it.operation)) && flat(startText).includes(flat(it.title)) && !prevText.includes(flat(`Nº ${n2(i)}`) + flat(it.operation)));
+    const mark = flat(up(`${pd.numberAbbr} ${n2(i)}`)) + flat(up(it.operation));
+    ok(`nº ${n2(i)} «${it.title.slice(0, 30)}»: el enlace lleva a su primera página (p. ${s})`, flat(startText).includes(mark) && flat(startText).includes(flat(it.title)) && !prevText.includes(mark));
   });
   // Números impresos en el índice: PDFKit agrupa las líneas a su manera, así
   // que se comparan como lista (los de cada línea que es solo un número).
@@ -186,8 +201,8 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
     const x = planItemExport(it);
     // Cortos (rótulos, título, precio): sin espacios. Largos: palabra a palabra.
     const flatHay = flat(pages.slice(from - 1, to).map((p) => p.text).join("\n"));
-    const shorts: [string, string][] = [["título", it.title], ["precio", it.price], ["rótulo", `Nº ${n2(i)}`], ["operación", it.operation], ...(it.place ?? "Zona · sin dato").split(",").map((z): [string, string] => ["zona", z])];
-    if (it.reserved) shorts.push(["reservada", "Reservada"]);
+    const shorts: [string, string][] = [["título", it.title], ["precio", forPdf(it.price)], ["rótulo", up(`${pd.numberAbbr} ${n2(i)}`)], ["operación", up(it.operation)], ...(it.place ?? d.placeNoData).split(",").map((z): [string, string] => ["zona", up(z)])];
+    if (it.reserved) shorts.push(["reservada", up(d.reserved)]);
     x.features.forEach((f, k) => shorts.push([`característica ${k + 1}`, f]));
     x.copy.forEach((b, k) => b.heading && shorts.push([`título de capítulo ${k + 1}`, b.heading]));
     const shortMiss = shorts.filter(([, w]) => !flatHay.includes(flat(w)));
@@ -208,8 +223,8 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
     });
     ok(`nº ${n2(i)}: la descripción no se repite (${x.copy.length} bloques)`, repeated.length === 0, repeated.map((b) => b.text.slice(0, 40)).join(" | "));
   });
-  ok("versión con fecha y hora en la portada", /Versión del \d{1,2} de \p{L}+ de \d{4}, \d\d:\d\d/u.test(pages[0].text), pages[0].text.slice(0, 200));
-  ok("cierre: rol del contacto", catalog.preparedBy || catalog.phone ? flat(pages[closingPage - 1].text).includes(catalog.role === "asesora" ? "tuasesora" : "tuasesor") : true);
+  ok("versión con fecha y hora en la portada", lang === "es" ? /Versión del \d{1,2} de \p{L}+ de \d{4}, \d\d:\d\d/u.test(pages[0].text) : flat(pages[0].text).includes(flat(pd.versionOf(""))) && /\d\d:\d\d/.test(pages[0].text), pages[0].text.slice(0, 200));
+  ok("cierre: rol del contacto", catalog.preparedBy || catalog.phone ? flat(pages[closingPage - 1].text).includes(flat(up(d.advisor(catalog.role === "asesora" ? "asesora" : "asesor")))) : true);
 
   // PDF3/PDF14 · fotos por su código visual.
   const jpgDir = join(outDir, `${tag}-jpg`);
@@ -244,12 +259,13 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
     ok(`nº ${n2(i)}: sin repetidas`, new Set(got).size === got.length);
     const excluded = (internalByKey.get(it.key)!.photos ?? []).filter((p) => !it.photos.some((q) => q.key === p.f)).map((p) => photoCode(p.u));
     if (excluded.length) ok(`nº ${n2(i)}: las ${excluded.length} fotos excluidas (E3) no aparecen`, excluded.every((e) => !got.includes(e) && !coverImgs.includes(e)));
-    const captions = (pages.slice(from - 1, to).map((p) => p.text).join("\n").match(/Foto (de apertura · )?\d+ de \d+/g) ?? []).length;
+    const capRe = new RegExp(forPdf(d.photoNofM(111, 999)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("111", "\\d+").replace("999", "\\d+"), "g");
+    const captions = (pages.slice(from - 1, to).map((p) => p.text).join("\n").match(capRe) ?? []).length;
     ok(`nº ${n2(i)}: un pie «Foto x de y» por foto prevista (también la que falla)`, captions === photosOfExport(x).length, `${captions} vs ${photosOfExport(x).length}`);
   }
   const allCodes = [...codeOf.values()];
   ok("ninguna imagen que no sea una foto prevista", allCodes.every((cd) => expectedAll.has(cd) || cd === coverCode));
-  if (failedSeen) ok(`foto que falla: «Foto no disponible» en su lugar (${failedSeen})`, (all.match(/Foto no disponible/g) ?? []).length === failedSeen);
+  if (failedSeen) ok(`foto que falla: «${d.photoUnavailable}» en su lugar (${failedSeen})`, all.split(forPdf(d.photoUnavailable)).length - 1 === failedSeen);
 
   // PDF4/PDF15 · nada interno.
   // Fuera de los flujos binarios (imágenes y texto comprimido): ahí una
@@ -274,12 +290,20 @@ export async function verifyCatalogPdf(v: VerifyInput): Promise<{ pages: number;
   ok("enlaces de las páginas: solo internos o tel:", pages.every((p) => p.links.every((l) => l.toPage !== undefined || (l.url ?? "").startsWith("tel:"))));
   const infoKeys = Object.keys(obj.info).sort();
   ok("metadatos: solo título, autor, asunto, creador, productor y fechas", infoKeys.every((k) => ["Author", "CreationDate", "Creator", "ModDate", "Producer", "Subject", "Title"].includes(k)), infoKeys.join(","));
-  ok("metadatos: título = el del catálogo; autor = la agencia", obj.info.Title === (catalog.title || "Catálogo") && obj.info.Author === "Benjamín Cousiño Propiedades", JSON.stringify(obj.info));
+  ok("metadatos: título = el del catálogo; autor = la agencia", obj.info.Title === (catalog.title || pd.catalog) && obj.info.Author === "Benjamín Cousiño Propiedades", JSON.stringify(obj.info));
+  const lang0 = readFileSync(file).toString("latin1").match(/\/Lang \(([^)]*)\)/)?.[1];
+  ok(`metadatos: /Lang = ${pdfLangTag(lang)}`, lang0 === pdfLangTag(lang), String(lang0));
 
   // PDF7 · fuentes y glifos.
   ok("fuentes: todas incrustadas", obj.fonts.length > 0 && obj.fonts.every((f) => f.embedded), JSON.stringify(obj.fonts));
-  ok("fuentes: solo Playfair Display, Cinzel e Inter (sin fuentes estándar)", obj.fonts.every((f) => /Playfair|Cinzel|Inter/.test(f.name)), obj.fonts.map((f) => f.name).join(","));
-  ok("glifos: «º», tildes, ñ y € se extraen tal cual", catalog.items.length === 0 || (/N ?º ?0 ?1/.test(all) && /[áéíóúñ]/.test(all) && all.includes("€")));
+  // Fuentes por idioma (PR5): es/en/it/de las tres de siempre; fr/tr además
+  // su «latin-ext»; ar/he sus familias (y la latina del catálogo solo como
+  // respaldo de «²», D4: lo comprueba test:catalogs-pdf-i18n carácter a carácter).
+  const fontRe = lang === "ar" ? /NotoNaskhArabic|PlayfairDisplay|Cinzel|Inter/ : lang === "he" ? /FrankRuhlLibre|NotoSansHebrew|PlayfairDisplay|Cinzel|Inter/ : /Playfair|Cinzel|Inter/;
+  ok(`fuentes: solo las del idioma (${lang}; sin fuentes estándar)`, obj.fonts.every((f) => fontRe.test(f.name)) && (lang === "fr" || lang === "tr" || isRtl(lang) || obj.fonts.every((f) => !/-Latin(Ext)?$/.test(f.name))), obj.fonts.map((f) => f.name).join(","));
+  if (lang === "es") ok("glifos: «º», tildes, ñ y € se extraen tal cual", catalog.items.length === 0 || (/N ?º ?0 ?1/.test(all) && /[áéíóúñ]/.test(all) && all.includes("€")));
+  else ok(`glifos: «${pd.numberAbbr}», tildes y € se extraen tal cual`, catalog.items.length === 0 || (flat(all).includes(flat(up(`${pd.numberAbbr} 01`))) && /[áéíóúñ]/.test(all) && all.includes("€")));
+  if (rtl) ok("RTL: el texto se lee del ActualText (D2) en su alfabeto", (own?.pages.flatMap((p) => p.actual).length ?? 0) > 20 && (lang === "ar" ? /[\u0621-\u064A]{3}/ : /[\u05D0-\u05EA]{3}/).test(all));
   return { pages: pages.length, text: all, catalog };
 }
 

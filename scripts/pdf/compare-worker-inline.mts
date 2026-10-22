@@ -4,7 +4,8 @@
 // enlaces por página, fotos por página (por su código, K5), fuentes y
 // metadatos. Fixtures sintéticas; los dos se maquetan en el mismo proceso.
 //   NODE_ENV=development CATALOG_FIXTURES=1 node --experimental-strip-types \
-//     --import ./scripts/node-ts-loader.mjs scripts/pdf/compare-worker-inline.mts <carpeta>
+//     --import ./scripts/node-ts-loader.mjs --import ./scripts/pdf/engine-patch-hook.mjs \
+//     scripts/pdf/compare-worker-inline.mts <carpeta>
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { captureFixed } from "../../lib/catalogs/export/capture.ts";
@@ -34,6 +35,10 @@ const CASES: Array<[string, string, (() => Promise<void>) | null]> = [
   ["journey", FIXTURE_TOKENS.journey, null],
   ["journey24", FIXTURE_TOKENS.journey24, null],
   ["empty", FIXTURE_TOKENS.empty, null],
+  // PR5: también en árabe y hebreo (el hilo lleva la misma corrección del motor).
+  ["pdf-ar", FIXTURE_TOKENS.pdf, async () => void (await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS.pdf, lang: "ar" } as never))],
+  ["pdf-he", FIXTURE_TOKENS.pdf, async () => void (await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS.pdf, lang: "he" } as never))],
+  ["main-tr", FIXTURE_TOKENS.main, async () => void (await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS.main, lang: "tr" } as never))],
 ];
 for (const [tag, token, prep] of CASES) {
   section(`· ${tag}`);
