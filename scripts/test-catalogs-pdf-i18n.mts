@@ -10,6 +10,9 @@
 //   · /Lang, título y asunto de los metadatos en el idioma;
 //   · todas las etiquetas fijas del PDF salen de los diccionarios del idioma
 //     (con las mayúsculas del idioma);
+//   · dos situaciones (PR6): (a) con traducciones aprobadas y vigentes
+//     (escritas a mano, scripts/pdf/pdf-translations.mts): contenido traducido
+//     entero y nada del español; (b) N5: el aviso del idioma y nada del español;
 //   · contenido completo (DA35): título, rótulo, precio, operación, zona,
 //     características, capítulos y cada bloque de la descripción, palabra a
 //     palabra, en las páginas de su vivienda; nada se pierde ni se repite;
@@ -38,6 +41,8 @@ const { loadLogoDataUri, loadWhiteLogoDataUri } = await import("../lib/pdf/load-
 const { renderCatalogPdf } = await import("../lib/pdf/catalog/render.ts");
 const { readPdf } = await import("./pdf/pdf-text.mts");
 const { flat, missingWord, tokens } = await import("./pdf/pdf-verify.mts");
+const { BANKS, translateFixtureCatalog } = await import("./pdf/pdf-translations.mts");
+type TargetLanguage = import("../lib/catalogs/translations.ts").TargetLanguage;
 type CatalogLanguage = Parameters<typeof catalogDictionary>[0];
 type PdfPhoto = import("../lib/pdf/catalog/document.ts").PdfPhoto;
 type InternalSnapshot = import("../lib/catalogs/to-public.ts").InternalSnapshot;
@@ -84,24 +89,32 @@ section("· Diccionarios del PDF (8 idiomas)");
 }
 
 // ── PDF reales en los 8 idiomas ─────────────────────────────────────────────
+// Dos situaciones por idioma (PR6):
+//   (a) catálogo con traducciones aprobadas y vigentes (escritas a mano en
+//       scripts/pdf/pdf-translations.mts y pasadas por preparar → aprobar →
+//       activar, como en el gestor): contenido traducido completo;
+//   (b) N5: una vivienda sin traducción vigente → el aviso «Descripción en
+//       preparación» del idioma y nada del español.
 const logo = await loadLogoDataUri();
 const logoWhite = await loadWhiteLogoDataUri();
 const AT = new Date("2026-10-17T10:00:00Z");
+type Built = Awaited<ReturnType<typeof build>>;
 
 async function build(token: string, lang: CatalogLanguage, prep?: () => Promise<void>) {
   await fixtureMutate({ op: "reset" });
   if (prep) await prep();
-  await fixtureMutate({ op: "lang", token, lang } as never);
+  else await fixtureMutate({ op: "lang", token, lang } as never);
   const cap = (await captureFixed(exportReaders({ kind: "link", token })))!;
   const snapshot = cap.snapshot as InternalSnapshot;
   const catalog = toPublicCatalog(snapshot, cap.operation);
+  const spanish = toPublicCatalog(snapshot, cap.operation, "es");
   const photos = new Map<string, PdfPhoto>();
   for (const [id, need] of photoNeeds(snapshot, cap.operation)) {
     const r = await loadExportPhoto(need, new AbortController().signal);
     photos.set(id, r.ok ? { ok: true, data: r.data, width: r.width, height: r.height } : { ok: false });
   }
   const r = await renderCatalogPdf({ catalog, capturedAt: AT, logo, logoWhite, photos });
-  return { catalog, pdf: r.pdf, pageOf: r.pageOf, passes: r.passes, read: readPdf(r.pdf) };
+  return { catalog, spanish, pdf: r.pdf, pageOf: r.pageOf, passes: r.passes, read: readPdf(r.pdf) };
 }
 
 const n2 = (i: number) => String(i + 1).padStart(2, "0");
@@ -112,101 +125,151 @@ const ALLOWED: Record<string, RegExp> = {
   ar: /^NotoNaskhArabic-[A-Za-z]+(-Latin)?$/,
   he: /^(FrankRuhlLibre|NotoSansHebrew)-[A-Za-z]+(-Latin)?$/,
 };
+/** Las primeras palabras de un texto, sin espacios ni signos (para buscar
+ *  que NO esté el español). */
+const head8 = (t: string) => flat(t.split(/\s+/).slice(0, 8).join(" "));
 
-for (const lang of CATALOG_LANGUAGES) {
-  section(`· ${lang}: PDF «pdf» (5 viviendas, descripción larga, sin fotos, reservada, foto que falla)`);
-  const { catalog, read, pageOf, passes: np } = await build(FIXTURE_TOKENS.pdf, lang);
+/** Todas las comprobaciones de un PDF (DA35): lo esperado sale del
+ *  diccionario del idioma y de la proyección pública en ese idioma. */
+function verifyDoc(tag: string, lang: CatalogLanguage, b: Built) {
+  const { catalog, read, pageOf, passes: np } = b;
   const d = catalogDictionary(lang);
   const p = catalogPdfDictionary(lang);
   const up = (s: string) => s.toLocaleUpperCase(intlLocale(lang));
   const pages = read.pages;
   const all = pages.map((x) => x.text).join("\n");
   const F = flat(all);
-  ok(`${lang}: el catálogo va en su idioma`, catalog.lang === lang);
-  ok(`${lang}: /Lang ${pdfLangTag(lang)}`, read.lang === pdfLangTag(lang), String(read.lang));
-  ok(`${lang}: metadatos (título, asunto en el idioma)`, read.info.Title === catalog.title && read.info.Subject === p.subject, JSON.stringify(read.info));
+  ok(`${tag}: el catálogo va en su idioma`, catalog.lang === lang);
+  ok(`${tag}: /Lang ${pdfLangTag(lang)}`, read.lang === pdfLangTag(lang), String(read.lang));
+  ok(`${tag}: metadatos (título, asunto en el idioma)`, read.info.Title === catalog.title && read.info.Subject === p.subject, JSON.stringify(read.info));
 
-  // Etiquetas fijas del idioma (por bloque, sin espacios ni signos).
+  // Etiquetas fijas del idioma (por bloque, sin espacios ni signos). La
+  // introducción y las características solo existen si el catálogo las trae
+  // en el idioma (PR6: sin traducción no se enseñan).
+  const anyFeatures = catalog.items.some((it) => it.features.length > 0);
   const labels: [string, string][] = [
     ["selección privada", up(d.privateSelection)], ["preparada por", up(d.preparedBy)], ["nº de viviendas", d.homesCount(catalog.items.length)],
-    ["versión (portada)", p.versionOf(pdfVersionDate(AT, lang))], ["introducción", up(d.introLabel)], ["saludo", d.greeting], ["índice", up(d.contents)],
-    ["en esta selección", d.inThisSelection], ["en detalle", up(d.inDetail)], ["características", up(d.features)], ["descripción", up(d.description)],
+    ["versión (portada)", p.versionOf(pdfVersionDate(AT, lang))], ["índice", up(d.contents)],
+    ["en esta selección", d.inThisSelection], ["en detalle", up(d.inDetail)], ["descripción", up(d.description)],
     ["más fotos", up(p.morePhotos)], ["superficie", up(d.surface)], ["dormitorios", up(d.bedrooms)], ["baños", up(d.bathrooms)], ["planta", up(d.floor)],
     ["reservada", up(d.reserved)], ["sin fotos", d.noPhotos], ["foto no disponible", d.photoUnavailable], ["contacto", up(d.contact)], ["hablemos", d.letsTalk],
     ["texto del cierre", d.closingHint], ["asesora", up(d.advisor("asesora"))], ["llamar", up(d.call)], ["colofón", d.colophonLine],
     ...p.closingNote(pdfVersionDate(AT, lang)).split("\n").map((l, k): [string, string] => [`nota del cierre ${k + 1}`, l]),
     ["nota del colofón", p.colophonNote(pdfVersionDate(AT, lang))],
+    ...(catalog.intro ? [["introducción", up(d.introLabel)], ["saludo", d.greeting]] as [string, string][] : []),
+    ...(anyFeatures ? [["características", up(d.features)]] as [string, string][] : []),
   ];
   const missingLabels = labels.filter(([, s]) => !F.includes(flat(forPdf(s))));
-  ok(`${lang}: ${labels.length} etiquetas fijas del diccionario del idioma`, missingLabels.length === 0, missingLabels.map(([k, s]) => `${k}: «${s}»`).join(" | "));
-  if (lang !== "es") ok(`${lang}: ninguna etiqueta española de antes`, !/selecciónprivada|laviviendaendetalle|hablemos|másfotos/.test(F));
+  ok(`${tag}: ${labels.length} etiquetas fijas del diccionario del idioma`, missingLabels.length === 0, missingLabels.map(([k, s]) => `${k}: «${s}»`).join(" | "));
+  if (lang !== "es") ok(`${tag}: ninguna etiqueta española de antes`, !/selecciónprivada|laviviendaendetalle|hablemos|másfotos/.test(F));
+  if (catalog.intro) ok(`${tag}: la introducción del catálogo entera`, !missingWord(tokens(all), catalog.intro), missingWord(tokens(all), catalog.intro) ?? "");
   const capRe = new RegExp(forPdf(d.photoNofM(111, 999)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("111", "\\d+").replace("999", "\\d+"), "g");
 
   // Índice: enlaces a las páginas reales y folios impresos.
   const indexLinks = pages.slice(1, 4).flatMap((x) => x.links.filter((l) => l.toPage !== undefined).map((l) => l.toPage!));
   const expected = catalog.items.map((it) => pageOf.get(it.key)!);
-  ok(`${lang}: índice con ${catalog.items.length} enlaces a las páginas reales (${expected.join(",")})`, JSON.stringify(indexLinks) === JSON.stringify(expected), `${indexLinks} vs ${expected}`);
+  ok(`${tag}: índice con ${catalog.items.length} enlaces a las páginas reales (${expected.join(",")})`, JSON.stringify(indexLinks) === JSON.stringify(expected), `${indexLinks} vs ${expected}`);
   const printed = pages.slice(1, expected[0] - 1).flatMap((x) => x.text.split("\n")).filter((l) => /^\d+$/.test(l.trim())).map(Number).filter((n) => n > 2);
-  ok(`${lang}: folios impresos = páginas de los enlaces`, JSON.stringify([...printed].sort((a, b) => a - b)) === JSON.stringify(expected), `${printed} vs ${expected}`);
-  ok(`${lang}: dos pasadas del índice estables`, np <= 3);
-  ok(`${lang}: el cierre es la penúltima página y el colofón la última`, flat(pages[pages.length - 2].text).includes(flat(d.letsTalk)) && flat(pages[pages.length - 1].text).includes(flat(d.colophonLine)));
+  ok(`${tag}: folios impresos = páginas de los enlaces`, JSON.stringify([...printed].sort((a, b) => a - b)) === JSON.stringify(expected), `${printed} vs ${expected}`);
+  ok(`${tag}: dos pasadas del índice estables`, np <= 3);
+  ok(`${tag}: el cierre es la penúltima página y el colofón la última`, flat(pages[pages.length - 2].text).includes(flat(d.letsTalk)) && flat(pages[pages.length - 1].text).includes(flat(d.colophonLine)));
 
   // Contenido completo por vivienda (DA35).
   catalog.items.forEach((it, i) => {
     const from = expected[i], to = (expected[i + 1] ?? pages.length - 1) - 1;
     const text = pages.slice(from - 1, to).map((x) => x.text).join("\n");
     const ft = flat(text);
-    ok(`${lang} nº ${n2(i)}: su página empieza con «${p.numberAbbr} ${n2(i)}» y el título`, flat(pages[from - 1].text).includes(flat(up(`${p.numberAbbr} ${n2(i)}`))) && flat(pages[from - 1].text).includes(flat(it.title)));
+    ok(`${tag} nº ${n2(i)}: su página empieza con «${p.numberAbbr} ${n2(i)}» y el título`, flat(pages[from - 1].text).includes(flat(up(`${p.numberAbbr} ${n2(i)}`))) && flat(pages[from - 1].text).includes(flat(it.title)));
     const x = planItemExport(it);
     const shorts: [string, string][] = [["título", it.title], ["precio", forPdf(it.price)], ["operación", up(it.operation)], ...(it.place ?? d.placeNoData).split(",").map((z): [string, string] => ["zona", up(z)])];
     x.features.forEach((f, k) => shorts.push([`característica ${k + 1}`, f]));
-    x.copy.forEach((b, k) => b.heading && shorts.push([`capítulo ${k + 1}`, b.heading]));
+    x.copy.forEach((cb, k) => cb.heading && shorts.push([`capítulo ${k + 1}`, cb.heading]));
     const shortMiss = shorts.filter(([, w]) => !ft.includes(flat(w)));
-    ok(`${lang} nº ${n2(i)}: título, precio, operación, zona, características y capítulos (${shorts.length})`, shortMiss.length === 0, shortMiss.map(([k, w]) => `${k}: «${w}»`).join(" | "));
+    ok(`${tag} nº ${n2(i)}: título, precio, operación, zona, características y capítulos (${shorts.length})`, shortMiss.length === 0, shortMiss.map(([k, w]) => `${k}: «${w}»`).join(" | "));
     const hay = tokens(text);
-    const miss = x.copy.map((b, k) => [k, missingWord(hay, b.text)] as const).filter(([, m]) => m);
-    ok(`${lang} nº ${n2(i)}: ${x.copy.length} bloques de la descripción enteros (${tokens(x.copy.map((b) => b.text).join(" ")).length} palabras)`, miss.length === 0, miss.map(([k, m]) => `bloque ${k + 1}: ${m}`).join(" | "));
+    const miss = x.copy.map((cb, k) => [k, missingWord(hay, cb.text)] as const).filter(([, m]) => m);
+    ok(`${tag} nº ${n2(i)}: ${x.copy.length} bloques de la descripción enteros (${tokens(x.copy.map((cb) => cb.text).join(" ")).length} palabras)`, miss.length === 0, miss.map(([k, m]) => `bloque ${k + 1}: ${m}`).join(" | "));
     const caps = (text.match(capRe) ?? []).length;
-    ok(`${lang} nº ${n2(i)}: un pie de foto por foto prevista`, caps === (x.opening !== null ? 1 : 0) + x.more.length, `${caps}`);
+    ok(`${tag} nº ${n2(i)}: un pie de foto por foto prevista`, caps === (x.opening !== null ? 1 : 0) + x.more.length, `${caps}`);
   });
 
   // Fuentes por idioma (D4) y glifos.
   // Solo las fuentes que pintan algo (pdfkit deja un «Tf» de Helvetica sin
   // glifos en el salto de línea del cierre; igual que en main).
   const fonts = read.fonts.filter((f) => f.glyphs > 0).map((f) => ({ ...f, base: f.name.replace(/^[A-Z]{6}\+/, ""), chars: f.chars.replace(/[\u0000\s]/g, "") }));
-  ok(`${lang}: todas las fuentes incrustadas, ninguna estándar`, fonts.every((f) => f.embedded) && !fonts.some((f) => /Helvetica|Times|Courier/.test(f.base)), fonts.map((f) => f.base).join(","));
+  ok(`${tag}: todas las fuentes incrustadas, ninguna estándar`, fonts.every((f) => f.embedded) && !fonts.some((f) => /Helvetica|Times|Courier/.test(f.base)), fonts.map((f) => f.base).join(","));
   const own = lang === "ar" ? ALLOWED.ar : lang === "he" ? ALLOWED.he : lang === "fr" || lang === "tr" ? ALLOWED.ext : ALLOWED.latin;
   const foreign = fonts.filter((f) => !own.test(f.base));
   if (isRtl(lang)) {
-    ok(`${lang}: de la latina del catálogo solo «²» (D4: cifras, precios y latín con su familia)`, foreign.every((f) => ALLOWED.latin.test(f.base) && [...f.chars].every((c) => c === "²")), foreign.map((f) => `${f.base}: «${f.chars}»`).join(" | "));
-  } else ok(`${lang}: solo sus fuentes (${own.source})`, foreign.length === 0, foreign.map((f) => f.base).join(","));
-  ok(`${lang}: sin marcas bidi ni U+202F en el texto`, !/[‎‏؜ ]/.test(all));
+    ok(`${tag}: de la latina del catálogo solo «²» (D4: cifras, precios y latín con su familia)`, foreign.every((f) => ALLOWED.latin.test(f.base) && [...f.chars].every((c) => c === "²")), foreign.map((f) => `${f.base}: «${f.chars}»`).join(" | "));
+  } else ok(`${tag}: solo sus fuentes (${own.source})`, foreign.length === 0, foreign.map((f) => f.base).join(","));
+  ok(`${tag}: sin marcas bidi ni U+202F en el texto`, !/[‎‏؜ ]/.test(all));
   const actualCount = pages.reduce((n, x) => n + x.actual.length, 0);
   if (isRtl(lang)) {
     const script = lang === "ar" ? /[ء-ي]/ : /[א-ת]/;
-    ok(`${lang}: ${actualCount} líneas RTL con ActualText, en su alfabeto`, actualCount > 20 && pages.flatMap((x) => x.actual).filter((a) => script.test(a)).length > 20);
-    ok(`${lang}: el ActualText es texto lógico (la etiqueta del índice entera, en orden)`, pages.some((x) => x.actual.some((a) => a.trim() === forPdf(up(d.contents)))));
-  } else ok(`${lang}: ninguna marca ActualText (PDF LTR sin cambios)`, actualCount === 0, String(actualCount));
-  if (lang === "fr") ok("fr: precio con espacio duro (U+202F normalizado)", /1 450 000|\d \d{3}/.test(all));
-  summary.push(`${lang} ${pages.length} hojas`);
+    ok(`${tag}: ${actualCount} líneas RTL con ActualText, en su alfabeto`, actualCount > 20 && pages.flatMap((x) => x.actual).filter((a) => script.test(a)).length > 20);
+    ok(`${tag}: el ActualText es texto lógico (la etiqueta del índice entera, en orden)`, pages.some((x) => x.actual.some((a) => a.trim() === forPdf(up(d.contents)))));
+  } else ok(`${tag}: ninguna marca ActualText (PDF LTR sin cambios)`, actualCount === 0, String(actualCount));
+  if (lang === "fr") ok(`${tag}: precio con espacio duro (U+202F normalizado)`, /1 450 000|\d \d{3}/.test(all));
+  return { all, pages, expected };
 }
 
-// ── Glifos especiales por idioma (títulos propios) ──────────────────────────
-section("· Glifos: turco (ğ İ ş ı), francés (Ÿ), árabe y hebreo en el contenido");
-for (const [lang, title, want] of [
-  ["tr", "Işıklı istanbul dairesi, güneşli", ["Işıklı istanbul dairesi, güneşli", "IŞIKLI İSTANBUL DAİRESİ, GÜNEŞLİ"]],
-  ["fr", "Maison à L'Haÿ-les-Roses", ["Maison à L'Haÿ-les-Roses", "MAISON À L'HAŸ-LES-ROSES"]],
-  ["ar", "شقة مشرقة في حي سالامانكا (مدريد)", ["شقة مشرقة في حي سالامانكا (مدريد)"]],
-  ["he", "דירה מוארת בשכונת סלמנקה (מדריד)", ["דירה מוארת בשכונת סלמנקה (מדריד)"]],
-] as const) {
-  const { read } = await build(FIXTURE_TOKENS.one, lang, async () => void (await fixtureMutate({ op: "title", token: FIXTURE_TOKENS.one, title } as never)));
-  const all = read.pages.map((x) => x.text).join("\n");
-  const actual = read.pages.flatMap((x) => x.actual.map((a) => a.trim()));
-  for (const w of want) ok(`${lang}: «${w}» se lee tal cual (glifos y texto correctos)`, all.includes(w) || actual.includes(w), all.slice(0, 300));
-  if (lang === "tr" || lang === "fr") ok(`${lang}: los glifos latin-ext salen de su fuente renombrada (E1)`, read.fonts.some((f) => /-LatinExt$/.test(f.name)), read.fonts.map((f) => f.name).join(","));
+const PDF = FIXTURE_TOKENS.pdf;
+const N5_KEY = "fxPdfDesc0002";
+for (const lang of CATALOG_LANGUAGES) {
+  if (lang === "es") {
+    section("· es: PDF «pdf» (5 viviendas, descripción larga, sin fotos, reservada, foto que falla)");
+    const b = await build(PDF, "es");
+    verifyDoc("es", "es", b);
+    summary.push(`es ${b.read.pages.length}`);
+    continue;
+  }
+  const t = lang as TargetLanguage;
+  const d = catalogDictionary(lang);
+  const up = (s: string) => s.toLocaleUpperCase(intlLocale(lang));
+
+  // (a) Traducciones aprobadas y vigentes en todo el catálogo.
+  section(`· ${lang} (a): catálogo «pdf» traducido, aprobado y activado`);
+  const a = await build(PDF, lang, async () => void (await translateFixtureCatalog(PDF, t)));
+  ok(`${lang} (a): todas las viviendas con su traducción vigente (ninguna en N5)`, a.catalog.items.every((it) => !it.copyPending));
+  ok(`${lang} (a): título e introducción del catálogo traducidos`, a.catalog.title === BANKS[t].meta[a.spanish.title] && a.catalog.intro === BANKS[t].intro, `${a.catalog.title} | ${a.catalog.intro}`);
+  const va = verifyDoc(`${lang} (a)`, lang, a);
+  // Nada del español del contenido: ni títulos, ni descripción, ni características, ni introducción.
+  const esLeft = a.spanish.items.flatMap((it) => [it.title, ...it.copy.map((cb) => cb.text), ...it.features.filter((f) => f.length > 9)]).concat(a.spanish.intro ?? []).filter((s) => flat(va.all).includes(s.length > 60 ? head8(s) : flat(s)));
+  ok(`${lang} (a): nada del contenido en español (títulos, descripciones, características, introducción)`, esLeft.length === 0, esLeft.map((s) => s.slice(0, 40)).join(" | "));
+  const headings = a.catalog.items.flatMap((it) => it.copy.map((cb) => cb.heading).filter((h): h is string => !!h));
+  ok(`${lang} (a): títulos de sección del diccionario del idioma (${headings.length}, «${d.sections.living}», «${d.livingIn("Retiro")}»)`, headings.length >= 5 && headings.includes(d.sections.living) && headings.includes(d.livingIn("Retiro")));
+  // Glifos del idioma en el CONTENIDO (no solo en las etiquetas).
+  const content = a.catalog.items.flatMap((it) => [it.title, up(it.title), ...it.copy.map((cb) => cb.text), ...it.features]).join(" ");
+  if (lang === "tr") ok("tr (a): ğ ş ı İ del contenido se leen tal cual en el PDF (y «SAKİN» en mayúsculas)", ["ğ", "ş", "ı", "İ"].every((c) => content.includes(c)) && ["ğ", "ş", "ı"].every((c) => va.all.includes(c)) && va.all.includes("SAKİN SOKAKTA") && a.read.fonts.some((f) => /-LatinExt$/.test(f.name)));
+  if (lang === "fr") ok("fr (a): «L'Haÿ-les-Roses» (portada) y «L'HAŸ-LES-ROSES» (pie, mayúsculas) se leen tal cual", va.all.includes("L'Haÿ-les-Roses") && va.all.includes("L'HAŸ-LES-ROSES") && a.read.fonts.some((f) => /-LatinExt$/.test(f.name)));
+  if (isRtl(lang)) {
+    const script = lang === "ar" ? /[ء-ي]/ : /[א-ת]/;
+    const actual = va.pages.flatMap((x) => x.actual.map((s) => s.trim()));
+    const first = a.catalog.items[0];
+    ok(`${lang} (a): el contenido en su alfabeto: título y primera frase de cada vivienda en el ActualText (texto lógico)`, script.test(first.title) && a.catalog.items.filter((it) => it.copy.length).every((it) => actual.some((s) => s.includes(it.copy[0].text.split(/(?<=\.)\s/)[0].slice(0, 30)))) && actual.includes(forPdf(first.title)));
+  }
+
+  // (b) N5: una vivienda sin traducción vigente.
+  section(`· ${lang} (b): N5, la vivienda «${N5_KEY}» sin traducción`);
+  const b = await build(PDF, lang, async () => void (await translateFixtureCatalog(PDF, t, { skip: [N5_KEY] })));
+  const vb = verifyDoc(`${lang} (b)`, lang, b);
+  const i = b.catalog.items.findIndex((it) => it.key === N5_KEY);
+  const it = b.catalog.items[i];
+  const es = b.spanish.items[i];
+  const from = vb.expected[i], to = (vb.expected[i + 1] ?? vb.pages.length - 1) - 1;
+  const itemText = vb.pages.slice(from - 1, to).map((x) => x.text).join("\n");
+  ok(`${lang} (b): la vivienda va en N5 (copyPending) y las demás traducidas`, !!it.copyPending && b.catalog.items.filter((x) => x.key !== N5_KEY).every((x) => !x.copyPending));
+  ok(`${lang} (b): «${d.descriptionPreparing}» y su texto, en las páginas de esa vivienda`, flat(itemText).includes(flat(d.descriptionPreparing)) && !missingWord(tokens(itemText), d.descriptionPreparingHint));
+  const [pre, post] = d.homeIn("\u0000").split("\u0000");
+  ok(`${lang} (b): título provisional del idioma («${it.title}») en su página`, it.title !== es.title && it.title.startsWith(pre) && it.title.endsWith(post) && flat(itemText).includes(flat(it.title)));
+  const esBits = [es.title, ...es.copy.map((cb) => cb.text)].map((s) => (s.length > 60 ? head8(s) : flat(s)));
+  ok(`${lang} (b): nada del español de esa vivienda (título ni descripción) en el PDF`, esBits.every((x) => !flat(vb.all).includes(x)));
+  ok(`${lang} (b): las demás viviendas siguen traducidas en el PDF`, b.catalog.items.filter((x) => x.key !== N5_KEY).every((x) => flat(vb.all).includes(flat(x.title))));
+  summary.push(`${lang} ${a.read.pages.length}/${b.read.pages.length}`);
 }
 await fixtureMutate({ op: "reset" });
 
-console.log(`\n  ${summary.join(" · ")}`);
+console.log(`\n  hojas por idioma (es · traducido/N5): ${summary.join(" · ")}`);
 console.log(fails ? `\n❌ ${fails} fallo(s) de ${passes + fails}` : `\n✅ PDF del catálogo en 8 idiomas: ${passes} comprobaciones en orden`);
 process.exit(fails ? 1 : 0);

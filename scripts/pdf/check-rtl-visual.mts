@@ -7,8 +7,10 @@
 //      Cada página tiene tinta (ninguna en blanco ni cortada).
 //   2. Orden visual por línea, como en la prueba técnica (pdf-rtl-spike.mts):
 //      las cadenas REALES del PDF en ese idioma (rótulos del diccionario,
-//      precio, superficie, teléfono, pie de foto, fecha, texto del cierre y un
-//      título en el alfabeto) se maquetan con el motor de producción y las
+//      precio, superficie, teléfono, pie de foto, fecha, texto del cierre, el
+//      aviso N5 y el CONTENIDO traducido de verdad del catálogo: título del
+//      catálogo y de la vivienda, título de sección, característica, una
+//      frase de la descripción y la introducción) se maquetan con el motor de producción y las
 //      MISMAS pilas de fuentes (catalogFonts) y dirección que usa document.ts,
 //      se rasterizan con pdfjs y se comparan con la misma línea compuesta por
 //      Chromium: perfil de tinta por columnas > 0,9, al menos 0,3 por encima
@@ -46,6 +48,8 @@ import { renderCatalogPdf } from "../../lib/pdf/catalog/render.ts";
 import { loadLogoDataUri, loadWhiteLogoDataUri } from "../../lib/pdf/load-logo.ts";
 import { assertPdfEnginePatched } from "../../lib/pdf/engine-patch/assert.ts";
 import { readPdf } from "./pdf-text.mts";
+import { translateFixtureCatalog } from "./pdf-translations.mts";
+import type { TargetLanguage } from "../../lib/catalogs/translations.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const args = process.argv.slice(2);
@@ -155,10 +159,11 @@ async function inkRatio(png: Buffer): Promise<number> {
 const logo = await loadLogoDataUri();
 const logoWhite = await loadWhiteLogoDataUri();
 const AT = new Date("2026-10-17T10:00:00Z");
-async function realPdf(token: string, lang: CatalogLanguage, title?: string) {
+/** El PDF real del catálogo con traducciones aprobadas y vigentes (PR6),
+ *  escritas a mano (pdf-translations.mts); con `skip`, esas viviendas en N5. */
+async function realPdf(token: string, lang: TargetLanguage, skip: string[] = []) {
   await fixtureMutate({ op: "reset" });
-  if (title) await fixtureMutate({ op: "title", token, title } as never);
-  await fixtureMutate({ op: "lang", token, lang } as never);
+  await translateFixtureCatalog(token, lang, { skip });
   const cap = (await captureFixed(exportReaders({ kind: "link", token })))!;
   const snapshot = cap.snapshot as InternalSnapshot;
   const catalog = toPublicCatalog(snapshot, cap.operation);
@@ -171,7 +176,6 @@ async function realPdf(token: string, lang: CatalogLanguage, title?: string) {
   return { catalog, pdf: r.pdf, pageOf: r.pageOf };
 }
 
-const TITLES: Record<string, string> = { ar: "شقة مشرقة في حي سالامانكا", he: "דירה מוארת בשכונת סלמנקה" };
 const JOINED: Record<string, string> = { ar: "مسكن" };
 const summary: Record<string, unknown> = {};
 const warnings: string[] = [];
@@ -233,7 +237,14 @@ try {
       { id: "telefono", text: "+34 641 457 123", family: f.text, weight: 400, dir: "ltr" },
       { id: "asesora", text: `${up(d.advisor("asesora"))} · BENJAMÍN COUSIÑO PROPIEDADES`, family: f.label, weight: 500, dir: "rtl" },
       { id: "cierre", text: d.closingHint, family: f.text, weight: 400, dir: "rtl" },
-      { id: "titulo", text: TITLES[lang], family: f.display, weight: 400, dir: "rtl" },
+      // Contenido traducido de verdad (PR6), tal como lo pinta el PDF real.
+      { id: "titulo-catalogo", text: real.catalog.title, family: f.display, weight: 400, dir: "rtl" },
+      { id: "titulo-vivienda", text: it0.title, family: f.display, weight: 400, dir: "rtl" },
+      { id: "titulo-seccion", text: it0.copy.find((cb) => cb.heading)!.heading!, family: f.display, weight: 400, dir: "rtl" },
+      { id: "caracteristica", text: it0.features[0], family: f.text, weight: 400, dir: "rtl" },
+      { id: "frase", text: it0.copy[0].text.split(/(?<=\.)\s/)[0], family: f.text, weight: 400, dir: "rtl" },
+      { id: "introduccion", text: real.catalog.intro!, family: f.text, weight: 400, dir: "rtl" },
+      { id: "aviso-n5", text: d.descriptionPreparing, family: f.display, weight: 400, dir: "rtl" },
       ...(JOINED[lang] ? [{ id: "palabra-unida", text: JOINED[lang], family: f.text, weight: 400, dir: "rtl" as const }, { id: "palabra-separada", text: [...JOINED[lang]].join(" "), family: f.text, weight: 400, dir: "rtl" as const }] : []),
     ];
     const SIZE = 32, GAP = 90, W = 1500;
@@ -297,11 +308,11 @@ try {
       const j = await gaps(crops.get("palabra-unida")!), s = await gaps(crops.get("palabra-separada")!);
       ok(`letras unidas: «${JOINED[lang]}» ${j.gaps} huecos en ${j.width} px · separada ${s.gaps} huecos`, j.gaps === 0 && s.gaps >= 2);
     }
-    // Título en su alfabeto en el documento real (contenido RTL tras el PR6).
-    const withTitle = await realPdf(FIXTURE_TOKENS.one, lang, TITLES[lang]);
-    writeFileSync(join(OUT, `one-${lang}.pdf`), withTitle.pdf);
-    const rt = readPdf(withTitle.pdf);
-    ok(`título del catálogo en su alfabeto: se pinta y su ActualText es el texto lógico`, rt.pages.some((x) => x.actual.some((a) => a.trim() === TITLES[lang])));
+    // N5 en el documento real: el aviso del idioma en vez de la descripción.
+    const n5 = await realPdf(FIXTURE_TOKENS.pdf, lang, ["fxPdfDesc0002"]);
+    writeFileSync(join(OUT, `pdf-${lang}-n5.pdf`), n5.pdf);
+    const rn = readPdf(n5.pdf);
+    ok(`N5: «${d.descriptionPreparing}» en el PDF real como texto lógico (ActualText) y la vivienda con su título provisional`, rn.pages.some((x) => x.actual.some((a) => a.trim() === d.descriptionPreparing)) && rn.pages.some((x) => x.actual.some((a) => a.trim() === n5.catalog.items[1].title)));
     summary[lang] = { pages: pages.length, lines: res };
   }
 } finally {
