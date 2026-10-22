@@ -336,6 +336,35 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-photos.sql
 
+echo "== 2zg. 0227: acabado fotográfico por catálogo (catálogos y enlaces previos + aplicada dos veces, reversión y reaplicación)"
+M19=supabase/migrations/0227_catalog_photo_finish.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-finish-pre.sql $M19 $M19 $S/test-catalog-finish.sql
+$R sql $D19/rollback-0227.sql $S/test-rollback-0227.sql $M19 $M19 $S/test-catalog-finish-reapply.sql
+$R sql $S/test-util.sql
+echo "   0227 se vuelve a aplicar tras su reversión"
+
+echo "== 2zh. 0227 sobre los tests de traducciones (0226), idiomas (0223), plantillas (0222), zonas (0220), biblioteca (0219), título (0217), opiniones (0218) y fotos (0202)"
+# Con el acabado apagado (todos los catálogos) la instantánea es la de antes: las huellas y comprobaciones de cada «pre» siguen igual.
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-translations-pre.sql $M18 $M19 $S/test-catalog-translations.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $S/test-catalog-languages-pre.sql $M17 $M18 $M19 $S/test-catalog-languages.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-area-texts-pre.sql $S/test-catalog-area-texts.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-areas-pre.sql $S/test-catalog-areas.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-copy.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-title-pre.sql $S/test-catalog-title.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-feedback-pre.sql $S/test-catalog-feedback.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-photos.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-operations.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
