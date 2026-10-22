@@ -5,6 +5,8 @@
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { installPdfEngineHook } = await import("./lib/pdf/engine-patch/install");
-    installPdfEngineHook(process.cwd());
+    if (installPdfEngineHook(process.cwd()) === "unavailable") {
+      console.error("[catalogos] pdf: este Node no tiene module.register; el PDF en árabe y hebreo no se podrá generar (pdf_engine_unpatched)");
+    }
   }
 }

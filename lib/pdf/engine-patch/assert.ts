@@ -1,8 +1,9 @@
 // Comprobación en tiempo de ejecución de que el motor de PDF lleva la
 // corrección local (patch.cjs; BCP-01 PR5, D1). La marca la escriben los dos
 // archivos corregidos al cargarse (webpack en Next; el hook en los scripts).
-// renderCatalogPdf la exige antes de maquetar: un motor sin corregir nunca
-// produce un PDF del catálogo (en árabe saldría ilegible y sin texto copiable).
+// renderCatalogPdf la exige antes de maquetar en árabe y hebreo: un motor sin
+// corregir nunca produce esos PDF (saldrían ilegibles y sin texto copiable).
+// En los demás idiomas el PDF es idéntico con y sin la corrección.
 
 type Marks = { textkit?: string; render?: string };
 
