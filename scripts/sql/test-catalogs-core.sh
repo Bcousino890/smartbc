@@ -305,6 +305,37 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-photos.sql
 
+echo "== 2ze. 0226: traducciones preparadas y revisadas (catálogo y enlaces previos + aplicada dos veces, concurrencia, reversión y reaplicación)"
+M18=supabase/migrations/0226_catalog_translations.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-translations-pre.sql $M18 $M18 $S/test-catalog-translations.sql
+$R sql $S/test-catalog-translations-conc-a.sql &
+CONC_TR=$!
+sleep 0.5
+$R sql $S/test-catalog-translations-conc-b.sql
+wait $CONC_TR
+$R sql $S/test-catalog-translations-conc-check.sql
+$R sql $D19/rollback-0226.sql $S/test-rollback-0226.sql $M18 $M18
+$R sql $S/test-util.sql
+echo "   0226 se vuelve a aplicar tras su reversión"
+
+echo "== 2zf. 0226 sobre los tests de idiomas (0223), plantillas (0222), zonas (0220), biblioteca (0219), título (0217), opiniones (0218) y fotos (0202)"
+# 0223 con 0226 detrás: en español la instantánea no cambia, así que sus huellas y comprobaciones siguen igual.
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $S/test-catalog-languages-pre.sql $M17 $M18 $S/test-catalog-languages.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-area-texts-pre.sql $S/test-catalog-area-texts.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-areas-pre.sql $S/test-catalog-areas.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-copy.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-title-pre.sql $S/test-catalog-title.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-feedback-pre.sql $S/test-catalog-feedback.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-photos.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

@@ -23,6 +23,8 @@ import { parseIdealistaAdCode } from "@/lib/catalogs/ads";
 import { createFixtureTexts } from "./fixture-texts";
 import { FIXTURE_AGENCIES, FIXTURE_TAGS, fixtureCatalogSearch } from "@/lib/catalogs/fixture-search";
 import { normalizeSearchFilters } from "@/lib/catalogs/search-filters";
+import type { TranslationActions } from "@/components/admin/catalogs/manager/languages-section";
+import { translationErrorText } from "@/lib/catalogs/translation-labels";
 
 // SOLO DESARROLLO LOCAL (BCP-01, E7): acciones falsas, para revisar el gestor
 // sin base de datos ni sistemas reales. Reproducen los mismos mensajes de
@@ -127,6 +129,31 @@ function fixtureClientLinkActions(): ClientLinkActions {
   };
 }
 
+/** PR6 · Traducciones contra el almacén sintético del servidor, con la IA
+ *  FALSA de los fixtures (cuenta llamadas). Misma orquestación que las
+ *  acciones reales. */
+async function traducciones<T>(body: Record<string, unknown>): Promise<({ ok: true } & T) | { ok: false; error: string }> {
+  const res = await fetch("/dev-fixtures/api/traducciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json().catch(() => null);
+  if (d?.ok) return d as { ok: true } & T;
+  return { ok: false, error: translationErrorText(String(d?.error ?? "")) };
+}
+
+function fixtureTranslationActions(): TranslationActions {
+  return {
+    load: (i) => traducciones({ op: "load", ...i }),
+    prepare: (i) => traducciones({ op: "prepare", ...i }),
+    cancel: (i) => traducciones({ op: "cancel", ...i }),
+    save: (i) => traducciones({ op: "save", ...i }),
+    reject: (i) => traducciones({ op: "reject", ...i }),
+    approve: (i) => traducciones({ op: "approve", ...i }),
+    useApproved: (i) => traducciones({ op: "use", ...i }),
+    remove: (i) => traducciones({ op: "remove", ...i }),
+    setCatalogLang: (i) => traducciones({ op: "cat-lang", ...i }),
+    setLinkLang: (i) => traducciones({ op: "link-lang", ...i }),
+  };
+}
+
 const invalid = { ok: false as const, error: "Revisa los criterios: zonas reconocidas, precio con operación (venta o alquiler), mínimo ≤ máximo y entre 1 y 24 viviendas." };
 
 export function FixtureCatalogManager({
@@ -135,8 +162,11 @@ export function FixtureCatalogManager({
   measureMode = false,
   pool = fixtureProperties,
   groups = null,
+  translationGaps = [],
 }: {
   catalog: CatalogDetail;
+  /** PR6 · N5: idiomas activos con viviendas sin traducción vigente. */
+  translationGaps?: Array<{ lang: string; pending: string[] }>;
   /** HOME · grupos: estado inicial del almacén sintético de grupos. */
   groups?: GroupsState | null;
   liveToken?: string | null;
@@ -615,6 +645,7 @@ export function FixtureCatalogManager({
     revoke: async () => ({ ok: true as const }),
   };
   const clientLinkActions = useMemo(() => fixtureClientLinkActions(), []);
+  const translationActions = useMemo(() => fixtureTranslationActions(), []);
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
   const shareRef = useRef(shareActions);
@@ -651,6 +682,8 @@ export function FixtureCatalogManager({
       share={liveToken ? { token: liveToken, expiresAt: new Date(Date.now() + 60 * 86_400_000).toISOString(), expired: false } : null}
       shareActions={fx.current.share}
       clientLinkActions={clientLinkActions}
+      translationActions={translationActions}
+      translationGaps={translationGaps}
       measureMode={measureMode}
       texts={fxTexts.views()}
       storyHref={() => "#historia-de-prueba"}

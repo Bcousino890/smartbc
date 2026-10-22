@@ -6,6 +6,7 @@ import { catalogDictionary, snapshotLang, type CatalogLanguage } from "./i18n";
 import { priceDisplay, type CatalogOperation } from "./operation-price";
 import { effectivePhotos, photoSrc } from "./photo-selection";
 import { contactPhoneHref, formatContactPhone, isContactRole } from "./contact-format";
+import { applyItemTranslation, esUnitFrom, type EsUnit, type ItemTranslation, type MetaTranslation } from "./translations";
 import {
   type PhotoOrientation,
   type PublicCatalog,
@@ -44,6 +45,9 @@ export interface InternalSnapshot {
   /** 0194: contacto público guardado en el catálogo. */
   contact?: { name: string | null; phone: string | null; role: string | null } | null;
   items: InternalItem[];
+  /** 0226 (PR6): título e introducción del catálogo traducidos al idioma del
+   *  enlace (solo fuera del español y solo si están aprobados). */
+  trm?: MetaTranslation | null;
   /** 0196 (C1): portada elegida. Solo existe si hay elección: la clave
    *  pública de la vivienda (null si ya no está en la lista) y el
    *  identificador opaco de la foto (el mismo `u` de photos; null si no hay). */
@@ -83,6 +87,10 @@ export interface InternalItem {
   at?: string | null;
   /** 0197 (C2): historia aprobada (huella, entrada, capítulos aprobados). */
   story?: { h: string | null; p: string | null; ph?: string | null; b: Array<{ c: string; t: string }> | null } | null;
+  /** 0226 (PR6): copia de la traducción aprobada de ESTE catálogo en el
+   *  idioma del enlace (solo fuera del español). Vale solo si su huella es la
+   *  del español que se ve hoy (translations.ts). */
+  tr?: ItemTranslation | null;
 }
 
 /** Mismo hash que client-description.ts: descripción recortada + NUL +
@@ -160,11 +168,10 @@ export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, it
   return first ? first.photos[first.coverIndex].src : null;
 }
 
-/** `op`: la operación guardada del catálogo (K1, DS-1/DS-2). En venta o
- *  alquiler, la operación y el importe del catálogo; una inclusión de otra
- *  operación, lo suyo real; en «venta y alquiler», como siempre. Sin la otra
- *  operación de las duales: eso es solo de la gestión. */
-export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lang: CatalogLanguage = "es"): PublicItem {
+/** El recorrido editorial en ESPAÑOL de una vivienda (lo que el lector
+ *  pinta en español) y sus fotos. Una sola definición para el lector, el PDF
+ *  y la unidad que se traduce (PR6). */
+function editorialOf(it: InternalItem) {
   const clean = it.clean;
   const cleanValid =
     !!clean && typeof clean.src === "string" && clean.src === clientDescriptionSrc(it.description, it.features);
@@ -193,6 +200,31 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lan
     photos: classes.map((k, i) => ({ u: String(i), k })),
     coverIndex: coverIndex < 0 ? 0 : coverIndex,
   });
+  return { ed, floorN, photos, coverIndex };
+}
+
+/** Título de la vivienda en español en este catálogo (el propio o el de la ficha). */
+function spanishTitle(it: InternalItem): string {
+  return String(it.title ?? "").trim();
+}
+
+/** PR6 · Lo que el catálogo enseña hoy en español de esta vivienda (la unidad
+ *  que se traduce y contra la que se comprueba la vigencia). */
+export function esUnitOfItem(it: InternalItem): EsUnit {
+  return esUnitFrom(spanishTitle(it) || catalogDictionary("es").untitled, editorialOf(it).ed);
+}
+
+/** `op`: la operación guardada del catálogo (K1, DS-1/DS-2). En venta o
+ *  alquiler, la operación y el importe del catálogo; una inclusión de otra
+ *  operación, lo suyo real; en «venta y alquiler», como siempre. Sin la otra
+ *  operación de las duales: eso es solo de la gestión. */
+export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lang: CatalogLanguage = "es"): PublicItem {
+  const { ed, floorN, photos, coverIndex } = editorialOf(it);
+  const place = [it.subzone, it.zone].filter((x) => typeof x === "string" && x.trim()).join(", ") || null;
+  // PR6 · Fuera del español, el contenido sale SOLO de la traducción aprobada
+  // y vigente de este catálogo; si no la hay, el caso N5. Los datos
+  // operativos de abajo salen siempre de la instantánea actual (DA34).
+  const tr = lang === "es" ? null : applyItemTranslation(esUnitFrom(spanishTitle(it) || catalogDictionary("es").untitled, ed), it.tr ?? null, catalogDictionary(lang), place);
   const shown = priceDisplay(
     { operation: it.operation, operations: it.operations, price: it.price, rent_price: it.rent_price, currency: it.currency },
     op,
@@ -201,8 +233,8 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lan
   const atico = floorN === ATICO_FLOOR;
   return {
     key: String(it.key),
-    title: String(it.title ?? "").trim() || catalogDictionary(lang).untitled,
-    place: [it.subzone, it.zone].filter((x) => typeof x === "string" && x.trim()).join(", ") || null,
+    title: tr ? tr.title : String(it.title ?? "").trim() || catalogDictionary(lang).untitled,
+    place,
     operation: shown.operation,
     price: shown.price,
     reserved: it.status === "reserved",
@@ -211,11 +243,26 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lan
     squareMeters: positiveInt(it.square_meters),
     floor: atico ? floorLabel(null, true, lang) : floorLabel(floorN, false, lang),
     floorShort: atico ? floorShortLabel(null, true, lang) : floorShortLabel(floorN, false, lang),
-    copy: ed.copy,
-    features: ed.features,
+    copy: tr ? tr.copy : ed.copy.map((b) => ({ heading: b.heading, text: b.text })),
+    features: tr ? tr.features : ed.features,
     photos,
     coverIndex,
+    ...(tr?.pending ? { copyPending: true } : {}),
   };
+}
+
+/** PR6 · Título e introducción del catálogo en el idioma del enlace: la
+ *  última traducción aprobada (el gestor avisa si el español cambió después).
+ *  Sin ninguna, el título del catálogo (su nombre) y sin introducción: nunca
+ *  la introducción en español fuera del español. */
+function catalogMeta(snap: InternalSnapshot, lang: CatalogLanguage): { title: string; intro: string | null } {
+  const title = String(snap.title ?? "").trim();
+  const intro = typeof snap.intro === "string" && snap.intro.trim() ? snap.intro.trim() : null;
+  if (lang === "es") return { title, intro };
+  const m = snap.trm;
+  const t = typeof m?.t === "string" && m.t.trim() ? m.t.trim() : null;
+  const i = typeof m?.i === "string" && m.i.trim() ? m.i.trim() : null;
+  return { title: t ?? title, intro: m ? i : null };
 }
 
 /** `lang` (PR4): el idioma del enlace. Por defecto, el que trae la
@@ -226,10 +273,11 @@ export function toPublicCatalog(snap: InternalSnapshot, op: CatalogOperation = "
     .filter((it) => it && it.status !== "sold" && it.status !== "archived")
     .map((it) => toPublicItem(it, op, lang));
   const contact = snap.contact ?? null;
+  const meta = catalogMeta(snap, lang);
   return {
     lang,
-    title: String(snap.title ?? "").trim(),
-    intro: typeof snap.intro === "string" && snap.intro.trim() ? snap.intro.trim() : null,
+    title: meta.title,
+    intro: meta.intro,
     edition: editionLabel(new Date(snap.created_at), lang),
     preparedBy: typeof contact?.name === "string" && contact.name.trim() ? contact.name.trim() : null,
     phone: formatContactPhone(contact?.phone),

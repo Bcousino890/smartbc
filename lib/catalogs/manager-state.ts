@@ -20,7 +20,7 @@ import type { CatalogTextView } from "./texts";
 
 // --- Secciones y URL -------------------------------------------------------
 
-export const SECTIONS = ["viviendas", "contenido", "diseno", "compartir"] as const;
+export const SECTIONS = ["viviendas", "contenido", "diseno", "compartir", "idiomas"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_LABEL: Record<Section, string> = {
@@ -28,6 +28,7 @@ export const SECTION_LABEL: Record<Section, string> = {
   contenido: "Contenido",
   diseno: "Diseño",
   compartir: "Compartir",
+  idiomas: "Idiomas",
 };
 
 export function parseSection(raw: string | null | undefined): Section {
