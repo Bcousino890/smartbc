@@ -37,6 +37,13 @@
   background: var(--ink);
 }
 
+/* Árabe y hebreo (PR4): sin espaciado entre letras (rompería el árabe
+   ligado) y sin mayúsculas forzadas (no existen). El resto, igual. */
+.cover:lang(ar) *,
+.cover:lang(he) * {
+  letter-spacing: 0;
+}
+
 .cover *,
 .cover *::before,
 .cover *::after {

@@ -259,7 +259,7 @@ async function liveTests() {
     // pierda la zona sin que nadie lo note.
     const pages = readFileSync("components/catalogs/reader/pages.tsx", "utf8");
     const index = pages.slice(pages.indexOf("export function IndexPage"), pages.indexOf("// ─── Piezas de una vivienda"));
-    check("índice dentro de ScrollRegion (variante «index»)", /<ScrollRegion label="Índice" variant="index"[^>]*>\s*<Rule[^>]*\/>\s*<ol>/.test(index));
+    check("índice dentro de ScrollRegion (variante «index»)", /<ScrollRegion label=(?:"Índice"|\{dict\.contents\}) variant="index"[^>]*>\s*<Rule[^>]*\/>\s*<ol>/.test(index));
     check("índice: todas las entradas, sin cortes ni límites", /catalog\.items\.map\(/.test(index) && !/catalog\.items\.slice\(/.test(index));
     const css = readFileSync("components/catalogs/reader/reader.module.css", "utf8");
     check("índice: la hoja es columna flexible en la doble página", /\.indexPage \{\s*display: flex;\s*flex-direction: column;/.test(css));

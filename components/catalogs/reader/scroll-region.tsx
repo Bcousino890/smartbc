@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useReaderLang } from "./lang-context";
 import styles from "./reader.module.css";
 
 // Zona de texto que, en la doble página, puede desplazarse POR DENTRO de la
@@ -15,13 +16,15 @@ export function ScrollRegion({
   label,
   children,
   variant = "text",
-  cue = "Sigue leyendo ↓",
+  cue,
 }: {
   label: string;
   children: ReactNode;
   variant?: "text" | "index";
+  /** Señal de la banda; sin ella, «Sigue leyendo ↓» en el idioma del enlace. */
   cue?: string;
 }) {
+  const { dict } = useReaderLang();
   const ref = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<{ scrollable: boolean; atEnd: boolean }>({ scrollable: false, atEnd: true });
 
@@ -58,7 +61,7 @@ export function ScrollRegion({
         data-more={more ? "true" : "false"}
         tabIndex={state.scrollable ? 0 : undefined}
         role={state.scrollable ? "region" : undefined}
-        aria-label={state.scrollable ? `${label} (se desplaza)` : undefined}
+        aria-label={state.scrollable ? dict.scrollsHint(label) : undefined}
       >
         {children}
       </div>
@@ -74,7 +77,7 @@ export function ScrollRegion({
               data-testid="scroll-cue"
               onClick={() => ref.current?.scrollBy({ top: (ref.current?.clientHeight ?? 300) * 0.8, behavior: "smooth" })}
             >
-              {cue}
+              {cue ?? dict.keepReading}
             </button>
           ) : null}
         </div>
