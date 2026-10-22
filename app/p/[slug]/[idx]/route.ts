@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { contentRange, parseRangeHeader, unsatisfiedContentRange } from "@/lib/http/range";
 import { isPhotoKey } from "@/lib/catalogs/photo-selection";
+import { renderPhotoVariant } from "@/lib/catalogs/photo-variant";
+import { snapPhotoWidth } from "@/lib/catalogs/photo-widths";
 import { findPropertyPhoto, photoCandidates } from "@/lib/catalogs/photo-resolve";
 
 // Proxy de fotos de propiedad. Sirve la foto en posición `idx` para la
@@ -49,17 +51,10 @@ import { findPropertyPhoto, photoCandidates } from "@/lib/catalogs/photo-resolve
 
 export const runtime = "nodejs";
 
-/** Anchos servibles. Cubre móvil (dpr 2-3), portátil, 1440@2x y 2560. */
-const WIDTHS = [640, 828, 1080, 1200, 1280, 1600, 1920, 2560, 3200] as const;
-/**
- * Calidad del reencode. Alta a propósito en los tamaños que se miran de
- * cerca; algo menor en los enormes, donde el ojo no distingue y el peso se
- * dispara: la misma foto pasa de 314KB a 834KB entre 1920 y 3200 px, y un
- * hero de 800KB estropea el LCP mucho más de lo que aporta el detalle.
- */
-function qualityFor(width: number): number {
-  return width > 2048 ? 78 : 86;
-}
+// La escala de anchos y la calidad viven en lib/catalogs/photo-widths.ts y el
+// reencode en lib/catalogs/photo-variant.ts (PR7a): los comparte la ruta de
+// fotos sintéticas de las fixtures, así que la QA y las pruebas ejercitan la
+// misma regla que esta ruta.
 
 /**
  * Respuesta para un cuerpo que hemos generado nosotros (las variantes `?w=`).
@@ -102,11 +97,6 @@ function respondBuffer(
   });
 }
 
-function snapWidth(raw: string | null): number | null {
-  const n = Number.parseInt(raw ?? "", 10);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return WIDTHS.find((w) => w >= n) ?? WIDTHS[WIDTHS.length - 1];
-}
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
@@ -116,7 +106,7 @@ export async function GET(
 ) {
   const { slug, idx } = await params;
   const search = new URL(req.url).searchParams;
-  const width = snapWidth(search.get("w"));
+  const width = snapPhotoWidth(search.get("w"));
   const fRaw = search.get("f");
   if (fRaw !== null && !isPhotoKey(fRaw)) {
     return new NextResponse("bad_photo", { status: 400, headers: { "Cache-Control": "no-store" } });
@@ -220,25 +210,11 @@ export async function GET(
         });
       }
       const source = Buffer.from(await upstream.arrayBuffer());
-      try {
-        const sharp = (await import("sharp")).default;
-        const image = sharp(source, { failOn: "none" });
-        const meta = await image.metadata();
-        // Más pequeña que lo pedido → se devuelve tal cual. Ampliar aquí solo
-        // añadiría peso y no un solo detalle real.
-        if (!meta.width || meta.width <= width) {
-          return respondBuffer(source, contentType, cache, rangeHeader, { "X-Bcp-Variant": "original" });
-        }
-        const out = await image
-          .resize({ width, withoutEnlargement: true, fit: "inside" })
-          .webp({ quality: qualityFor(width) })
-          .toBuffer();
-        return respondBuffer(out, "image/webp", cache, rangeHeader, { "X-Bcp-Variant": `w${width}` });
-      } catch {
-        // Si el reencode falla por lo que sea, manda el original: una foto
-        // grande de más es infinitamente mejor que un hueco roto.
-        return respondBuffer(source, contentType, cache, rangeHeader, { "X-Bcp-Variant": "fallback" });
-      }
+      // Más pequeña que lo pedido → se devuelve tal cual («original»); si el
+      // reencode falla, también («fallback»): una foto grande de más es
+      // infinitamente mejor que un hueco roto.
+      const v = await renderPhotoVariant(source, width, contentType);
+      return respondBuffer(v.data, v.contentType, cache, rangeHeader, { "X-Bcp-Variant": v.variant });
     } catch {
       if (!isLast) continue;
       return new NextResponse("upstream_error", { status: 502 });

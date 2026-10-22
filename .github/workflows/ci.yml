@@ -77,6 +77,9 @@ jobs:
       # el español exactamente como antes. Sin BD, red ni IA.
       - name: "Catálogos (idiomas, offline)"
         run: npm run test:catalogs-i18n
+      # PR7a: variantes por ancho del proxy, srcset de la portada y anchos del PDF (sharp sobre fotos sintéticas). Sin BD.
+      - name: "Catálogos (resolución de fotos, offline)"
+        run: npm run test:catalogs-photos
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"

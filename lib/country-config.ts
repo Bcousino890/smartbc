@@ -27,6 +27,10 @@ export type CountryConfig = {
   ): string;
 };
 
+// Precio 0 en una propiedad sindicada = la agencia no lo publica (p.ej. Rentals
+// HD). Se muestra así en vez de "0 €" y el equipo lo rellena a mano.
+export const PRICE_ON_REQUEST_LABEL = "Precio a consultar";
+
 const ES_CONFIG: CountryConfig = {
   locale: "es-ES",
   prefix: "/es/admin",
@@ -35,6 +39,7 @@ const ES_CONFIG: CountryConfig = {
   rentedLabel: "Alquilada",
   formatPrice(price, _currency, operation) {
     if (price == null) return "—";
+    if (price <= 0) return PRICE_ON_REQUEST_LABEL;
     const formatted = new Intl.NumberFormat("es-ES").format(price);
     return operation === "rent" ? `${formatted} €/mes` : `${formatted} €`;
   },
@@ -48,6 +53,7 @@ const CL_CONFIG: CountryConfig = {
   rentedLabel: "Arrendada",
   formatPrice(price, currency, operation) {
     if (price == null) return "—";
+    if (price <= 0) return PRICE_ON_REQUEST_LABEL;
     const n = new Intl.NumberFormat("es-CL").format(price);
     const unit =
       currency === "uf" ? `UF ${n}` : currency === "usd" ? `US$ ${n}` : `$ ${n}`;

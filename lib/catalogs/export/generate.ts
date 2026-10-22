@@ -1,7 +1,8 @@
 import "server-only";
 import { loadLogoDataUri, loadWhiteLogoDataUri } from "@/lib/pdf/load-logo";
 import { prepareCatalogPdfWorker } from "@/lib/pdf/catalog/render-in-worker";
-import { photoId, type PdfPhoto } from "@/lib/pdf/catalog/document";
+import { photoId, PRINT_BOXES, type PdfPhoto } from "@/lib/pdf/catalog/document";
+import { PHOTO_STORED_MAX_WIDTH } from "../photo-widths";
 import { toPublicCatalog, type InternalSnapshot } from "../to-public";
 import type { CatalogOperation } from "../operation-price";
 import { captureFixed, isUnstableRead, verifyFixed, type Captured } from "./capture";
@@ -30,8 +31,51 @@ export const EXPORT_LIMITS: RunnerLimits = {
   jobBudgetMs: 50_000,
 };
 
-/** Ancho de cada foto incrustada (px), según su uso. */
-export const PHOTO_WIDTHS = { cover: 1400, opening: 1400, section: 1100, more: 800 } as const;
+/** Resolución de impresión a la que se dimensiona cada foto (PR7a). */
+export const PRINT_PPI = 300;
+/** Píxeles que necesita una medida de `pt` puntos a PRINT_PPI (1 pt = 1/72 in). */
+export const pxForPrint = (pt: number): number => Math.ceil((pt * PRINT_PPI) / 72);
+/**
+ * Ancho MÁXIMO de cada foto incrustada (px), según su caja impresa
+ * (PRINT_BOXES): el de una foto que llenara el ancho de la caja a 300 ppi.
+ *   · portada: a sangre en todo el A4 (`objectFit: cover`); a 300 ppi haría
+ *     falta más de lo que se guarda (una foto apaisada 3:2 necesitaría 5.262
+ *     px para llenar los 297 mm de alto), así que el tope es el máximo
+ *     guardado (2.560 px: unos 146 ppi apaisada, 310 ppi vertical);
+ *   · apertura y «Más fotos»: 300 ppi en el ancho de su caja (antes 1.400 y
+ *     800 px: 224 y 240 ppi).
+ * El ancho de CADA foto lo ajusta exportPhotoWidth a lo que ocupa impresa.
+ */
+export const PHOTO_WIDTHS = {
+  cover: PHOTO_STORED_MAX_WIDTH,
+  opening: pxForPrint(PRINT_BOXES.opening.w),
+  more: pxForPrint(PRINT_BOXES.more.w),
+} as const;
+
+export type PhotoUse = keyof typeof PHOTO_WIDTHS;
+
+/**
+ * Ancho justo (px) de una foto para su uso en el PDF: los píxeles que ocupa
+ * impresa a 300 ppi, ni uno más (una apaisada 3:2 en la apertura queda
+ * limitada por los 300 pt de alto: 450 pt → 1.875 px; una vertical en «Más
+ * fotos», por los 175 pt: 117 pt → 487 px). Con el tope de PHOTO_WIDTHS y, en
+ * la portada, el del máximo guardado. Sin medidas conocidas, el tope. Nunca
+ * se amplía (photos.ts).
+ */
+export function exportPhotoWidth(use: PhotoUse, w: number | null, h: number | null): number {
+  const max = PHOTO_WIDTHS[use];
+  if (!w || !h || w <= 0 || h <= 0) return max;
+  if (use === "cover") {
+    // A sangre: la escala es la mayor de las dos, y el ancho mostrado puede
+    // sobrepasar la página (se recorta).
+    const { w: pw, h: ph } = PRINT_BOXES.page;
+    const scale = Math.max(pw / w, ph / h);
+    return Math.min(max, pxForPrint(w * scale));
+  }
+  const box = PRINT_BOXES[use];
+  const scale = Math.min(box.w / w, box.h / h);
+  return Math.min(max, pxForPrint(w * scale));
+}
 /** Descargas de fotos a la vez dentro de un trabajo. */
 const PHOTO_PARALLEL = 4;
 
@@ -57,8 +101,8 @@ export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperati
   for (const item of catalog.items) {
     const x = planItemExport(item);
     for (const idx of photosOfExport(x)) {
-      const width = idx === x.opening ? PHOTO_WIDTHS.opening : PHOTO_WIDTHS.more;
-      const n = needOf(item.key, item.photos[idx].key, width);
+      const ph = item.photos[idx];
+      const n = needOf(item.key, ph.key, exportPhotoWidth(idx === x.opening ? "opening" : "more", ph.width, ph.height));
       if (n) needs.set(photoId(item.key, idx), n);
     }
   }
@@ -66,7 +110,7 @@ export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperati
     for (const item of catalog.items) {
       const idx = item.photos.findIndex((p) => p.src === catalog.coverPhoto);
       if (idx < 0) continue;
-      const n = needOf(item.key, item.photos[idx].key, PHOTO_WIDTHS.cover);
+      const n = needOf(item.key, item.photos[idx].key, exportPhotoWidth("cover", item.photos[idx].width, item.photos[idx].height));
       if (n) needs.set("cover", n);
       break;
     }

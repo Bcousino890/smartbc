@@ -127,7 +127,10 @@ async function seed(): Promise<Map<string, Share>> {
       item({
         key: "fxKeyAtico01", slug: "fx-atico", title: "Ático con terraza sobre los tejados de Jerónimos",
         subzone: "Jerónimos", price: 1450000, bedrooms: 3, bathrooms: 2, square_meters: 142,
-        floor_override: "7", photos: photos(28, 4, "h"),
+        // PR7a: esta vivienda da la portada del catálogo principal; sus fotos
+        // declaran el ancho máximo del almacén (2.560 px) para que la QA de
+        // resolución compruebe que la portada pide la variante grande.
+        floor_override: "7", photos: photos(28, 4, "h").map((p) => ({ ...p, w: 2560, h: 1707 })),
       }),
       DESC,
       ["Terraza de 40 m²", "Ascensor", "Calefacción central", "Portero físico"],

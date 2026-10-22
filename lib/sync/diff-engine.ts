@@ -9,6 +9,7 @@ import type {
   SyncResult,
 } from "./types";
 import { downloadAndWatermark } from "./watermark";
+import { scraperPriceIsUnknown, syncPriceChanged } from "./price-rules";
 import { enqueueAfterSync } from "@/lib/services/video/queue";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -48,7 +49,9 @@ function needsUpdate(
   normalized: NormalizedProperty,
 ): boolean {
   if (existing.archived_at) return true; // desarchivar
-  if (Number(existing.price) !== normalized.price) return true;
+  // Precio 0 del scraper = "a consultar" (la agencia no lo publica): no se
+  // compara, para no pisar el que el equipo teclea a mano (ver price-rules.ts).
+  if (syncPriceChanged(existing.price, normalized.price)) return true;
   if (existing.title !== normalized.title) return true;
   if ((existing.description ?? null) !== normalized.description) return true;
   if ((existing.property_type ?? null) !== normalized.property_type) return true;
@@ -183,7 +186,9 @@ async function insertProperty(
 // IMPORTANTE: este UPDATE solo toca los campos que vienen del scraper.
 // Los campos internos del admin (owner_*, internal_notes, features_manual)
 // NO se incluyen adrede — son siempre propiedad del admin y nunca se
-// sobrescriben en sync.
+// sobrescriben en sync. Tampoco `price` cuando el scraper manda 0 (agencias
+// sin precio público, p.ej. Rentals HD): ahí el precio lo pone el equipo a
+// mano y el sync lo conserva.
 async function updateExistingProperty(
   supabase: AdminClient,
   existing: ExistingProperty,
@@ -202,7 +207,7 @@ async function updateExistingProperty(
       title: normalized.title,
       description: normalized.description,
       property_type: normalized.property_type,
-      price: normalized.price,
+      ...(scraperPriceIsUnknown(normalized.price) ? {} : { price: normalized.price }),
       bedrooms: normalized.bedrooms,
       bathrooms: normalized.bathrooms,
       square_meters: normalized.square_meters,

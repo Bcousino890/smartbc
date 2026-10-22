@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChapterMark, DataPoint, Label, Ornament, Rule, StatusLine } from "@/app/v/[token]/_components/editorial";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import { formatDateShort, formatNumber } from "@/lib/catalogs/i18n";
+import { COVER_FALLBACK_WIDTH, COVER_SIZES, coverPhotoWidth, coverSrcSet } from "@/lib/catalogs/cover-srcset";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { cn } from "@/lib/utils";
 import { useReaderLang } from "./lang-context";
@@ -63,6 +64,11 @@ function Num({ value, suffix }: { value: number | null; suffix?: ReactNode }) {
 
 export function CoverPage({ catalog, url, onBegin }: { catalog: PublicCatalog; url: PhotoUrl; onBegin?: () => void }) {
   const { dict } = useReaderLang();
+  // PR7a: la portada va a sangre y en retina pedía 1.600 px para 2.880. Con
+  // `srcset` acotado al ancho real de la foto (hasta 2.560, el máximo
+  // guardado) el navegador pide la variante que le corresponde. Misma caja,
+  // misma posición, mismo recorte; `src` sigue siendo la variante de siempre.
+  const cover = catalog.coverPhoto;
   return (
     <section className={cn(styles.page, styles.coverPage)} aria-label={dict.cover}>
       <CatalogCover
@@ -73,7 +79,9 @@ export function CoverPage({ catalog, url, onBegin }: { catalog: PublicCatalog; u
           title: catalog.title,
           subtitle: null,
           edition: catalog.edition,
-          photoUrl: catalog.coverPhoto ? url(catalog.coverPhoto, 1600) : null,
+          photoUrl: cover ? url(cover, COVER_FALLBACK_WIDTH) : null,
+          photoSrcSet: cover ? coverSrcSet(url, cover, coverPhotoWidth(catalog)) : null,
+          photoSizes: COVER_SIZES,
           preparedBy: catalog.preparedBy,
           countLabel: dict.homesCount(catalog.items.length),
         }}

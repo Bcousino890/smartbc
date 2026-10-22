@@ -19,6 +19,8 @@ export function formatPropertyPrice(
   property: Pick<Property, "price" | "operation">,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): string {
+  // Precio 0 = la agencia no lo publica (sindicación sin precio): "a consultar".
+  if (!(property.price > 0)) return t("common.priceOnRequest");
   const formatted = `${formatPrice(property.price)} €`;
   if (property.operation === "alquiler") {
     return `${formatted}${t("common.priceUnit")}`;
