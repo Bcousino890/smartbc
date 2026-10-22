@@ -145,8 +145,8 @@ export function translationCurrent(es: EsUnit, tr: ItemTranslation | null | unde
     tr.t.trim().length > 0 &&
     Array.isArray(tr.b) &&
     sameKeys(tr.b, es.blocks) &&
-    tr.b.every((b) => typeof b.x === "string" && b.x.trim().length > 0 && textBlockers(b.x).length === 0) &&
-    textBlockers(tr.t).length === 0
+    tr.b.every((b, i) => typeof b.x === "string" && b.x.trim().length > 0 && translationBlockers(es.blocks[i]?.x, b.x).length === 0) &&
+    translationBlockers(es.title, tr.t).length === 0
   );
 }
 
@@ -169,7 +169,7 @@ export function applyItemTranslation(
 ): TranslatedItem {
   const pairs = new Map<string, string>();
   for (const p of tr?.f ?? []) {
-    if (Array.isArray(p) && typeof p[0] === "string" && typeof p[1] === "string" && p[1].trim() && textBlockers(p[1]).length === 0) pairs.set(p[0], p[1].trim());
+    if (Array.isArray(p) && typeof p[0] === "string" && typeof p[1] === "string" && p[1].trim() && translationBlockers(p[0], p[1]).length === 0) pairs.set(p[0], p[1].trim());
   }
   // Las características sin traducción aprobada no se enseñan en español
   // (el gestor las marca); las traducidas sí, aunque la descripción no.
@@ -358,6 +358,31 @@ export interface TranslationCheck {
   warnings: TranslationWarning[];
 }
 
+/** Importes con moneda de un texto (cifra + € / euro(s) / eur, o € + cifra),
+ *  solo con sus dígitos («5.500 €» → «5500»). */
+const MONEY_RE = /(\d[\d.,\u00a0\u202f ]*)\s?(?:€|euros?\b|eur\b)|€\s?(\d[\d.,\u00a0\u202f ]*)/gi;
+
+/** Bloqueos de una TRADUCCIÓN frente a su original español. Contacto
+ *  (correo, web, teléfono): siempre. Precio: solo si la traducción trae un
+ *  importe que NO está en el original. Si el español ya dice «5.500 /mes» y
+ *  la traducción «5.500 €/ay», no se bloquea: es la misma información que ya
+ *  se publica en español (caso real del 22-10-2026). Lo que la traducción no
+ *  puede hacer es INVENTAR un precio. */
+export function translationBlockers(es: string | null | undefined, tr: string | null | undefined): TextBlocker[] {
+  const t = (tr ?? "").trim();
+  if (!t) return [];
+  const out: TextBlocker[] = textBlockers(t).filter((b) => b === "text_has_contact");
+  const known = new Set(digitsIn(es ?? ""));
+  for (const m of t.matchAll(MONEY_RE)) {
+    const d = (m[1] ?? m[2] ?? "").replace(/[^\d]/g, "");
+    if (!d || !known.has(d)) {
+      out.push("text_has_price");
+      break;
+    }
+  }
+  return out;
+}
+
 function digitsIn(text: string): string[] {
   return (text.match(/\d+(?:[.,   ]\d{3})*(?:[.,]\d+)?/g) ?? []).map((n) => n.replace(/[^\d]/g, ""));
 }
@@ -379,7 +404,7 @@ export function checkTranslation(pairs: CheckPair[], names: string[]): Translati
   const warnings: TranslationWarning[] = [];
   const cleanNames = [...new Set(names.map((n) => n.trim()).filter((n) => n.length >= 3))];
   for (const p of pairs) {
-    for (const b of textBlockers(p.tr)) if (!blockers.some((x) => x.code === b && x.where === p.where)) blockers.push({ code: b, where: p.where });
+    for (const b of translationBlockers(p.es, p.tr)) if (!blockers.some((x) => x.code === b && x.where === p.where)) blockers.push({ code: b, where: p.where });
     if (!p.tr.trim()) {
       warnings.push({ id: `missing:${p.where}`, kind: "missing", where: p.where, message: `${p.label}: falta la traducción.` });
       continue;
