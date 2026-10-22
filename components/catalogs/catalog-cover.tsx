@@ -17,6 +17,11 @@ export interface CatalogCoverData {
   edition: string;
   /** URL de la foto de portada (proxy neutro) o null. */
   photoUrl?: string | null;
+  /** PR7a · `srcset` acotado al ancho real de la foto (solo el lector; la
+   *  miniatura de la HOME y la vista previa siguen con la variante única). */
+  photoSrcSet?: string | null;
+  /** PR7a · `sizes` del `srcset` («100vw» en el lector: la foto va a sangre). */
+  photoSizes?: string | null;
   preparedBy?: string | null;
   /** «Cuatro viviendas» (o null si no se sabe). */
   countLabel?: string | null;
@@ -53,7 +58,15 @@ export function CatalogCover({
           <div className={styles.photo} aria-hidden="true">
             <div className={readable ? "vc-kenburns h-full w-full" : "h-full w-full"}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={data.photoUrl} alt="" loading={readable ? "eager" : "lazy"} fetchPriority={readable ? "high" : undefined} decoding="async" />
+              <img
+                src={data.photoUrl}
+                srcSet={data.photoSrcSet ?? undefined}
+                sizes={data.photoSrcSet ? (data.photoSizes ?? undefined) : undefined}
+                alt=""
+                loading={readable ? "eager" : "lazy"}
+                fetchPriority={readable ? "high" : undefined}
+                decoding="async"
+              />
             </div>
             <div className={styles.veil} />
             <div className={styles.veil2} />
