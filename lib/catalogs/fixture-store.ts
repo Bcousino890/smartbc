@@ -5,6 +5,8 @@ import type { CatalogMeta } from "./coherent-read";
 import type { CatalogOperation } from "./operation-price";
 import { composeFingerprint } from "./public-fingerprint";
 import { DEFAULT_CATALOG_LANGUAGE, type CatalogLanguage } from "./i18n";
+import { MemoryTranslations } from "./translation-memory";
+import { fakeTranslationAi, type FakeAi } from "./translation-fake-ai";
 
 // ============================================================================
 // SOLO DESARROLLO LOCAL (BCP-01 T11, E7). Almacén EN MEMORIA que sustituye a
@@ -428,26 +430,34 @@ function store(): Promise<Map<string, Share>> {
 
 export async function resetFixtureStore(): Promise<void> {
   (globalThis as G)[KEY] = seed();
+  resetFixtureTranslations();
 }
 
 function fingerprintOf(s: InternalSnapshot): string {
   return createHash("md5").update(JSON.stringify(s)).digest("hex");
 }
 
-/** Como get_public_catalog (0223): la instantánea del enlace lleva su idioma
- *  (el del enlace personal si lo tiene, si no el del catálogo), y por tanto
- *  la huella cambia con él (DA19). */
-function snapshotOf(s: Share): InternalSnapshot {
-  return { ...s.snapshot, lang: s.lang ?? DEFAULT_CATALOG_LANGUAGE };
+/** Como get_public_catalog (0223/0226): la instantánea del enlace lleva su
+ *  idioma (el del enlace personal si lo tiene, si no el del catálogo) y, fuera
+ *  del español, las copias APROBADAS de ese idioma; la huella cambia con él
+ *  (DA19). */
+function snapshotOf(s: Share, baseToken?: string): InternalSnapshot {
+  const lang = s.lang ?? DEFAULT_CATALOG_LANGUAGE;
+  const snap = { ...s.snapshot, lang };
+  const catalogId = baseToken ? catalogOfToken(baseToken) : null;
+  if (!catalogId || lang === "es") return snap;
+  return trState().mem.mergeSnapshot(catalogId, snap.items.map((it) => ({ p: it.key, k: it.key })), snap, lang);
 }
+
+const baseOf = (token: string) => fb().links.get(token)?.base ?? token;
 
 function valid(s: Share | undefined): s is Share {
   return !!s && !s.revoked && !s.archived && s.expiresAt > Date.now();
 }
 
 /** Huella pública compuesta (la misma que sirve public-data.ts). */
-function publicFingerprintOf(s: Share): string {
-  return composeFingerprint(fingerprintOf(snapshotOf(s)), s.operation ?? "any");
+function publicFingerprintOf(s: Share, baseToken?: string): string {
+  return composeFingerprint(fingerprintOf(snapshotOf(s, baseToken)), s.operation ?? "any");
 }
 
 /** m1/m2 de la lectura coherente: versión y operación de cada enlace. */
@@ -474,6 +484,11 @@ export function fixtureOwnerToken(catalogId: string): string | null {
   return k ? FIXTURE_TOKENS[k] : null;
 }
 
+function catalogOfToken(token: string): string | null {
+  for (const [id, k] of Object.entries(OWNER_FIXTURES)) if (FIXTURE_TOKENS[k] === token) return id;
+  return null;
+}
+
 /** La instantánea del catálogo para su dueño: aunque el enlace esté
  *  revocado, caducado o el catálogo archivado (P4). */
 export async function fixtureOwnerSnapshot(token: string): Promise<InternalSnapshot | null> {
@@ -483,13 +498,13 @@ export async function fixtureOwnerSnapshot(token: string): Promise<InternalSnaps
 /** Huella pública actual de un enlace (null si no vale). */
 export async function fixtureFingerprint(token: string): Promise<string | null> {
   const s = resolveShare(await store(), token);
-  return valid(s) ? publicFingerprintOf(s) : null;
+  return valid(s) ? publicFingerprintOf(s, baseOf(token)) : null;
 }
 
 export async function fixtureGetPublic(token: string): Promise<{ snapshot: InternalSnapshot; fingerprint: string; expiresAt: string } | null> {
   const s = resolveShare(await store(), token);
   if (!valid(s)) return null;
-  const snapshot = snapshotOf(s);
+  const snapshot = snapshotOf(s, baseOf(token));
   return { snapshot, fingerprint: fingerprintOf(snapshot), expiresAt: new Date(s.expiresAt).toISOString() };
 }
 
@@ -498,7 +513,7 @@ export async function fixtureGetStates(tokens: string[]) {
   return new Map(
     tokens.map((t) => {
       const s = resolveShare(st, t);
-      return [t, valid(s) ? { valid: true, fingerprint: fingerprintOf(snapshotOf(s)), expiresAt: new Date(s.expiresAt).toISOString() } : { valid: false, fingerprint: null, expiresAt: null }] as const;
+      return [t, valid(s) ? { valid: true, fingerprint: fingerprintOf(snapshotOf(s, baseOf(t))), expiresAt: new Date(s.expiresAt).toISOString() } : { valid: false, fingerprint: null, expiresAt: null }] as const;
     }),
   );
 }
@@ -545,6 +560,7 @@ export type FixtureOp =
 export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: string | null }> {
   if (op.op === "reset") {
     await resetFixtureStore();
+    trState().ai.reset();
     resetFeedbackStore();
     (globalThis as GF)[FAIL_KEY] = undefined;
     (globalThis as GD)[DELAY_KEY] = 0;
@@ -686,7 +702,7 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
       s.archived = true;
       break;
   }
-  return { fingerprint: valid(s) ? publicFingerprintOf(s) : null };
+  return { fingerprint: valid(s) ? publicFingerprintOf(s, op.token) : null };
 }
 
 // PDF del catálogo: fotos que «fallan» al leerlas (slug:clave).
@@ -1005,4 +1021,101 @@ export async function fixtureClientRecord(clientId: string) {
 
 export function fixtureNotices(): FixtureNotice[] {
   return [...fb().notices].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+
+// ============================================================================
+// PR6 · Traducciones de los fixtures: el almacén en memoria con las MISMAS
+// reglas que 0226 (translation-memory.ts) sobre los catálogos sintéticos de la
+// gestión, y una IA FALSA que cuenta llamadas (nunca una real). La vivienda
+// se identifica por su clave pública; la plantilla, por su texto.
+// ============================================================================
+
+interface TrState {
+  mem: MemoryTranslations;
+  ai: FakeAi;
+  mode: "ok" | "timeout" | "error" | "bad";
+  delayMs: number;
+}
+const TR_KEY = "__bcpCatalogFixtureTranslations";
+type GT = typeof globalThis & { [TR_KEY]?: TrState };
+let cachedStore: Map<string, Share> | null = null;
+
+function shareOfCatalog(catalogId: string): Share {
+  const t = fixtureOwnerToken(catalogId);
+  const s = t && cachedStore ? cachedStore.get(t) : undefined;
+  if (!s) throw new Error("forbidden");
+  return s;
+}
+
+function makeTrState(): TrState {
+  const state: TrState = {
+    mode: "ok",
+    delayMs: 600,
+    ai: null as unknown as FakeAi,
+    mem: new MemoryTranslations({
+      esState: async (catalogId) => {
+        cachedStore = await store();
+        const s = shareOfCatalog(catalogId);
+        return {
+          version: s.version ?? 1,
+          defaultLang: s.lang ?? DEFAULT_CATALOG_LANGUAGE,
+          snapshot: { ...structuredClone(s.snapshot), lang: "es" },
+          map: s.snapshot.items.map((it) => ({ p: it.key, k: it.key, av: it.at ? `fx-av-${createHash("md5").update(it.at).digest("hex").slice(0, 8)}` : null })),
+        };
+      },
+      links: (catalogId) => {
+        const base = fixtureOwnerToken(catalogId);
+        return [...fb().links.values()]
+          .filter((l) => l.base === base && l.revokedAt === null)
+          .map((l) => ({ id: l.id, clientName: FIXTURE_CLIENTS.find((c) => c.id === l.clientId)?.name ?? "Cliente", lang: l.lang ?? null, state: l.expiresAt > Date.now() ? ("active" as const) : ("expired" as const) }));
+      },
+      bump: (catalogId) => {
+        const s = shareOfCatalog(catalogId);
+        s.version = (s.version ?? 1) + 1;
+        return s.version;
+      },
+      version: (catalogId) => shareOfCatalog(catalogId).version ?? 1,
+      setLang: (catalogId, linkId, lang) => {
+        const s = shareOfCatalog(catalogId);
+        if (linkId === null) {
+          if ((s.lang ?? DEFAULT_CATALOG_LANGUAGE) === lang) return false;
+          s.lang = lang ?? DEFAULT_CATALOG_LANGUAGE;
+          return true;
+        }
+        const l = [...fb().links.values()].find((x) => x.id === linkId);
+        if (!l) throw new Error("link_not_found");
+        if (l.revokedAt !== null) throw new Error("link_revoked");
+        if ((l.lang ?? null) === lang) return false;
+        l.lang = lang;
+        return true;
+      },
+    }),
+  };
+  state.ai = fakeTranslationAi({ mode: () => state.mode, delayMs: () => state.delayMs });
+  return state;
+}
+
+function trState(): TrState {
+  const g = globalThis as GT;
+  if (!g[TR_KEY]) g[TR_KEY] = makeTrState();
+  return g[TR_KEY]!;
+}
+
+function resetFixtureTranslations(): void {
+  (globalThis as GT)[TR_KEY] = makeTrState();
+}
+
+/** Gestión de fixtures: el almacén de traducciones, la IA falsa y su ajuste. */
+export async function fixtureTranslations(): Promise<{ mem: MemoryTranslations; ai: FakeAi; configure: (o: { mode?: TrState["mode"]; delayMs?: number }) => void }> {
+  cachedStore = await store();
+  const t = trState();
+  return {
+    mem: t.mem,
+    ai: t.ai,
+    configure: (o) => {
+      if (o.mode) t.mode = o.mode;
+      if (typeof o.delayMs === "number") t.delayMs = Math.max(0, Math.min(10_000, o.delayMs));
+    },
+  };
 }
