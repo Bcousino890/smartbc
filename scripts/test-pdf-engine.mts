@@ -78,6 +78,7 @@ for (const [k, file] of Object.entries(files)) {
   if (k === "textkit") {
     ok("textkit: reorderLine sustituida (L2 sobre runs, ActualText lógico)", out.includes("bcpActualText: logical") && !out.includes("getItemAtIndex(line.runs, 'glyphs', index)"));
     ok("textkit: slice$1 empieza en el primer glifo del grupo (E7)", out.includes("run.glyphIndices.indexOf(run.glyphIndices[lastStart])"));
+    ok("textkit: resolveRunYOffset suma el desplazamiento vertical de cada glifo (E10)", out.includes("yOffset: (p.yOffset || 0) + yOffset"));
   } else {
     ok("render: xOffset/yOffset escalados (E6)", out.includes("xOffset: pos.xOffset * scale,") && out.includes("yOffset: pos.yOffset * scale,"));
     ok("render: ActualText alrededor de la línea (D2)", out.includes("ctx.markContent('Span', { actual: bcpActualText })") && out.includes("ctx.endMarkedContent();"));
@@ -104,6 +105,9 @@ console.log("\n· 3 · Versión distinta o texto cambiado → error claro al car
     const r1 = fake("render", "4.6.0", files.render);
     const e2 = throws(() => patch.patchEngineSource(r1, readFileSync(r1, "utf8")));
     ok("render 4.6.0 → error claro", !!e2 && e2.includes("4.6.0") && e2.includes("4.5.1"), e2 ?? "no falló");
+    const t3 = fake("textkit", "6.3.0", files.textkit, (s) => s.replace("Object.assign({}, p, { yOffset })", "Object.assign({}, p, { yOffset: yOffset })"));
+    const e5 = throws(() => patch.patchEngineSource(t3, readFileSync(t3, "utf8")));
+    ok("textkit con resolveRunYOffset cambiada → error claro (E10)", !!e5 && e5.includes("resolveRunYOffset"), e5 ?? "no falló");
     const t2 = fake("textkit", "6.3.0", files.textkit, (s) => s.replace("const reorderLine = (line) => {", "const reorderLine = (line, x) => {"));
     const e3 = throws(() => patch.patchEngineSource(t2, readFileSync(t2, "utf8")));
     ok("misma versión con el texto cambiado → error claro", !!e3 && e3.includes("reorderLine"), e3 ?? "no falló");
@@ -199,6 +203,18 @@ console.log("\n· 5 · Motor corregido en ejecución: árabe, hebreo y ActualTex
     ok("hebreo: ActualText = el texto lógico exacto", actual.includes(he), JSON.stringify(actual));
     ok("latino: ninguna marca ActualText (los PDF LTR no cambian)", actual.length === 2 && r.pages[0].text.includes(lat), JSON.stringify({ actual: actual.length, text: r.pages[0].text }));
     const raw = buf.toString("latin1");
+    // E10: los puntos del árabe se colocan también en vertical (GPOS): hay
+    // glifos con un Tm cuya y no es la de la línea.
+    const ys = new Set<string>();
+    for (const m of buf.toString("latin1").matchAll(/stream\r?\n([\s\S]*?)endstream/g)) {
+      try {
+        const c = (await import("node:zlib")).inflateSync(Buffer.from(m[1], "latin1")).toString("latin1");
+        for (const t of c.matchAll(/1 0 0 1 [-\d.]+ ([-\d.]+) Tm/g)) ys.add(t[1]);
+      } catch {
+        /* no es un flujo de contenido */
+      }
+    }
+    ok(`árabe: los puntos llevan su desplazamiento vertical de la fuente (E10: ${ys.size} alturas de glifo distintas)`, ys.size > 3, [...ys].slice(0, 6).join(" "));
     ok("el flujo usa /Span << /ActualText … >> BDC … EMC", (r.pages[0].actual.length === 2) && !/\/ActualText/.test(raw.replace(/stream[\s\S]*?endstream/g, "")));
   }
 }
