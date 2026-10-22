@@ -1,4 +1,6 @@
 import type { PublicCatalog, PublicCopyBlock, PublicItem } from "../public-contract";
+import { isCatalogLanguage, type CatalogLanguage } from "../i18n";
+import { catalogPdfDictionary, forPdf, pdfFileNameFor, pdfLangTag } from "../pdf-i18n";
 
 // ============================================================================
 // PDF del catálogo · reglas puras (expediente 2026-10-16-bcp-01-pdf). Sin red.
@@ -41,22 +43,15 @@ export function photosOfExport(x: ItemExport): number[] {
   return [...(x.opening !== null ? [x.opening] : []), ...x.more];
 }
 
-const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+// PR5: la fecha de la versión, el nombre del archivo y los metadatos van en
+// el idioma del catálogo (lib/catalogs/pdf-i18n.ts). En español, exactamente
+// los de antes (scripts/test-catalogs-public.mts y test-catalogs-pdf-i18n.mts).
+export { versionLabel } from "../pdf-i18n";
 
-/** «16 de octubre de 2026, 19:40» en la hora de Madrid. */
-export function versionLabel(at: Date): string {
-  const p = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(at);
-  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
-  return `${Number(g("day"))} de ${MONTHS[Number(g("month")) - 1]} de ${g("year")}, ${g("hour")}:${g("minute")}`;
-}
-
-/** Nombre del archivo: «Catálogo · <título> · 16-10-2026.pdf», sin
- *  caracteres que rompan un nombre de archivo. */
-export function pdfFileName(title: string, at: Date): string {
-  const p = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(at);
-  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
-  const clean = (title || "Catálogo").replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 90) || "Catálogo";
-  return `Catálogo · ${clean} · ${g("day")}-${g("month")}-${g("year")}.pdf`;
+/** Nombre del archivo: «Catálogo · <título> · 16-10-2026.pdf» (con la palabra
+ *  del idioma), sin caracteres que rompan un nombre de archivo. */
+export function pdfFileName(title: string, at: Date, lang: CatalogLanguage = "es"): string {
+  return pdfFileNameFor(title, at, lang);
 }
 
 /** Content-Disposition con nombre UTF-8 (RFC 5987) y uno ASCII de respaldo. */
@@ -67,13 +62,15 @@ export function contentDisposition(fileName: string): string {
 
 /** Metadatos del PDF: sin ids, URL ni nada interno. */
 export function pdfMetadata(catalog: PublicCatalog): { title: string; author: string; subject: string; creator: string; producer: string; language: string } {
+  const lang = isCatalogLanguage(catalog.lang) ? catalog.lang : "es";
+  const p = catalogPdfDictionary(lang);
   return {
-    title: catalog.title || "Catálogo",
+    title: forPdf(catalog.title || p.catalog),
     author: "Benjamín Cousiño Propiedades",
-    subject: "Selección de viviendas",
+    subject: p.subject,
     creator: "Benjamín Cousiño Propiedades",
     producer: "Benjamín Cousiño Propiedades",
-    language: "es-ES",
+    language: pdfLangTag(lang),
   };
 }
 
