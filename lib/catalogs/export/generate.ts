@@ -86,11 +86,12 @@ export interface BuiltPdf {
   fileName: string;
 }
 
-// PR4 (idiomas): el PDF sigue en español pase lo que pase con el idioma del
-// enlace; el PR5 (PDF multilingüe y fuentes) es quien le pasa `snapshot.lang`.
+// PR5 (idiomas): el PDF va en el idioma del token, el que trae la captura
+// fija (`snapshot.lang`, 0223; ausente = español). Contenido e idioma salen
+// de la MISMA captura (DA19): nunca el idioma de otro enlace.
 /** Fotos que necesita el PDF, con su versión en S1 (`u`) y su ancho. */
 export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperation): Map<string, PhotoNeed> {
-  const catalog = toPublicCatalog(snapshot, operation, "es");
+  const catalog = toPublicCatalog(snapshot, operation);
   const needs = new Map<string, PhotoNeed>();
   const internal = new Map((snapshot.items ?? []).map((it) => [String(it.key), it]));
   const needOf = (itemKey: string, photoKey: string, width: number): PhotoNeed | null => {
@@ -142,7 +143,7 @@ async function loadAll(needs: Map<string, PhotoNeed>, signal: AbortSignal): Prom
 
 /** Construye el PDF de una captura. «changed» si una foto ya no es la de S1. */
 export async function buildCatalogPdf(cap: Cap, signal: AbortSignal): Promise<{ pdf: Buffer; fileName: string } | { changed: true }> {
-  const catalog = toPublicCatalog(cap.snapshot, cap.operation, "es");
+  const catalog = toPublicCatalog(cap.snapshot, cap.operation);
   // La maquetación va en un hilo aparte (expediente 2026-10-17-bcp-01-pdf-worker).
   // Se lanza YA, para que arranque mientras se descargan las fotos; no recibe
   // nada hasta que las fotos están listas y él ha dicho «ready». La señal del
@@ -155,7 +156,7 @@ export async function buildCatalogPdf(cap: Cap, signal: AbortSignal): Promise<{ 
     if (signal.aborted) throw new Error("cancelled");
     const [logo, logoWhite] = await Promise.all([loadLogoDataUri(), loadWhiteLogoDataUri()]);
     const { pdf } = await worker.render({ catalog, capturedAt: cap.capturedAt, logo, logoWhite, photos });
-    return { pdf, fileName: pdfFileName(catalog.title, cap.capturedAt) };
+    return { pdf, fileName: pdfFileName(catalog.title, cap.capturedAt, catalog.lang) };
   } finally {
     await worker.dispose();
   }

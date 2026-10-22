@@ -1,0 +1,223 @@
+// Corrección local del motor de PDF (BCP-01 ampliación, PR5, decisiones D1 y
+// D2): pruebas sin red ni base de datos, en la CI.
+//
+//   npm run test:pdf-engine
+//   (= node … --import ./scripts/pdf/engine-patch-hook.mjs scripts/test-pdf-engine.mts)
+//
+// Comprueba:
+//   1. Las versiones instaladas de @react-pdf/textkit y @react-pdf/render son
+//      las revisadas; si no, FALLA con el motivo (hay que revisar la corrección).
+//   2. La corrección se aplica a los archivos instalados: cada trozo aparece
+//      una vez y el resultado lleva la marca.
+//   3. Una versión distinta o un texto cambiado hacen fallar la carga con un
+//      error claro (simulado en una carpeta temporal).
+//   4. En Next, @react-pdf/renderer queda FUERA del bundle (lista por defecto
+//      de serverExternalPackages): la corrección la instala en tiempo de
+//      ejecución lib/pdf/engine-patch/install.ts, desde instrumentation.ts
+//      (proceso) y como PRIMERA importación del hilo (render-worker.ts). Se
+//      comprueba en un proceso de Node limpio (sin --import): instalar y luego
+//      cargar @react-pdf deja el motor corregido. Y el loader de webpack de
+//      next.config.ts, por si algún día se compila dentro del bundle.
+//   5. Con el hook de este proceso el motor está corregido (marca en tiempo de
+//      ejecución) y maqueta: el árabe que antes tiraba el motor se genera; cada
+//      línea RTL lleva su /ActualText con el texto lógico exacto (copiar y
+//      buscar, D2); una línea solo latina no lleva ninguno (es, en, fr, it, de
+//      y tr salen igual que sin la corrección).
+import { createRequire } from "node:module";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { createElement as h } from "react";
+import { Document, Font, Page, Text, renderToBuffer } from "@react-pdf/renderer";
+import { assertPdfEnginePatched, pdfEnginePatchMarks } from "../lib/pdf/engine-patch/assert.ts";
+import { readPdf } from "./pdf/pdf-text.mts";
+
+const ROOT = resolve(import.meta.dirname, "..");
+const require = createRequire(import.meta.url);
+const patch = require(join(ROOT, "lib/pdf/engine-patch/patch.cjs")) as {
+  REVIEWED: Record<string, string>;
+  MARK: string;
+  EnginePatchError: new (m: string) => Error;
+  patchEngineSource(file: string, src: string): string;
+  targetOf(file: string): string | null;
+};
+
+let fails = 0;
+const ok = (name: string, cond: boolean, detail = "") => {
+  console.log(`  ${cond ? "✅" : "❌"} ${name}${cond || !detail ? "" : ` — ${detail}`}`);
+  if (!cond) fails++;
+};
+const throws = (fn: () => unknown): string | null => {
+  try {
+    fn();
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+};
+
+const files = {
+  textkit: join(ROOT, "node_modules/@react-pdf/textkit/lib/textkit.js"),
+  render: join(ROOT, "node_modules/@react-pdf/render/lib/index.js"),
+};
+
+console.log("\n· 1 · Versiones instaladas = revisadas");
+for (const [name, pkg] of [["@react-pdf/textkit", "textkit"], ["@react-pdf/render", "render"]] as const) {
+  const v = JSON.parse(readFileSync(join(ROOT, "node_modules", name, "package.json"), "utf8")).version;
+  ok(`${name} ${v} (revisada: ${patch.REVIEWED[name]})`, v === patch.REVIEWED[name], `subida sin revisar la corrección: revisa lib/pdf/engine-patch/patch.cjs`);
+}
+
+console.log("\n· 2 · La corrección se aplica a los archivos instalados");
+for (const [k, file] of Object.entries(files)) {
+  const src = readFileSync(file, "utf8");
+  const err = throws(() => patch.patchEngineSource(file, src));
+  ok(`${k}: se corrige sin error`, err === null, err ?? "");
+  if (err) continue;
+  const out = patch.patchEngineSource(file, src);
+  ok(`${k}: lleva la marca «${patch.MARK}»`, out.includes(patch.MARK) && out.includes("__bcpPdfEnginePatch"));
+  if (k === "textkit") {
+    ok("textkit: reorderLine sustituida (L2 sobre runs, ActualText lógico)", out.includes("bcpActualText: logical") && !out.includes("getItemAtIndex(line.runs, 'glyphs', index)"));
+    ok("textkit: slice$1 empieza en el primer glifo del grupo (E7)", out.includes("run.glyphIndices.indexOf(run.glyphIndices[lastStart])"));
+    ok("textkit: resolveRunYOffset suma el desplazamiento vertical de cada glifo (E10)", out.includes("yOffset: (p.yOffset || 0) + yOffset"));
+  } else {
+    ok("render: xOffset/yOffset escalados (E6)", out.includes("xOffset: pos.xOffset * scale,") && out.includes("yOffset: pos.yOffset * scale,"));
+    ok("render: ActualText alrededor de la línea (D2)", out.includes("ctx.markContent('Span', { actual: bcpActualText })") && out.includes("ctx.endMarkedContent();"));
+  }
+  ok(`${k}: otro archivo no se toca`, patch.patchEngineSource(join(ROOT, "node_modules/@react-pdf/layout/lib/index.js"), "x") === "x");
+}
+
+console.log("\n· 3 · Versión distinta o texto cambiado → error claro al cargar");
+{
+  const tmp = mkdtempSync(join(tmpdir(), "pdf-engine-"));
+  try {
+    const fake = (pkg: string, version: string, srcFile: string, mutate?: (s: string) => string) => {
+      const dir = join(tmp, version, "node_modules/@react-pdf", pkg);
+      mkdirSync(join(dir, "lib"), { recursive: true });
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: `@react-pdf/${pkg}`, version }));
+      const target = join(dir, "lib", pkg === "textkit" ? "textkit.js" : "index.js");
+      copyFileSync(srcFile, target);
+      if (mutate) writeFileSync(target, mutate(readFileSync(target, "utf8")));
+      return target;
+    };
+    const t1 = fake("textkit", "6.4.0", files.textkit);
+    const e1 = throws(() => patch.patchEngineSource(t1, readFileSync(t1, "utf8")));
+    ok("textkit 6.4.0 → error que nombra la versión y la corrección", !!e1 && e1.includes("6.4.0") && e1.includes("6.3.0") && e1.includes("lib/pdf/engine-patch/patch.cjs"), e1 ?? "no falló");
+    const r1 = fake("render", "4.6.0", files.render);
+    const e2 = throws(() => patch.patchEngineSource(r1, readFileSync(r1, "utf8")));
+    ok("render 4.6.0 → error claro", !!e2 && e2.includes("4.6.0") && e2.includes("4.5.1"), e2 ?? "no falló");
+    const t3 = fake("textkit", "6.3.0", files.textkit, (s) => s.replace("Object.assign({}, p, { yOffset })", "Object.assign({}, p, { yOffset: yOffset })"));
+    const e5 = throws(() => patch.patchEngineSource(t3, readFileSync(t3, "utf8")));
+    ok("textkit con resolveRunYOffset cambiada → error claro (E10)", !!e5 && e5.includes("resolveRunYOffset"), e5 ?? "no falló");
+    const t2 = fake("textkit", "6.3.0", files.textkit, (s) => s.replace("const reorderLine = (line) => {", "const reorderLine = (line, x) => {"));
+    const e3 = throws(() => patch.patchEngineSource(t2, readFileSync(t2, "utf8")));
+    ok("misma versión con el texto cambiado → error claro", !!e3 && e3.includes("reorderLine"), e3 ?? "no falló");
+    const r2 = fake("render", "4.5.1", files.render, (s) => s.replace("xOffset: pos.xOffset,", "xOffset: pos.xOffset ,"));
+    const e4 = throws(() => patch.patchEngineSource(r2, readFileSync(r2, "utf8")));
+    ok("render con renderGlyphs cambiada → error claro", !!e4 && e4.includes("renderGlyphs"), e4 ?? "no falló");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+console.log("\n· 4 · Servidor Next: hook en tiempo de ejecución (proceso e hilo) y loader de reserva");
+{
+  const ext = JSON.parse(readFileSync(join(ROOT, "node_modules/next/dist/lib/server-external-packages.json"), "utf8")) as string[];
+  ok("Next deja @react-pdf/renderer fuera del bundle (por eso el hook de ejecución)", ext.includes("@react-pdf/renderer"));
+  const instr = readFileSync(join(ROOT, "instrumentation.ts"), "utf8");
+  ok("instrumentation.ts instala el hook en el runtime de Node", /NEXT_RUNTIME === "nodejs"/.test(instr) && /installPdfEngineHook\(/.test(instr));
+  const worker = readFileSync(join(ROOT, "lib/pdf/catalog/render-worker.ts"), "utf8");
+  const firstImport = worker.match(/^import [^\n]+$/m)?.[0] ?? "";
+  ok("render-worker.ts: la PRIMERA importación instala el hook (antes de @react-pdf)", firstImport === 'import "../engine-patch/install-worker";', firstImport);
+  // Proceso limpio: sin el hook de los scripts.
+  const { execFileSync } = await import("node:child_process");
+  const probe = `
+    const { installPdfEngineHook } = await import(${JSON.stringify(join(ROOT, "lib/pdf/engine-patch/install.ts"))});
+    const before = globalThis.__bcpPdfEnginePatch ?? null;
+    const how = installPdfEngineHook(${JSON.stringify(ROOT)});
+    const again = installPdfEngineHook(${JSON.stringify(ROOT)});
+    await import("@react-pdf/renderer");
+    console.log(JSON.stringify({ before, how, again, after: globalThis.__bcpPdfEnginePatch ?? null }));`;
+  let res: { before: unknown; how: string; again: string; after: Record<string, string> | null } | null = null;
+  try {
+    const out = execFileSync(process.execPath, ["--experimental-strip-types", "--no-warnings", "--input-type=module", "-e", probe], { cwd: ROOT, env: { PATH: process.env.PATH ?? "" }, encoding: "utf8" });
+    res = JSON.parse(out.trim().split("\n").pop()!);
+  } catch (e) {
+    ok("proceso limpio: instalar el hook y cargar @react-pdf", false, e instanceof Error ? e.message.slice(0, 300) : String(e));
+  }
+  if (res) {
+    ok("proceso limpio: sin hook, el motor no está corregido", res.before === null);
+    ok(`proceso limpio: installPdfEngineHook → «${res.how}», una sola vez («${res.again}»)`, res.how === "register" && res.again === "already");
+    ok("proceso limpio: tras instalarlo, @react-pdf se carga corregido (textkit y render)", !!res.after?.textkit && !!res.after?.render, JSON.stringify(res.after));
+  }
+  const tk = readFileSync(files.textkit, "utf8");
+  ok("la corrección es idempotente (un código ya corregido no se toca)", patch.patchEngineSource(files.textkit, patch.patchEngineSource(files.textkit, tk)) === patch.patchEngineSource(files.textkit, tk));
+  const nextConfig = (await import("../next.config.ts")).default as { webpack: (c: unknown, o: { isServer: boolean }) => { module: { rules: Array<{ test: RegExp; enforce?: string; use: Array<{ loader: string }> }> } } };
+  for (const isServer of [true, false]) {
+    const cfg = nextConfig.webpack({ module: { rules: [] }, output: {} }, { isServer });
+    const rule = cfg.module.rules.find((r) => r.use?.some((u) => u.loader.endsWith("webpack-loader.cjs")));
+    ok(`${isServer ? "servidor" : "navegador"}: regla con el loader, enforce «pre»`, !!rule && rule.enforce === "pre");
+    if (!rule) continue;
+    ok(`${isServer ? "servidor" : "navegador"}: casa con textkit y render instalados, no con otros`, rule.test.test(files.textkit) && rule.test.test(files.render) && !rule.test.test(join(ROOT, "node_modules/@react-pdf/layout/lib/index.js")));
+    const loader = require(rule.use[0].loader) as (this: { resourcePath: string; cacheable(): void }, s: string) => string;
+    const out = loader.call({ resourcePath: files.textkit, cacheable() {} }, readFileSync(files.textkit, "utf8"));
+    ok(`${isServer ? "servidor" : "navegador"}: el loader corrige textkit`, out.includes(patch.MARK));
+  }
+  const src = readFileSync(join(ROOT, "lib/pdf/catalog/render-in-worker.ts"), "utf8");
+  ok("el hilo del PDF es un chunk de webpack (new Worker(new URL(…)))", /new Worker\(new URL\("\.\/render-worker\.ts", import\.meta\.url\)/.test(src));
+  const cfgSrc = readFileSync(join(ROOT, "next.config.ts"), "utf8");
+  ok("next.config.ts no añade @react-pdf a serverExternalPackages (el loader de reserva sigue valiendo si Next lo compila)", !/serverExternalPackages:[\s\S]*@react-pdf[\s\S]*\],/.test(cfgSrc.split("webpack(")[0]));
+}
+
+console.log("\n· 5 · Motor corregido en ejecución: árabe, hebreo y ActualText");
+{
+  const marks = pdfEnginePatchMarks();
+  ok("marca en tiempo de ejecución (textkit y render)", !!marks.textkit && !!marks.render, JSON.stringify(marks));
+  ok("assertPdfEnginePatched no lanza", throws(() => assertPdfEnginePatched()) === null);
+  const F = (n: string) => join(ROOT, "lib/pdf/fonts", n);
+  Font.register({ family: "TNaskh", fonts: [{ src: F("noto-naskh-arabic-arabic-400-normal.woff") }] });
+  Font.register({ family: "TNaskhL", fonts: [{ src: F("noto-naskh-arabic-latin-400-normal.woff") }] });
+  Font.register({ family: "THeb", fonts: [{ src: F("noto-sans-hebrew-hebrew-400-normal.woff") }] });
+  Font.register({ family: "THebL", fonts: [{ src: F("noto-sans-hebrew-latin-400-normal.woff") }] });
+  Font.register({ family: "TInter", fonts: [{ src: F("inter-latin-400-normal.woff") }] });
+  // Las 6 palabras que tiraban el motor sin corregir (E3) y una frase con
+  // cifras, paréntesis y € (E2, espejado de signos).
+  const ar = "أعددنا إلى آخر شيء شخصياً ياً · شقة مشرقة في حي سالامانكا (مدريد) بسعر 1,450,000 €";
+  const he = "דירה מוארת בשכונת סלמנקה (מדריד) במחיר 1,450,000 € ונוף";
+  const lat = "Piso luminoso en Salamanca (Madrid) por 1.450.000 €";
+  const doc = h(Document, null, h(Page, { size: "A4", style: { padding: 40 } },
+    h(Text, { style: { fontFamily: ["TNaskh", "TNaskhL"], direction: "rtl", textAlign: "right", fontSize: 12 } }, ar),
+    h(Text, { style: { fontFamily: ["THeb", "THebL"], direction: "rtl", textAlign: "right", fontSize: 12, marginTop: 12 } }, he),
+    h(Text, { style: { fontFamily: "TInter", fontSize: 12, marginTop: 12 } }, lat),
+  ));
+  let buf: Buffer | null = null;
+  try {
+    buf = await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]);
+  } catch (e) {
+    ok("árabe y hebreo se maquetan", false, e instanceof Error ? e.message : String(e));
+  }
+  if (buf) {
+    ok("árabe y hebreo se maquetan (sin «reading 'id'»)", buf.length > 1000);
+    const r = readPdf(buf);
+    const actual = r.pages[0].actual.map((s) => s.trim());
+    ok("árabe: ActualText = el texto lógico exacto (letras, paréntesis, cifras)", actual.includes(ar), JSON.stringify(actual));
+    ok("hebreo: ActualText = el texto lógico exacto", actual.includes(he), JSON.stringify(actual));
+    ok("latino: ninguna marca ActualText (los PDF LTR no cambian)", actual.length === 2 && r.pages[0].text.includes(lat), JSON.stringify({ actual: actual.length, text: r.pages[0].text }));
+    const raw = buf.toString("latin1");
+    // E10: los puntos del árabe se colocan también en vertical (GPOS): hay
+    // glifos con un Tm cuya y no es la de la línea.
+    const ys = new Set<string>();
+    for (const m of buf.toString("latin1").matchAll(/stream\r?\n([\s\S]*?)endstream/g)) {
+      try {
+        const c = (await import("node:zlib")).inflateSync(Buffer.from(m[1], "latin1")).toString("latin1");
+        for (const t of c.matchAll(/1 0 0 1 [-\d.]+ ([-\d.]+) Tm/g)) ys.add(t[1]);
+      } catch {
+        /* no es un flujo de contenido */
+      }
+    }
+    ok(`árabe: los puntos llevan su desplazamiento vertical de la fuente (E10: ${ys.size} alturas de glifo distintas)`, ys.size > 3, [...ys].slice(0, 6).join(" "));
+    ok("el flujo usa /Span << /ActualText … >> BDC … EMC", (r.pages[0].actual.length === 2) && !/\/ActualText/.test(raw.replace(/stream[\s\S]*?endstream/g, "")));
+  }
+}
+
+console.log(fails ? `\n❌ ${fails} fallo(s)` : "\n✅ corrección del motor de PDF: versiones, carga, next.config y ActualText en orden");
+process.exit(fails ? 1 : 0);

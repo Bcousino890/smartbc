@@ -2,7 +2,7 @@
 // catálogo de las fixtures por el MISMO camino que el servidor (captura fija,
 // fotos por clave, documento y comprobación final), sin servidor HTTP.
 //   NODE_ENV=development CATALOG_FIXTURES=1 node --experimental-strip-types \
-//     --import ./scripts/node-ts-loader.mjs scripts/pdf/render-fixture.mts <token|owner:<id>> <salida.pdf>
+//     --import ./scripts/node-ts-loader.mjs --import ./scripts/pdf/engine-patch-hook.mjs scripts/pdf/render-fixture.mts <token|owner:<id>> <salida.pdf>
 import { writeFileSync } from "node:fs";
 import { exportCatalogPdf } from "../../lib/catalogs/export/generate.ts";
 import { FIXTURE_TOKENS } from "../../lib/catalogs/fixture-store.ts";

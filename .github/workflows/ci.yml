@@ -77,6 +77,11 @@ jobs:
       # el español exactamente como antes. Sin BD, red ni IA.
       - name: "Catálogos (idiomas, offline)"
         run: npm run test:catalogs-i18n
+      # PR5 (DA35, N2, N3, D2, D4): el PDF real de las fixtures en los 8 idiomas,
+      # leído con un lector propio que respeta ActualText: etiquetas del idioma,
+      # contenido completo, índice a la página real, fuentes y glifos por idioma.
+      - name: "Catálogos (PDF en 8 idiomas, offline)"
+        run: npm run test:catalogs-pdf-i18n
       # 0226 (PR6): traducciones preparadas y revisadas con IA FALSA que cuenta llamadas (reserva, incierto, N5, DA34). Sin BD.
       - name: "Catálogos (traducciones, offline)"
         run: npm run test:catalogs-translations
@@ -87,6 +92,16 @@ jobs:
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
         run: npm run test:pdf-extract
+      # PR5 (N3): las fuentes de lib/pdf/fonts están en su README con su sha256
+      # y traen los glifos de cada idioma (es/tr/fr/ar/he), leído con fontkit. Sin red.
+      - name: "PDF del catálogo: fuentes y cobertura de glifos (offline)"
+        run: npm run test:pdf-fonts
+      # PR5 (D1, D2): la corrección local del motor de PDF (lib/pdf/engine-patch)
+      # se aplica a las versiones revisadas de @react-pdf, falla con un error claro
+      # si cambian, está en next.config (también el hilo del PDF) y guarda el
+      # texto lógico (ActualText) en árabe y hebreo. Sin red.
+      - name: "PDF del catálogo: corrección local del motor (offline)"
+        run: npm run test:pdf-engine
       - name: "Catálogos: buscador (filtros, URL, texto y planta, paginación; offline)"
         run: npm run test:catalog-search
       - name: "Propiedades: filtro de la lista (caracterización) y búsqueda por referencia (offline)"

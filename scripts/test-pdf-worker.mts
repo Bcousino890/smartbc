@@ -1,7 +1,7 @@
 // PDF del catálogo · pruebas del HILO de maquetación (expediente
 // 2026-10-17-bcp-01-pdf-worker), con el hilo real y las fixtures sintéticas.
 //   NODE_ENV=development CATALOG_FIXTURES=1 node --experimental-strip-types \
-//     --import ./scripts/node-ts-loader.mjs scripts/test-pdf-worker.mts
+//     --import ./scripts/node-ts-loader.mjs --import ./scripts/pdf/engine-patch-hook.mjs scripts/test-pdf-worker.mts
 import { captureFixed } from "../lib/catalogs/export/capture.ts";
 import { exportCatalogPdf, exportStats, photoNeeds } from "../lib/catalogs/export/generate.ts";
 import { loadExportPhoto } from "../lib/catalogs/export/photos.ts";

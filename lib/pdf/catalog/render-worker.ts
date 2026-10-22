@@ -1,8 +1,12 @@
+// PR5 (D1): PRIMERA importación del hilo: instala la corrección del motor de
+// PDF antes de que se cargue @react-pdf (que Next deja fuera del bundle).
+import "../engine-patch/install-worker";
 import { existsSync } from "node:fs";
 import { parentPort, workerData } from "node:worker_threads";
 import { getHeapStatistics } from "node:v8";
 import { catalogFontFiles, registerCatalogFonts } from "./fonts";
 import { IndexUnstableError, renderCatalogPdf } from "./render";
+import { PdfEngineUnpatchedError } from "../engine-patch/assert";
 import type { PdfPhoto } from "./document";
 import type { WorkerData, WorkerMessage, WorkerRenderRequest } from "./worker-protocol";
 
@@ -48,6 +52,8 @@ if (port) {
         const out = pdf.byteOffset === 0 && pdf.byteLength === pdf.buffer.byteLength ? (pdf.buffer as ArrayBuffer) : pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength);
         post({ type: "done", pdf: out as ArrayBuffer, passes, ms: Math.round(performance.now() - t0), heapUsedMB: MB(heap.used_heap_size), heapTotalMB: MB(heap.total_heap_size) }, [out as ArrayBuffer]);
       } catch (err) {
+        // PR5 (D1): un motor sin la corrección local se dice tal cual en el log.
+        if (err instanceof PdfEngineUnpatchedError) console.error(`[catalogos] ${err.message}`);
         post({ type: "error", code: err instanceof IndexUnstableError ? "index_unstable" : "render_failed" });
       }
     });

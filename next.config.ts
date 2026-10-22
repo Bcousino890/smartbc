@@ -1,4 +1,18 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+
+// Corrección local del motor de PDF (BCP-01 ampliación, PR5, decisión D1).
+// Hoy Next deja @react-pdf/renderer FUERA del bundle del servidor (su lista
+// por defecto de serverExternalPackages), así que la corrección la aplica un
+// hook de carga de Node que instalan instrumentation.ts (proceso) y
+// lib/pdf/catalog/render-worker.ts (hilo del PDF). Este loader es la RESERVA:
+// si algún día Next compila @react-pdf dentro del bundle, la misma corrección
+// se aplica al compilar, y si la versión no es la revisada el build falla.
+// Next carga este archivo como CommonJS (__dirname existe); las pruebas en Node
+// lo importan como ESM desde la raíz del repositorio.
+const CONFIG_DIR = typeof __dirname === "string" ? __dirname : process.cwd();
+const PDF_ENGINE_PATCH_LOADER = path.join(CONFIG_DIR, "lib", "pdf", "engine-patch", "webpack-loader.cjs");
+const PDF_ENGINE_FILES = /[\\/]@react-pdf[\\/](?:textkit[\\/]lib[\\/]textkit|render[\\/]lib[\\/]index)\.js$/;
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -41,6 +55,9 @@ const nextConfig: NextConfig = {
   // como «sin valor» y vuelve al publicPath. Solo afecta a los hilos del servidor.
   webpack(config, { isServer }) {
     if (isServer) config.output = { ...config.output, workerPublicPath: "./" };
+    // PR5 (D1), reserva: ver PDF_ENGINE_PATCH_LOADER arriba. `enforce: "pre"`:
+    // el loader recibe el código tal cual lo publica el paquete.
+    config.module.rules.push({ test: PDF_ENGINE_FILES, enforce: "pre", use: [{ loader: PDF_ENGINE_PATCH_LOADER }] });
     return config;
   },
   async redirects() {

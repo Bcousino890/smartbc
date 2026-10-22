@@ -141,7 +141,8 @@ export function CatalogReader({
   const [unavailable, setUnavailable] = useState(false);
   const [connectivity, setConnectivity] = useState<Connectivity>("connecting");
   // PDF: solo con conexión (el enlace no válido ya sustituye todo el lector).
-  const readerPdf = useReaderPdf(token);
+  // Avisos de la descarga en el idioma del enlace (este hook va fuera del proveedor).
+  const readerPdf = useReaderPdf(token, readerLangOf(state.catalog.lang).dict);
   const pdf = connectivity === "offline" ? null : readerPdf;
   const [userScroll, setUserScroll] = useState(false);
   // Opiniones guardadas de este enlace personal, por clave de vivienda.

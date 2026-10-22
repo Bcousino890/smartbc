@@ -1,6 +1,8 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { catalogDocument, type CatalogPdfInput } from "./document";
 import { freshCatalogFonts } from "./fonts";
+import { assertPdfEnginePatched } from "../engine-patch/assert";
+import { isRtl } from "@/lib/catalogs/i18n";
 
 // ============================================================================
 // PDF del catálogo · renderizado con el índice en dos pasadas (P7, T1): la
@@ -23,6 +25,7 @@ export async function renderCatalogPdf(
   input: Omit<CatalogPdfInput, "pageOf" | "onPage">,
   opts: { root?: string; beforePass?: () => void } = {},
 ): Promise<{ pdf: Buffer; pageOf: Map<string, number>; passes: number }> {
+  if (isRtl(input.catalog.lang)) assertPdfEnginePatched();
   let pageOf: Map<string, number> | undefined;
   for (let pass = 1; pass <= 3; pass++) {
     opts.beforePass?.();
