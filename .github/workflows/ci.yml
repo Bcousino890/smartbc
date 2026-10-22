@@ -77,6 +77,11 @@ jobs:
       # el español exactamente como antes. Sin BD, red ni IA.
       - name: "Catálogos (idiomas, offline)"
         run: npm run test:catalogs-i18n
+      # PR5 (DA35, N2, N3, D2, D4): el PDF real de las fixtures en los 8 idiomas,
+      # leído con un lector propio que respeta ActualText: etiquetas del idioma,
+      # contenido completo, índice a la página real, fuentes y glifos por idioma.
+      - name: "Catálogos (PDF en 8 idiomas, offline)"
+        run: npm run test:catalogs-pdf-i18n
       # PR7a: variantes por ancho del proxy, srcset de la portada y anchos del PDF (sharp sobre fotos sintéticas). Sin BD.
       - name: "Catálogos (resolución de fotos, offline)"
         run: npm run test:catalogs-photos

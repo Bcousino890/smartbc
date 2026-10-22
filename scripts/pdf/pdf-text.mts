@@ -14,11 +14,15 @@
 // No es un lector general: solo lo que pdfkit genera (Flate, Type0/Identity-H,
 // objetos sin comprimir en flujos de objetos).
 import { inflateSync } from "node:zlib";
+import * as fontkit from "fontkit";
+import { readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 type Obj = { head: string; stream: Buffer | null };
 export type PdfPiece = { x: number; y: number; end: number; text: string; actual: boolean };
 export type PdfPage = { n: number; text: string; pieces: PdfPiece[]; actual: string[]; links: { toPage?: number; url?: string }[] };
-export type PdfRead = { pages: PdfPage[]; fonts: { name: string; embedded: boolean }[]; lang: string | null; info: Record<string, string> };
+export type PdfRead = { pages: PdfPage[]; fonts: { name: string; embedded: boolean; chars: string; glyphs: number; unmapped: number[] }[]; lang: string | null; info: Record<string, string> };
 
 // ── Objetos ─────────────────────────────────────────────────────────────────
 function readObjects(buf: Buffer): Map<number, Obj> {
@@ -160,9 +164,12 @@ const I: M = [1, 0, 0, 1, 0, 0];
 
 type FontInfo = { toUni: Map<number, string>; widths: Map<number, number> };
 
+/** Las ligaduras latinas (ﬁ, ﬂ…) se leen como sus letras, como hace PDFKit. */
+const LIGATURES: Record<string, string> = { "\uFB00": "ff", "\uFB01": "fi", "\uFB02": "fl", "\uFB03": "ffi", "\uFB04": "ffl", "\uFB05": "st", "\uFB06": "st" };
+
 function parseCMap(src: string): Map<number, string> {
   const map = new Map<number, string>();
-  const hexStr = (h: string) => { let s = ""; for (let i = 0; i < h.length; i += 4) s += String.fromCharCode(parseInt(h.slice(i, i + 4), 16)); return s; };
+  const hexStr = (h: string) => { let s = ""; for (let i = 0; i < h.length; i += 4) s += String.fromCharCode(parseInt(h.slice(i, i + 4), 16)); return s.replace(/[\uFB00-\uFB06]/g, (c) => LIGATURES[c]); };
   for (const block of src.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
     for (const m of block[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) map.set(parseInt(m[1], 16), hexStr(m[2]));
   }
@@ -192,6 +199,37 @@ function parseWidths(w: string): Map<number, number> {
   return out;
 }
 
+const FONT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "lib", "pdf", "fonts");
+type KFont = { postscriptName: string; unitsPerEm: number; layout(s: string): { glyphs: { advanceWidth: number; bbox: Bbox }[] }; getGlyph(id: number): { advanceWidth: number; bbox: Bbox } };
+type Bbox = { minX: number; minY: number; maxX: number; maxY: number };
+const ligCache = new Map<string, { lig: string; adv: number; box: string }[]>();
+const boxKey = (b: Bbox) => [b.minX, b.minY, b.maxX, b.maxY].map((v) => Math.round(v)).join(",");
+/** La ligadura cuya anchura y caja coinciden con el glifo `gid` del subconjunto. */
+function ligatureOf(postscript: string, sub: KFont | null, gid: number, width: number): string | null {
+  if (!ligCache.has(postscript)) {
+    const list: { lig: string; adv: number; box: string }[] = [];
+    for (const f of readdirSync(FONT_DIR).filter((x) => x.endsWith(".woff"))) {
+      const font = (fontkit as unknown as { openSync(p: string): KFont }).openSync(join(FONT_DIR, f));
+      if (font.postscriptName !== postscript) continue;
+      for (const lig of ["ffi", "ffl", "ff", "fi", "fl"]) {
+        const g = font.layout(lig).glyphs;
+        if (g.length === 1) list.push({ lig, adv: Math.round((g[0].advanceWidth * 1000) / font.unitsPerEm), box: boxKey(g[0].bbox) });
+      }
+    }
+    ligCache.set(postscript, list);
+  }
+  let cands = ligCache.get(postscript)!.filter((c) => c.adv === Math.round(width));
+  if (cands.length > 1 && sub) {
+    try {
+      const box = boxKey(sub.getGlyph(gid).bbox);
+      cands = cands.filter((c) => c.box === box);
+    } catch {
+      return null;
+    }
+  }
+  return cands.length === 1 ? cands[0].lig : null;
+}
+
 export function readPdf(buf: Buffer): PdfRead {
   const objs = readObjects(buf);
   const get = (n: number | null) => (n === null ? undefined : objs.get(n));
@@ -219,16 +257,44 @@ export function readPdf(buf: Buffer): PdfRead {
     const tu = get(ref(o.head, "ToUnicode"));
     const desc = get(Number(o.head.match(/\/DescendantFonts \[(\d+) 0 R/)?.[1] ?? -1));
     const info: FontInfo = { toUni: tu?.stream ? parseCMap(tu.stream.toString("latin1")) : new Map(), widths: desc ? parseWidths(desc.head.match(/\/W (\[[\s\S]*?\]\s*\])/)?.[1] ?? "[]") : new Map() };
+    // pdfkit no escribe en el ToUnicode las ligaduras que pinta textkit (la
+    // «ﬁ» de Playfair: «La finca» se extrae «La nca» con un lector que solo
+    // mire el ToUnicode; pasa igual en main y en el PDF español de siempre).
+    // PDFKit de macOS la reconoce. Aquí se identifica por su anchura entre
+    // las ligaduras de la misma fuente del repositorio (lib/pdf/fonts).
+    const base = (o.head.match(/\/BaseFont \/(?:[A-Z]{6}\+)?([^\s/]+)/)?.[1] ?? "").replace(/-(Latin|LatinExt)$/, "");
+    const missing = [...info.widths].filter(([gid]) => gid !== 0 && !info.toUni.has(gid));
+    if (missing.length) {
+      const ff = get(ref(get(ref(desc?.head ?? "", "FontDescriptor"))?.head ?? "", "FontFile2"));
+      let sub: KFont | null = null;
+      try {
+        sub = ff?.stream ? (fontkit as unknown as { create(b: Buffer): KFont }).create(ff.stream) : null;
+      } catch {
+        sub = null;
+      }
+      for (const [gid, w] of missing) {
+        const lig = ligatureOf(base, sub, gid, w);
+        if (lig) info.toUni.set(gid, lig);
+      }
+    }
     fontCache.set(n, info);
     return info;
   };
-  const fonts = [...objs.values()]
-    .filter((o) => /\/Type \/Font\b/.test(o.head) && !/\/Subtype \/CIDFontType2/.test(o.head))
-    .map((o) => {
+  // Glifos pintados con cada fuente (objeto → nº), para no contar una fuente
+  // que solo se selecciona (pdfkit deja un «/F1 8 Tf» de Helvetica sin glifos
+  // en el salto de línea de un texto).
+  const used = new Map<number, number>();
+  const unmapped = new Map<number, number[]>();
+  const fontList = () => [...objs.entries()]
+    .filter(([, o]) => /\/Type \/Font\b/.test(o.head) && !/\/Subtype \/CIDFontType2/.test(o.head))
+    .map(([num, o]) => {
       const name = o.head.match(/\/BaseFont \/([^\s/]+)/)?.[1] ?? "?";
       const desc = get(Number(o.head.match(/\/DescendantFonts \[(\d+) 0 R/)?.[1] ?? -1));
       const fd = get(ref(desc?.head ?? o.head, "FontDescriptor"));
-      return { name, embedded: !!fd && /\/FontFile[23]? \d+ 0 R/.test(fd.head) };
+      const tu = get(ref(o.head, "ToUnicode"));
+      // Los caracteres que pinta (según su ToUnicode): para saber qué sale de cada fuente.
+      const chars = tu?.stream ? [...new Set([...parseCMap(tu.stream.toString("latin1")).values()].join(""))].sort().join("") : "";
+      return { name, embedded: !!fd && /\/FontFile[23]? \d+ 0 R/.test(fd.head), chars, glyphs: used.get(num) ?? 0, unmapped: [...new Set(unmapped.get(num) ?? [])] };
     });
   const info: Record<string, string> = {};
   const infoObj = [...objs.values()].find((o) => /\/Producer\b/.test(o.head) && /\/Creator\b/.test(o.head));
@@ -249,6 +315,7 @@ export function readPdf(buf: Buffer): PdfRead {
     const stack: M[] = [];
     let tm: M = I;
     let font: FontInfo | null = null;
+    let fontNum = -1;
     let size = 0;
     const args: Tok[] = [];
     // Pila de contenido marcado: el ActualText abierto (si lo hay).
@@ -263,7 +330,7 @@ export function readPdf(buf: Buffer): PdfRead {
         case "cm": ctm = mul(nums() as M, ctm); break;
         case "BT": tm = I; break;
         case "Tm": tm = nums() as M; break;
-        case "Tf": font = fontRefs.has(args[0].v) ? fontInfo(fontRefs.get(args[0].v)!) : null; size = Number(args[1].v); break;
+        case "Tf": fontNum = fontRefs.get(args[0].v) ?? -1; font = fontNum >= 0 ? fontInfo(fontNum) : null; size = Number(args[1].v); break;
         case "Tj":
         case "TJ": {
           if (!font) break;
@@ -278,6 +345,8 @@ export function readPdf(buf: Buffer): PdfRead {
               const gid = parseInt(raw.slice(k, k + 4), 16);
               if (Number.isNaN(gid)) continue;
               text += font.toUni.get(gid) ?? "";
+              if (!font.toUni.has(gid)) unmapped.set(fontNum, [...(unmapped.get(fontNum) ?? []), gid]);
+              used.set(fontNum, (used.get(fontNum) ?? 0) + 1);
               adv += ((font.widths.get(gid) ?? 0) / 1000) * size;
             }
           }
@@ -335,5 +404,5 @@ export function readPdf(buf: Buffer): PdfRead {
       });
     return { n: idx + 1, text, pieces, actual, links };
   });
-  return { pages, fonts, lang: lang ? pdfString(lang) : null, info };
+  return { pages, fonts: fontList(), lang: lang ? pdfString(lang) : null, info };
 }

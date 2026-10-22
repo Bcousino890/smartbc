@@ -308,7 +308,8 @@ function snap(over: Partial<InternalSnapshot> = {}): InternalSnapshot {
   const fonts = readFileSync(new URL("../components/catalogs/reader/fonts.ts", import.meta.url), "utf8");
   ok(/Noto_Naskh_Arabic\(/.test(fonts) && /Frank_Ruhl_Libre\(/.test(fonts) && /Noto_Sans_Hebrew\(/.test(fonts) && /next\/font\/google/.test(fonts), "fonts.ts: Noto Naskh Arabic, Frank Ruhl Libre y Noto Sans Hebrew por next/font (N3)");
   const gen = readFileSync(new URL("../lib/catalogs/export/generate.ts", import.meta.url), "utf8");
-  ok((gen.match(/toPublicCatalog\([^)]*"es"\)/g) ?? []).length === 2, "generate.ts: el PDF sigue en español (PR5 lo cambia)");
+  // PR5: el PDF va en el idioma del token (el de la instantánea), nunca forzado a «es».
+  ok((gen.match(/toPublicCatalog\([^)]*"es"\)/g) ?? []).length === 0 && (gen.match(/toPublicCatalog\(cap\.snapshot, cap\.operation\)|toPublicCatalog\(snapshot, operation\)/g) ?? []).length === 2 && /pdfFileName\(catalog\.title, cap\.capturedAt, catalog\.lang\)/.test(gen), "generate.ts: el PDF en el idioma del token (PR5)");
   const mig = readFileSync(new URL("../supabase/migrations/0223_catalog_languages.sql", import.meta.url), "utf8");
   ok(/CHECK \(default_lang IN \('es','en','fr','it','de','ar','tr','he'\)\)/.test(mig), "0223: la misma lista de idiomas que 0130/0134");
   ok(/jsonb_build_object\('lang', coalesce\(p_lang, 'es'\)\)/.test(mig), "0223: «lang» entra en la instantánea (y en la huella)");
