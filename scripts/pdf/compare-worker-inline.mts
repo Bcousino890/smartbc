@@ -19,6 +19,7 @@ import { loadLogoDataUri } from "../../lib/pdf/load-logo.ts";
 import { renderCatalogPdf } from "../../lib/pdf/catalog/render.ts";
 import { catalogPdfWorkerStats, renderCatalogInWorker } from "../../lib/pdf/catalog/render-in-worker.ts";
 import { comparePdfs, createChecker, ensureInspect } from "./pdf-verify.mts";
+import { translateFixtureCatalog } from "./pdf-translations.mts";
 
 const OUT = resolve(process.argv[2] ?? "node_modules/.cache/pdf-compare");
 mkdirSync(OUT, { recursive: true });
@@ -35,10 +36,12 @@ const CASES: Array<[string, string, (() => Promise<void>) | null]> = [
   ["journey", FIXTURE_TOKENS.journey, null],
   ["journey24", FIXTURE_TOKENS.journey24, null],
   ["empty", FIXTURE_TOKENS.empty, null],
-  // PR5: también en árabe y hebreo (el hilo lleva la misma corrección del motor).
-  ["pdf-ar", FIXTURE_TOKENS.pdf, async () => void (await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS.pdf, lang: "ar" } as never))],
-  ["pdf-he", FIXTURE_TOKENS.pdf, async () => void (await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS.pdf, lang: "he" } as never))],
-  ["main-tr", FIXTURE_TOKENS.main, async () => void (await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS.main, lang: "tr" } as never))],
+  // PR5: también en árabe, hebreo y turco con contenido traducido (PR6) y un
+  // caso N5 (el hilo lleva la misma corrección del motor).
+  ["pdf-ar", FIXTURE_TOKENS.pdf, async () => void (await translateFixtureCatalog(FIXTURE_TOKENS.pdf, "ar"))],
+  ["pdf-he", FIXTURE_TOKENS.pdf, async () => void (await translateFixtureCatalog(FIXTURE_TOKENS.pdf, "he"))],
+  ["main-tr", FIXTURE_TOKENS.main, async () => void (await translateFixtureCatalog(FIXTURE_TOKENS.main, "tr"))],
+  ["pdf-ar-n5", FIXTURE_TOKENS.pdf, async () => void (await translateFixtureCatalog(FIXTURE_TOKENS.pdf, "ar", { skip: ["fxPdfDesc0002"] }))],
 ];
 for (const [tag, token, prep] of CASES) {
   section(`· ${tag}`);

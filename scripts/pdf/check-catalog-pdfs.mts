@@ -34,6 +34,8 @@ import { toPublicCatalog, type InternalSnapshot } from "../../lib/catalogs/to-pu
 import type { PublicCatalog } from "../../lib/catalogs/public-contract.ts";
 import { catalogPdfWorkerStats } from "../../lib/pdf/catalog/render-in-worker.ts";
 import { createChecker, ensureInspect, flat, inspect, objects, tokens, verifyCatalogPdf } from "./pdf-verify.mts";
+import { translateFixtureCatalog } from "./pdf-translations.mts";
+import { catalogDictionary } from "../../lib/catalogs/i18n.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const OUT = resolve(process.argv[2] ?? join(ROOT, "node_modules/.cache/pdf-check"));
@@ -195,15 +197,34 @@ section("· cambios a mitad (PDF8)");
   await fixtureMutate({ op: "reset" });
 }
 
-// PR5 · los demás idiomas por el mismo camino (captura, fotos, hilo).
-section("· 8 idiomas por el hilo (PR5, DA35)");
+// PR5 · los demás idiomas por el mismo camino (captura, fotos, hilo). Tras el
+// PR6, en dos situaciones: (a) con traducciones aprobadas y vigentes (escritas
+// a mano, pdf-translations.mts, por preparar → aprobar → activar) y (b) N5,
+// una vivienda sin traducción: su aviso del idioma y nada del español.
+section("· 8 idiomas por el hilo (PR5, DA35; contenido traducido y N5 del PR6)");
 for (const lang of ["en", "fr", "it", "de", "ar", "tr", "he"] as const) {
   for (const k of ["pdf", "main"] as const) {
     await fixtureMutate({ op: "reset" });
-    await fixtureMutate({ op: "lang", token: FIXTURE_TOKENS[k], lang } as never);
+    await translateFixtureCatalog(FIXTURE_TOKENS[k], lang);
     const r = await checkCase({ ...link(k), tag: `${k}-${lang}` });
     summary[`${k}-${lang}`] = { bytes: r.bytes, ms: r.ms, pages: r.pages };
+    ok(`${k}-${lang}: todo el contenido traducido (ninguna vivienda en N5)`, r.catalog.items.every((it) => !it.copyPending));
   }
+  // (b) N5 en «pdf»: la vivienda de la descripción larga sin traducción.
+  await fixtureMutate({ op: "reset" });
+  await translateFixtureCatalog(FIXTURE_TOKENS.pdf, lang, { skip: ["fxPdfDesc0002"] });
+  const spanish = await (async () => {
+    const cap = (await captureFixed(exportReaders(link("pdf").scope)))!;
+    return toPublicCatalog(cap.snapshot as InternalSnapshot, cap.operation, "es");
+  })();
+  const r = await checkCase({ ...link("pdf"), tag: `pdf-${lang}-n5` });
+  summary[`pdf-${lang}-n5`] = { bytes: r.bytes, ms: r.ms, pages: r.pages };
+  const d = catalogDictionary(lang);
+  const i = r.catalog.items.findIndex((it) => it.key === "fxPdfDesc0002");
+  const es = spanish.items[i];
+  const head = (t: string) => flat(t.split(/\s+/).slice(0, 8).join(" "));
+  ok(`pdf-${lang}-n5: «${d.descriptionPreparing}» en el PDF y la vivienda en N5`, !!r.catalog.items[i].copyPending && flat(r.text).includes(flat(d.descriptionPreparing)));
+  ok(`pdf-${lang}-n5: nada del español de esa vivienda (título ni ${es.copy.length} bloques)`, [es.title, ...es.copy.map((b) => b.text)].every((t) => !flat(r.text).includes(t.length > 60 ? head(t) : flat(t))));
 }
 await fixtureMutate({ op: "reset" });
 
