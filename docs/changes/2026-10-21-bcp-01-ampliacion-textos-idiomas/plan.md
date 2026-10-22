@@ -22,7 +22,7 @@ PR1 Biblioteca de textos ──► PR2 Zonas ──► PR3 Plantillas «Vivir en
                                                                        ├──► PR6 Traducciones
 PR4 Base multilingüe (sin IA) ──► PR5 PDF multilingüe y fuentes ───────┘
 PR7a Resolución de portada y PDF (independiente, pequeño)
-PR7b Acabado visual (tras aprobar las propuestas)
+PR7b Acabado visual (juicio visual delegado por Fabricio el 22-10-2026)
 ```
 
 ## PR1 · Biblioteca de textos aprobados y reutilización
@@ -140,15 +140,26 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 
 `srcset` en la portada del lector y anchos de foto del PDF acordes a su tamaño impreso (portada a página completa). Pruebas: cabecera de variante del proxy, peso por página y número de páginas del PDF iguales.
 
-## PR7b · Acabado visual (tras su aceptación visual)
+## PR7b · Acabado visual
 
-**Requisito previo:** comparación con **fotos reales de catálogos**: una luminosa, una realmente oscura y una normal, incluida la del ejemplo de Fabricio. Las tiene que aportar o señalar Fabricio, porque los agentes no acceden a fotos de producción. Tras esa comparación, aceptación visual de Fabricio del tratamiento concreto (N4).
+**Requisito previo (sustituido por decisión de Fabricio del 22-10-2026):** ~~comparación con fotos reales de catálogos aportadas por Fabricio y su aceptación visual del tratamiento concreto (N4)~~. Fabricio delega la selección de fotos y el juicio visual: fotos representativas dentro de los permisos existentes, criterio propio y un acabado **contenido**, con cualquier foto oscura de ejemplo rotulada «simulada». Sin más aprobación para decisiones estéticas rutinarias (spec.md DA30/N4).
 
 | Tarea | Contenido |
 | --- | --- |
 | 7.1 | Variante tratada en el servicio de fotos `/p` (parámetro propio, cacheada, original intacto), con la receta aceptada y medidas por foto. **Activación por catálogo** (desactivada por defecto en todos, también en los existentes) y opción por foto para quitarla (N4). |
 | 7.2 | Acabados CSS aprobados en apertura y portada; equivalentes vectoriales en el PDF. |
 | 7.3 | Pruebas: AC14, comparación de capturas de las dos pantallas (posiciones y tamaños iguales), contraste del título de portada ≥ 4,5:1 con fotos claras, altas luces quemadas no aumentan, rendimiento (peso por foto). |
+
+**Ajustes al implementar el PR7b (22-10-2026):**
+- **Decisión de Fabricio del 22-10-2026** (delega fotos y juicio visual): fotos usadas = `public/portal-hero.jpg` y `public/login-bg.jpg` (las únicas fotografías reales del repositorio), un recorte real de `login-bg` para el tono medio y una oscura **simulada** (`login-bg` a −1,7 EV), rotulada así en capturas y documentación.
+- **Migración 0227** (la 0225 queda sin usar). `catalogs.photo_finish` (apagado en todos) y, para «Sin acabado en esta foto», el tipo nuevo `no_finish` en `catalog_photo_prefs` (misma tabla, claves y limpieza que E3). Hubo que **redefinir `catalog_internal_snapshot`** (la de 0222): el ajuste por foto reutiliza la tabla de E3 y su lectura agrupaba todas las filas; ahora filtra por tipo, y `fin`/`pp.n` solo aparecen con el acabado activo. Apagado, instantánea y huella idénticas (probado en SQL).
+- **El acabado viaja en la ruta de la foto** (`&t=1`, la versión de la receta): el contrato público no gana campos; lector, miniaturas, portada, HOME, vista previa de Diseño y PDF saben si una foto va tratada por su ruta. El filete acompaña a la foto tratada (si la apertura o la portada están marcadas «sin acabado», tampoco llevan filete).
+- **Acabado contenido**: del acabado propuesto quedan el tono adaptativo y un filete interior de 1 px blanco translúcido en apertura y portada. **Fuera**: las esquinas doradas, el degradado inferior y la rebaja del velo plano (25 % → 8 %), para que el contraste del título no dependa del acabado.
+- **Contraluz**: una foto oscura con ventanas quemadas no se aclara (va con la receta luminosa: solo recupera altas luces). La receta oscura es solo para subexpuestas de verdad (media < 0,36 y P98 < 0,93).
+- **Dominante**: solo se corrige sobre superficies casi neutras (un cielo o un mar azules no son dominante), un 30 % de la desviación y como mucho un 3 % por canal.
+- **Autocomprobación**: cada receta se ensaya sobre la muestra con la que se mide y se suaviza (hasta tres veces) si incumple sus límites; si no hay forma, la foto queda sin cambio.
+- **Gestor**: en «Diseño», el interruptor «Acabado fotográfico»; en el panel de fotos de cada vivienda, la casilla «Sin acabado en esta foto» (solo con el acabado activo; las marcas se conservan al apagarlo). Las miniaturas de ese panel se ven tratadas cuando aplica.
+- Test nuevo en la CI `test:catalogs-finish` y QA en Chromium `fin-qa`.
 
 ## Decisiones rutinarias (las toma Claude y se anotan)
 
@@ -163,7 +174,7 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 
 ## Decisiones de producto pendientes
 
-- La aceptación visual del acabado con fotos reales (antes del PR7b).
+- ~~La aceptación visual del acabado con fotos reales (antes del PR7b).~~ Delegada por Fabricio el 22-10-2026 (spec.md DA30/N4).
 
 N1–N5 ya están cerradas (N5 el 22-10-2026).
 

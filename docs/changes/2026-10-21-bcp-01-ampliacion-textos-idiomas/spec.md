@@ -119,7 +119,7 @@ Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N5** (§6) 
 | | Decisión |
 | --- | --- |
 | **DA29** | Solo pulido de lo existente, sin cambios de estructura: exposición, contraste, color y acabados decorativos discretos (filetes, esquinas, degradados o sombras donde mejoren lo ya establecido). Fotos originales intactas y tratamiento desactivable. Sin subir el brillo en bloque. Antes de tratar una foto borrosa como un problema de estilo, se comprueban su resolución y su entrega. Sin alteración generativa: ni estancias, ni acabados, ni medidas, ni vistas, ni muebles. Legibilidad, estados de carga y error, y rendimiento intactos. |
-| **DA30** | Fabricio aprueba el tratamiento visual concreto **antes** de implementarlo. |
+| **DA30** | Fabricio aprueba el tratamiento visual concreto **antes** de implementarlo. **Sustituida por decisión de Fabricio del 22-10-2026:** delega la selección de fotos y el juicio visual del PR7b. Se eligen fotos representativas dentro de los permisos existentes (las dos fotografías reales del repositorio, un recorte real de una de ellas y una foto oscura **simulada**, rotulada como tal), se aplica criterio y se implementa un acabado **contenido**; no se pide más aprobación para decisiones estéticas rutinarias. Criterios aplicados y resultado: [`result-pr7b.md`](result-pr7b.md). |
 
 **Hallazgos de resolución (comprobados en el código):**
 - El lector usa varios anchos para la foto de apertura, pero la **portada es una sola imagen de 1.600 px** a sangre, sin `srcset`, que en pantallas retina se amplía unas 1,8 veces. Es la causa más probable de que se vea blanda.
@@ -142,6 +142,7 @@ Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N5** (§6) 
    - contraste del título medido en el peor 5 % del fondo: hoy 9,38:1, propuesta 7,94:1, ambos por encima de AA.
 
 **Estado (N4):** la dirección pasa a comparación con fotos reales (luminosa, realmente oscura y normal) antes de implementarse; el tratamiento concreto necesita la aceptación visual de Fabricio. Se activará **por catálogo**, nunca en bloque.
+**Sustituido por decisión de Fabricio del 22-10-2026** (ver DA30): sin esperar fotos de producción ni aceptación visual previa. Lo que se mantiene de N4: activación **por catálogo** (apagado por defecto en todos, también en los existentes), opción por foto para quitarlo y nada en bloque ni en silencio. Del acabado propuesto se implementa solo la parte contenida: tono adaptativo por foto y un filete interior fino y translúcido en la apertura y la portada; **sin** esquinas doradas, **sin** degradado nuevo y **sin** tocar el velo de la portada (el velo plano sigue en el 25 %).
 
 **Coherencia**: el tono se aplica en el servicio de fotos (una variante tratada, cacheada, junto al original), así que lector, miniaturas, portada y PDF ven la misma foto. Los filetes, esquinas y degradados son CSS en el lector y se reproducen con formas vectoriales en el PDF.
 
@@ -152,7 +153,7 @@ Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N5** (§6) 
 | **N1** | «Guardar como texto aprobado de la vivienda» viene **desmarcada por defecto en todos los catálogos**, también en los que no tienen asignaciones personales. Publicar en un catálogo y aprobar para reutilizar son acciones distintas. Una vez aprobada expresamente una versión, añadir la vivienda a un catálogo nuevo la reutiliza sola y sin IA. Borradores y textos personalizados nunca entran solos en la biblioteca. |
 | **N2** | En árabe y hebreo se reflejan navegación, flechas, dirección del teclado y del deslizamiento según la lectura de derecha a izquierda. Se conservan la composición foto y panel aprobada y las dos pantallas por vivienda. |
 | **N3** | Fuentes OFL aprobadas: **Noto Naskh Arabic**; **Frank Ruhl Libre** (títulos en hebreo) y **Noto Sans Hebrew** (texto en hebreo); y la cobertura ampliada de caracteres de **Playfair, Cinzel e Inter**. Se verifican licencias y cobertura real de glifos. Los idiomas que ya funcionan conservan su tipografía actual. |
-| **N4** | El acabado visual se **activa por catálogo**, con opción por foto para quitarlo. Nunca se activa en bloque ni cambia en silencio catálogos ya compartidos. La dirección propuesta pasa a comparación **con fotos reales** (una luminosa, una realmente oscura y una normal); el tratamiento exacto **no** está aprobado todavía y necesita su aceptación visual antes de implementarse. La mejora de resolución puede ir aparte. |
+| **N4** | El acabado visual se **activa por catálogo**, con opción por foto para quitarlo. Nunca se activa en bloque ni cambia en silencio catálogos ya compartidos. La dirección propuesta pasa a comparación **con fotos reales** (una luminosa, una realmente oscura y una normal); el tratamiento exacto **no** está aprobado todavía y necesita su aceptación visual antes de implementarse. La mejora de resolución puede ir aparte. **Sustituida en parte por decisión de Fabricio del 22-10-2026** (ver DA30): la comparación con fotos de producción y la aceptación visual previa dejan de ser requisito; siguen vigentes la activación por catálogo, la opción por foto y el «nunca en bloque ni en silencio». |
 
 | | Corrección obligatoria (21-10-2026) |
 | --- | --- |
@@ -194,7 +195,7 @@ Rediseño o páginas nuevas; cambiar la ficha del CRM o sus campos de ubicación
 | **AC11** | Clasificación geográfica: coincidencias exactas se clasifican; calles homónimas, barrios fuera del distrito y pistas sueltas quedan para confirmar y nada se presenta como verificado mientras tanto; el CRM no se modifica. |
 | **AC12** | Una plantilla aprobada entra en «Vivir en…» solo si no hay texto propio de zona; actualizarla no cambia catálogos ya compartidos; elegirla no gasta IA. |
 | **AC13** | Siguen exactamente dos pantallas por vivienda, la lectura completa en móvil y las suites actuales en verde (título, fotos, en vivo, opiniones). |
-| **AC14** | Acabado visual (tras su aceptación visual): activado solo en los catálogos que lo eligen, desactivable por foto, originales intactos, sin aumento de altas luces quemadas, título de portada ≥ 4,5:1, misma composición (comparación de capturas antes y después) y mismo tratamiento en lector y PDF. |
+| **AC14** | Acabado visual (aceptación visual delegada por Fabricio el 22-10-2026, ver DA30): activado solo en los catálogos que lo eligen, desactivable por foto, originales intactos, sin aumento de altas luces quemadas, título de portada ≥ 4,5:1, misma composición (comparación de capturas antes y después) y mismo tratamiento en lector y PDF. |
 
 ## 9. Pendientes que esta ampliación no cierra
 
