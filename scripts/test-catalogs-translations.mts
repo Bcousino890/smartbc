@@ -24,6 +24,7 @@ import {
   parseTranslation,
   pendingTranslationWarnings,
   translationErrorMessage,
+  translationBlockers,
   translationSystemPrompt,
   TranslationParseError,
   unitSig,
@@ -187,6 +188,20 @@ console.log("· respuesta de la IA y comprobaciones");
   ok(chk.blockers.some((b) => b.code === "text_has_contact" && b.where === "title") && chk.blockers.some((b) => b.code === "text_has_price"), "bloqueos: contacto y precio");
   eq(pendingTranslationWarnings(chk, chk.warnings.map((w) => w.id)).length, 0, "los avisos se confirman uno a uno");
   const clean = checkTranslation([{ where: "block:0", label: "x", es: "Planta 1.450, 3 dormitorios en Goya.", tr: "Floor 1,450, 3 bedrooms in Goya." }], ["Goya"]);
+  // Caso real (22-10-2026): el español dice «5.500 /mes» y «150 mensuales» (sin «€»,
+  // así que se publica) y la IA escribe «5.500 €/ay» y «150 €»: no se bloquea.
+  const real = checkTranslation([
+    { where: "block:0", label: "Introducción", es: "Alquiler de corta estancia: 5.500 /mes. Alquiler de larga estancia: 5.780 /mes.", tr: "Kısa süreli kiralama: 5.500 €/ay.\n\nUzun süreli kiralama: 5.780 €/ay." },
+    { where: "block:2", label: "La finca", es: "Plaza de garaje opcional, con un coste adicional de 150 mensuales.", tr: "Opsiyonel garaj yeri, aylık ek 150 € ücrete tabidir." },
+  ], []);
+  eq(real.blockers.length, 0, "precio que ya está en el español: no bloquea la traducción");
+  eq(translationBlockers("Piso de 90 m².", "90 m² daire, aylık 2.000 €."), ["text_has_price"], "precio inventado por la traducción: bloquea");
+  eq(translationBlockers("Garaje: 150 mensuales.", "Garaj: aylık 180 €."), ["text_has_price"], "importe cambiado: bloquea");
+  eq(translationBlockers("Garaje: 150 mensuales.", "Garaj: € 150 aylık."), [], "«€» delante del importe del original: no bloquea");
+  eq(translationBlockers("Llámanos.", "Arayın 612 345 678."), ["text_has_contact"], "contacto: bloquea siempre");
+  eq(translationBlockers("Precio 1.450.000 €.", "Price €1,450,000."), [], "mismo importe con otros separadores: no bloquea");
+  const sqlFix = readFileSync("supabase/migrations/0229_catalog_translation_prices.sql", "utf8");
+  ok(/CREATE OR REPLACE FUNCTION catalog_tr_text_blocker/.test(sqlFix) && /catalog_text_blocker\(p_text\) = 'text_has_contact'/.test(sqlFix), "0229: la base de datos solo bloquea contacto en lo traducido");
   eq(clean.warnings.length + clean.blockers.length, 0, "separadores de miles distintos: la misma cifra, sin avisos");
   eq(classifyAiFailure(Object.assign(new Error("x"), { name: "TimeoutError" })), "uncertain", "tiempo agotado → incierto");
   eq(classifyAiFailure(new TypeError("fetch failed")), "uncertain", "conexión cortada → incierto");

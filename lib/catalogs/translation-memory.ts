@@ -79,8 +79,14 @@ function keysMatch(tr: unknown, es: unknown): boolean {
   return tr.every((b, i) => b && typeof b.x === "string" && b.x.trim() && b.x.length <= 8000 && b.k === (es[i] as { k: string }).k);
 }
 
+/** Como catalog_tr_text_blocker (0229): en lo traducido, la base de datos
+ *  solo bloquea contacto; el precio lo decide el servidor frente al original. */
+function trBlocker(t: string | null | undefined): string | null {
+  return textBlocker(t ?? null) === "text_has_contact" ? "text_has_contact" : null;
+}
+
 function blockerOf(c: { t?: string | null; i?: string | null; b?: Array<{ x: string }> }): string | null {
-  return textBlocker(c.t ?? null) ?? textBlocker(c.i ?? null) ?? (c.b ?? []).map((b) => textBlocker(b.x)).find((x) => x) ?? null;
+  return trBlocker(c.t) ?? trBlocker(c.i) ?? (c.b ?? []).map((b) => trBlocker(b.x)).find((x) => x) ?? null;
 }
 
 export class MemoryTranslations implements TrBackend {
@@ -278,7 +284,7 @@ export class MemoryTranslations implements TrBackend {
   }
   async saveFeature(lang: TargetLanguage, es: string, tr: string): Promise<void> {
     if (!es.trim() || !tr.trim() || es.length > 200 || tr.length > 200) throw new Error("invalid_text");
-    const b = textBlocker(tr);
+    const b = trBlocker(tr);
     if (b) throw new Error(b);
     const prev = this.features.find((f) => f.es === es && f.lang === lang);
     if (prev) Object.assign(prev, { tr: tr.trim(), status: "draft", origin: "manual" });
@@ -339,7 +345,7 @@ export class MemoryTranslations implements TrBackend {
     for (const f of parts.features) {
       const row = this.features.find((x) => x.es === f.es && x.lang === lang);
       if (!row || row.status === "rejected" || row.tr !== f.tr) throw new Error("translation_changed");
-      const fb = textBlocker(row.tr);
+      const fb = trBlocker(row.tr);
       if (fb) throw new Error(fb);
     }
     t.status = "approved";

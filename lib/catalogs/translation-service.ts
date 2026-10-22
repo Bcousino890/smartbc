@@ -1,7 +1,6 @@
 import { esUnitOfItem, type InternalItem, type InternalSnapshot } from "./to-public";
 import { catalogDictionary, type CatalogLanguage } from "./i18n";
 import { SECTION_HEADINGS } from "./structure";
-import { textBlockers } from "./text-rules";
 import {
   AUTO_LIMITS,
   autoRetryState,
@@ -9,6 +8,7 @@ import {
   headingFor,
   ITEM_STATE_LABEL,
   isTargetLanguage,
+  translationBlockers,
   languageProgress,
   metaSig,
   RESERVATION_TTL_SECONDS,
@@ -532,7 +532,7 @@ export async function publishItem(be: TrBackend, catalogId: string, lang: Target
   const blockers = unitBlockers(it.check);
   if (blockers.length) return { kind: "blocked", code: blockers[0].code };
   const featureParts = it.features
-    .filter((f): f is typeof f & { tr: string } => !!f.tr && f.status === "draft" && textBlockers(f.tr).length === 0)
+    .filter((f): f is typeof f & { tr: string } => !!f.tr && f.status === "draft" && translationBlockers(f.es, f.tr).length === 0)
     .map((f) => ({ es: f.es, tr: f.tr }));
   const copyMissing = it.featuresMissing > 0 && it.features.some((f) => f.status === "approved");
   if (mode === "auto" && it.current && featureParts.length === 0 && !copyMissing) return { kind: "nothing" };
@@ -551,7 +551,7 @@ export function needsAutoWork(it: PanelItem, now = Date.now()): boolean {
   if (it.state === "waiting") return !!it.retry.until && Date.parse(it.retry.until) <= now;
   if (it.state === "current" || it.state === "review") {
     // Vigente: solo si faltan características que se puedan traducir o copiar.
-    return it.featuresMissing > 0 && it.features.some((f) => f.status === null || f.status === "rejected" || (f.status === "draft" && !!f.tr && textBlockers(f.tr).length === 0) || f.status === "approved");
+    return it.featuresMissing > 0 && it.features.some((f) => f.status === null || f.status === "rejected" || (f.status === "draft" && !!f.tr && translationBlockers(f.es, f.tr).length === 0) || f.status === "approved");
   }
   return true;
 }
