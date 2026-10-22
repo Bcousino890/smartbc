@@ -8,7 +8,7 @@
 > 1. **D1 no se podía aplicar como estaba previsto (DA21, se cuenta tal cual).** La prueba técnica suponía que el hilo del PDF lleva `@react-pdf` compilado dentro. No es así: Next tiene `@react-pdf/renderer` en su lista **por defecto** de paquetes externos del servidor, así que Node lo carga de `node_modules` al ejecutar, también dentro del hilo. Un loader de webpack nunca lo tocaría. Lo detectó la propia comprobación del PR en el servidor de fixtures (500 con `pdf_engine_unpatched`). **Solución:** la misma corrección, como hook de carga de módulos de Node (`module.register`), que se instala al arrancar el servidor (`instrumentation.ts`) y al arrancar el hilo (primera importación de `render-worker.ts`). El loader de webpack queda de reserva. Probado en el servidor de desarrollo (hilo y camino sin hilo) y **ejecutando el chunk del hilo compilado por `next build`** sin ningún hook externo.
 > 2. **El español sale idéntico a `main`:** los 10 catálogos de fixtures, objeto a objeto, salvo fecha, `/ID` y prefijo aleatorio de las fuentes.
 > 3. **D4 queda propuesta** (abajo): en árabe y hebreo, cifras, precios y latín con la parte latina de **la misma familia** (Noto Naskh Arabic, Frank Ruhl Libre, Noto Sans Hebrew), como el lector. Cambiarla es una línea.
-> 4. **Dos cosas nuevas para Fabricio:** un residuo de forma más del árabe (los puntos de la «ة» final de «المساحة», familia E8, no cubierto por D3) y un defecto **anterior** del PDF en español (la ligadura «fi» de Playfair no lleva texto: algunos lectores copian «La finca» como «La nca»). Ninguno se ha tocado en silencio.
+> 4. **Para Fabricio:** un defecto **anterior** del PDF en español (la ligadura «fi» de Playfair no lleva texto: algunos lectores copian «La finca» como «La nca»), no tocado. El residuo de forma del árabe (E8, «في» y «ة») **ya no existe**: era un defecto del motor (E10) encontrado al adaptar el PR5 al PR6 y corregido (ver «Adaptación al PR6»).
 
 ## PR5 · PDF multilingüe y fuentes
 
@@ -49,7 +49,7 @@
 - **`patch.cjs` (un solo módulo).**
   - Sustituye trozos exactos de `@react-pdf/textkit` 6.3.0: `reorderLine` (E2, E3 y E4, más el texto lógico para D2) y `slice$1` (E7).
   - Y de `@react-pdf/render` 4.5.1: `renderGlyphs` (E6) y `renderLine` (ActualText, D2).
-  - Deja una marca (`bcp-pdf-engine-patch@1 textkit-6.3.0 render-4.5.1`) en `globalThis` y en el código.
+  - Deja una marca (`bcp-pdf-engine-patch@2 textkit-6.3.0 render-4.5.1`; `@1` antes de E10) en `globalThis` y en el código.
   - Es idempotente.
 - **Comprobación de versión** (al cargar). Si la versión instalada no es la revisada, o un trozo no aparece exactamente una vez, **lanza**: «[pdf-engine-patch] @react-pdf/textkit 6.4.0 no es la versión revisada (6.3.0) — revisa lib/pdf/engine-patch/patch.cjs…». La carga de `@react-pdf` falla con ese motivo. Lo prueba `npm run test:pdf-engine` en la CI con versiones y textos simulados.
 - **Dónde se instala:**
@@ -63,7 +63,7 @@
   - El chunk del hilo (`.next.qa/server/chunks/9233.js`, 77 KB) contiene la marca, el hook (`data:text/javascript,`) y `import("@react-pdf/renderer")`, este fuera del bundle.
   - `instrumentation.js` carga el chunk de instalación (`69554.js`, también con la marca).
   - **Prueba de ejecución:** ese chunk compilado se lanzó como `Worker` desde un proceso **sin** el hook de los scripts (marca ausente en el proceso principal). Maquetó «pdf» en ar (16 hojas, 103 líneas con ActualText), he (15 hojas, 102) y es (16 hojas, 0).
-- **Se buscó así:** `grep -rl "bcp-pdf-engine-patch@1" .next.qa/server` y `grep -rl parentPort .next.qa/server/chunks`, antes de borrar `.next.qa`.
+- **Se buscó así:** `grep -rl "bcp-pdf-engine-patch@2" .next.qa/server` (`@1` en la primera versión) y `grep -rl parentPort .next.qa/server/chunks`, antes de borrar `.next.qa`.
 
 ### Propuesta D4 (para que Fabricio la cierre)
 
@@ -98,9 +98,7 @@
 | `compare-worker-inline.mts`: hilo frente a camino sin hilo, también ar, he y tr (y byte a byte con `same-pdf.mts`) | ✅ 10/10 |
 | `test-pdf-worker.mts` (hilo, cancelación, memoria, respaldo, entorno mínimo) | ✅ todo en verde |
 | `check-rtl-visual.mts` (local, nuevo; pdfjs en Chromium, como la prueba técnica).<br>• ar y he: todas las páginas del PDF real con contenido.<br>• Filas reflejadas medidas en el documento real: índice, datos clave y pie.<br>• **24 líneas reales del PDF** frente a Chromium con las mismas fuentes y controles en espejo y bidi invertido.<br>• Letras unidas («مسكن»: 0 huecos; separada: 3).<br>• Título árabe y hebreo con ActualText lógico. | ✅ **35**, ⚠️ 3, 0 ❌ |
-| Residuos de forma del árabe (E8), con orden y ancho correctos: | ⚠️ |
-| • «في» en el título y en el texto del cierre (perfil 0,845 y 0,891): **aceptado en D3**. | |
-| • «المساحة» (perfil 0,877): los dos puntos de la «ة» final salen algo más altos que en Chromium. Es legible y el orden es correcto (controles −0,08 y −0,37). **No está cubierto por D3: lo decide Fabricio** (captura `capturas-pr5/lineas-ar-pdf-vs-chromium.jpg`). | |
+| Residuos de forma del árabe (E8: «في» 0,845 y 0,891; «ة» de «المساحة» 0,877) en la primera versión. **Resueltos** en la adaptación al PR6: eran E10 (puntos sin su desplazamiento vertical). Tras la corrección, 0,996–0,999 y ningún ⚠️. | ✅ |
 | Descarga desde el botón del lector (servidor de fixtures en 3140, `pdf-qa.mjs`), en ar, he, tr y es y en el enlace personal de Ana en hebreo:<br>• nombre del archivo en el idioma, `/Lang`, textos del idioma, ActualText solo en ar/he y aviso «PDF descargado» en el idioma;<br>• maquetado por el hilo («pdf hilo» en el log);<br>• con `CATALOG_PDF_WORKER=0`, el árabe sale bien por el camino sin hilo (hook de `instrumentation.ts`). | ✅ 41 |
 | QA anteriores contra 3140:<br>• lector `qa` (24), `res-qa` (24), zonas `area-qa` (19), estructura `st-qa` (15), textos aprobados `copy-qa` (17), título `title-qa` (7), opiniones `fb-qa` (23) y **idiomas del lector `lang-qa` (218)**;<br>• plantillas `tpl-qa`: 28/29 con su espera de 1,5 s y **29/29** con 4 s. Es un paso del gestor que el PR no toca: «quitar la plantilla» tarda más en el servidor de desarrollo;<br>• `fb-qa` y `lang-qa` necesitaron una segunda pasada tras un `reset` (estado dejado por la QA anterior); luego en verde. | ✅ |
 | `pdf-rtl-spike.mts` con parche: los mismos 4 ❌ documentados en la prueba técnica (E8 y la extracción de PDFKit, que no lee ActualText). | = prueba técnica |
@@ -126,7 +124,7 @@ Capturas en [`capturas-pr5/`](capturas-pr5/), 500 KB:
 | H3 | `module.registerHooks` (Node 23.7) rompe CommonJS importado desde ESM. | Se usa `module.register`. |
 | H4 | El aviso de la descarga en el lector salía en español en los demás idiomas (PR4). | Corregido (`useReaderPdf` recibe el diccionario del enlace). |
 | H5 | **Anterior, también en `main`:** en el PDF en español, la ligadura «fi» de Playfair (título «La finca») se incrusta sin entrada en el ToUnicode. PDFKit de macOS la reconoce. Un lector que solo mire el ToUnicode copia «La nca». | **No se ha tocado**: el español debía quedar idéntico. El lector de las pruebas la identifica por anchura y forma. Se propone corregirlo en un PR aparte. |
-| H6 | Residuo de forma árabe en la «ة» final («المساحة»), además de «في» (D3). | Se informa; decide Fabricio. |
+| H6 | Residuo de forma árabe en la «ة» final («المساحة»), además de «في» (D3). | **Resuelto** (E10, adaptación al PR6): ya no hay residuo. |
 | H7 | PDFKit de macOS y pdf.js **no** leen ActualText; con ellos el árabe copiado sigue dando otras letras. | La verificación usa un lector propio que sí lo lee, como hacen, según su documentación, Acrobat y poppler. En Chrome (pdfium) no se ha podido comprobar desde aquí: paso de la QA de Fabricio. |
 
 ### Efectos al fusionar
@@ -159,7 +157,7 @@ Capturas en [`capturas-pr5/`](capturas-pr5/), 500 KB:
    - En Acrobat y en Chrome, **selecciona y copia** un rótulo árabe («الفهرس») y busca «اختيار»: debe salir el texto correcto. Si en Chrome no, dímelo: sería H7.
 5. Repite el paso 4 con `'he'`. Para deshacerlo, la misma llamada con `NULL`.
 6. Revisa los textos nuevos del PDF en `lib/catalogs/pdf-i18n.ts`. **ar, tr y he necesitan un hablante nativo** (DA20).
-7. Decide **D4** (propuesta arriba) y el residuo «ة» de H6.
+7. Decide **D4** (propuesta arriba). El residuo «ة» de H6 ya no existe (E10).
 
 ### Ajustes al plan
 
@@ -182,6 +180,68 @@ Capturas en [`capturas-pr5/`](capturas-pr5/), 500 KB:
 - Viñetas de características alineadas al lado de la viñeta en RTL (`alignItems: flex-end`).
 - Los avisos ⚠️ de E8 no cuentan como fallo, pero se listan en `informe.json` y aquí.
 - `same-pdf.mts` ignora fecha, `/ID`, prefijo de subconjunto y `/Length`.
+
+### Adaptación al PR6 (22-10-2026)
+
+El PR6 (#351, `4ed9ed52`) ya está en `main` y fusionado en esta rama (`dae5e4f9`; el conflicto de `ci.yml` se resolvió conservando `test:catalogs-pdf-i18n` y `test:catalogs-translations`).
+
+**Qué cambió con el PR6.** Fuera del español, el contenido sale **solo** de traducciones aprobadas y vigentes (`toPublicCatalog`). Si faltan:
+- **N5:** `copyPending` y el aviso «Descripción en preparación» del idioma, con un título provisional («Chamberí semtinde konut»).
+- La introducción del catálogo no se muestra.
+- Las características sin traducir no se muestran.
+
+El PDF ya lo respetaba: lee la proyección pública en el idioma del token. **No hubo que cambiar `document.ts`.**
+
+Las pruebas del PDF suponían el contenido en español y daban 9 ❌ de 370:
+- faltaban las etiquetas de introducción, saludo y características;
+- los glifos turcos y franceses se buscaban en títulos que ahora son provisionales.
+
+**Qué se ha hecho.**
+
+1. **Traducciones de prueba escritas a mano** (`scripts/pdf/pdf-translations.mts`).
+   - **Textos:** en, fr, it, de, ar, tr y he. Doce frases generales de vivienda, ocho títulos, las 14 características de las fixtures y título e introducción de los tres catálogos con dueño. ar, tr y he «sin revisión nativa».
+   - **Sin IA:** un traductor local y determinista responde con el formato de `TRANSLATION_SCHEMA`: mismos bloques y párrafos, longitud parecida al español.
+   - **Mismo camino que el gestor:** `prepareItem`, luego `approveItem` (confirmando los avisos) y luego `setLanguage`, con la comprobación de «completo», sobre el almacén de las fixtures con las reglas de 0226. La instantánea que lee el PDF es, por tanto, la de producción.
+   - **Glifos en el CONTENIDO:** el turco lleva ğ, ş, ı e İ en frases y títulos («SAKİN SOKAKTA» en mayúsculas). El francés lleva «L'Haÿ-les-Roses» en el título del catálogo «pdf», puesto a propósito para el glifo, y «L'HAŸ-LES-ROSES» en el pie.
+2. **Las dos situaciones en cada idioma:**
+   - **(a) traducido:** contenido completo palabra a palabra; títulos de sección del diccionario («Living in Retiro», «العيش في Retiro»); introducción y características; glifos del idioma en el contenido; **nada del español** (títulos, bloques, características, introducción).
+   - **(b) N5:** «fxPdfDesc0002» sin traducción. Aviso y texto del idioma en sus páginas, título provisional y **nada del español** de esa vivienda; las demás, traducidas.
+   - **Las etiquetas** de introducción, saludo y características se exigen cuando el PDF las tiene que llevar (hay introducción o características en el idioma). En (a) y (b) las lleva siempre.
+3. **E10, defecto del motor encontrado con contenido árabe real (DA21).**
+   - **Síntoma:** en la imagen, «شرفة», «مسكن مشرق…» y la introducción salían con los puntos lejos de su letra (perfil 0,59–0,79 frente a Chromium).
+   - **Causa:** `resolveRunYOffset` de textkit **sustituía** el desplazamiento vertical de cada glifo (GPOS de la fuente) por el de la run, que es 0. Noto Naskh coloca los puntos y la hamza con ese desplazamiento.
+   - **Corrección** en `patch.cjs` (marca `@2`): se **suma**. `test:pdf-engine` lo comprueba: el texto, el error si cambia y alturas de glifo distintas en el árabe.
+   - **Era lo que se atribuía a fontkit:** «في» (E8, D3) y la «ة» (H6) pasan de 0,85–0,89 a 0,996–0,999 y ya **no queda ningún residuo**.
+   - **Prueba técnica:** el título árabe pasa de 0,900 a ✅ y su párrafo de muestra de 0,689 a 0,875. Ese párrafo sigue por debajo de 0,9; las otras dos ❌ que quedan son de PDFKit, que no lee ActualText.
+   - **Latino y hebreo:** sin cambios. El hebreo no lleva marcas y el latín usa letras precompuestas. **El español sigue idéntico a `main`.**
+4. **Verificación local por el hilo:**
+   - `check-catalog-pdfs.mts`: «pdf» y «main» traducidos y «pdf» con N5, en los 7 idiomas.
+   - `compare-worker-inline.mts`: ar, he y tr traducidos, y ar con N5.
+   - `check-rtl-visual.mts`: además del contenido traducido árabe y hebreo (título del catálogo y de la vivienda, título de sección, característica, frase e introducción), compara el aviso N5 sobre la imagen.
+
+| Comprobación (tras el PR6) | Resultado |
+| --- | --- |
+| **Español idéntico a `main` `4ed9ed52`** (`render-cases` + `same-pdf`, 10 catálogos) | ✅ 10/10, mismas páginas |
+| `test:catalogs-pdf-i18n` (CI): es + 7 idiomas × (a) traducido y (b) N5 | ✅ **678** |
+| `test:pdf-engine` (CI), con E10 | ✅ 42 |
+| `check-catalog-pdfs.mts` (local, por el hilo, 37 PDF, 0 respaldos) | ✅ **1.909**, 0 ❌ |
+| `compare-worker-inline.mts` (11 casos, también ar/he/tr traducidos y ar N5) | ✅ |
+| `check-rtl-visual.mts` (ar y he, contenido traducido real y N5 sobre la imagen) | ✅ **50**, **0 ⚠️**, 0 ❌ |
+| Descarga desde el lector, fixtures en 3140 (`pdf-qa`). La QA respeta el límite de 6 descargas por minuto y enlace; un intento sin esperar dio el 429 previsto.<br>• ar, he, tr, es y el enlace personal de Ana en he.<br>• **ar y en traducidos en el gestor con la IA falsa** (preparar, aprobar y activar).<br>• Su PDF lleva el texto aprobado y nada del español; con una copia quitada, el aviso N5.<br>• **Descargar no llama a la IA** (5 → 5). | ✅ 54 |
+| QA del lector en 3140:<br>• `lang-qa` (versión del PR6, con N5): 218;<br>• `tr-qa` (PR6): 58;<br>• `qa` 24, `res-qa` 24, `fb-qa` 23, `st-qa` 15, `title-qa` 7. | ✅ |
+| 31 suites de la CI (bucle sin `npm run build`), `tsc`, `lint-migrations.py` | ✅ |
+| `next build` aislado (`.env.production` fuera, `tsconfig.json` respaldado).<br>• Log sin «Environments: .env»; los dos restaurados e intactos (`git diff` vacío); `.next.qa` y `.next` borrados.<br>• Marca `@2` en `chunks/9233.js` (hilo) y `69554.js`.<br>• El hilo compilado maqueta ar, he y es sin el hook de los scripts. | ✅ |
+
+**Hojas por idioma** (DA35: no se exige el mismo número que en español):
+- Español: «pdf» 16, «main» 12.
+- «pdf» traducido: en 16; fr, it, de, ar, tr y he 15.
+- «pdf» con N5: en 15; los demás 14, porque la descripción larga se sustituye por el aviso.
+- «main» traducido: 12; he 11.
+- Las frases de prueba son algo más cortas que el español, de ahí la hoja menos. El índice apunta siempre a la página real.
+
+**Capturas** ([`capturas-pr5/`](capturas-pr5/), 596 KB):
+- Rehechas con contenido traducido: la hoja de vivienda en los 7 idiomas, el índice en ar y he y las líneas frente a Chromium.
+- Nuevas: `pdf-ar-n5.jpg` y `pdf-he-n5.jpg`.
 
 ### Cómo reproducir
 
