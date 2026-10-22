@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { usePdfDownload } from "@/lib/catalogs/export/download-client";
 import { cn } from "@/lib/utils";
 import { useReaderLang } from "./lang-context";
+import type { CatalogDictionary } from "@/lib/catalogs/i18n";
 
 // PDF del catálogo en el lector (expediente 2026-10-16-bcp-01-pdf): en el
 // índice (enlace discreto) y en el cierre (acción de filete fino, como las de
@@ -20,8 +21,13 @@ export interface ReaderPdf {
   start: (place: PdfPlace) => void;
 }
 
-export function useReaderPdf(token: string): ReaderPdf {
-  const { dict } = useReaderLang();
+/** `dict`: el diccionario del idioma del enlace. Hay que pasarlo desde
+ *  CatalogReader, que llama a este hook FUERA de ReaderLangProvider (el
+ *  contexto ahí da el español: los avisos de la descarga salían en español en
+ *  los demás idiomas; corregido en el PR5). */
+export function useReaderPdf(token: string, dictOfLink?: CatalogDictionary): ReaderPdf {
+  const fromContext = useReaderLang().dict;
+  const dict = dictOfLink ?? fromContext;
   const texts = useMemo(
     () => ({ changing: dict.pdfChanging, rateLimited: dict.pdfRateLimited, otherInProgress: dict.pdfOtherInProgress, failed: dict.pdfFailed, busy: dict.pdfBusy, downloaded: dict.pdfDownloaded, network: dict.pdfNetwork }),
     [dict],

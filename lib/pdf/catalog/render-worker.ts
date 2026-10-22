@@ -1,3 +1,6 @@
+// PR5 (D1): PRIMERA importación del hilo: instala la corrección del motor de
+// PDF antes de que se cargue @react-pdf (que Next deja fuera del bundle).
+import "../engine-patch/install-worker";
 import { existsSync } from "node:fs";
 import { parentPort, workerData } from "node:worker_threads";
 import { getHeapStatistics } from "node:v8";

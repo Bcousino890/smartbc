@@ -11,8 +11,13 @@
 //      una vez y el resultado lleva la marca.
 //   3. Una versión distinta o un texto cambiado hacen fallar la carga con un
 //      error claro (simulado en una carpeta temporal).
-//   4. next.config.ts registra el loader para esos dos archivos (también en el
-//      bundle del servidor, donde está el hilo del PDF) y el loader corrige.
+//   4. En Next, @react-pdf/renderer queda FUERA del bundle (lista por defecto
+//      de serverExternalPackages): la corrección la instala en tiempo de
+//      ejecución lib/pdf/engine-patch/install.ts, desde instrumentation.ts
+//      (proceso) y como PRIMERA importación del hilo (render-worker.ts). Se
+//      comprueba en un proceso de Node limpio (sin --import): instalar y luego
+//      cargar @react-pdf deja el motor corregido. Y el loader de webpack de
+//      next.config.ts, por si algún día se compila dentro del bundle.
 //   5. Con el hook de este proceso el motor está corregido (marca en tiempo de
 //      ejecución) y maqueta: el árabe que antes tiraba el motor se genera; cada
 //      línea RTL lleva su /ActualText con el texto lógico exacto (copiar y
@@ -110,8 +115,38 @@ console.log("\n· 3 · Versión distinta o texto cambiado → error claro al car
   }
 }
 
-console.log("\n· 4 · next.config.ts: el loader en todos los bundles (también el hilo del PDF)");
+console.log("\n· 4 · Servidor Next: hook en tiempo de ejecución (proceso e hilo) y loader de reserva");
 {
+  const ext = JSON.parse(readFileSync(join(ROOT, "node_modules/next/dist/lib/server-external-packages.json"), "utf8")) as string[];
+  ok("Next deja @react-pdf/renderer fuera del bundle (por eso el hook de ejecución)", ext.includes("@react-pdf/renderer"));
+  const instr = readFileSync(join(ROOT, "instrumentation.ts"), "utf8");
+  ok("instrumentation.ts instala el hook en el runtime de Node", /NEXT_RUNTIME === "nodejs"/.test(instr) && /installPdfEngineHook\(/.test(instr));
+  const worker = readFileSync(join(ROOT, "lib/pdf/catalog/render-worker.ts"), "utf8");
+  const firstImport = worker.match(/^import [^\n]+$/m)?.[0] ?? "";
+  ok("render-worker.ts: la PRIMERA importación instala el hook (antes de @react-pdf)", firstImport === 'import "../engine-patch/install-worker";', firstImport);
+  // Proceso limpio: sin el hook de los scripts.
+  const { execFileSync } = await import("node:child_process");
+  const probe = `
+    const { installPdfEngineHook } = await import(${JSON.stringify(join(ROOT, "lib/pdf/engine-patch/install.ts"))});
+    const before = globalThis.__bcpPdfEnginePatch ?? null;
+    const how = installPdfEngineHook(${JSON.stringify(ROOT)});
+    const again = installPdfEngineHook(${JSON.stringify(ROOT)});
+    await import("@react-pdf/renderer");
+    console.log(JSON.stringify({ before, how, again, after: globalThis.__bcpPdfEnginePatch ?? null }));`;
+  let res: { before: unknown; how: string; again: string; after: Record<string, string> | null } | null = null;
+  try {
+    const out = execFileSync(process.execPath, ["--experimental-strip-types", "--no-warnings", "--input-type=module", "-e", probe], { cwd: ROOT, env: { PATH: process.env.PATH ?? "" }, encoding: "utf8" });
+    res = JSON.parse(out.trim().split("\n").pop()!);
+  } catch (e) {
+    ok("proceso limpio: instalar el hook y cargar @react-pdf", false, e instanceof Error ? e.message.slice(0, 300) : String(e));
+  }
+  if (res) {
+    ok("proceso limpio: sin hook, el motor no está corregido", res.before === null);
+    ok(`proceso limpio: installPdfEngineHook → «${res.how}», una sola vez («${res.again}»)`, res.how === "register" && res.again === "already");
+    ok("proceso limpio: tras instalarlo, @react-pdf se carga corregido (textkit y render)", !!res.after?.textkit && !!res.after?.render, JSON.stringify(res.after));
+  }
+  const tk = readFileSync(files.textkit, "utf8");
+  ok("la corrección es idempotente (un código ya corregido no se toca)", patch.patchEngineSource(files.textkit, patch.patchEngineSource(files.textkit, tk)) === patch.patchEngineSource(files.textkit, tk));
   const nextConfig = (await import("../next.config.ts")).default as { webpack: (c: unknown, o: { isServer: boolean }) => { module: { rules: Array<{ test: RegExp; enforce?: string; use: Array<{ loader: string }> }> } } };
   for (const isServer of [true, false]) {
     const cfg = nextConfig.webpack({ module: { rules: [] }, output: {} }, { isServer });
@@ -126,7 +161,7 @@ console.log("\n· 4 · next.config.ts: el loader en todos los bundles (también 
   const src = readFileSync(join(ROOT, "lib/pdf/catalog/render-in-worker.ts"), "utf8");
   ok("el hilo del PDF es un chunk de webpack (new Worker(new URL(…)))", /new Worker\(new URL\("\.\/render-worker\.ts", import\.meta\.url\)/.test(src));
   const cfgSrc = readFileSync(join(ROOT, "next.config.ts"), "utf8");
-  ok("@react-pdf no es externo (se compila, y por tanto se corrige)", !/serverExternalPackages:[\s\S]*@react-pdf[\s\S]*\],/.test(cfgSrc.split("webpack(")[0]));
+  ok("next.config.ts no añade @react-pdf a serverExternalPackages (el loader de reserva sigue valiendo si Next lo compila)", !/serverExternalPackages:[\s\S]*@react-pdf[\s\S]*\],/.test(cfgSrc.split("webpack(")[0]));
 }
 
 console.log("\n· 5 · Motor corregido en ejecución: árabe, hebreo y ActualText");
