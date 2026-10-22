@@ -189,7 +189,7 @@ export function prepareCatalogPdfWorker(signal: AbortSignal, opts: { root?: stri
             }
             const ab = transferable(ph.data);
             transfer.push(ab);
-            photos.push({ id, ok: true, width: ph.width, height: ph.height, data: ab });
+            photos.push({ id, ok: true, width: ph.width, height: ph.height, data: ab, ...(ph.finish ? { finish: true as const } : {}) });
           }
           const req: WorkerRenderRequest = {
             type: "render",

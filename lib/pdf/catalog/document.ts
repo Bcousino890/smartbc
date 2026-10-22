@@ -56,7 +56,10 @@ export const PRINT_BOXES = {
   more: { w: (CONTENT_W - 12) / 2, h: 175 },
 } as const;
 
-export type PdfPhoto = { ok: true; data: Buffer; width: number; height: number } | { ok: false };
+/** `finish` (PR7b): la foto llegó TRATADA (acabado fotográfico): lleva el
+ *  filete en la portada y la apertura. El hilo no recibe rutas ni claves, así
+ *  que el dato viaja con la propia foto. */
+export type PdfPhoto = { ok: true; data: Buffer; width: number; height: number; finish?: true } | { ok: false };
 
 export interface CatalogPdfInput {
   catalog: PublicCatalog;
@@ -233,11 +236,29 @@ function missing(L: Lx, text: string, w: number, height: number): ReactElement {
   );
 }
 
+/** PR7b · Acabado fotográfico: el filete interior del lector en vectorial
+ *  (blanco de baja opacidad, fino y uniforme), a `inset` puntos del borde de
+ *  la foto. Solo en la apertura y la portada, y solo con la foto tratada. */
+function finishRule(w: number, hh: number, inset: number, opacity: number): ReactElement {
+  return h(
+    Svg,
+    { key: "finish", width: w, height: hh, style: { position: "absolute", top: 0, left: 0 } },
+    h(Rect, { x: inset, y: inset, width: w - 2 * inset, height: hh - 2 * inset, fill: "none", stroke: "#ffffff", strokeWidth: 0.6, strokeOpacity: opacity }),
+  );
+}
+
+/** Proporciones del filete (las del lector): apertura a 14 px de ~720 px de
+ *  foto (≈ 2 % del ancho); portada a 0,9 em = 2,4 % del ancho. */
+const FINISH_OPENING_INSET = 0.02;
+const FINISH_COVER_INSET = 0.024;
+
 /** Fotografía entera (sin recortar); si no se pudo leer, «Foto no disponible». */
-function photoBlock(L: Lx, photo: PdfPhoto | undefined, maxW: number, maxH: number, fallbackRatio = 0.66): ReactElement {
+function photoBlock(L: Lx, photo: PdfPhoto | undefined, maxW: number, maxH: number, fallbackRatio = 0.66, rule = false): ReactElement {
   if (!photo || !photo.ok) return missing(L, L.d.photoUnavailable, maxW, Math.min(maxH, maxW * fallbackRatio));
   const { w, h: hh } = fit(photo, maxW, maxH);
-  return h(View, { style: { alignSelf: "center" } }, h(Image, { src: { data: photo.data, format: "jpg" }, style: { width: w, height: hh } }));
+  const img = h(Image, { src: { data: photo.data, format: "jpg" }, style: { width: w, height: hh } });
+  if (!rule || !photo.finish) return h(View, { style: { alignSelf: "center" } }, img);
+  return h(View, { style: { alignSelf: "center", position: "relative" } }, img, finishRule(w, hh, Math.round(w * FINISH_OPENING_INSET * 10) / 10, 0.38));
 }
 
 function footer(L: Lx, catalog: PublicCatalog): ReactElement {
@@ -274,6 +295,8 @@ function coverPage(L: Lx, input: CatalogPdfInput): ReactElement {
       ),
     );
     layers.push(h(View, { key: "veil2", style: { position: "absolute", top: 0, left: 0, width: A4_W, height: A4_H - 1, backgroundColor: INK, opacity: 0.25 } }));
+    // PR7b: filete del acabado ENCIMA de los velos (que no cambian).
+    if (photo.finish) layers.push(finishRule(A4_W, A4_H - 1, Math.round(A4_W * FINISH_COVER_INSET * 10) / 10, 0.28));
   }
   // La página va sin márgenes y el contenido en una vista propia: las capas
   // a sangre miden la página entera y, con márgenes, react-pdf las tomaba por
@@ -409,7 +432,7 @@ function itemPage(L: Lx, input: CatalogPdfInput, item: PublicItem, i: number): R
   );
   parts.push(h(View, { key: "mark" }, chapterMark(L, i, input.catalog.items.length)));
   if (x.opening !== null) {
-    parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, photoBlock(L, ph(x.opening), PRINT_BOXES.opening.w, PRINT_BOXES.opening.h), L.T({ ...S.photoCap, marginTop: 5 }, L.d.photoNofM(x.opening + 1, total))));
+    parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, photoBlock(L, ph(x.opening), PRINT_BOXES.opening.w, PRINT_BOXES.opening.h, 0.66, true), L.T({ ...S.photoCap, marginTop: 5 }, L.d.photoNofM(x.opening + 1, total))));
   } else {
     parts.push(h(View, { key: "op", wrap: false, style: { marginTop: 14 } }, missing(L, L.d.noPhotos, CONTENT_W, 180)));
   }

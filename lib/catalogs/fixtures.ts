@@ -86,6 +86,7 @@ export const fixtureCatalogDetail: CatalogDetail = {
   autoMatched: null,
   adjustments: { included: 0, excluded: [], unavailable: [], overMax: false },
   cover: { chosenPropertyId: null, chosenPhotoId: null, effectivePhotoUrl: syntheticPhoto(28, 320, 240, "1"), warnings: [] },
+  photoFinish: false,
   // E2 · material sintético (escrito a mano; la página real lo calcula con la
   // instantánea del lector). El dúplex está reservado y sin foto.
   material: {

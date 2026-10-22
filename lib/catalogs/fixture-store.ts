@@ -69,6 +69,26 @@ interface Share {
   version?: number;
   /** 0223: idioma por defecto del catálogo («es» si falta). */
   lang?: CatalogLanguage;
+  /** 0227 (PR7b): acabado fotográfico (`on`) y fotos «sin acabado» por
+   *  vivienda (`n`, por clave). Como en SQL, solo entra en la instantánea con
+   *  el acabado activo. */
+  finish?: { on: boolean; n: Record<string, string[]> };
+}
+
+/** Como catalog_internal_snapshot (0227): con el acabado activo, «fin» y, en
+ *  las viviendas con fotos marcadas, pp.n. Apagado, la instantánea de siempre. */
+function withFinish(s: Share, snap: InternalSnapshot): InternalSnapshot {
+  if (!s.finish?.on) return snap;
+  const n = s.finish.n;
+  return {
+    ...snap,
+    fin: true,
+    items: snap.items.map((it) => {
+      const keys = (n[it.key] ?? []).filter((k) => it.photos.some((ph) => ph.f === k)).sort();
+      if (!keys.length) return it;
+      return { ...it, pp: { x: it.pp?.x ?? [], o: it.pp?.o ?? null, n: keys } };
+    }),
+  };
 }
 
 const DESC =
@@ -443,7 +463,7 @@ function fingerprintOf(s: InternalSnapshot): string {
  *  (DA19). */
 function snapshotOf(s: Share, baseToken?: string): InternalSnapshot {
   const lang = s.lang ?? DEFAULT_CATALOG_LANGUAGE;
-  const snap = { ...s.snapshot, lang };
+  const snap = { ...withFinish(s, s.snapshot), lang };
   const catalogId = baseToken ? catalogOfToken(baseToken) : null;
   if (!catalogId || lang === "es") return snap;
   return trState().mem.mergeSnapshot(catalogId, snap.items.map((it) => ({ p: it.key, k: it.key })), snap, lang);
@@ -492,7 +512,8 @@ function catalogOfToken(token: string): string | null {
 /** La instantánea del catálogo para su dueño: aunque el enlace esté
  *  revocado, caducado o el catálogo archivado (P4). */
 export async function fixtureOwnerSnapshot(token: string): Promise<InternalSnapshot | null> {
-  return (await store()).get(token)?.snapshot ?? null;
+  const s = (await store()).get(token);
+  return s ? withFinish(s, s.snapshot) : null;
 }
 
 /** Huella pública actual de un enlace (null si no vale). */
@@ -553,7 +574,10 @@ export type FixtureOp =
   // 0223 (PR4): idioma del enlace. Con un token PERSONAL fija el idioma propio
   // de esa asignación (null = el del catálogo, como catalog_client_link_set_lang);
   // con el general, el idioma por defecto del catálogo (catalog_set_default_lang).
-  | { op: "lang"; token: string; lang: CatalogLanguage | null };
+  | { op: "lang"; token: string; lang: CatalogLanguage | null }
+  // 0227 (PR7b): acabado fotográfico del catálogo (`on`) y, si viene, las
+  // fotos «sin acabado» por vivienda (`n`: clave pública → claves de foto).
+  | { op: "finish"; token: string; on?: boolean; n?: Record<string, string[]> };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -607,6 +631,9 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
   switch (op.op) {
     case "operation":
       s.operation = op.operation;
+      break;
+    case "finish":
+      s.finish = { on: op.on ?? s.finish?.on ?? false, n: op.n ?? s.finish?.n ?? {} };
       break;
     case "photos":
       snap.items = snap.items.map((it) => (it.key === op.key ? { ...it, pp: op.x.length || op.o ? { x: op.x, o: op.o } : null } : it));

@@ -97,6 +97,8 @@ export interface CatalogPhotoItem {
   crmCover: boolean;
   /** Es la foto elegida como portada del catálogo. */
   catalogCover: boolean;
+  /** PR7b (0227): marcada «Sin acabado en esta foto». */
+  noFinish: boolean;
 }
 
 /** E3 · bloque «Fotos en este catálogo» de una vivienda. */
@@ -110,6 +112,8 @@ export interface CatalogPhotosView {
   stale: { excluded: string[]; opening: string | null };
   /** La portada del catálogo es una foto de esta vivienda (o su apertura). */
   catalogCoverHere: boolean;
+  /** PR7b (0227): el catálogo tiene el acabado fotográfico activo. */
+  finish: boolean;
 }
 
 export interface CatalogDetail {
@@ -143,6 +147,8 @@ export interface CatalogDetail {
     overMax: boolean;
   };
   cover: CatalogCoverState;
+  /** PR7b (0227): acabado fotográfico del catálogo (apagado por defecto). */
+  photoFinish: boolean;
   /** E2 (solo gestión, D-QA8): material de cada vivienda de la lista según lo
    *  que ve hoy el cliente, por propertyId. Sin entrada = sin diagnóstico. */
   material: Record<string, CatalogMaterial>;

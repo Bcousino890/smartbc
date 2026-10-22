@@ -77,6 +77,17 @@
   background: rgba(10, 10, 10, 0.25);
 }
 
+/* PR7b · Acabado fotográfico: filete interior fino, uniforme y sin esquinas
+   decorativas, ENCIMA de los velos (que no cambian: el contraste del título es
+   el de siempre). Una capa absoluta sin eventos: no mueve nada. Solo cuando
+   la foto de portada va tratada. */
+.finishRule {
+  position: absolute;
+  inset: 0.9em;
+  border: 1px solid rgba(251, 248, 243, 0.28);
+  pointer-events: none;
+}
+
 /* ── Marca ── */
 .brand {
   position: relative;

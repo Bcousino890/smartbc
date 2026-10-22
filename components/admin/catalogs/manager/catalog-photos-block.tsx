@@ -15,6 +15,8 @@ import type { CatalogPhotoItem, CatalogPhotosView } from "@/lib/catalogs/types";
 //   · los ajustes que ya no aplican (fotos borradas o reimportadas) se avisan
 //     y se pueden quitar (E3-5).
 // No cambia la ficha ni las fotos del CRM.
+// PR7b: con el acabado fotográfico del catálogo activo, cada foto en uso
+// ofrece «Sin acabado en esta foto» (se guarda al pulsar).
 
 type Res = ActionResult<{ version: number; fingerprint?: string | null; publicChange?: boolean }>;
 
@@ -22,6 +24,8 @@ export interface PhotoActions {
   list: (i: { catalogId: string; propertyId: string }) => Promise<ActionResult<{ view: CatalogPhotosView }>>;
   setExcluded: (i: { catalogId: string; propertyId: string; photoId: string; excluded: boolean; skipNotify?: boolean }) => Promise<Res>;
   setOpening: (i: { catalogId: string; propertyId: string; photoId: string | null; skipNotify?: boolean }) => Promise<Res>;
+  /** PR7b · «Sin acabado en esta foto». */
+  setNoFinish: (i: { catalogId: string; propertyId: string; photoId: string; noFinish: boolean; skipNotify?: boolean }) => Promise<Res>;
 }
 
 const SOURCE: Record<CatalogPhotosView["openingSource"], string> = {
@@ -80,6 +84,15 @@ export function CatalogPhotosBlock({
     run(
       () => actions.setOpening({ catalogId, propertyId, photoId }),
       photoId ? "Foto de apertura elegida." : "Apertura automática.",
+      () => void load(),
+      undefined,
+      "fotos",
+    );
+  }
+  function noFinish(photoId: string, on: boolean) {
+    run(
+      () => actions.setNoFinish({ catalogId, propertyId, photoId, noFinish: on }),
+      on ? "Esta foto se verá sin acabado." : "Esta foto vuelve a llevar el acabado.",
       () => void load(),
       undefined,
       "fotos",
@@ -178,6 +191,19 @@ export function CatalogPhotosBlock({
                       )}
                     </div>
                     {last ? <p className="text-xs text-ink/50">Última foto en uso: no se puede excluir.</p> : null}
+                    {view.finish && !ph.excluded ? (
+                      <label className="flex items-center gap-1.5 text-xs text-ink/70" data-testid="photo-no-finish">
+                        <input
+                          type="checkbox"
+                          checked={ph.noFinish}
+                          disabled={pending}
+                          onChange={(e) => noFinish(ph.photoId, e.target.checked)}
+                          className="h-3.5 w-3.5 accent-[#b8956a]"
+                          aria-label={`Sin acabado en la foto ${i + 1}`}
+                        />
+                        Sin acabado en esta foto
+                      </label>
+                    ) : null}
                   </li>
                 );
               })}
