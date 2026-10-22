@@ -18,7 +18,13 @@
 //     la clave (N1), no por el índice; `v` (8 hex del md5 de la URL) cambia
 //     al realojar y evita la caché vieja. No detecta un archivo sustituido en
 //     la MISMA URL (límite documentado, corrección 5 de D-QA19).
+//   · PR7b · Acabado fotográfico: si el catálogo lo tiene activo y la foto no
+//     está marcada «sin acabado» (prefs.n), su ruta lleva `t=<versión de la
+//     receta>` y el proxy sirve la variante tratada. Apagado, la ruta es
+//     EXACTAMENTE la de antes.
 // ============================================================================
+
+import { TONE_RECIPE_VERSION } from "./photo-tone";
 
 export interface PhotoInput {
   /** md5 de la URL (instantánea interna). */
@@ -37,6 +43,9 @@ export interface PhotoInput {
 export interface PhotoPrefs {
   x: string[];
   o: string | null;
+  /** PR7b (0227): fotos «sin acabado en esta foto». Solo llega en la
+   *  instantánea cuando el catálogo tiene el acabado activo. */
+  n?: string[];
 }
 
 export interface EffectivePhoto {
@@ -53,6 +62,8 @@ export interface EffectivePhoto {
   h: number | null;
   k: string | null;
   crmCover: boolean;
+  /** PR7b: la foto está marcada «sin acabado en esta foto» (cualquiera de sus filas). */
+  noFinish: boolean;
 }
 
 export type OpeningSource = "chosen" | "crm-cover" | "first" | "none";
@@ -84,6 +95,7 @@ export function effectivePhotos(input: PhotoInput[] | null | undefined, prefs?: 
     }
   }
   const excludedKeys = new Set(prefs?.x ?? []);
+  const noFinishKeys = new Set(prefs?.n ?? []);
   const known = new Set(groups.flatMap((g) => g.keys));
   const opening = prefs?.o ?? null;
 
@@ -99,6 +111,7 @@ export function effectivePhotos(input: PhotoInput[] | null | undefined, prefs?: 
       h: g.first.h ?? null,
       k: typeof g.first.k === "string" ? g.first.k : null,
       crmCover: g.first.c === true,
+      noFinish: g.keys.some((k) => noFinishKeys.has(k)),
       excluded,
       opening: !excluded && opening !== null && g.keys.includes(opening),
     };
@@ -128,10 +141,31 @@ export function effectivePhotos(input: PhotoInput[] | null | undefined, prefs?: 
   };
 }
 
-/** Ruta pública de una foto: por clave si la hay (N1); si no, la de antes. */
-export function photoSrc(slug: string, p: Pick<EffectivePhoto, "proxyIdx" | "key" | "v">): string {
+/** Parámetro del acabado en la ruta de una foto (PR7b). */
+export const FINISH_PARAM = "t";
+
+/** Ruta pública de una foto: por clave si la hay (N1); si no, la de antes.
+ *  Con `finish` (PR7b: catálogo con acabado y foto no excluida del acabado),
+ *  la variante tratada: `&t=<versión de la receta>`. */
+export function photoSrc(slug: string, p: Pick<EffectivePhoto, "proxyIdx" | "key" | "v">, finish = false): string {
   const base = `/p/${encodeURIComponent(slug)}/${p.proxyIdx}.webp`;
-  return p.key ? `${base}?f=${p.key}&v=${p.v}` : base;
+  const src = p.key ? `${base}?f=${p.key}&v=${p.v}` : base;
+  return finish ? `${src}${src.includes("?") ? "&" : "?"}${FINISH_PARAM}=${TONE_RECIPE_VERSION}` : src;
+}
+
+/** ¿Lleva esta ruta de foto el acabado? (lector y PDF: el filete acompaña a
+ *  la foto tratada). */
+export function isFinishedSrc(src: string | null | undefined): boolean {
+  return typeof src === "string" && /[?&]t=[1-9][0-9]{0,2}(?:&|$)/.test(src);
+}
+
+/** Lo que pide el proxy en `t`: una versión de receta (1–999). Con cualquier
+ *  versión válida se aplica la receta VIGENTE. Al subir la versión, las rutas
+ *  nuevas llevan el número nuevo, así que la caché nunca les sirve bytes de la
+ *  receta anterior; una ruta vieja (un lector abierto antes) recibe la vigente.
+ *  Cualquier otro valor = sin acabado. */
+export function parseFinishParam(raw: string | null | undefined): boolean {
+  return typeof raw === "string" && /^[1-9][0-9]{0,2}$/.test(raw);
 }
 
 /** Añade el ancho a una ruta de foto, lleve ya parámetros o no. */

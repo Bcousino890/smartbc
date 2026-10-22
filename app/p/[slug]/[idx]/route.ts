@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { contentRange, parseRangeHeader, unsatisfiedContentRange } from "@/lib/http/range";
-import { isPhotoKey } from "@/lib/catalogs/photo-selection";
+import { isPhotoKey, parseFinishParam } from "@/lib/catalogs/photo-selection";
 import { renderPhotoVariant } from "@/lib/catalogs/photo-variant";
 import { snapPhotoWidth } from "@/lib/catalogs/photo-widths";
 import { findPropertyPhoto, photoCandidates } from "@/lib/catalogs/photo-resolve";
@@ -37,6 +37,15 @@ import { findPropertyPhoto, photoCandidates } from "@/lib/catalogs/photo-resolve
 //   · calidad 86 en WebP: el hero es la imagen más importante de la página y
 //     ahorrar 150KB destrozando una fotografía premium es mal negocio.
 // Sin `?w=` el comportamiento es exactamente el de antes.
+//
+// ── Acabado fotográfico (`&t=<versión>`, PR7b) ──
+// Con `t` se sirve la variante TRATADA (tono adaptativo por foto,
+// lib/catalogs/photo-tone.ts), combinable con `w`. Es una copia: el original
+// del almacén nunca se reescribe. La versión de la receta va en la URL (clave
+// de la caché del CDN, misma cabecera de 24 h); `X-Bcp-Tone` dice la receta
+// aplicada («v1/luminosa») o `fallback` (falló el tratamiento: va la variante
+// sin tratar). Solo lo piden los catálogos con el acabado activo y en las
+// fotos no excluidas del acabado. Sin `t`, todo es exactamente como antes.
 //
 // ── `Range` ──
 // El storage de origen lo maneja mal y lo pagábamos nosotros: con un fichero
@@ -107,6 +116,7 @@ export async function GET(
   const { slug, idx } = await params;
   const search = new URL(req.url).searchParams;
   const width = snapPhotoWidth(search.get("w"));
+  const tone = parseFinishParam(search.get("t"));
   const fRaw = search.get("f");
   if (fRaw !== null && !isPhotoKey(fRaw)) {
     return new NextResponse("bad_photo", { status: 400, headers: { "Cache-Control": "no-store" } });
@@ -142,7 +152,7 @@ export async function GET(
     try {
       // Con `Range` hay que conocer el tamaño ANTES de pedir nada: es lo que
       // permite recortar y, de paso, no disparar el fallo del origen.
-      if (rangeHeader && !width) {
+      if (rangeHeader && !width && !tone) {
         const head = await fetch(candidates[i], {
           method: "HEAD",
           cache: "no-store",
@@ -197,8 +207,8 @@ export async function GET(
       }
       const contentType = upstream.headers.get("content-type") ?? "image/webp";
       const cache = "public, max-age=86400, s-maxage=86400";
-      if (!width) {
-        // Sin `?w=`: se sirve el original en streaming, sin tocar un byte.
+      if (!width && !tone) {
+        // Sin `?w=` ni `t`: se sirve el original en streaming, sin tocar un byte.
         const length = upstream.headers.get("content-length");
         return new NextResponse(upstream.body, {
           headers: {
@@ -213,8 +223,11 @@ export async function GET(
       // Más pequeña que lo pedido → se devuelve tal cual («original»); si el
       // reencode falla, también («fallback»): una foto grande de más es
       // infinitamente mejor que un hueco roto.
-      const v = await renderPhotoVariant(source, width, contentType);
-      return respondBuffer(v.data, v.contentType, cache, rangeHeader, { "X-Bcp-Variant": v.variant });
+      const v = await renderPhotoVariant(source, width, contentType, { tone });
+      return respondBuffer(v.data, v.contentType, cache, rangeHeader, {
+        "X-Bcp-Variant": v.variant,
+        ...(v.tone ? { "X-Bcp-Tone": v.tone } : {}),
+      });
     } catch {
       if (!isLast) continue;
       return new NextResponse("upstream_error", { status: 502 });
