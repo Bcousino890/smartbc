@@ -4,7 +4,7 @@
 **Base comprobada:** `origin/main` = `8b640e3b` (21 de octubre de 2026), con 0217 (título propio), 0218 (asignaciones y opiniones) y la descripción estructurada (#341). La última migración en `main` es la 0218; ningún PR abierto usa 0219 o posteriores (comprobado rama por rama).
 **Tamaño:** grande o sensible (migraciones, contenido público, IA de pago bajo demanda, recursos tipográficos nuevos).
 
-Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N4** (§6) y no se vuelven a preguntar. Queda abierta **N5**, que solo afecta al PR6 y se presentará antes de implementarlo.
+Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N5** (§6) y no se vuelven a preguntar. **N5** (vivienda sin traducción vigente) quedó **decidida por Fabricio el 22-10-2026** y solo afecta al PR6.
 
 ## 1. Lo que se conserva (aprobado por Fabricio)
 
@@ -164,11 +164,11 @@ Las decisiones de Fabricio se registran como **DA1–DA37** y **N1–N4** (§6) 
 | **DA36** | **Reutilización y concurrencia de traducciones, explícitas.** Solo se traduce el idioma que pide el personal autorizado y se reutilizan traducciones aprobadas por versión de origen e idioma exactos. Visitas públicas, valoraciones y descargas de PDF nunca generan traducciones ni llaman a la IA. Se impide la preparación duplicada simultánea y que un trabajo caducado pise uno más nuevo; caducidad de la reserva, cancelación y resultados inciertos del proveedor se tratan expresamente. **No se promete una sola llamada de pago** solo por existir una reserva en la base de datos, y no hay reintentos automáticos sin control. |
 | **DA37** | **Clasificación geográfica prudente.** Una calle o un título comercial no prueban el barrio. Se usa información geográfica verificada y el flujo de confirmación para la ambigüedad. Ninguna plantilla ni etiqueta se presenta como «verificada» mientras la clasificación esté sin resolver. Plantillas independientes de grupos y criterios de búsqueda; se conservan las descripciones de zona propias y las copias congeladas de cada catálogo. |
 
-### Decisión abierta que hay que cerrar antes del PR6
+### Decisión N5 (cerrada antes del PR6)
 
-| | Pregunta | Recomendación |
+| | Pregunta | Decisión |
 | --- | --- | --- |
-| **N5** | En un catálogo con un idioma activo, ¿qué ve el cliente de una vivienda **sin traducción vigente** (porque se añadió después o porque la ficha cambió y su texto dejó de valer)? | La vivienda **se ve** con sus datos, fotos y etiquetas en el idioma, y en el lugar de la descripción un aviso visible en ese idioma: «Descripción en preparación». No se muestra el español ni se oculta la vivienda. El gestor lo marca y ofrece preparar la traducción. Alternativa: mostrar el texto español con un aviso visible «Disponible en español». |
+| **N5** | En un catálogo con un idioma activo, ¿qué ve el cliente de una vivienda **sin traducción vigente** (porque se añadió después o porque la ficha cambió y su texto dejó de valer)? | **DECIDIDA por Fabricio el 22-10-2026.** Aviso «Descripción en preparación»: la vivienda se ve con sus datos, fotos y etiquetas en el idioma y, en lugar de la descripción, un aviso visible en ese idioma; no se muestra el español ni se oculta la vivienda; el gestor lo marca y ofrece preparar la traducción. (Se descartó la alternativa de mostrar el texto español con un aviso «Disponible en español».) |
 
 Todo lo demás son decisiones rutinarias de implementación y se anotan en el plan.
 

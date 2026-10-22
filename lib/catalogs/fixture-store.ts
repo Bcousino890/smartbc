@@ -4,6 +4,7 @@ import type { InternalItem, InternalSnapshot } from "./to-public";
 import type { CatalogMeta } from "./coherent-read";
 import type { CatalogOperation } from "./operation-price";
 import { composeFingerprint } from "./public-fingerprint";
+import { DEFAULT_CATALOG_LANGUAGE, type CatalogLanguage } from "./i18n";
 
 // ============================================================================
 // SOLO DESARROLLO LOCAL (BCP-01 T11, E7). Almacén EN MEMORIA que sustituye a
@@ -64,6 +65,8 @@ interface Share {
   operation?: CatalogOperation;
   /** Como catalogs.version: sube con cada cambio. */
   version?: number;
+  /** 0223: idioma por defecto del catálogo («es» si falta). */
+  lang?: CatalogLanguage;
 }
 
 const DESC =
@@ -124,7 +127,10 @@ async function seed(): Promise<Map<string, Share>> {
       item({
         key: "fxKeyAtico01", slug: "fx-atico", title: "Ático con terraza sobre los tejados de Jerónimos",
         subzone: "Jerónimos", price: 1450000, bedrooms: 3, bathrooms: 2, square_meters: 142,
-        floor_override: "7", photos: photos(28, 4, "h"),
+        // PR7a: esta vivienda da la portada del catálogo principal; sus fotos
+        // declaran el ancho máximo del almacén (2.560 px) para que la QA de
+        // resolución compruebe que la portada pide la variante grande.
+        floor_override: "7", photos: photos(28, 4, "h").map((p) => ({ ...p, w: 2560, h: 1707 })),
       }),
       DESC,
       ["Terraza de 40 m²", "Ascensor", "Calefacción central", "Portero físico"],
@@ -428,13 +434,20 @@ function fingerprintOf(s: InternalSnapshot): string {
   return createHash("md5").update(JSON.stringify(s)).digest("hex");
 }
 
+/** Como get_public_catalog (0223): la instantánea del enlace lleva su idioma
+ *  (el del enlace personal si lo tiene, si no el del catálogo), y por tanto
+ *  la huella cambia con él (DA19). */
+function snapshotOf(s: Share): InternalSnapshot {
+  return { ...s.snapshot, lang: s.lang ?? DEFAULT_CATALOG_LANGUAGE };
+}
+
 function valid(s: Share | undefined): s is Share {
   return !!s && !s.revoked && !s.archived && s.expiresAt > Date.now();
 }
 
 /** Huella pública compuesta (la misma que sirve public-data.ts). */
 function publicFingerprintOf(s: Share): string {
-  return composeFingerprint(fingerprintOf(s.snapshot), s.operation ?? "any");
+  return composeFingerprint(fingerprintOf(snapshotOf(s)), s.operation ?? "any");
 }
 
 /** m1/m2 de la lectura coherente: versión y operación de cada enlace. */
@@ -476,7 +489,8 @@ export async function fixtureFingerprint(token: string): Promise<string | null> 
 export async function fixtureGetPublic(token: string): Promise<{ snapshot: InternalSnapshot; fingerprint: string; expiresAt: string } | null> {
   const s = resolveShare(await store(), token);
   if (!valid(s)) return null;
-  return { snapshot: s.snapshot, fingerprint: fingerprintOf(s.snapshot), expiresAt: new Date(s.expiresAt).toISOString() };
+  const snapshot = snapshotOf(s);
+  return { snapshot, fingerprint: fingerprintOf(snapshot), expiresAt: new Date(s.expiresAt).toISOString() };
 }
 
 export async function fixtureGetStates(tokens: string[]) {
@@ -484,7 +498,7 @@ export async function fixtureGetStates(tokens: string[]) {
   return new Map(
     tokens.map((t) => {
       const s = resolveShare(st, t);
-      return [t, valid(s) ? { valid: true, fingerprint: fingerprintOf(s.snapshot), expiresAt: new Date(s.expiresAt).toISOString() } : { valid: false, fingerprint: null, expiresAt: null }] as const;
+      return [t, valid(s) ? { valid: true, fingerprint: fingerprintOf(snapshotOf(s)), expiresAt: new Date(s.expiresAt).toISOString() } : { valid: false, fingerprint: null, expiresAt: null }] as const;
     }),
   );
 }
@@ -520,7 +534,11 @@ export type FixtureOp =
   | { op: "photo-delay"; ms: number }
   // PDF (medición, T10): servir cada foto como un JPEG grande de `px` de lado
   // mayor (0 = el SVG pequeño de siempre).
-  | { op: "photo-size"; px: number };
+  | { op: "photo-size"; px: number }
+  // 0223 (PR4): idioma del enlace. Con un token PERSONAL fija el idioma propio
+  // de esa asignación (null = el del catálogo, como catalog_client_link_set_lang);
+  // con el general, el idioma por defecto del catálogo (catalog_set_default_lang).
+  | { op: "lang"; token: string; lang: CatalogLanguage | null };
 
 /** Aplica un cambio sintético y devuelve la huella nueva (o null si el
  *  enlace ya no vale). */
@@ -551,6 +569,20 @@ export async function fixtureMutate(op: FixtureOp): Promise<{ fingerprint: strin
     return { fingerprint: await fixtureFingerprint(op.token) };
   }
   const st = await store();
+  if (op.op === "lang") {
+    const link = fb().links.get(op.token);
+    if (link) {
+      link.lang = op.lang;
+      const base = st.get(link.base);
+      if (base) base.version = (base.version ?? 1) + 1;
+    } else {
+      const share = st.get(op.token);
+      if (!share) return { fingerprint: null };
+      share.lang = op.lang ?? DEFAULT_CATALOG_LANGUAGE;
+      share.version = (share.version ?? 1) + 1;
+    }
+    return { fingerprint: await fixtureFingerprint(op.token) };
+  }
   const s = st.get(op.token);
   if (!s) return { fingerprint: null };
   const snap = s.snapshot;
@@ -748,6 +780,8 @@ interface PersonalLink {
   createdAt: number;
   expiresAt: number;
   revokedAt: number | null;
+  /** 0223: idioma propio del enlace personal (null = el del catálogo). */
+  lang?: CatalogLanguage | null;
 }
 
 interface StoredFeedback {
@@ -819,7 +853,7 @@ function resolveShare(st: Map<string, Share>, token: string): Share | undefined 
   if (!p) return undefined;
   const b = st.get(p.base);
   if (!b) return undefined;
-  return { ...b, expiresAt: p.expiresAt, revoked: p.revokedAt !== null };
+  return { ...b, expiresAt: p.expiresAt, revoked: p.revokedAt !== null, lang: p.lang ?? b.lang };
 }
 
 function validPersonal(st: Map<string, Share>, token: string): { link: PersonalLink; share: Share } | null {

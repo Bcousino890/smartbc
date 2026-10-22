@@ -1,7 +1,8 @@
 import { deriveEditorial } from "./editorial";
 import { createHash } from "node:crypto";
 import { ATICO_FLOOR, resolveFloor } from "@/lib/floor";
-import { editionLabel, floorLabel } from "./format";
+import { editionLabel, floorLabel, floorShortLabel } from "./format";
+import { catalogDictionary, snapshotLang, type CatalogLanguage } from "./i18n";
 import { priceDisplay, type CatalogOperation } from "./operation-price";
 import { effectivePhotos, photoSrc } from "./photo-selection";
 import { contactPhoneHref, formatContactPhone, isContactRole } from "./contact-format";
@@ -31,6 +32,9 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export interface InternalSnapshot {
+  /** 0223: idioma del enlace que abrió la instantánea (get_public_catalog);
+   *  ausente o desconocido = español. */
+  lang?: string | null;
   title: string;
   intro: string | null;
   created_at: string;
@@ -160,7 +164,7 @@ export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, it
  *  alquiler, la operación y el importe del catálogo; una inclusión de otra
  *  operación, lo suyo real; en «venta y alquiler», como siempre. Sin la otra
  *  operación de las duales: eso es solo de la gestión. */
-export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): PublicItem {
+export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lang: CatalogLanguage = "es"): PublicItem {
   const clean = it.clean;
   const cleanValid =
     !!clean && typeof clean.src === "string" && clean.src === clientDescriptionSrc(it.description, it.features);
@@ -192,10 +196,12 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): Pu
   const shown = priceDisplay(
     { operation: it.operation, operations: it.operations, price: it.price, rent_price: it.rent_price, currency: it.currency },
     op,
+    lang,
   );
+  const atico = floorN === ATICO_FLOOR;
   return {
     key: String(it.key),
-    title: String(it.title ?? "").trim() || "Sin título",
+    title: String(it.title ?? "").trim() || catalogDictionary(lang).untitled,
     place: [it.subzone, it.zone].filter((x) => typeof x === "string" && x.trim()).join(", ") || null,
     operation: shown.operation,
     price: shown.price,
@@ -203,7 +209,8 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): Pu
     bedrooms: nonNegativeInt(it.bedrooms),
     bathrooms: nonNegativeInt(it.bathrooms),
     squareMeters: positiveInt(it.square_meters),
-    floor: floorN === ATICO_FLOOR ? floorLabel(null, true) : floorLabel(floorN),
+    floor: atico ? floorLabel(null, true, lang) : floorLabel(floorN, false, lang),
+    floorShort: atico ? floorShortLabel(null, true, lang) : floorShortLabel(floorN, false, lang),
     copy: ed.copy,
     features: ed.features,
     photos,
@@ -211,16 +218,19 @@ export function toPublicItem(it: InternalItem, op: CatalogOperation = "any"): Pu
   };
 }
 
-export function toPublicCatalog(snap: InternalSnapshot, op: CatalogOperation = "any"): PublicCatalog {
+/** `lang` (PR4): el idioma del enlace. Por defecto, el que trae la
+ *  instantánea (0223) o español. El PDF (hasta el PR5) pasa «es» a propósito. */
+export function toPublicCatalog(snap: InternalSnapshot, op: CatalogOperation = "any", lang: CatalogLanguage = snapshotLang(snap.lang)): PublicCatalog {
   // Defensa en profundidad: la instantánea ya excluye vendidas y archivadas.
   const items = (snap.items ?? [])
     .filter((it) => it && it.status !== "sold" && it.status !== "archived")
-    .map((it) => toPublicItem(it, op));
+    .map((it) => toPublicItem(it, op, lang));
   const contact = snap.contact ?? null;
   return {
+    lang,
     title: String(snap.title ?? "").trim(),
     intro: typeof snap.intro === "string" && snap.intro.trim() ? snap.intro.trim() : null,
-    edition: editionLabel(new Date(snap.created_at)),
+    edition: editionLabel(new Date(snap.created_at), lang),
     preparedBy: typeof contact?.name === "string" && contact.name.trim() ? contact.name.trim() : null,
     phone: formatContactPhone(contact?.phone),
     phoneHref: contactPhoneHref(contact?.phone),

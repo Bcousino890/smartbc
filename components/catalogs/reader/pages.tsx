@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { ChapterMark, DataPoint, Label, Ornament, Rule, StatusLine } from "@/app/v/[token]/_components/editorial";
-import { CatalogCover, countLabel } from "@/components/catalogs/catalog-cover";
-import { contactRoleLabel } from "@/lib/catalogs/contact-format";
+import { CatalogCover } from "@/components/catalogs/catalog-cover";
+import { formatDateShort, formatNumber } from "@/lib/catalogs/i18n";
+import { COVER_FALLBACK_WIDTH, COVER_SIZES, coverPhotoWidth, coverSrcSet } from "@/lib/catalogs/cover-srcset";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
-import { shareExpiryLabel } from "@/lib/catalogs/share";
 import { cn } from "@/lib/utils";
+import { useReaderLang } from "./lang-context";
 import { PdfDownload, type ReaderPdf } from "./pdf-download";
 import { ReaderImage } from "./reader-image";
 import { ScrollRegion } from "./scroll-region";
@@ -16,6 +17,16 @@ import styles from "./reader.module.css";
 // (Label, Rule, Ornament, DataPoint, ChapterMark, StatusLine) son las de
 // app/v/[token]/_components/editorial.tsx (DV12). Sin fechas, horas, estados
 // de visita, referencias BC, direcciones ni enlaces a la ficha (DV2, DV3).
+// Idiomas (PR4): las etiquetas fijas salen del diccionario del enlace
+// (lang-context.tsx); las cifras, los precios y el teléfono van SIEMPRE en
+// LTR (dir="ltr", que aísla la dirección), también en árabe y hebreo. Las
+// alineaciones son lógicas (text-start/text-end) para que el índice se lea
+// en el sentido del idioma. El CONTENIDO (títulos, zona, descripción,
+// características, introducción y contacto), que sigue en español hasta el
+// PR6, va en <bdi>: en una página RTL conserva su propio orden (la
+// puntuación de una frase española no salta al otro lado) y en LTR no
+// cambia nada. StatePage no usa el contexto: la pinta también
+// la página de servidor con un enlace no válido (siempre en español).
 
 export type PhotoUrl = (src: string, width: number) => string;
 
@@ -35,30 +46,44 @@ export function n2(i: number): string {
 
 const PHOTO_SIZES = "(min-width: 900px) and (min-height: 620px) 50vw, 100vw";
 
-function num(v: number | null): ReactNode {
-  return v === null ? <span className="text-ink/30">—</span> : v.toLocaleString("es-ES");
-}
+const DASH = <span className="text-ink/30">—</span>;
 
-/** «Ver 12 fotografías» */
-function photosWord(n: number): string {
-  return `Ver ${n} ${n === 1 ? "fotografía" : "fotografías"}`;
+/** Cifra en el formato del idioma y aislada en LTR (también en RTL). */
+function Num({ value, suffix }: { value: number | null; suffix?: ReactNode }) {
+  const { lang } = useReaderLang();
+  if (value === null) return DASH;
+  return (
+    <span dir="ltr">
+      {formatNumber(value, lang)}
+      {suffix}
+    </span>
+  );
 }
 
 // ─── Portada ─────────────────────────────────────────────────────────────────
 
 export function CoverPage({ catalog, url, onBegin }: { catalog: PublicCatalog; url: PhotoUrl; onBegin?: () => void }) {
+  const { dict } = useReaderLang();
+  // PR7a: la portada va a sangre y en retina pedía 1.600 px para 2.880. Con
+  // `srcset` acotado al ancho real de la foto (hasta 2.560, el máximo
+  // guardado) el navegador pide la variante que le corresponde. Misma caja,
+  // misma posición, mismo recorte; `src` sigue siendo la variante de siempre.
+  const cover = catalog.coverPhoto;
   return (
-    <section className={cn(styles.page, styles.coverPage)} aria-label="Portada">
+    <section className={cn(styles.page, styles.coverPage)} aria-label={dict.cover}>
       <CatalogCover
         readable
         onBegin={onBegin}
+        labels={{ kicker: dict.privateSelection, preparedBy: dict.preparedBy, begin: dict.begin }}
         data={{
           title: catalog.title,
           subtitle: null,
           edition: catalog.edition,
-          photoUrl: catalog.coverPhoto ? url(catalog.coverPhoto, 1600) : null,
+          photoUrl: cover ? url(cover, COVER_FALLBACK_WIDTH) : null,
+          photoSrcSet: cover ? coverSrcSet(url, cover, coverPhotoWidth(catalog)) : null,
+          photoSizes: COVER_SIZES,
           preparedBy: catalog.preparedBy,
-          countLabel: countLabel(catalog.items.length),
+          countLabel: dict.homesCount(catalog.items.length),
         }}
       />
     </section>
@@ -80,20 +105,21 @@ export function IndexPage({
   /** Descarga del PDF; null = no se ofrece (sin conexión). */
   pdf?: ReaderPdf | null;
 }) {
+  const { dict } = useReaderLang();
   const hasIntro = !!catalog.intro;
   return (
-    <section className={cn(styles.page, styles.indexPage)} aria-label="Índice">
+    <section className={cn(styles.page, styles.indexPage)} aria-label={dict.contents}>
       <div className={cn(styles.indexLayout, hasIntro && styles.indexWithIntro)}>
         {hasIntro ? (
-          <div className={styles.introCol} aria-label="Introducción">
-            <Label tone="gold">Una selección pensada para ti</Label>
-            <h2 className="mt-3 font-serif text-[26px] font-normal vc-tight text-ink sm:text-[32px] lg:text-[38px]">{catalog.title}</h2>
+          <div className={styles.introCol} aria-label={dict.introduction}>
+            <Label tone="gold">{dict.introLabel}</Label>
+            <h2 className="mt-3 font-serif text-[26px] font-normal vc-tight text-ink sm:text-[32px] lg:text-[38px]"><bdi>{catalog.title}</bdi></h2>
             <Ornament className="mx-0 mt-6" />
-            <p className="mt-6 whitespace-pre-line break-words font-sans text-[15px] leading-relaxed text-ink/80">{catalog.intro}</p>
+            <p className="mt-6 whitespace-pre-line break-words font-sans text-[15px] leading-relaxed text-ink/80"><bdi>{catalog.intro}</bdi></p>
             {catalog.preparedBy ? (
               <p className="mt-7 font-sans text-[13px] text-ink/55">
-                Un saludo,
-                <span className="mt-1 block font-serif text-[22px] italic text-ink">{catalog.preparedBy}</span>
+                {dict.greeting}
+                <span className="mt-1 block font-serif text-[22px] italic text-ink"><bdi>{catalog.preparedBy}</bdi></span>
               </p>
             ) : null}
           </div>
@@ -101,20 +127,20 @@ export function IndexPage({
 
         <div className={styles.indexCol}>
           <header className="text-center">
-            <Label tone="gold">Índice</Label>
-            <h2 className="mt-3 font-serif text-[26px] font-normal vc-tight text-ink sm:text-[32px] lg:text-[40px]">En esta selección</h2>
-            {!hasIntro ? <p className="mt-3 font-sans text-[13px] text-ink/50">{catalog.title}</p> : null}
+            <Label tone="gold">{dict.contents}</Label>
+            <h2 className="mt-3 font-serif text-[26px] font-normal vc-tight text-ink sm:text-[32px] lg:text-[40px]">{dict.inThisSelection}</h2>
+            {!hasIntro ? <p className="mt-3 font-sans text-[13px] text-ink/50"><bdi>{catalog.title}</bdi></p> : null}
             {pdf && catalog.items.length ? <PdfDownload pdf={pdf} variant="index" /> : null}
             <Ornament className="mt-6" />
           </header>
 
           {catalog.items.length === 0 ? (
             <div className="mt-10 text-center" data-testid="empty-state">
-              <h3 className="font-serif text-[22px] font-normal text-ink">Esta selección no tiene viviendas ahora mismo</h3>
-              <p className="mt-3 font-sans text-[14px] leading-relaxed text-ink/55">Se actualizará en cuanto haya opciones nuevas. Esta página se actualiza sola.</p>
+              <h3 className="font-serif text-[22px] font-normal text-ink">{dict.emptyTitle}</h3>
+              <p className="mt-3 font-sans text-[14px] leading-relaxed text-ink/55">{dict.emptyHint}</p>
             </div>
           ) : (
-            <ScrollRegion label="Índice" variant="index" cue="Más viviendas ↓">
+            <ScrollRegion label={dict.contents} variant="index" cue={dict.moreHomes}>
               <Rule className="mt-8" />
               <ol>
                 {catalog.items.map((it, i) => (
@@ -125,14 +151,14 @@ export function IndexPage({
                       className="vc-focus group grid w-full grid-cols-[2.2rem_1fr_auto] items-baseline gap-x-3 gap-y-0.5 py-3 text-start transition-colors duration-500 sm:grid-cols-[3rem_1fr_auto_auto] sm:gap-x-6 sm:py-4 lg:py-5"
                       data-check-overflow="indice"
                     >
-                      <span className="font-display text-[10.5px] font-medium uppercase vc-tracked vc-nums text-ink/30">{n2(i)}</span>
+                      <span dir="ltr" className="font-display text-[10.5px] font-medium uppercase vc-tracked vc-nums text-ink/30">{n2(i)}</span>
                       <span className="min-w-0">
                         <span className="block break-words font-display text-[12px] font-medium uppercase vc-tracked-sm text-ink transition-colors duration-500 group-hover:text-gold-dark sm:text-[13px]">
-                          {it.title}
+                          <bdi>{it.title}</bdi>
                         </span>
-                        <span className="mt-0.5 block font-sans text-[11.5px] text-ink/45">{it.place ?? "Zona · sin dato"}</span>
+                        <span className="mt-0.5 block font-sans text-[11.5px] text-ink/45">{it.place ? <bdi>{it.place}</bdi> : dict.placeNoData}</span>
                       </span>
-                      <span className="max-w-[8.5rem] justify-self-end break-words text-right font-serif text-[18px] leading-tight vc-nums text-ink sm:max-w-[11rem] sm:text-[20px] lg:text-[22px]">{it.price}</span>
+                      <span dir="ltr" className="max-w-[8.5rem] justify-self-end break-words text-end font-serif text-[18px] leading-tight vc-nums text-ink sm:max-w-[11rem] sm:text-[20px] lg:text-[22px]">{it.price}</span>
                       {/* En una columna, el estado o el folio van bajo el precio. */}
                       <span
                         className={cn(
@@ -140,7 +166,7 @@ export function IndexPage({
                           it.reserved ? "text-gold-dark" : "text-ink/30",
                         )}
                       >
-                        {it.reserved ? "Reservada" : `p. ${folioOf(it.key)}`}
+                        {it.reserved ? dict.reserved : dict.pageAbbr(folioOf(it.key))}
                       </span>
                     </button>
                     <Rule />
@@ -171,21 +197,22 @@ function PhotoColumn({
   sizes?: string;
   onOpenGallery: (photo: number) => void;
 }) {
+  const { dict } = useReaderLang();
   const p = item.photos[photo];
   return (
     <div className={styles.photoCol}>
       {p ? (
-        <button type="button" className={cn(styles.photoBtn, "vc-focus group")} onClick={() => onOpenGallery(photo)} aria-haspopup="dialog" aria-label={`Ver las fotos de ${item.title}`}>
+        <button type="button" className={cn(styles.photoBtn, "vc-focus group")} onClick={() => onOpenGallery(photo)} aria-haspopup="dialog" aria-label={dict.viewPhotosOf(item.title)}>
           <ReaderImage variant="frame" {...photoProps(p, url, sizes)} alt={item.title} decoding="async" />
           {item.photos.length > 1 ? (
-            <span className="pointer-events-none absolute bottom-6 right-6 border border-cream-50/45 bg-ink/55 px-4 py-2.5 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm">
-              {photosWord(item.photos.length)}
+            <span className="pointer-events-none absolute bottom-6 end-6 border border-cream-50/45 bg-ink/55 px-4 py-2.5 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm">
+              {dict.viewPhotos(item.photos.length)}
             </span>
           ) : null}
         </button>
       ) : (
         <div className={styles.photoEmpty} data-check-overflow="foto">
-          <Label className="text-ink/30">Sin fotos</Label>
+          <Label className="text-ink/30">{dict.noPhotos}</Label>
         </div>
       )}
     </div>
@@ -193,6 +220,7 @@ function PhotoColumn({
 }
 
 function ItemHead({ item, index, total }: { item: PublicItem; index: number; total: number }) {
+  const { dict } = useReaderLang();
   return (
     <>
       <div className="flex items-center gap-4 md:gap-5">
@@ -200,14 +228,20 @@ function ItemHead({ item, index, total }: { item: PublicItem; index: number; tot
         <span aria-hidden className="h-px flex-1 bg-ink/12" />
       </div>
       <Label tone="gold" className="mt-4 md:mt-7">
-        {[item.operation, item.place].filter(Boolean).join(" · ")}
+        {item.operation}
+        {item.place ? (
+          <>
+            {" · "}
+            <bdi>{item.place}</bdi>
+          </>
+        ) : null}
       </Label>
       <h2 className="mt-2 max-w-[18ch] break-words font-serif text-[26px] font-normal vc-tight text-ink sm:text-[30px] md:text-[34px] lg:text-[42px]" data-check-overflow="titulo" data-testid="item-title">
-        {item.title}
+        <bdi>{item.title}</bdi>
       </h2>
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 md:mt-5">
-        <p className="font-serif text-[23px] leading-none vc-nums text-ink md:text-[26px] lg:text-[30px]">{item.price}</p>
-        {item.reserved ? <StatusLine tone="alert">Reservada</StatusLine> : null}
+        <p dir="ltr" className="font-serif text-[23px] leading-none vc-nums text-ink md:text-[26px] lg:text-[30px]">{item.price}</p>
+        {item.reserved ? <StatusLine tone="alert">{dict.reserved}</StatusLine> : null}
       </div>
       <Rule className="my-4 md:my-6" />
     </>
@@ -215,25 +249,13 @@ function ItemHead({ item, index, total }: { item: PublicItem; index: number; tot
 }
 
 export function KeyFacts({ item }: { item: PublicItem }) {
-  const floor = item.floor.endsWith("sin dato") ? null : item.floor.replace(/^Planta /, "");
+  const { dict } = useReaderLang();
   return (
-    <div className="flex flex-wrap gap-x-8 gap-y-4 md:gap-x-10" aria-label="Datos clave">
-      <DataPoint
-        label="Superficie"
-        value={
-          item.squareMeters === null ? (
-            <span className="text-ink/30">—</span>
-          ) : (
-            <>
-              {item.squareMeters.toLocaleString("es-ES")}
-              <span className="ms-1 text-[13px] text-ink/45">m²</span>
-            </>
-          )
-        }
-      />
-      <DataPoint label="Dormitorios" value={num(item.bedrooms)} />
-      <DataPoint label="Baños" value={num(item.bathrooms)} />
-      <DataPoint label="Planta" value={floor ?? <span className="text-ink/30">—</span>} />
+    <div className="flex flex-wrap gap-x-8 gap-y-4 md:gap-x-10" aria-label={dict.keyFacts}>
+      <DataPoint label={dict.surface} value={<Num value={item.squareMeters} suffix={<span className="ms-1 text-[13px] text-ink/45">m²</span>} />} />
+      <DataPoint label={dict.bedrooms} value={<Num value={item.bedrooms} />} />
+      <DataPoint label={dict.bathrooms} value={<Num value={item.bathrooms} />} />
+      <DataPoint label={dict.floor} value={item.floorShort ?? DASH} />
     </div>
   );
 }
@@ -243,6 +265,7 @@ export function KeyFacts({ item }: { item: PublicItem }) {
 const THUMBS_MAX = 6;
 
 function Thumbs({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl; onOpenGallery: (photo: number) => void }) {
+  const { dict } = useReaderLang();
   const others = item.photos.map((_, i) => i).filter((i) => i !== item.coverIndex);
   if (!others.length) return null;
   const shown = others.slice(0, THUMBS_MAX);
@@ -251,7 +274,7 @@ function Thumbs({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl;
       <ul className={styles.thumbs}>
         {shown.map((i) => (
           <li key={item.photos[i].key}>
-            <button type="button" className={cn(styles.thumb, "vc-focus")} onClick={() => onOpenGallery(i)} aria-haspopup="dialog" aria-label={`Foto ${i + 1} de ${item.photos.length}`}>
+            <button type="button" className={cn(styles.thumb, "vc-focus")} onClick={() => onOpenGallery(i)} aria-haspopup="dialog" aria-label={dict.photoNofM(i + 1, item.photos.length)}>
               <ReaderImage variant="thumb" src={url(item.photos[i].src, 640)} alt="" loading="lazy" decoding="async" />
             </button>
           </li>
@@ -263,6 +286,7 @@ function Thumbs({ item, url, onOpenGallery }: { item: PublicItem; url: PhotoUrl;
 }
 
 function GalleryLink({ item, onOpenGallery }: { item: PublicItem; onOpenGallery: (photo: number) => void }) {
+  const { dict } = useReaderLang();
   if (item.photos.length <= 1) return null;
   return (
     <button
@@ -272,8 +296,8 @@ function GalleryLink({ item, onOpenGallery }: { item: PublicItem; onOpenGallery:
       data-testid="gallery-open"
       className="vc-focus group mt-5 inline-flex items-center gap-3 self-start font-display text-[10.5px] font-medium uppercase vc-tracked text-ink/60 transition-colors duration-500 hover:text-ink"
     >
-      {photosWord(item.photos.length)}
-      <span aria-hidden className="inline-block transition-transform duration-500 group-hover:translate-x-1">
+      {dict.viewPhotos(item.photos.length)}
+      <span aria-hidden className="inline-block transition-transform duration-500 group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1">
         &rarr;
       </span>
     </button>
@@ -281,15 +305,16 @@ function GalleryLink({ item, onOpenGallery }: { item: PublicItem; onOpenGallery:
 }
 
 function Features({ item }: { item: PublicItem }) {
+  const { dict } = useReaderLang();
   if (!item.features.length) return null;
   return (
     <div className="mt-7" data-testid="features">
-      <Label>Características</Label>
-      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2" aria-label="Características">
+      <Label>{dict.features}</Label>
+      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2" aria-label={dict.features}>
         {item.features.map((f, i) => (
           <li key={`${i}-${f}`} className="flex items-center gap-2 font-sans text-[13px] text-ink/70">
             <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-gold/70" />
-            {f}
+            <bdi>{f}</bdi>
           </li>
         ))}
       </ul>
@@ -299,24 +324,26 @@ function Features({ item }: { item: PublicItem }) {
 
 /** Ficha técnica completa, con «sin dato» explícito. */
 function FullFacts({ item, className }: { item: PublicItem; className?: string }) {
-  const rows: Array<[string, string | null]> = [
-    ["Operación", item.operation],
-    ["Precio", item.price],
-    ["Zona", item.place],
-    ["Superficie", item.squareMeters === null ? null : `${item.squareMeters.toLocaleString("es-ES")} m²`],
-    ["Dormitorios", item.bedrooms === null ? null : item.bedrooms.toLocaleString("es-ES")],
-    ["Baños", item.bathrooms === null ? null : item.bathrooms.toLocaleString("es-ES")],
-    ["Planta", item.floor.endsWith("sin dato") ? null : item.floor],
+  const { dict, lang } = useReaderLang();
+  // [etiqueta, valor, ¿es una cifra (LTR)?]
+  const rows: Array<[string, string | null, boolean]> = [
+    [dict.operation, item.operation, false],
+    [dict.price, item.price, true],
+    [dict.place, item.place, false], // contenido: se aísla abajo con <bdi>
+    [dict.surface, item.squareMeters === null ? null : `${formatNumber(item.squareMeters, lang)} m²`, true],
+    [dict.bedrooms, item.bedrooms === null ? null : formatNumber(item.bedrooms, lang), true],
+    [dict.bathrooms, item.bathrooms === null ? null : formatNumber(item.bathrooms, lang), true],
+    [dict.floor, item.floorShort === null ? null : item.floor, false],
   ];
   return (
     <dl className={cn("w-full", className)} data-testid="full-facts">
-      {rows.map(([k, v]) => (
+      {rows.map(([k, v, ltr]) => (
         <div key={k} className="flex items-baseline justify-between gap-4 border-b border-ink/10 py-3">
           <dt>
             <Label>{k}</Label>
           </dt>
-          <dd className="min-w-0 break-words text-right font-serif text-[17px] leading-none vc-nums text-ink md:text-[19px]">
-            {v ?? <span className="font-sans text-[12px] italic text-ink/40">sin dato</span>}
+          <dd className="min-w-0 break-words text-end font-serif text-[17px] leading-none vc-nums text-ink md:text-[19px]">
+            {v === null ? <span className="font-sans text-[12px] italic text-ink/40">{dict.noData}</span> : ltr ? <span dir="ltr">{v}</span> : <bdi>{v}</bdi>}
           </dd>
         </div>
       ))}
@@ -330,8 +357,8 @@ function Copy({ item }: { item: PublicItem }) {
     <div className="flex flex-col gap-6" data-testid="full-description">
       {item.copy.map((b, i) => (
         <div key={i} data-testid={b.heading ? "story-chapter" : "copy-block"}>
-          {b.heading ? <h3 className="font-serif text-[21px] font-normal leading-tight text-ink md:text-[24px]">{b.heading}</h3> : null}
-          <p className={cn("whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85", b.heading && "mt-3")}>{b.text}</p>
+          {b.heading ? <h3 className="font-serif text-[21px] font-normal leading-tight text-ink md:text-[24px]"><bdi>{b.heading}</bdi></h3> : null}
+          <p className={cn("whitespace-pre-line break-words font-sans text-[15px] leading-[1.75] text-ink/85", b.heading && "mt-3")}><bdi>{b.text}</bdi></p>
         </div>
       ))}
     </div>
@@ -398,14 +425,15 @@ export function DetailSpread({
   /** Bloque adicional bajo los datos (la opinión del cliente, PR B). */
   extra?: ReactNode;
 }) {
+  const { dict } = useReaderLang();
   const hasCopy = item.copy.length > 0;
   const head = (
     <>
       <ChapterMark index={index + 1} total={total} />
       <Label tone="gold" className="mt-6">
-        La vivienda en detalle
+        {dict.inDetail}
       </Label>
-      <h2 className="mt-2 break-words font-serif text-[24px] font-normal vc-tight text-ink md:text-[30px]">{item.title}</h2>
+      <h2 className="mt-2 break-words font-serif text-[24px] font-normal vc-tight text-ink md:text-[30px]"><bdi>{item.title}</bdi></h2>
       <FullFacts item={item} className="mt-6" />
       <Features item={item} />
       <GalleryLink item={item} onOpenGallery={onOpenGallery} />
@@ -414,15 +442,15 @@ export function DetailSpread({
   );
   const copyLabel = (
     <>
-      <Label tone="gold">Descripción</Label>
+      <Label tone="gold">{dict.description}</Label>
       <Ornament className="mx-0 mb-6 mt-5" />
     </>
   );
   if (single || !hasCopy) {
     return (
-      <section className={cn(styles.page, styles.composed)} aria-label={`${item.title} · en detalle`} data-part="detail">
+      <section className={cn(styles.page, styles.composed)} aria-label={dict.detailOf(item.title)} data-part="detail">
         <div className={styles.panel}>
-          <ScrollRegion label={`${item.title} · en detalle`}>
+          <ScrollRegion label={dict.detailOf(item.title)}>
             <div className={cn(styles.panelInner, "flex flex-col")}>
               {head}
               {hasCopy ? (
@@ -438,14 +466,14 @@ export function DetailSpread({
     );
   }
   return (
-    <section className={cn(styles.page, styles.twoPanels)} aria-label={`${item.title} · en detalle`} data-part="detail">
+    <section className={cn(styles.page, styles.twoPanels)} aria-label={dict.detailOf(item.title)} data-part="detail">
       <div className={styles.panel}>
-        <ScrollRegion label={`${item.title} · ficha`}>
+        <ScrollRegion label={dict.sheetOf(item.title)}>
           <div className={cn(styles.panelInner, "flex flex-col")}>{head}</div>
         </ScrollRegion>
       </div>
-      <div className={styles.panel} aria-label={`${item.title} · descripción`}>
-        <ScrollRegion label={`${item.title} · descripción`}>
+      <div className={styles.panel} aria-label={dict.descriptionOf(item.title)}>
+        <ScrollRegion label={dict.descriptionOf(item.title)}>
           <div className={cn(styles.panelInner, "flex flex-col")}>
             {copyLabel}
             <Copy item={item} />
@@ -459,6 +487,7 @@ export function DetailSpread({
 // ─── Cierre «Hablemos» (D20) y colofón ───────────────────────────────────────
 
 export function ClosingPage({ catalog, expiresAt, pdf = null }: { catalog: PublicCatalog; expiresAt: string; pdf?: ReaderPdf | null }) {
+  const { dict, lang } = useReaderLang();
   const hasCard = !!catalog.preparedBy || !!catalog.phone;
   const initials = (catalog.preparedBy ?? "")
     .split(/\s+/)
@@ -469,12 +498,12 @@ export function ClosingPage({ catalog, expiresAt, pdf = null }: { catalog: Publi
     .toUpperCase();
   const pdfBlock = pdf && catalog.items.length ? <PdfDownload pdf={pdf} variant="closing" /> : null;
   return (
-    <section className={cn(styles.page, styles.centered)} aria-label="Contacto">
+    <section className={cn(styles.page, styles.centered)} aria-label={dict.contact}>
       <div className={styles.centeredInner}>
-        <Label tone="gold">Contacto</Label>
-        <h2 className="mt-3 font-serif text-[32px] font-normal vc-tight text-ink lg:text-[40px]">Hablemos</h2>
+        <Label tone="gold">{dict.contact}</Label>
+        <h2 className="mt-3 font-serif text-[32px] font-normal vc-tight text-ink lg:text-[40px]">{dict.letsTalk}</h2>
         <Ornament className="mt-7" />
-        <p className="mt-7 max-w-[36ch] font-sans text-[14px] leading-relaxed text-ink/60">Si alguna de estas viviendas te encaja, organizamos la visita cuando mejor te venga.</p>
+        <p className="mt-7 max-w-[36ch] font-sans text-[14px] leading-relaxed text-ink/60">{dict.closingHint}</p>
 
         {hasCard ? (
           <div className="mt-9 flex w-full flex-col items-center" data-testid="contact-card">
@@ -483,8 +512,8 @@ export function ClosingPage({ catalog, expiresAt, pdf = null }: { catalog: Publi
                 {initials}
               </span>
             ) : null}
-            {catalog.preparedBy ? <p className="mt-5 break-words font-serif text-[25px] text-ink">{catalog.preparedBy}</p> : null}
-            <p className="mt-2 font-display text-[9.5px] font-medium uppercase vc-tracked text-ink/40">{contactRoleLabel(catalog.role)} · Benjamín Cousiño Propiedades</p>
+            {catalog.preparedBy ? <p className="mt-5 break-words font-serif text-[25px] text-ink"><bdi>{catalog.preparedBy}</bdi></p> : null}
+            <p className="mt-2 font-display text-[9.5px] font-medium uppercase vc-tracked text-ink/40">{dict.advisor(catalog.role)} · Benjamín Cousiño Propiedades</p>
             <div className="mt-8 flex flex-wrap items-start justify-center gap-2.5">
               {catalog.phone && catalog.phoneHref ? (
                 <a
@@ -492,7 +521,7 @@ export function ClosingPage({ catalog, expiresAt, pdf = null }: { catalog: Publi
                   data-testid="call"
                   className="vc-focus border border-ink bg-ink px-7 py-3.5 font-display text-[10.5px] font-medium uppercase vc-tracked text-cream-50 transition-colors duration-500 hover:bg-ink-soft"
                 >
-                  Llamar
+                  {dict.call}
                 </a>
               ) : null}
               {pdfBlock}
@@ -509,25 +538,24 @@ export function ClosingPage({ catalog, expiresAt, pdf = null }: { catalog: Publi
           <div className="mt-9 flex flex-col items-center">{pdfBlock}</div>
         ) : null}
 
-        <p className="mt-12 max-w-[42ch] font-sans text-[11px] leading-relaxed text-ink/40">
-          Selección preparada para ti. Se actualiza sola cuando hay cambios · disponible hasta el {shareExpiryLabel(expiresAt)}.
-        </p>
+        <p className="mt-12 max-w-[42ch] font-sans text-[11px] leading-relaxed text-ink/40">{dict.closingFooter(formatDateShort(expiresAt, lang))}</p>
       </div>
     </section>
   );
 }
 
 export function ColophonPage({ catalog, expiresAt }: { catalog: PublicCatalog; expiresAt: string }) {
+  const { dict, lang } = useReaderLang();
   return (
-    <section className={cn(styles.page, styles.centered, styles.dark)} aria-label="Colofón">
+    <section className={cn(styles.page, styles.centered, styles.dark)} aria-label={dict.colophon}>
       <div className={cn(styles.centeredInner, "text-cream-50")}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="Benjamín Cousiño Propiedades" width={3282} height={519} decoding="async" className="mx-auto h-auto w-[120px] select-none brightness-0 invert" />
         <p className="mt-3 font-display text-[9px] font-medium uppercase vc-tracked text-cream-50/50">Private Client Services</p>
         <Ornament tone="cream" className="mt-9" />
-        <p className="mt-9 font-serif text-[20px] italic leading-relaxed text-cream-50/90 lg:text-[23px]">Una selección preparada para ti.</p>
+        <p className="mt-9 font-serif text-[20px] italic leading-relaxed text-cream-50/90 lg:text-[23px]">{dict.colophonLine}</p>
         <p className="mt-4 font-display text-[10px] font-medium uppercase vc-tracked-sm text-cream-50/45">{catalog.edition}</p>
-        <p className="mt-12 font-sans text-[11px] leading-relaxed text-cream-50/30">Selección privada · disponible hasta el {shareExpiryLabel(expiresAt)}</p>
+        <p className="mt-12 font-sans text-[11px] leading-relaxed text-cream-50/30">{dict.colophonFooter(formatDateShort(expiresAt, lang))}</p>
       </div>
     </section>
   );

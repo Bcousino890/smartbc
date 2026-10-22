@@ -55,7 +55,7 @@ export function RecommendationCard({ property }: { property: Property }) {
           {t("card.unit.area", { n: property.squareMeters })}
         </p>
         <p className="font-serif text-2xl font-semibold text-cream-50">
-          {formatPrice(property.price)} €
+          {property.price > 0 ? `${formatPrice(property.price)} €` : t("common.priceOnRequest")}
         </p>
         <Link
           href={`/propiedades/${property.id}`}

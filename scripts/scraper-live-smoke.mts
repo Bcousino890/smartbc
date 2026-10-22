@@ -6,7 +6,7 @@
  *
  * Ejecutar (en /opt/smartbc-app):
  *   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
- *     scripts/scraper-live-smoke.mts <housely|innea|esriv|enfoka|…>
+ *     scripts/scraper-live-smoke.mts <housely|innea|esriv|enfoka|rentalshd|…>
  */
 import { getScraperByKey, listScraperKeys } from "../lib/sync/scrapers/index.ts";
 

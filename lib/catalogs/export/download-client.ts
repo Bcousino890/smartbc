@@ -26,13 +26,35 @@ export function fileNameFromDisposition(header: string | null, fallback: string)
   return plain ? plain[1] : fallback;
 }
 
+/** Mensajes de la descarga. Los del gestor son estos (español); el lector
+ *  (PR4) pasa los de su diccionario en el idioma del enlace. */
+export interface PdfDownloadTexts {
+  changing: string;
+  rateLimited: string;
+  otherInProgress: string;
+  failed: string;
+  busy: string;
+  downloaded: string;
+  network: string;
+}
+
+export const PDF_DOWNLOAD_TEXTS_ES: PdfDownloadTexts = {
+  changing: "El catálogo está cambiando ahora mismo; vuelve a intentarlo en unos segundos.",
+  rateLimited: "Has pedido varias descargas seguidas; inténtalo de nuevo en un minuto.",
+  otherInProgress: "Ahora mismo se está preparando otro PDF; inténtalo en un momento.",
+  failed: "No se pudo preparar el PDF. Inténtalo de nuevo.",
+  busy: "Ya se está preparando el PDF.",
+  downloaded: "PDF descargado.",
+  network: "No se pudo descargar el PDF: revisa la conexión e inténtalo de nuevo.",
+};
+
 /** Texto para cada respuesta (404 lo decide quien llama: dueño o cliente). */
-export function pdfErrorText(status: number, notFound: string): string {
+export function pdfErrorText(status: number, notFound: string, texts: PdfDownloadTexts = PDF_DOWNLOAD_TEXTS_ES): string {
   if (status === 404) return notFound;
-  if (status === 409) return "El catálogo está cambiando ahora mismo; vuelve a intentarlo en unos segundos.";
-  if (status === 429) return "Has pedido varias descargas seguidas; inténtalo de nuevo en un minuto.";
-  if (status === 503) return "Ahora mismo se está preparando otro PDF; inténtalo en un momento.";
-  return "No se pudo preparar el PDF. Inténtalo de nuevo.";
+  if (status === 409) return texts.changing;
+  if (status === 429) return texts.rateLimited;
+  if (status === 503) return texts.otherInProgress;
+  return texts.failed;
 }
 
 function save(blob: Blob, name: string) {
@@ -49,28 +71,29 @@ function save(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(href), 30_000);
 }
 
-export function usePdfDownload(url: string, opts: { notFound: string; fallbackName?: string }) {
+export function usePdfDownload(url: string, opts: { notFound: string; fallbackName?: string; texts?: PdfDownloadTexts }) {
   const [busy, setBusy] = useState(false);
   const inFlight = useRef<AbortController | null>(null);
+  const texts = opts.texts ?? PDF_DOWNLOAD_TEXTS_ES;
   const download = useCallback(async (): Promise<PdfDownloadResult> => {
-    if (inFlight.current) return { ok: false, text: "Ya se está preparando el PDF." };
+    if (inFlight.current) return { ok: false, text: texts.busy };
     const ctrl = new AbortController();
     inFlight.current = ctrl;
     setBusy(true);
     try {
       const res = await fetch(url, { cache: "no-store", credentials: "same-origin", signal: ctrl.signal });
       if (!res.ok || !(res.headers.get("content-type") ?? "").includes("application/pdf")) {
-        return { ok: false, text: pdfErrorText(res.ok ? 500 : res.status, opts.notFound) };
+        return { ok: false, text: pdfErrorText(res.ok ? 500 : res.status, opts.notFound, texts) };
       }
       const blob = await res.blob();
       save(blob, fileNameFromDisposition(res.headers.get("content-disposition"), opts.fallbackName ?? "Catálogo.pdf"));
-      return { ok: true, text: "PDF descargado." };
+      return { ok: true, text: texts.downloaded };
     } catch {
-      return { ok: false, text: "No se pudo descargar el PDF: revisa la conexión e inténtalo de nuevo." };
+      return { ok: false, text: texts.network };
     } finally {
       inFlight.current = null;
       setBusy(false);
     }
-  }, [url, opts.notFound, opts.fallbackName]);
+  }, [url, opts.notFound, opts.fallbackName, texts]);
   return { busy, download };
 }

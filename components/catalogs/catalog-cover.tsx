@@ -17,10 +17,25 @@ export interface CatalogCoverData {
   edition: string;
   /** URL de la foto de portada (proxy neutro) o null. */
   photoUrl?: string | null;
+  /** PR7a · `srcset` acotado al ancho real de la foto (solo el lector; la
+   *  miniatura de la HOME y la vista previa siguen con la variante única). */
+  photoSrcSet?: string | null;
+  /** PR7a · `sizes` del `srcset` («100vw» en el lector: la foto va a sangre). */
+  photoSizes?: string | null;
   preparedBy?: string | null;
   /** «Cuatro viviendas» (o null si no se sabe). */
   countLabel?: string | null;
 }
+
+/** Etiquetas fijas de la portada (PR4: el lector las pasa en el idioma del
+ *  enlace; la HOME y Diseño usan las de siempre, en español). */
+export interface CatalogCoverLabels {
+  kicker: string;
+  preparedBy: string;
+  begin: string;
+}
+
+const DEFAULT_LABELS: CatalogCoverLabels = { kicker: "Selección privada", preparedBy: "Preparada por", begin: "Comenzar" };
 
 const ES_WORDS = ["", "Una", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve", "Diez", "Once", "Doce"];
 
@@ -36,8 +51,10 @@ export function CatalogCover({
   className,
   readable = false,
   onBegin,
+  labels = DEFAULT_LABELS,
 }: {
   data: CatalogCoverData;
+  labels?: CatalogCoverLabels;
   className?: string;
   /** En el lector: textos auxiliares de 12 px mínimo, foto prioritaria y el
    *  movimiento de la referencia (la miniatura de la HOME conserva su escala). */
@@ -45,7 +62,7 @@ export function CatalogCover({
   /** «Comenzar» (solo en el lector). */
   onBegin?: () => void;
 }) {
-  const kicker = ["Selección privada", data.numberLabel].filter(Boolean).join(" · ");
+  const kicker = [labels.kicker, data.numberLabel].filter(Boolean).join(" · ");
   return (
     <div className={`${styles.frame}${readable ? ` ${styles.readable}` : ""}${className ? ` ${className}` : ""}`}>
       <div className={styles.cover}>
@@ -53,7 +70,15 @@ export function CatalogCover({
           <div className={styles.photo} aria-hidden="true">
             <div className={readable ? "vc-kenburns h-full w-full" : "h-full w-full"}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={data.photoUrl} alt="" loading={readable ? "eager" : "lazy"} fetchPriority={readable ? "high" : undefined} decoding="async" />
+              <img
+                src={data.photoUrl}
+                srcSet={data.photoSrcSet ?? undefined}
+                sizes={data.photoSrcSet ? (data.photoSizes ?? undefined) : undefined}
+                alt=""
+                loading={readable ? "eager" : "lazy"}
+                fetchPriority={readable ? "high" : undefined}
+                decoding="async"
+              />
             </div>
             <div className={styles.veil} />
             <div className={styles.veil2} />
@@ -72,13 +97,17 @@ export function CatalogCover({
               -webkit-box del recorte a cuatro líneas se «bloquificaba» y el
               título quedaba con cero líneas (comprobado en Chromium). */}
           <div className={`w-full${readable ? " vc-cover-in vc-cover-in-d1" : ""}`}>
-            <h2 className={styles.title}>{data.title}</h2>
+            <h2 className={styles.title}>
+              <bdi>{data.title}</bdi>
+            </h2>
           </div>
           <span className={`${styles.ornament}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`} aria-hidden="true" />
           {data.preparedBy ? (
             <>
-              <p className={`${styles.preparedLabel}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>Preparada por</p>
-              <p className={`${styles.preparedBy}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>{data.preparedBy}</p>
+              <p className={`${styles.preparedLabel}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>{labels.preparedBy}</p>
+              <p className={`${styles.preparedBy}${readable ? " vc-cover-in vc-cover-in-d2" : ""}`}>
+                <bdi>{data.preparedBy}</bdi>
+              </p>
             </>
           ) : null}
           <div className={`${styles.meta}${readable ? " vc-cover-in vc-cover-in-d3" : ""}`}>
@@ -91,7 +120,7 @@ export function CatalogCover({
 
         {onBegin ? (
           <button type="button" onClick={onBegin} className={`${styles.begin}${readable ? " vc-cover-in vc-cover-in-d4" : ""}`}>
-            <span className={styles.beginLabel}>Comenzar</span>
+            <span className={styles.beginLabel}>{labels.begin}</span>
             <span className={styles.beginLine} aria-hidden="true" />
           </button>
         ) : null}

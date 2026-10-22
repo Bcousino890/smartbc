@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PRICE_ON_REQUEST_LABEL } from "@/lib/country-config";
 import { notFound, redirect } from "next/navigation";
 import { propertyRowToClientProperty } from "@/lib/db/adapters";
 import {
@@ -24,6 +25,7 @@ const PORTAL_URL = (
 ).replace(/\/+$/, "");
 
 function formatPriceForOg(price: number, isRent: boolean): string {
+  if (!(price > 0)) return PRICE_ON_REQUEST_LABEL;
   const n = new Intl.NumberFormat("es-ES").format(price);
   return isRent ? `${n} €/mes` : `${n} €`;
 }

@@ -73,11 +73,15 @@
     "test:catalogs-areas": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-areas.mts",
     "test:pdf-fonts": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/pdf-fonts-coverage.mts",
     "test:catalogs-area-texts": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-area-texts.mts",
+    "test:catalogs-i18n": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-i18n.mts",
+    "test:catalogs-photos": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-photos.mts",
     "test:housely": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-housely-scraper.mts",
     "test:innea": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-innea-scraper.mts",
     "test:esriv": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-esriv-scraper.mts",
     "test:enfoka": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-enfoka-scraper.mts",
-    "test:sindicacion": "npm run test:housely && npm run test:innea && npm run test:esriv && npm run test:enfoka"
+    "test:rentalshd": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-rentalshd-scraper.mts",
+    "test:price-guard": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-sync-price-guard.mts",
+    "test:sindicacion": "npm run test:housely && npm run test:innea && npm run test:esriv && npm run test:enfoka && npm run test:rentalshd && npm run test:price-guard"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",

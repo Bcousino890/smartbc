@@ -651,3 +651,70 @@
     background-position: 0 0;
   }
 }
+
+/* ── Idiomas (PR4, expediente 2026-10-21-bcp-01-ampliacion-textos-idiomas) ──
+   La raíz lleva `lang` y `dir` según el idioma del enlace. En árabe y hebreo
+   (dir="rtl") el texto, el índice y la navegación se leen de derecha a
+   izquierda (N2), pero la composición aprobada NO se refleja: la foto y el
+   panel de la apertura, y los dos paneles del detalle, ocupan exactamente las
+   mismas cajas que en español (DA1, DA2). Para ello el contenedor de la
+   rejilla vuelve a LTR y cada columna recupera la dirección del idioma. */
+
+.root[dir="rtl"] .split,
+.root[dir="rtl"] .twoPanels {
+  direction: ltr;
+}
+
+.root[dir="rtl"] .split > *,
+.root[dir="rtl"] .twoPanels > * {
+  direction: rtl;
+}
+
+/* Familias del idioma (decisión N3; fonts.ts las carga con next/font y SOLO
+   se aplican aquí). Las variables --font-cinzel/--font-playfair/--font-inter
+   las ponen el layout y Tailwind (font-display / font-serif / font-sans), y
+   también las usa la portada: se guardan las latinas en la raíz y se
+   redefinen en los hijos, con las latinas detrás como respaldo de glifos.
+   Fuera de ar y he no se toca nada: los demás idiomas conservan exactamente
+   su tipografía. */
+
+.root {
+  --reader-latin-display: var(--font-cinzel);
+  --reader-latin-serif: var(--font-playfair);
+  --reader-latin-sans: var(--font-inter);
+}
+
+.root[lang="ar"] > * {
+  --font-cinzel: var(--font-reader-arabic), var(--reader-latin-display), serif;
+  --font-playfair: var(--font-reader-arabic), var(--reader-latin-serif), serif;
+  --font-inter: var(--font-reader-arabic), var(--reader-latin-sans), sans-serif;
+}
+
+.root[lang="he"] > * {
+  --font-cinzel: var(--font-reader-hebrew-title), var(--reader-latin-display), serif;
+  --font-playfair: var(--font-reader-hebrew-title), var(--reader-latin-serif), serif;
+  --font-inter: var(--font-reader-hebrew-text), var(--reader-latin-sans), sans-serif;
+}
+
+/* El espaciado entre letras de las etiquetas (vc-tracked, Cinzel) rompería
+   el árabe ligado; en hebreo tampoco aporta. Se anula en los dos idiomas. */
+.root[lang="ar"] :global(.vc-tracked),
+.root[lang="ar"] :global(.vc-tracked-sm),
+.root[lang="ar"] .scrollCue,
+.root[lang="ar"] .imgLoading,
+.root[lang="ar"] .imgError,
+.root[lang="ar"] .fold summary,
+.root[lang="he"] :global(.vc-tracked),
+.root[lang="he"] :global(.vc-tracked-sm),
+.root[lang="he"] .scrollCue,
+.root[lang="he"] .imgLoading,
+.root[lang="he"] .imgError,
+.root[lang="he"] .fold summary {
+  letter-spacing: 0;
+}
+
+/* La insignia de medición es de desarrollo; que no tape la navegación RTL. */
+.root[dir="rtl"] .measureBadge {
+  right: auto;
+  left: 8px;
+}

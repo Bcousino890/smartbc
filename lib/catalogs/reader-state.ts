@@ -48,17 +48,23 @@ export interface ReaderState {
   layout: ReaderLayout;
   page: PageRef;
   gallery: GalleryRef | null;
-  notice: string | null;
+  /** Aviso pendiente (PR4: un CÓDIGO; el lector lo escribe en el idioma del
+   *  enlace con el diccionario). */
+  notice: ReaderNotice | null;
 }
+
+export type ReaderNotice = "item_removed" | "item_removed_last" | "photo_removed";
 
 /** Duración del paso de página (el giro de la referencia, book-stage.tsx);
  *  con «reducir movimiento», 0. */
 export const PAGE_TURN_MS = 720;
 
-export const REMOVED_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección.";
-export const REMOVED_LAST_NOTICE = "La vivienda que estabas viendo ya no forma parte de la selección. Vuelves al índice.";
+/** «La vivienda que estabas viendo ya no forma parte de la selección.» */
+export const REMOVED_NOTICE: ReaderNotice = "item_removed";
+/** «… Vuelves al índice.» */
+export const REMOVED_LAST_NOTICE: ReaderNotice = "item_removed_last";
 /** E3: la foto que se veía en la galería ya no se usa en este catálogo. */
-export const PHOTO_REMOVED_NOTICE = "Esa foto ya no forma parte del catálogo.";
+export const PHOTO_REMOVED_NOTICE: ReaderNotice = "photo_removed";
 
 const ITEM_PARTS: readonly ItemPart[] = ["open", "detail"];
 
@@ -163,7 +169,7 @@ export function applyUpdate(state: ReaderState, next: PublicCatalogState): Reade
   }
   const newKeys = new Set(next.catalog.items.map((it) => it.key));
   let page = state.page;
-  let notice: string | null = null;
+  let notice: ReaderNotice | null = null;
   if (page.kind === "item" && !newKeys.has(page.key)) {
     const oldItems = state.catalog.items;
     const at = oldItems.findIndex((it) => it.key === (page as { key: string }).key);
