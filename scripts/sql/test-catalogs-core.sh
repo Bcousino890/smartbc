@@ -400,6 +400,19 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-operations.sql
 
+echo "== 2zk. 0229: una traducción puede llevar el precio del original (contacto siempre bloqueado; aplicada dos veces, reversión y reaplicación)"
+M21=supabase/migrations/0229_catalog_translation_prices.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $M21 $M21 $S/test-catalog-translation-prices.sql
+$R sql $D19/rollback-0229.sql $S/test-rollback-0229.sql $M21 $M21 $S/test-catalog-translation-prices.sql
+echo "   0229 se vuelve a aplicar tras su reversión"
+
+echo "== 2zl. 0229 sobre los tests de la traducción automática (0228) y del acabado (0227)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-translations-pre.sql $M18 $M19 $S/test-catalog-translations-auto-pre.sql $M20 $M21 $S/test-catalog-translations-auto.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-finish-pre.sql $M19 $M20 $M21 $S/test-catalog-finish.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql
