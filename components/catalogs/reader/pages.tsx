@@ -353,6 +353,19 @@ function FullFacts({ item, className }: { item: PublicItem; className?: string }
 
 /** La descripción completa del catálogo (DC3): íntegra, una sola vez. */
 function Copy({ item }: { item: PublicItem }) {
+  // PR6 · N5: sin traducción vigente en este idioma, el aviso del diccionario
+  // ocupa el sitio de la descripción (nunca el español); misma composición.
+  if (item.copyPending) {
+    const notice = item.copy[0];
+    return (
+      <div className="flex flex-col gap-6" data-testid="full-description">
+        <div role="note" className="rounded-sm border border-gold/40 bg-cream-50/60 px-5 py-4" data-testid="copy-pending">
+          {notice?.heading ? <h3 className="font-serif text-[21px] font-normal leading-tight text-ink md:text-[24px]">{notice.heading}</h3> : null}
+          {notice?.text ? <p className="mt-3 font-sans text-[15px] italic leading-[1.75] text-ink/70">{notice.text}</p> : null}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6" data-testid="full-description">
       {item.copy.map((b, i) => (

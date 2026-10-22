@@ -4,7 +4,7 @@ import { isMicroChapter, microChapterFact } from "@/lib/services/story/micro-cha
 import { isStorySourceCurrent } from "@/lib/services/story/source-hash";
 import { CHAPTER_HEADINGS, STORY_CHAPTERS, type StoryChapter } from "@/lib/services/story/types";
 import { fold, HIGHLIGHT_TERMS, isPublicSafe, PHONE_RE, EMAIL_RE, URL_RE } from "./text-rules";
-import { leadFrom, organizeDescription, paragraphsOf, SECTION_ORDER, type SectionKey } from "./structure";
+import { leadFrom, organizeDescription, paragraphsOf, SECTION_ORDER, type CopyBlock, type SectionKey } from "./structure";
 
 export { leadFrom, paragraphsOf };
 
@@ -98,9 +98,13 @@ export interface Editorial {
    *  estructura estándar (introducción sin título y partes con título), sin
    *  fotos: del texto publicado, de la historia aprobada o de la descripción
    *  limpia; [] solo con datos. Nunca se repite ni se pierde una frase. */
-  copy: Array<{ heading: string | null; text: string }>;
+  copy: CopyBlock[];
   /** DE10 · Partes de la estructura sin material (aviso del editor). */
   missing: SectionKey[];
+  /** PR6 · Zona de «Vivir en …» (la misma que titula el bloque «barrio»). */
+  areaName: string | null;
+  /** PR6 · El bloque «barrio» es la plantilla de zona de este catálogo. */
+  areaTextUsed: boolean;
 }
 
 /** E1 (D-QA4) · Clases que el recorrido automático NO usa solas. Solo cuentan
@@ -216,6 +220,8 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       features,
       copy: organized.copy,
       missing: organized.missing,
+      areaName: area,
+      areaTextUsed: organized.areaTextUsed === true,
     };
   }
 
@@ -260,6 +266,8 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       features,
       copy: organized.copy,
       missing: organized.missing,
+      areaName: area,
+      areaTextUsed: organized.areaTextUsed === true,
     };
   }
 
@@ -281,11 +289,13 @@ function deriveText(it: EditorialInput): Omit<Editorial, "mosaic"> {
       features,
       copy: organized.copy,
       missing: organized.missing,
+      areaName: area,
+      areaTextUsed: organized.areaTextUsed === true,
     };
   }
 
   // 4 · Solo datos y fotos.
-  return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features, copy: [], missing: [...SECTION_ORDER] };
+  return { level: "facts", lead: null, highlights: candidates.slice(0, 3), sections: [], description: null, features, copy: [], missing: [...SECTION_ORDER], areaName: area, areaTextUsed: false };
 }
 
 export function deriveEditorial(it: EditorialInput): Editorial {
