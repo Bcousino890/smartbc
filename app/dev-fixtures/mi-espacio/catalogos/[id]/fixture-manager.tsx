@@ -129,9 +129,9 @@ function fixtureClientLinkActions(): ClientLinkActions {
   };
 }
 
-/** PR6 · Traducciones contra el almacén sintético del servidor, con la IA
- *  FALSA de los fixtures (cuenta llamadas). Misma orquestación que las
- *  acciones reales. */
+/** Traducciones contra el almacén sintético del servidor, con la IA FALSA de
+ *  los fixtures (cuenta llamadas). Misma orquestación que las acciones
+ *  reales (traducción automática en segundo plano, 0228). */
 async function traducciones<T>(body: Record<string, unknown>): Promise<({ ok: true } & T) | { ok: false; error: string }> {
   const res = await fetch("/dev-fixtures/api/traducciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const d = await res.json().catch(() => null);
@@ -142,13 +142,9 @@ async function traducciones<T>(body: Record<string, unknown>): Promise<({ ok: tr
 function fixtureTranslationActions(): TranslationActions {
   return {
     load: (i) => traducciones({ op: "load", ...i }),
-    prepare: (i) => traducciones({ op: "prepare", ...i }),
-    cancel: (i) => traducciones({ op: "cancel", ...i }),
+    prepareNow: (i) => traducciones({ op: "prepare-now", ...i }),
     save: (i) => traducciones({ op: "save", ...i }),
-    reject: (i) => traducciones({ op: "reject", ...i }),
-    approve: (i) => traducciones({ op: "approve", ...i }),
-    useApproved: (i) => traducciones({ op: "use", ...i }),
-    remove: (i) => traducciones({ op: "remove", ...i }),
+    markReviewed: (i) => traducciones({ op: "reviewed", ...i }),
     setCatalogLang: (i) => traducciones({ op: "cat-lang", ...i }),
     setLinkLang: (i) => traducciones({ op: "link-lang", ...i }),
   };

@@ -6,7 +6,8 @@ import type { CatalogOperation } from "./operation-price";
 import { composeFingerprint } from "./public-fingerprint";
 import { DEFAULT_CATALOG_LANGUAGE, type CatalogLanguage } from "./i18n";
 import { MemoryTranslations } from "./translation-memory";
-import { fakeTranslationAi, type FakeAi } from "./translation-fake-ai";
+import { fakeTranslationAi, type FakeAi, type FakeAiMode } from "./translation-fake-ai";
+import { isTargetLanguage, type TargetLanguage } from "./translation-labels";
 
 // ============================================================================
 // SOLO DESARROLLO LOCAL (BCP-01 T11, E7). Almacén EN MEMORIA que sustituye a
@@ -451,6 +452,9 @@ function store(): Promise<Map<string, Share>> {
 export async function resetFixtureStore(): Promise<void> {
   (globalThis as G)[KEY] = seed();
   resetFixtureTranslations();
+  // El traductor automático de los fixtures empieza de cero (sin esperas
+  // ni visitas recordadas de la pasada anterior).
+  (globalThis as typeof globalThis & { __bcpCatalogAutoTranslator?: unknown }).__bcpCatalogAutoTranslator = undefined;
 }
 
 function fingerprintOf(s: InternalSnapshot): string {
@@ -1061,7 +1065,7 @@ export function fixtureNotices(): FixtureNotice[] {
 interface TrState {
   mem: MemoryTranslations;
   ai: FakeAi;
-  mode: "ok" | "timeout" | "error" | "bad";
+  mode: FakeAiMode;
   delayMs: number;
 }
 const TR_KEY = "__bcpCatalogFixtureTranslations";
@@ -1131,6 +1135,18 @@ function trState(): TrState {
 
 function resetFixtureTranslations(): void {
   (globalThis as GT)[TR_KEY] = makeTrState();
+}
+
+/** Traducción automática en los fixtures: token → catálogo sintético, dueño
+ *  y el idioma del enlace (como resolveToken en auto-translate-instance.ts). */
+export async function fixtureAutoTarget(token: string): Promise<{ catalogId: string; ownerId: string; lang: TargetLanguage } | null> {
+  const st = await store();
+  cachedStore = st;
+  const s = resolveShare(st, token);
+  if (!valid(s)) return null;
+  const catalogId = catalogOfToken(baseOf(token));
+  const lang = s.lang ?? DEFAULT_CATALOG_LANGUAGE;
+  return catalogId && isTargetLanguage(lang) ? { catalogId, ownerId: "fixture-owner", lang } : null;
 }
 
 /** Gestión de fixtures: el almacén de traducciones, la IA falsa y su ajuste. */

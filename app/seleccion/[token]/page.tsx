@@ -44,7 +44,7 @@ export default async function SeleccionPage({
   if (!isShareToken(token) || !pageLimiter.allow(token)) return <Unavailable />;
   let state;
   try {
-    state = await getPublicCatalogState(token);
+    state = await getPublicCatalogState(token, { visit: true });
   } catch (err) {
     console.error("[catalogos] lector:", err instanceof Error ? err.message : err);
     state = null;

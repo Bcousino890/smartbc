@@ -6,13 +6,14 @@ import { fold, textBlockers, type TextBlocker } from "./text-rules";
 import type { CatalogDictionary } from "./i18n";
 
 // ============================================================================
-// Traducciones preparadas y revisadas del catálogo (BCP-01 ampliación,
-// expediente 2026-10-21-bcp-01-ampliacion-textos-idiomas, PR6: spec §3,
-// DA9–DA21, DA31–DA36, N5). PURO: sin base de datos ni red. La IA llega
-// INYECTADA (como en ai-draft.ts y area-texts.ts): en la app es aiComplete con
-// el proveedor configurado; en las pruebas y los fixtures, una IA FALSA que
-// cuenta llamadas. Solo la gestión (al pulsar) llega aquí con una IA: la
-// lectura pública solo usa `applyItemTranslation`, que no tiene IA.
+// Traducciones del catálogo (BCP-01 ampliación, expediente
+// 2026-10-21-bcp-01-ampliacion-textos-idiomas: PR6 y la traducción
+// AUTOMÁTICA decidida por Fabricio el 22-10-2026, «como en itinerarios»).
+// PURO: sin base de datos ni red. La IA llega INYECTADA (como en ai-draft.ts
+// y area-texts.ts): en la app es aiComplete con el proveedor configurado; en
+// las pruebas y los fixtures, una IA FALSA que cuenta llamadas. La lectura
+// pública solo usa `applyItemTranslation` (sin IA): la traducción la hace la
+// gestión EN SEGUNDO PLANO (auto-translate.ts) y nunca dentro de la petición.
 //
 // · Unidad de traducción = la descripción YA ORGANIZADA en español (DA18): los
 //   bloques del organizador con su CLAVE de sección. Los títulos de sección
@@ -22,11 +23,16 @@ import type { CatalogDictionary } from "./i18n";
 //   traducción solo es VIGENTE si su huella es la del español que el catálogo
 //   enseña ahora (DA14). Si no, la vivienda sigue el caso N5: datos, fotos y
 //   etiquetas en el idioma y, en lugar de la descripción, «Descripción en
-//   preparación» (nunca el español ni una traducción desactualizada).
+//   preparación» (nunca el español ni una traducción desactualizada), hasta
+//   que la traducción automática termina (en la primera visita).
 // · Preparación (DA15, DA36): reserva única por fuente e idioma con
 //   caducidad; un resultado que llega tarde o tras cancelar se descarta y se
-//   registra; un tiempo agotado tras enviar queda INCIERTO y no se reintenta
-//   solo. La reserva reduce duplicados, no garantiza una sola llamada de pago.
+//   registra. Un fallo, un incierto o una reserva caducada no se reintentan en
+//   bucle: espera creciente (AUTO_LIMITS) y, tras varios seguidos, ya solo el
+//   dueño. La reserva reduce duplicados, no garantiza una sola llamada de pago.
+// · Publicación automática: si pasa los filtros deterministas (sin contacto
+//   ni precio) se publica sola; los avisos de cifras y nombres no la frenan,
+//   pero el gestor la marca «revisar». Con un bloqueo, no se publica.
 // ============================================================================
 
 export { TARGET_LANGUAGES, isTargetLanguage, LANGUAGE_NAMES_ES, ITEM_STATE_LABEL } from "./translation-labels";
@@ -401,7 +407,8 @@ export function pendingTranslationWarnings(check: TranslationCheck, confirmed: s
 /** «not_configured»: no se llegó a llamar (sin coste). «failed»: el
  *  proveedor respondió con un error o la respuesta no vale. «uncertain»: se
  *  agotó el tiempo o se cortó la conexión tras enviar: la llamada pudo
- *  cobrarse y NO se reintenta sola. Lo desconocido se trata como incierto. */
+ *  cobrarse; solo se reintenta tras la espera creciente (0228). Lo
+ *  desconocido se trata como incierto. */
 export type AiFailure = "not_configured" | "failed" | "uncertain";
 
 export function classifyAiFailure(err: unknown, isNotConfigured: (e: unknown) => boolean = () => false): AiFailure {
@@ -428,12 +435,17 @@ export type ReserveResult =
   | { state: "reserved"; jobId: string; expiresAt: string; needs: PrepareNeeds }
   | { state: "busy"; jobId: string; expiresAt: string }
   | { state: "ready" }
-  | { state: "uncertain"; jobId: string };
+  | { state: "uncertain"; jobId: string }
+  // 0228 · límites contra el abuso y el coste (catalog_tr_reserve_auto):
+  | { state: "limit" } // ya hay AUTO_LIMITS.maxActivePerCatalog trabajos de este catálogo
+  | { state: "cap" } // tope diario de trabajos automáticos del catálogo
+  | { state: "waiting"; until: string; failures: number } // espera creciente tras un fallo
+  | { state: "stopped"; failures: number }; // demasiados fallos seguidos: solo el dueño
 
 export type FinishResult = { state: "saved" } | { state: "recorded" } | { state: "discarded"; reason: string };
 
 export interface TranslationStore {
-  reserve(i: { sourceId: string; lang: TargetLanguage; needs: PrepareNeeds; retry: boolean }): Promise<ReserveResult>;
+  reserve(i: { sourceId: string; lang: TargetLanguage; needs: PrepareNeeds; manual: boolean }): Promise<ReserveResult>;
   finish(i: { jobId: string; outcome: "done" | "failed" | "uncertain"; result: TranslationResult | null; note: string | null }): Promise<FinishResult>;
 }
 
@@ -445,6 +457,66 @@ export type TrAiFn = (opts: { system: string; userText: string; maxTokens?: numb
 export const TRANSLATION_TIMEOUT_MS = 120_000;
 export const RESERVATION_TTL_SECONDS = 300;
 
+/** Límites de la traducción automática contra el abuso y el coste (0228;
+ *  documentados en result-traduccion-automatica.md). Los cuatro primeros los
+ *  aplica la base de datos (catalog_tr_reserve_auto); los demás, el proceso.
+ *  Solo se traduce el idioma que el dueño eligió para el catálogo o el enlace
+ *  (nunca uno pedido por URL), y cada vivienda una vez por versión del
+ *  español: N visitas no son N veces el coste. */
+export interface AutoLimits {
+  maxActivePerCatalog: number;
+  dailyCapPerCatalog: number;
+  maxFailures: number;
+  retryWaitsSeconds: readonly number[];
+  maxAiPerVisit: number;
+  globalConcurrency: number;
+  requestThrottleMs: number;
+}
+
+export const AUTO_LIMITS: Readonly<AutoLimits> = {
+  /** Trabajos (llamadas a la IA) a la vez por catálogo, entre todas sus visitas. */
+  maxActivePerCatalog: 2,
+  /** Trabajos automáticos por catálogo en 24 h (techo de seguridad: un
+   *  catálogo de 24 viviendas en 7 idiomas son 175). */
+  dailyCapPerCatalog: 300,
+  /** Fallos seguidos (fallido, incierto o caducado) tras los que ya no se
+   *  reintenta solo: hace falta «Preparar ahora» del dueño. */
+  maxFailures: 5,
+  /** Espera antes de que otra visita reintente tras 1, 2, 3 y 4 fallos. */
+  retryWaitsSeconds: [300, 1800, 7200, 43200],
+  /** Trabajos nuevos que puede lanzar una visita (un catálogo normal, 24
+   *  viviendas y su título, cabe entero en una). */
+  maxAiPerVisit: 30,
+  /** Llamadas a la IA a la vez en todo el proceso (todos los catálogos). */
+  globalConcurrency: 4,
+  /** Una misma visita (token) no relanza la comprobación antes de esto: el
+   *  lector consulta el estado cada 500 ms si el canal en vivo calla. */
+  requestThrottleMs: 15_000,
+};
+
+/** Lo que la base de datos recibe en p_limits (catalog_tr_reserve_auto). */
+export function reserveLimits(manual: boolean, l: Pick<AutoLimits, "maxActivePerCatalog" | "dailyCapPerCatalog" | "maxFailures" | "retryWaitsSeconds"> = AUTO_LIMITS) {
+  return { manual, max_active: l.maxActivePerCatalog, daily_cap: l.dailyCapPerCatalog, max_failures: l.maxFailures, waits: [...l.retryWaitsSeconds] };
+}
+
+/** Espera creciente de una fuente en un idioma (la MISMA regla que
+ *  catalog_tr_reserve_auto): fallos seguidos desde el último trabajo
+ *  terminado, cuándo se puede reintentar y si ya no se reintenta solo. */
+export function autoRetryState(
+  jobs: Array<{ status: string; reservedAt: string; finishedAt: string | null; expiresAt: string }>,
+  now: number,
+  l: Pick<AutoLimits, "maxFailures" | "retryWaitsSeconds"> = AUTO_LIMITS,
+): { failures: number; until: string | null; stopped: boolean } {
+  const lastDone = jobs.filter((j) => j.status === "done").reduce<string>((a, j) => (j.reservedAt > a ? j.reservedAt : a), "");
+  const fails = jobs.filter((j) => (j.status === "failed" || j.status === "uncertain" || j.status === "expired") && j.reservedAt > lastDone);
+  if (fails.length === 0) return { failures: 0, until: null, stopped: false };
+  if (fails.length >= l.maxFailures) return { failures: fails.length, until: null, stopped: true };
+  const last = Math.max(...fails.map((j) => Date.parse(j.finishedAt ?? j.expiresAt)));
+  const wait = l.retryWaitsSeconds[Math.min(fails.length, l.retryWaitsSeconds.length) - 1] * 1000;
+  const until = last + wait;
+  return { failures: fails.length, until: until > now ? new Date(until).toISOString() : null, stopped: false };
+}
+
 export type PrepareOutcome =
   | { kind: "saved"; jobId: string }
   | { kind: "ready" }
@@ -452,7 +524,11 @@ export type PrepareOutcome =
   | { kind: "uncertain_pending"; jobId: string }
   | { kind: "discarded"; jobId: string; reason: string }
   | { kind: "failed"; jobId: string; reason: "not_configured" | "provider" | "invalid"; charged: boolean }
-  | { kind: "uncertain"; jobId: string };
+  | { kind: "uncertain"; jobId: string }
+  | { kind: "limit" }
+  | { kind: "cap" }
+  | { kind: "waiting"; until: string; failures: number }
+  | { kind: "stopped"; failures: number };
 
 /** Recorta la petición a lo que la reserva dice que falta. */
 export function requestFor(full: TranslationRequest, needs: PrepareNeeds): TranslationRequest {
@@ -466,16 +542,22 @@ export function requestFor(full: TranslationRequest, needs: PrepareNeeds): Trans
   };
 }
 
-/** Solo al pulsar «Preparar»: reserva → UNA llamada → guarda solo si la
- *  reserva sigue siendo suya y vigente. Nunca reintenta sola. */
+/** Reserva (con los límites de 0228) → UNA llamada → guarda solo si la
+ *  reserva sigue siendo suya y vigente. Nunca reintenta en bucle: un fallo
+ *  queda registrado y la espera creciente decide cuándo otra visita puede
+ *  volver a intentarlo. Ninguna petición pública espera a esto. */
 export async function runPreparation(
   deps: { store: TranslationStore; ai: TrAiFn; timeoutMs?: number; isNotConfigured?: (e: unknown) => boolean; signal?: AbortSignal },
-  input: { sourceId: string; request: TranslationRequest; needs: PrepareNeeds; retry?: boolean },
+  input: { sourceId: string; request: TranslationRequest; needs: PrepareNeeds; manual?: boolean },
 ): Promise<PrepareOutcome> {
-  const r = await deps.store.reserve({ sourceId: input.sourceId, lang: input.request.lang, needs: input.needs, retry: input.retry === true });
+  const r = await deps.store.reserve({ sourceId: input.sourceId, lang: input.request.lang, needs: input.needs, manual: input.manual === true });
   if (r.state === "ready") return { kind: "ready" };
   if (r.state === "busy") return { kind: "busy", jobId: r.jobId, expiresAt: r.expiresAt };
   if (r.state === "uncertain") return { kind: "uncertain_pending", jobId: r.jobId };
+  if (r.state === "limit") return { kind: "limit" };
+  if (r.state === "cap") return { kind: "cap" };
+  if (r.state === "waiting") return { kind: "waiting", until: r.until, failures: r.failures };
+  if (r.state === "stopped") return { kind: "stopped", failures: r.failures };
   const req = requestFor(input.request, r.needs);
   if (requestIsEmpty(req)) {
     await deps.store.finish({ jobId: r.jobId, outcome: "failed", result: null, note: "nada que traducir" });

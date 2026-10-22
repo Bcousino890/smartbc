@@ -7,47 +7,44 @@ import { CATALOG_LANGUAGES, LANGUAGE_LABELS, TRANSLATION_REVIEW_REQUIRED, type C
 import { LANGUAGE_NAMES_ES, TARGET_LANGUAGES, type TargetLanguage } from "@/lib/catalogs/translation-labels";
 import type { PanelItem, PanelState, ReviewEdit } from "@/lib/catalogs/translation-service";
 
-// Idiomas del catálogo (PR6 · spec §3, DA9–DA21, DA31–DA36, N5). Todo es
-// del gestor: el cliente solo ve traducciones APROBADAS y VIGENTES.
-//   · Idioma del catálogo y de cada enlace personal: solo se activa un idioma
-//     completo (todas las viviendas y el título del catálogo); hasta entonces
-//     el enlace sigue en el idioma anterior y aquí se ve el progreso.
-//   · Preparar: solo al pulsar, solo el idioma elegido y solo lo que falta,
-//     con la IA ya configurada. Una reserva evita lanzar dos veces lo mismo,
-//     pero no garantiza una sola llamada de pago; un resultado incierto no
-//     se reintenta solo.
-//   · Revisar: original y traducción por bloque, editar, aprobar o rechazar.
+// Idiomas del catálogo · traducción AUTOMÁTICA, como en los itinerarios
+// (decisión de Fabricio del 22-10-2026; antes PR6). Esta pestaña es OPCIONAL:
+//   · El idioma del catálogo y el de cada enlace personal se aplican al
+//     momento. La primera vez que alguien abre el enlace en ese idioma, lo que
+//     falta se traduce solo con la IA configurada y se publica si pasa los
+//     filtros (sin contacto ni precio); mientras, «Descripción en preparación».
+//   · Aquí se ve el estado por idioma, se corrige a mano cualquier bloque (lo
+//     guardado a mano manda y no lo pisa una traducción automática mientras el
+//     español no cambie) y se puede traducir antes de compartir.
+//   · ar, tr y he siguen marcados «sin revisión nativa».
 
 type Msg = { kind: "ok" | "info" | "error"; text: string } | null;
 type Res = ActionResult<{ version?: number }>;
 
 export interface TranslationActions {
   load: (i: { catalogId: string; lang: string }) => Promise<ActionResult<{ panel: PanelState }>>;
-  prepare: (i: { catalogId: string; key: string; lang: string; retry?: boolean }) => Promise<ActionResult<{ outcome: string; message: { kind: "ok" | "info" | "error"; text: string } }>>;
-  cancel: (i: { catalogId: string; jobId: string }) => Promise<ActionResult<{ changed: boolean }>>;
-  save: (i: { catalogId: string; edit: ReviewEdit }) => Promise<ActionResult<object>>;
-  reject: (i: { catalogId: string; textId: string }) => Promise<ActionResult<{ changed: boolean }>>;
-  approve: (i: { catalogId: string; key: string; lang: string; textRev: number; areaRev: number | null; confirmed: string[] }) => Promise<Res>;
-  useApproved: (i: { catalogId: string; lang: string; key?: string }) => Promise<ActionResult<{ copied: number }>>;
-  remove: (i: { catalogId: string; key: string; lang: string }) => Promise<Res>;
+  prepareNow: (i: { catalogId: string; lang: string }) => Promise<ActionResult<{ started: boolean }>>;
+  save: (i: { catalogId: string; edit: ReviewEdit }) => Promise<Res>;
+  markReviewed: (i: { catalogId: string; key: string; lang: string }) => Promise<ActionResult<{ changed: number }>>;
   setCatalogLang: (i: { catalogId: string; lang: string }) => Promise<Res>;
   setLinkLang: (i: { catalogId: string; linkId: string; lang: string | null }) => Promise<Res>;
 }
 
+export const AUTO_NOTE =
+  "Elegir un idioma lo aplica al momento. La primera vez que alguien abre el enlace en ese idioma, las viviendas se traducen solas con la IA configurada (Configuración → IA) y se publican si no tienen teléfonos, correos ni precios; mientras tanto, cada una enseña «Descripción en preparación». Datos, fotos y precios salen siempre de la ficha actual.";
+
 const COST_NOTE =
-  "Preparar llama a la IA configurada (Configuración → IA) y puede tener coste. Solo se prepara el idioma elegido y solo lo que falta. " +
-  "Una reserva evita que dos personas lancen a la vez lo mismo, pero no garantiza una sola llamada de pago: si se agota el tiempo después de enviar, " +
-  "el resultado queda «incierto», pudo cobrarse y no se reintenta solo.";
+  "Cada vivienda se traduce una vez por idioma y por versión del texto en español (una llamada a la IA, con coste). Visitas a la vez no repiten la llamada. Si una traducción falla, se reintenta sola tras 5 min, 30 min, 2 h y 12 h; tras 5 fallos seguidos, solo con «Preparar ahora».";
 
 const STATE_TONE: Record<PanelItem["state"], string> = {
   current: "bg-emerald-50 text-emerald-800",
-  ready: "bg-sky-50 text-sky-800",
   review: "bg-amber-50 text-amber-900",
-  busy: "bg-amber-50 text-amber-900",
-  uncertain: "bg-red-50 text-red-800",
-  failed: "bg-red-50 text-red-800",
+  ready: "bg-sky-50 text-sky-800",
+  busy: "bg-sky-50 text-sky-900",
+  blocked: "bg-red-50 text-red-800",
+  waiting: "bg-orange-50 text-orange-900",
+  stopped: "bg-red-50 text-red-800",
   outdated: "bg-orange-50 text-orange-900",
-  rejected: "bg-ink/5 text-ink/70",
   none: "bg-ink/5 text-ink/70",
 };
 
@@ -64,12 +61,33 @@ function langName(l: CatalogLanguage): string {
   return `${LANGUAGE_LABELS[l]} (${LANGUAGE_NAMES_ES[l]})`;
 }
 
-function NativeMark({ lang }: { lang: CatalogLanguage }) {
+function hhmm(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export function NativeMark({ lang }: { lang: CatalogLanguage }) {
   if (!TRANSLATION_REVIEW_REQUIRED.has(lang)) return null;
   return (
     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900" data-testid={`native-${lang}`}>
       sin revisión nativa
     </span>
+  );
+}
+
+/** Opciones de idioma con la marca «sin revisión nativa» (como el diálogo de
+ *  itinerarios). */
+export function LanguageOptions({ inheritLabel }: { inheritLabel?: string }) {
+  return (
+    <>
+      {inheritLabel ? <option value="">{inheritLabel}</option> : null}
+      {CATALOG_LANGUAGES.map((l) => (
+        <option key={l} value={l}>
+          {langName(l)}
+          {TRANSLATION_REVIEW_REQUIRED.has(l) ? " · sin revisión nativa" : ""}
+        </option>
+      ))}
+    </>
   );
 }
 
@@ -83,34 +101,64 @@ function Notice({ msg }: { msg: Msg }) {
   );
 }
 
-export function LanguagesSection({ catalogId, actions, onPublicChange }: { catalogId: string; actions: TranslationActions; onPublicChange?: () => void }) {
+function stateText(it: PanelItem): string {
+  if (it.state === "waiting" && it.retry.until) return `Falló: se reintentará sola a partir de las ${hhmm(it.retry.until)}`;
+  if (it.state === "stopped") return `Sin reintentos automáticos (${it.retry.failures} fallos)`;
+  if ((it.state === "current" || it.state === "review") && it.featuresMissing > 0) return `${it.stateLabel} · faltan ${it.featuresMissing} características`;
+  return it.stateLabel;
+}
+
+export function LanguagesSection({
+  catalogId,
+  actions,
+  onPublicChange,
+  catalogLang,
+  onCatalogLang,
+}: {
+  catalogId: string;
+  actions: TranslationActions;
+  onPublicChange?: () => void;
+  /** El idioma del catálogo que conoce el gestor (también se cambia en «Compartir»). */
+  catalogLang?: CatalogLanguage;
+  onCatalogLang?: (l: CatalogLanguage) => void;
+}) {
   const [lang, setLang] = useState<TargetLanguage>("en");
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [catalogChoice, setCatalogChoice] = useState<CatalogLanguage>("es");
-  const stopAll = useRef(false);
+  const [watchUntil, setWatchUntil] = useState(0);
+  const langRef = useRef(lang);
+  langRef.current = lang;
 
-  const reload = useCallback(async (l: TargetLanguage = lang) => {
+  const reload = useCallback(async (l: TargetLanguage = langRef.current) => {
     const r = await actions.load({ catalogId, lang: l });
-    if (r.ok) {
-      setPanel(r.panel);
-      setCatalogChoice(r.panel.defaultLang);
-    } else setMsg({ kind: "error", text: r.error });
-  }, [actions, catalogId, lang]);
+    if (l !== langRef.current) return;
+    if (r.ok) setPanel(r.panel);
+    else setMsg({ kind: "error", text: r.error });
+  }, [actions, catalogId]);
 
   useEffect(() => {
     void reload(lang);
   }, [lang, reload]);
+  // Si el idioma del catálogo cambió desde «Compartir», el panel se pone al día
+  // (una vez por cambio, sin bucles si el gestor tuviera un valor viejo).
+  const seenLang = useRef(catalogLang);
+  useEffect(() => {
+    if (catalogLang === seenLang.current) return;
+    seenLang.current = catalogLang;
+    void reload();
+  }, [catalogLang, reload]);
 
-  // Mientras haya una preparación en curso, se vuelve a mirar cada pocos segundos.
+  // Mientras algo se traduce (o tras «Preparar ahora»), se vuelve a mirar.
   const anyBusy = !!panel?.items.some((i) => i.state === "busy");
   useEffect(() => {
-    if (!anyBusy) return;
-    const t = setInterval(() => void reload(), 4000);
+    if (!anyBusy && Date.now() > watchUntil) return;
+    const t = setInterval(() => {
+      void reload();
+    }, 2500);
     return () => clearInterval(t);
-  }, [anyBusy, reload]);
+  }, [anyBusy, watchUntil, reload]);
 
   async function run(id: string, fn: () => Promise<{ ok: boolean; error?: string } & Record<string, unknown>>, ok?: (r: Record<string, unknown>) => Msg) {
     setBusy(id);
@@ -129,28 +177,10 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
   }
 
   const progressOf = (l: CatalogLanguage) => panel?.progress.find((p) => p.lang === l) ?? null;
-  const missing = panel?.items.filter((i) => i.state === "none" || i.state === "outdated" || i.state === "rejected" || i.state === "failed" || (i.state === "current" && i.featuresMissing > 0)) ?? [];
-  const ready = panel?.items.filter((i) => i.state === "ready" || (i.state === "current" && i.featuresMissing > 0 && i.features.some((f) => f.status === "approved"))) ?? [];
+  const items = panel?.items ?? [];
+  const count = (s: PanelItem["state"][]) => items.filter((i) => s.includes(i.state)).length;
+  const todo = items.filter((i) => i.state !== "current" && i.state !== "review" && i.state !== "busy" && i.state !== "blocked").length;
   const active = panel?.active.includes(lang) ?? false;
-  const pendingVisible = active ? panel!.items.filter((i) => i.kind === "item" && !i.current) : [];
-
-  async function prepareAll() {
-    stopAll.current = false;
-    for (const it of missing) {
-      if (stopAll.current) break;
-      setBusy(`prep:${it.key}`);
-      const r = await actions.prepare({ catalogId, key: it.key, lang });
-      if (!r.ok) {
-        setMsg({ kind: "error", text: r.error });
-        break;
-      }
-      setMsg(r.message);
-      await reload();
-      if (r.outcome === "uncertain" || r.outcome === "failed" || r.outcome === "uncertain_pending") break;
-    }
-    setBusy(null);
-    await reload();
-  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]" data-testid="languages-section">
@@ -159,46 +189,31 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
           <h2 id="lang-cat-title" className="crm-label-sm flex items-center gap-1.5 text-ink/70">
             <Languages className="h-4 w-4" aria-hidden="true" /> Idioma de los enlaces
           </h2>
-          <p className="text-xs text-ink/60">
-            Un idioma solo se puede activar cuando está completo: todas las viviendas y el título del catálogo con su traducción aprobada y vigente. Hasta
-            entonces el enlace sigue en el idioma de antes. Los datos, las fotos y los precios salen siempre de la ficha actual, en todos los idiomas.
-          </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-sm text-ink/70">
-              <span className="block">Idioma del catálogo</span>
-              <select
-                value={catalogChoice}
-                onChange={(e) => setCatalogChoice(e.target.value as CatalogLanguage)}
-                className="mt-1 rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink"
-                data-testid="lang-catalog-select"
-              >
-                {CATALOG_LANGUAGES.map((l) => {
-                  const p = progressOf(l);
-                  return (
-                    <option key={l} value={l}>
-                      {langName(l)}
-                      {l === "es" ? "" : p?.complete ? " · completo" : ` · ${p?.current ?? 0}/${p?.total ?? 0}`}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-            <button
-              type="button"
-              disabled={!panel || busy !== null || catalogChoice === panel.defaultLang}
-              onClick={() => run("cat-lang", () => actions.setCatalogLang({ catalogId, lang: catalogChoice }), () => ({ kind: "ok", text: `El catálogo está ahora en ${LANGUAGE_NAMES_ES[catalogChoice]}. Los enlaces abiertos se actualizan solos.` }))}
-              className="rounded-lg bg-gold/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-gold disabled:opacity-50"
-              data-testid="lang-catalog-apply"
+          <p className="text-xs text-ink/60" data-testid="lang-auto-note">{AUTO_NOTE}</p>
+          <label className="block text-sm text-ink/70">
+            <span className="block">Idioma del catálogo</span>
+            <select
+              value={panel?.defaultLang ?? "es"}
+              disabled={!panel || busy !== null}
+              onChange={(e) => {
+                const v = e.target.value as CatalogLanguage;
+                void run("cat-lang", () => actions.setCatalogLang({ catalogId, lang: v }), () => {
+                  onCatalogLang?.(v);
+                  return { kind: "ok", text: `El catálogo está ahora en ${LANGUAGE_NAMES_ES[v]}. Los enlaces abiertos se actualizan solos.` };
+                });
+              }}
+              className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink"
+              data-testid="lang-catalog-select"
             >
-              Cambiar
-            </button>
-          </div>
+              <LanguageOptions />
+            </select>
+          </label>
           {panel ? (
-            <p className="text-xs text-ink/60" data-testid="lang-catalog-current">
-              Ahora: {langName(panel.defaultLang)}
+            <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink/60" data-testid="lang-catalog-current">
+              Ahora: {langName(panel.defaultLang)} <NativeMark lang={panel.defaultLang} />
             </p>
           ) : null}
-          <ul className="space-y-1" aria-label="Progreso por idioma" data-testid="lang-progress">
+          <ul className="space-y-1" aria-label="Viviendas traducidas por idioma" data-testid="lang-progress">
             {TARGET_LANGUAGES.map((l) => {
               const p = progressOf(l);
               return (
@@ -207,7 +222,7 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
                     {langName(l)} <NativeMark lang={l} />
                   </span>
                   <span className={p?.complete ? "font-semibold text-emerald-800" : ""}>
-                    {p ? (p.complete ? "Completo" : `${p.current} de ${p.total} viviendas`) : "…"}
+                    {p ? (p.complete ? "Todo traducido" : `${p.current} de ${p.total} traducidas`) : "…"}
                   </span>
                 </li>
               );
@@ -216,8 +231,15 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
           {panel && panel.links.filter((l) => l.state !== "revoked").length ? (
             <div className="space-y-2 border-t border-gold/10 pt-3" data-testid="lang-links">
               <p className="text-sm font-semibold text-ink/80">Enlaces personales</p>
+              <p className="text-xs text-ink/55">Cada enlace puede tener su idioma; no cambia el de los demás.</p>
               {panel.links.filter((l) => l.state !== "revoked").map((l) => (
-                <LinkLang key={l.id} link={l} catalogLang={panel.defaultLang} disabled={busy !== null} onApply={(v) => run(`link:${l.id}`, () => actions.setLinkLang({ catalogId, linkId: l.id, lang: v }), () => ({ kind: "ok", text: `El enlace de ${l.clientName} está ahora en ${LANGUAGE_NAMES_ES[(v ?? panel.defaultLang) as CatalogLanguage]}. Los demás enlaces no cambian.` }))} />
+                <LinkLang
+                  key={l.id}
+                  link={l}
+                  catalogLang={panel.defaultLang}
+                  disabled={busy !== null}
+                  onApply={(v) => run(`link:${l.id}`, () => actions.setLinkLang({ catalogId, linkId: l.id, lang: v }), () => ({ kind: "ok", text: `El enlace de ${l.clientName} está ahora en ${LANGUAGE_NAMES_ES[(v ?? panel.defaultLang) as CatalogLanguage]}. Los demás enlaces no cambian.` }))}
+                />
               ))}
             </div>
           ) : null}
@@ -227,13 +249,14 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
       <div className="min-w-0 space-y-4">
         <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="lang-work-title" data-testid="lang-work">
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 id="lang-work-title" className="crm-label-sm text-ink/70">Preparar y revisar traducciones</h2>
+            <h2 id="lang-work-title" className="crm-label-sm text-ink/70">Traducciones (opcional)</h2>
             <label className="text-sm text-ink/70">
               <span className="sr-only">Idioma</span>
-              <select value={lang} onChange={(e) => { setOpen(null); setLang(e.target.value as TargetLanguage); }} className="rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink" data-testid="lang-work-select">
+              <select value={lang} onChange={(e) => { setOpen(null); setPanel(null); setLang(e.target.value as TargetLanguage); }} className="rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink" data-testid="lang-work-select">
                 {TARGET_LANGUAGES.map((l) => (
                   <option key={l} value={l}>
                     {langName(l)}
+                    {TRANSLATION_REVIEW_REQUIRED.has(l) ? " · sin revisión nativa" : ""}
                   </option>
                 ))}
               </select>
@@ -244,35 +267,35 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
               {LANGUAGE_NAMES_ES[lang][0].toUpperCase() + LANGUAGE_NAMES_ES[lang].slice(1)}: sin revisión nativa. Las traducciones y los textos fijos de este idioma no están validados por un hablante nativo.
             </p>
           ) : null}
-          <p className="text-xs text-ink/60" data-testid="lang-cost-note">{COST_NOTE}</p>
-          {pendingVisible.length ? (
-            <p className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-900" data-testid="lang-pending-visible">
-              Este idioma está activo: {pendingVisible.length === 1 ? "1 vivienda se ve" : `${pendingVisible.length} viviendas se ven`} ahora con «Descripción en preparación» (datos, fotos y etiquetas en el idioma, sin el texto en español). Prepárala y apruébala.
+          <p className="text-xs text-ink/60">
+            Se traducen y se publican solas. Aquí puedes corregir cualquier texto (lo que guardes a mano tiene prioridad) o traducir antes de compartir.
+            {active ? " Este idioma lo usa ahora algún enlace." : ""}
+          </p>
+          <p className="text-xs text-ink/55" data-testid="lang-cost-note">{COST_NOTE}</p>
+          {panel ? (
+            <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink/70" data-testid="tr-summary">
+              <span>Traducidas: {count(["current", "review"])}</span>
+              <span>En preparación: {count(["busy"])}</span>
+              <span>Revisar: {count(["review"])}</span>
+              <span>No publicadas: {count(["blocked"])}</span>
+              <span>Desactualizadas: {count(["outdated"])}</span>
+              <span>Pendientes: {count(["none", "ready", "waiting", "stopped"])}</span>
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={!panel || busy !== null || missing.length === 0}
-              onClick={() => void prepareAll()}
+              disabled={!panel || busy !== null || todo === 0}
+              onClick={() =>
+                run("prepare-now", () => actions.prepareNow({ catalogId, lang }), () => {
+                  setWatchUntil(Date.now() + 180_000);
+                  return { kind: "info", text: `Traduciendo en segundo plano lo que falta en ${LANGUAGE_NAMES_ES[lang]}. Esta lista se actualiza sola.` };
+                })
+              }
               className="rounded-lg bg-gold/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-gold disabled:opacity-50"
-              data-testid="tr-prepare-all"
+              data-testid="tr-prepare-now"
             >
-              {missing.length ? `Preparar lo que falta (${missing.length})` : "No falta nada por preparar"}
-            </button>
-            {busy?.startsWith("prep:") ? (
-              <button type="button" onClick={() => { stopAll.current = true; }} className="rounded-lg border border-gold/40 bg-white px-3 py-1.5 text-sm text-ink/80" data-testid="tr-stop-all">
-                Parar después de esta
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={!panel || busy !== null || ready.length === 0}
-              onClick={() => run("use", () => actions.useApproved({ catalogId, lang }), (r) => ({ kind: "ok", text: `Copiadas ${String(r.copied ?? 0)} traducciones ya aprobadas, sin IA.` }))}
-              className="rounded-lg border border-gold/40 bg-white px-3 py-1.5 text-sm font-semibold text-ink/80 hover:bg-cream-50 disabled:opacity-50"
-              data-testid="tr-use-approved"
-            >
-              Usar las ya aprobadas, sin IA ({ready.length})
+              {todo ? `Preparar ahora (${todo})` : "Nada pendiente"}
             </button>
           </div>
           <Notice msg={msg} />
@@ -280,22 +303,16 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
             <p className="text-xs text-ink/50">Cargando…</p>
           ) : (
             <ul className="divide-y divide-gold/10" data-testid="tr-items">
-              {panel.items.map((it) => (
+              {items.map((it) => (
                 <TrRow
                   key={`${it.key}:${lang}`}
                   item={it}
                   lang={lang}
-                  activeLang={active}
                   open={open === it.key}
                   busy={busy}
                   onToggle={() => setOpen(open === it.key ? null : it.key)}
-                  onPrepare={(retry) => run(`prep:${it.key}`, () => actions.prepare({ catalogId, key: it.key, lang, retry }) as never, (r) => (r as { message: Msg }).message)}
-                  onCancel={() => it.job && run(`cancel:${it.key}`, () => actions.cancel({ catalogId, jobId: it.job!.id }), (r) => (r.changed ? { kind: "info", text: "Preparación cancelada. Si la IA responde después, la respuesta se descarta y queda registrada (esa llamada pudo cobrarse)." } : { kind: "info", text: "Esa preparación ya había terminado." }))}
-                  onSave={(edit) => run(`save:${it.key}`, () => actions.save({ catalogId, edit }), () => ({ kind: "ok", text: "Cambios guardados. Falta aprobar." }))}
-                  onApprove={(confirmed) => run(`approve:${it.key}`, () => actions.approve({ catalogId, key: it.key, lang, textRev: it.text!.rev, areaRev: it.area?.rev ?? null, confirmed }), () => ({ kind: "ok", text: "Traducción aprobada y copiada a este catálogo." }))}
-                  onReject={() => it.text && run(`reject:${it.key}`, () => actions.reject({ catalogId, textId: it.text!.id }), () => ({ kind: "info", text: "Traducción rechazada. Puedes preparar otra." }))}
-                  onUse={() => run(`use:${it.key}`, () => actions.useApproved({ catalogId, lang, key: it.key }), () => ({ kind: "ok", text: "Traducción aprobada copiada a este catálogo, sin IA." }))}
-                  onRemove={() => run(`remove:${it.key}`, () => actions.remove({ catalogId, key: it.key, lang }), () => ({ kind: "info", text: "Traducción quitada de este catálogo." }))}
+                  onSave={(edit) => run(`save:${it.key}`, () => actions.save({ catalogId, edit }), () => ({ kind: "ok", text: "Guardado y publicado en este catálogo. Ninguna traducción automática lo cambiará mientras el español no cambie." }))}
+                  onReviewed={() => run(`reviewed:${it.key}`, () => actions.markReviewed({ catalogId, key: it.key, lang }), () => ({ kind: "ok", text: "Marcada como revisada." }))}
                 />
               ))}
             </ul>
@@ -307,110 +324,89 @@ export function LanguagesSection({ catalogId, actions, onPublicChange }: { catal
 }
 
 function LinkLang({ link, catalogLang, disabled, onApply }: { link: PanelState["links"][number]; catalogLang: CatalogLanguage; disabled: boolean; onApply: (v: string | null) => void }) {
-  const [v, setV] = useState<string>(link.lang ?? "");
-  useEffect(() => setV(link.lang ?? ""), [link.lang]);
   return (
-    <div className="flex flex-wrap items-center gap-2" data-testid="lang-link">
+    <label className="flex flex-wrap items-center gap-2" data-testid="lang-link">
       <span className="min-w-0 flex-1 truncate text-sm text-ink">{link.clientName}</span>
-      <select value={v} onChange={(e) => setV(e.target.value)} aria-label={`Idioma del enlace de ${link.clientName}`} className="rounded-lg border border-gold/25 bg-white px-2 py-1 text-sm text-ink" data-testid="lang-link-select">
-        <option value="">El del catálogo ({LANGUAGE_NAMES_ES[catalogLang]})</option>
-        {CATALOG_LANGUAGES.map((l) => (
-          <option key={l} value={l}>
-            {langName(l)}
-          </option>
-        ))}
+      <select
+        value={link.lang ?? ""}
+        disabled={disabled}
+        onChange={(e) => onApply(e.target.value || null)}
+        aria-label={`Idioma del enlace de ${link.clientName}`}
+        className="max-w-full rounded-lg border border-gold/25 bg-white px-2 py-1 text-sm text-ink"
+        data-testid="lang-link-select"
+      >
+        <LanguageOptions inheritLabel={`El del catálogo (${LANGUAGE_NAMES_ES[catalogLang]})`} />
       </select>
-      <button type="button" disabled={disabled || v === (link.lang ?? "")} onClick={() => onApply(v || null)} className="rounded-lg border border-gold/40 bg-white px-2 py-1 text-xs font-semibold text-ink/80 disabled:opacity-50" data-testid="lang-link-apply">
-        Cambiar
-      </button>
-    </div>
+    </label>
   );
 }
 
 function TrRow(p: {
   item: PanelItem;
   lang: TargetLanguage;
-  activeLang: boolean;
   open: boolean;
   busy: string | null;
   onToggle: () => void;
-  onPrepare: (retry?: boolean) => void;
-  onCancel: () => void;
   onSave: (edit: ReviewEdit) => void;
-  onApprove: (confirmed: string[]) => void;
-  onReject: () => void;
-  onUse: () => void;
-  onRemove: () => void;
+  onReviewed: () => void;
 }) {
   const it = p.item;
   const disabled = p.busy !== null;
-  const canPrepare = it.state === "none" || it.state === "outdated" || it.state === "rejected" || it.state === "failed" || (it.state === "current" && it.featuresMissing > 0 && it.features.some((f) => !f.tr));
-  const canReview = !!it.text && it.text.status !== "rejected";
+  const canEdit = !!it.text && it.text.status !== "rejected";
+  const blockers = (it.check?.blockers ?? []).filter((b) => !b.where.startsWith("feature:"));
+  const warnings = it.check?.warnings ?? [];
   return (
     <li className="space-y-2 py-3" data-testid="tr-item" data-key={it.key} data-state={it.state}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink">{it.kind === "meta" ? `Título e introducción del catálogo` : it.title}</p>
+          <p className="truncate text-sm font-semibold text-ink">{it.kind === "meta" ? "Título e introducción del catálogo" : it.title}</p>
           <p className="text-xs text-ink/55">
-            {it.kind === "meta" ? it.title : `Fuente: ${it.library ? "texto aprobado de la biblioteca (se reutiliza en tus catálogos)" : "lo que enseña hoy este catálogo (no entra en la biblioteca)"}`}
+            {it.kind === "meta" ? it.title : it.library ? "Texto aprobado de la biblioteca (su traducción se reutiliza en tus catálogos)" : "Lo que enseña hoy este catálogo"}
+            {it.text?.approval === "manual" || it.text?.origin === "manual" ? " · corregida a mano" : it.text?.approval === "auto" ? " · publicada sola" : ""}
           </p>
         </div>
         <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${STATE_TONE[it.state]}`} data-testid="tr-state">
-          {it.state === "current" && it.featuresMissing > 0 ? `Vigente · faltan ${it.featuresMissing} características` : it.stateLabel}
+          {stateText(it)}
         </span>
       </div>
-      {it.outdated && it.kind === "item" ? (
+      {it.state === "blocked" ? (
+        <p className="text-xs text-red-800" data-testid="tr-blocked">
+          No se ha publicado: {blockers.map((b) => `${b.code === "text_has_price" ? "menciona un precio" : "tiene un teléfono, un correo o una web"} (${whereLabel(b.where)})`).join("; ")}. El cliente sigue viendo «Descripción en preparación». Corrígela y guárdala.
+        </p>
+      ) : null}
+      {it.state === "review" ? (
+        <p className="text-xs text-amber-900" data-testid="tr-review-note">
+          Publicada sola con {warnings.length === 1 ? "un aviso" : `${warnings.length} avisos`} (cifras o nombres propios). Revísala si quieres.
+        </p>
+      ) : null}
+      {it.state === "outdated" ? (
         <p className="text-xs text-orange-900" data-testid="tr-outdated">
-          El español de esta vivienda cambió después de aprobar la traducción.{p.activeLang ? " El cliente ve «Descripción en preparación» hasta que apruebes la nueva." : ""}
+          {it.kind === "meta"
+            ? "El título o la introducción en español cambiaron: el cliente ve el título traducido anterior hasta la próxima visita."
+            : "El español de esta vivienda cambió: el cliente ve «Descripción en preparación» y se vuelve a traducir sola en la próxima visita."}
         </p>
       ) : null}
-      {it.outdated && it.kind === "meta" ? (
-        <p className="text-xs text-orange-900" data-testid="tr-outdated">El título o la introducción en español cambiaron: el cliente sigue viendo la traducción anterior hasta que apruebes la nueva.</p>
+      {(it.state === "waiting" || it.state === "stopped") && it.job?.note ? (
+        <p className="text-xs text-ink/55" data-testid="tr-job-note">Último intento: {it.job.note}</p>
       ) : null}
-      {it.state === "uncertain" ? (
-        <p className="text-xs text-red-800" data-testid="tr-uncertain">
-          La última preparación quedó incierta (tiempo agotado tras enviar): pudo cobrarse. No se reintenta sola.
-        </p>
-      ) : null}
-      {it.job?.note && (it.state === "failed" || it.job.discarded) ? <p className="text-xs text-ink/55" data-testid="tr-job-note">Registro: {it.job.note}</p> : null}
       <div className="flex flex-wrap gap-2">
-        {it.state === "busy" ? (
-          <button type="button" disabled={disabled} onClick={p.onCancel} className="rounded-lg border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-800 disabled:opacity-50" data-testid="tr-cancel">
-            Cancelar la preparación
+        {canEdit ? (
+          <button type="button" onClick={p.onToggle} aria-expanded={p.open} className="rounded-lg border border-gold/40 bg-white px-2 py-1 text-xs font-semibold text-ink/80" data-testid="tr-edit">
+            {p.open ? "Cerrar" : it.state === "blocked" ? "Corregir" : "Ver y corregir"}
           </button>
         ) : null}
-        {canPrepare ? (
-          <button type="button" disabled={disabled} onClick={() => p.onPrepare(false)} className="rounded-lg bg-gold/90 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" data-testid="tr-prepare">
-            {p.busy === `prep:${it.key}` ? "Preparando…" : `Preparar en ${LANGUAGE_NAMES_ES[p.lang]}`}
-          </button>
-        ) : null}
-        {it.state === "uncertain" ? (
-          <button type="button" disabled={disabled} onClick={() => p.onPrepare(true)} className="rounded-lg border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-800 disabled:opacity-50" data-testid="tr-retry">
-            Volver a preparar (la anterior pudo cobrarse)
-          </button>
-        ) : null}
-        {it.state === "ready" || (it.state === "current" && it.featuresMissing > 0 && it.features.some((f) => f.status === "approved")) ? (
-          <button type="button" disabled={disabled} onClick={p.onUse} className="rounded-lg border border-gold/40 bg-white px-2 py-1 text-xs font-semibold text-ink/80 disabled:opacity-50" data-testid="tr-use">
-            Usar la aprobada (sin IA)
-          </button>
-        ) : null}
-        {canReview ? (
-          <button type="button" onClick={p.onToggle} aria-expanded={p.open} className="rounded-lg border border-gold/40 bg-white px-2 py-1 text-xs font-semibold text-ink/80" data-testid="tr-review">
-            {p.open ? "Cerrar revisión" : it.state === "review" ? "Revisar" : "Ver traducción"}
-          </button>
-        ) : null}
-        {it.current || (it.outdated && it.kind === "item") ? (
-          <button type="button" disabled={disabled} onClick={p.onRemove} className="rounded-lg px-2 py-1 text-xs text-ink/55 underline disabled:opacity-50" data-testid="tr-remove">
-            Quitar de este catálogo
+        {it.state === "review" ? (
+          <button type="button" disabled={disabled} onClick={p.onReviewed} className="rounded-lg border border-emerald-300 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 disabled:opacity-50" data-testid="tr-reviewed">
+            Dar por revisada
           </button>
         ) : null}
       </div>
-      {p.open && canReview ? <Review item={it} lang={p.lang} disabled={disabled} onSave={p.onSave} onApprove={p.onApprove} onReject={p.onReject} /> : null}
+      {p.open && canEdit ? <Editor item={it} lang={p.lang} disabled={disabled} onSave={p.onSave} /> : null}
     </li>
   );
 }
 
-function Review({ item, lang, disabled, onSave, onApprove, onReject }: { item: PanelItem; lang: TargetLanguage; disabled: boolean; onSave: (e: ReviewEdit) => void; onApprove: (c: string[]) => void; onReject: () => void }) {
+function Editor({ item, lang, disabled, onSave }: { item: PanelItem; lang: TargetLanguage; disabled: boolean; onSave: (e: ReviewEdit) => void }) {
   const own = item.es.blocks.filter((b) => !b.area);
   const areaBlock = item.es.blocks.find((b) => b.area) ?? null;
   const [title, setTitle] = useState(item.text?.title ?? "");
@@ -418,29 +414,29 @@ function Review({ item, lang, disabled, onSave, onApprove, onReject }: { item: P
   const [blocks, setBlocks] = useState<string[]>(own.map((b) => b.tr ?? ""));
   const [area, setArea] = useState(areaBlock?.tr ?? "");
   const [feats, setFeats] = useState<Record<string, string>>(Object.fromEntries(item.features.map((f) => [f.es, f.tr ?? ""])));
-  const [confirmed, setConfirmed] = useState<string[]>([]);
   const textChanged =
     title !== (item.text?.title ?? "") || (item.kind === "meta" && intro !== (item.text?.intro ?? "")) || blocks.some((b, i) => b !== (own[i]?.tr ?? ""));
-  const areaChanged = !!areaBlock && area !== (areaBlock.tr ?? "");
+  const areaChanged = !!areaBlock && !!item.area && area !== (areaBlock.tr ?? "");
   const featChanged = item.features.filter((f) => (feats[f.es] ?? "") !== (f.tr ?? "") && (feats[f.es] ?? "").trim());
   const changed = textChanged || areaChanged || featChanged.length > 0;
   const blockers = item.check?.blockers ?? [];
   const warnings = item.check?.warnings ?? [];
-  const pending = warnings.filter((w) => !confirmed.includes(w.id));
   const fieldDir = lang === "ar" || lang === "he" ? "rtl" : "ltr";
+  // Un bloqueo de una traducción automática solo se arregla guardando a mano.
+  const mustSave = item.state === "blocked";
 
   function save() {
     onSave({
       key: item.key,
       lang,
-      text: textChanged && item.text ? { id: item.text.id, rev: item.text.rev, title, intro: item.kind === "meta" ? intro : undefined, blocks: item.kind === "meta" ? undefined : blocks } : null,
+      text: (textChanged || mustSave) && item.text ? { id: item.text.id, rev: item.text.rev, title, intro: item.kind === "meta" ? intro : undefined, blocks: item.kind === "meta" ? undefined : blocks } : null,
       area: areaChanged && item.area ? { id: item.area.id, rev: item.area.rev, body: area } : null,
       features: featChanged.map((f) => ({ es: f.es, tr: feats[f.es] })),
     });
   }
   const box = "w-full rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-gold";
   return (
-    <div className="space-y-3 rounded-lg border border-gold/15 bg-cream-50/50 p-3" data-testid="tr-review-panel">
+    <div className="space-y-3 rounded-lg border border-gold/15 bg-cream-50/50 p-3" data-testid="tr-editor">
       <div className="grid gap-2 md:grid-cols-2">
         <div>
           <p className="crm-label-sm text-ink/55">Original (español)</p>
@@ -474,7 +470,7 @@ function Review({ item, lang, disabled, onSave, onApprove, onReject }: { item: P
           <div>
             <p className="crm-label-sm text-ink/55">{areaBlock.headingEs} · plantilla de zona</p>
             <p className="mt-1 whitespace-pre-line text-sm text-ink/80">{areaBlock.es}</p>
-            <p className="mt-1 text-[11px] text-ink/50">Se aprueba una vez y se reutiliza en todas las viviendas con esta plantilla.</p>
+            <p className="mt-1 text-[11px] text-ink/50">Se traduce una vez y se reutiliza en todas las viviendas con esta plantilla.</p>
           </div>
           <label className="block">
             <span className="crm-label-sm text-ink/55">{areaBlock.headingTr}</span>
@@ -496,44 +492,22 @@ function Review({ item, lang, disabled, onSave, onApprove, onReject }: { item: P
       {blockers.length ? (
         <ul className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" data-testid="tr-blockers">
           {blockers.map((b, i) => (
-            <li key={i}>{b.code === "text_has_price" ? "Menciona un precio" : "Tiene un teléfono, un correo o una web"} ({whereLabel(b.where)}). Corrígelo antes de aprobar.</li>
+            <li key={i}>{b.code === "text_has_price" ? "Menciona un precio" : "Tiene un teléfono, un correo o una web"} ({whereLabel(b.where)}). Quítalo antes de guardar.</li>
           ))}
         </ul>
       ) : null}
       {warnings.length ? (
         <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="tr-warnings">
           {warnings.map((w) => (
-            <li key={w.id}>
-              <label className="flex items-start gap-2">
-                <input type="checkbox" checked={confirmed.includes(w.id)} onChange={(e) => setConfirmed(e.target.checked ? [...confirmed, w.id] : confirmed.filter((x) => x !== w.id))} data-testid="tr-warning-confirm" />
-                <span>{w.message}</span>
-              </label>
-            </li>
+            <li key={w.id}>{w.message}</li>
           ))}
         </ul>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        {changed ? (
-          <button type="button" disabled={disabled} onClick={save} className="rounded-lg bg-gold/90 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50" data-testid="tr-save">
-            Guardar cambios
-          </button>
-        ) : null}
-        <button
-          type="button"
-          disabled={disabled || changed || blockers.length > 0 || pending.length > 0 || (!!areaBlock && !item.area) || (item.current && item.text?.status === "approved" && item.area?.status !== "draft" && !item.features.some((f) => f.status === "draft"))}
-          onClick={() => onApprove(confirmed)}
-          className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-          data-testid="tr-approve"
-        >
-          Aprobar y usar en este catálogo
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={disabled || (!changed && !mustSave)} onClick={save} className="rounded-lg bg-gold/90 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50" data-testid="tr-save">
+          Guardar y publicar
         </button>
-        {item.text?.status === "draft" ? (
-          <button type="button" disabled={disabled} onClick={onReject} className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-800 disabled:opacity-50" data-testid="tr-reject">
-            Rechazar
-          </button>
-        ) : null}
-        {changed ? <span className="self-center text-xs text-amber-800">Guarda los cambios antes de aprobar.</span> : null}
-        {!changed && pending.length ? <span className="self-center text-xs text-amber-800">Confirma cada aviso para aprobar.</span> : null}
+        <span className="text-xs text-ink/55">Se publica al momento en este catálogo.</span>
       </div>
     </div>
   );

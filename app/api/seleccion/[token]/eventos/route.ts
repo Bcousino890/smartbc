@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   }
   let initial;
   try {
-    initial = await getPublicCatalogState(token);
+    initial = await getPublicCatalogState(token, { visit: true });
   } catch (err) {
     console.error("[catalogos] eventos:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "unavailable_backend" }, { status: 503, headers: { "Cache-Control": "no-store" } });

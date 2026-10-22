@@ -1,10 +1,11 @@
 import type { CatalogLanguage } from "./i18n";
 import type { InternalSnapshot } from "./to-public";
-import { isTargetLanguage, type FinishResult, type PrepareNeeds, type ReserveResult, type TargetLanguage, type TranslationResult } from "./translations";
+import { autoRetryState, isTargetLanguage, reserveLimits, type FinishResult, type PrepareNeeds, type ReserveResult, type TargetLanguage, type TranslationResult } from "./translations";
 import { textBlocker } from "./text-rules";
 import type {
   ActivationRequired,
   ApproveParts,
+  PublishMode,
   CopyRow,
   EsState,
   FeatureRow,
@@ -18,12 +19,14 @@ import type {
 } from "./translation-service";
 
 // ============================================================================
-// Almacén EN MEMORIA de las traducciones (PR6) con las MISMAS reglas que las
-// funciones SQL de 0226: reserva única por fuente e idioma con caducidad,
-// resultado descartado si la reserva ya no es suya o caducó, incierto sin
-// reintento salvo petición expresa, nunca pisa lo preparado o aprobado,
-// claves de los bloques idénticas, aprobación con la revisión que se vio,
-// copias por catálogo y activación solo con el idioma completo.
+// Almacén EN MEMORIA de las traducciones (PR6 + 0228) con las MISMAS reglas
+// que las funciones SQL: reserva única por fuente e idioma con caducidad,
+// límites de 0228 (trabajos a la vez por catálogo, tope diario, espera
+// creciente tras fallos y parada tras N seguidos), resultado descartado si la
+// reserva ya no es suya o caducó, nunca pisa lo preparado o aprobado, claves
+// de los bloques idénticas, publicación con la revisión que se vio y cómo se
+// aprobó ('auto' | 'manual'), copias por catálogo y cambio de idioma al
+// momento.
 //
 // Lo usan las pruebas puras (scripts/test-catalogs-translations.mts) y los
 // fixtures de desarrollo (fixture-store.ts). En la app real manda SQL; las
@@ -153,21 +156,31 @@ export class MemoryTranslations implements TrBackend {
   }
 
   // ── Preparación ──
-  async reserve(i: { sourceId: string; lang: TargetLanguage; catalogId: string; propertyId: string | null; needs: PrepareNeeds; ttlSeconds: number; retry: boolean }): Promise<ReserveResult> {
+  /** Como catalog_tr_reserve_auto (0228) → catalog_tr_reserve (0226). */
+  async reserve(i: { sourceId: string; lang: TargetLanguage; catalogId: string; propertyId: string | null; needs: PrepareNeeds; ttlSeconds: number; limits: ReturnType<typeof reserveLimits> }): Promise<ReserveResult> {
     if (!isTargetLanguage(i.lang)) throw new Error("invalid_lang");
     if (i.ttlSeconds < 30 || i.ttlSeconds > 900) throw new Error("invalid_ttl");
+    const L = i.limits;
+    if (L.max_active < 1 || L.max_active > 10 || L.daily_cap < 1 || L.max_failures < 1 || !L.waits.length || L.waits.some((w) => w < 60)) throw new Error("invalid_limits");
     const src = this.sources.find((s) => s.id === i.sourceId);
     if (!src) throw new Error("source_not_found");
     const now = this.now();
     for (const j of this.jobs) {
-      if (j.sourceId === i.sourceId && j.lang === i.lang && j.status === "reserved" && Date.parse(j.expiresAt) <= now) {
+      if ((j.catalogId === i.catalogId || (j.sourceId === i.sourceId && j.lang === i.lang)) && j.status === "reserved" && Date.parse(j.expiresAt) <= now) {
         j.status = "expired";
-        j.finishedAt = this.iso(now);
+        j.finishedAt = j.expiresAt;
         j.note = [j.note, "reserva caducada sin resultado"].filter(Boolean).join(" · ");
       }
     }
     const active = this.jobs.find((j) => j.sourceId === i.sourceId && j.lang === i.lang && j.status === "reserved");
     if (active) return { state: "busy", jobId: active.id, expiresAt: active.expiresAt };
+    if (!L.manual) {
+      const r = autoRetryState(this.jobs.filter((j) => j.sourceId === i.sourceId && j.lang === i.lang), now, { maxFailures: L.max_failures, retryWaitsSeconds: L.waits });
+      if (r.stopped) return { state: "stopped", failures: r.failures };
+      if (r.until) return { state: "waiting", until: r.until, failures: r.failures };
+    }
+    if (this.jobs.filter((j) => j.catalogId === i.catalogId && j.status === "reserved").length >= L.max_active) return { state: "limit" };
+    if (!L.manual && this.jobs.filter((j) => j.catalogId === i.catalogId && j.auto && Date.parse(j.reservedAt) > now - 86_400_000).length >= L.daily_cap) return { state: "cap" };
     const self = (i.needs.text || i.needs.meta) && src.kind !== "area" && !this.texts.some((t) => t.sourceId === i.sourceId && t.lang === i.lang && t.status !== "rejected");
     let area = i.needs.area;
     if (area) {
@@ -176,17 +189,17 @@ export class MemoryTranslations implements TrBackend {
     }
     const features = [...new Set(i.needs.features)].filter((f) => f.trim() && f.length <= 200 && !this.features.some((r) => r.es === f && r.lang === i.lang && r.status !== "rejected"));
     if (!self && !area && features.length === 0) return { state: "ready" };
-    const last = this.jobs.filter((j) => j.sourceId === i.sourceId && j.lang === i.lang).sort((a, b) => b.reservedAt.localeCompare(a.reservedAt))[0];
-    if (last && last.status === "uncertain" && !i.retry) return { state: "uncertain", jobId: last.id };
     const job: Job = {
       id: uid("c"), sourceId: i.sourceId, lang: i.lang, status: "reserved", reservedAt: this.iso(now), expiresAt: this.iso(now + i.ttlSeconds * 1000),
-      finishedAt: null, discardedAt: null, note: null, catalogId: i.catalogId, propertyId: i.propertyId,
+      finishedAt: null, discardedAt: null, note: null, catalogId: i.catalogId, propertyId: i.propertyId, auto: !L.manual,
       needs: { text: self && src.kind !== "meta", meta: self && src.kind === "meta", area, features },
     };
     this.jobs.push(job);
     return { state: "reserved", jobId: job.id, expiresAt: job.expiresAt, needs: job.needs };
   }
 
+  /** Como catalog_tr_cancel (0226). Ya no lo usa la gestión; sigue para
+   *  probar que lo que llega tras cancelar se descarta. */
   async cancel(jobId: string): Promise<boolean> {
     const j = this.jobs.find((x) => x.id === jobId);
     if (!j) throw new Error("job_not_found");
@@ -201,7 +214,7 @@ export class MemoryTranslations implements TrBackend {
     const prev = this.texts.find((t) => t.sourceId === sourceId && t.lang === lang);
     if (prev && prev.status !== "rejected") return;
     if (prev) Object.assign(prev, { status: "draft", content, rev: prev.rev + 1, origin: "ai", updatedAt: this.iso(this.now()) });
-    else this.texts.push({ id: uid("d"), sourceId, lang, status: "draft", content, rev: 1, origin: "ai", updatedAt: this.iso(this.now()) });
+    else this.texts.push({ id: uid("d"), sourceId, lang, status: "draft", content, rev: 1, origin: "ai", approval: null, updatedAt: this.iso(this.now()) });
     void jobId;
   }
 
@@ -238,8 +251,8 @@ export class MemoryTranslations implements TrBackend {
       if (!j.needs.features.includes(f.es) || !f.tr?.trim() || f.tr.length > 200) continue;
       const prev = this.features.find((x) => x.es === f.es && x.lang === j.lang);
       if (prev && prev.status !== "rejected") continue;
-      if (prev) Object.assign(prev, { tr: f.tr.trim(), status: "draft" });
-      else this.features.push({ es: f.es, lang: j.lang, tr: f.tr.trim(), status: "draft" });
+      if (prev) Object.assign(prev, { tr: f.tr.trim(), status: "draft", origin: "ai" });
+      else this.features.push({ es: f.es, lang: j.lang, tr: f.tr.trim(), status: "draft", approval: null, origin: "ai" });
     }
     Object.assign(j, { status: "done", finishedAt: this.iso(now), note: i.note });
     return { state: "saved" };
@@ -268,15 +281,8 @@ export class MemoryTranslations implements TrBackend {
     const b = textBlocker(tr);
     if (b) throw new Error(b);
     const prev = this.features.find((f) => f.es === es && f.lang === lang);
-    if (prev) Object.assign(prev, { tr: tr.trim(), status: "draft" });
-    else this.features.push({ es, lang, tr: tr.trim(), status: "draft" });
-  }
-  async reject(textId: string): Promise<boolean> {
-    const t = this.texts.find((x) => x.id === textId);
-    if (!t) throw new Error("translation_not_found");
-    if (t.status !== "draft") return false;
-    t.status = "rejected";
-    return true;
+    if (prev) Object.assign(prev, { tr: tr.trim(), status: "draft", origin: "manual" });
+    else this.features.push({ es, lang, tr: tr.trim(), status: "draft", approval: null, origin: "manual" });
   }
 
   private textFor(catalogId: string, propertyId: string | null, lang: TargetLanguage, textId: string): TextRow | null {
@@ -291,7 +297,32 @@ export class MemoryTranslations implements TrBackend {
     return ok ? t : null;
   }
 
-  async approve(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, parts: ApproveParts): Promise<number> {
+  /** Como catalog_tr_publish (0228) = catalog_tr_approve (0226) + cómo. */
+  async publish(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, parts: ApproveParts, mode: PublishMode): Promise<number> {
+    if (mode !== "auto" && mode !== "manual") throw new Error("invalid_mode");
+    const before = new Map(this.texts.filter((t) => t.id === parts.text.id || t.id === parts.area?.id).map((t) => [t.id, t.status]));
+    const version = await this.approve(catalogId, propertyId, lang, sig, parts);
+    for (const t of this.texts) {
+      if (t.id !== parts.text.id && t.id !== parts.area?.id) continue;
+      if (mode === "manual" || t.approval === null || before.get(t.id) !== "approved") t.approval = mode === "manual" || t.origin === "manual" ? "manual" : "auto";
+    }
+    for (const f of parts.features) {
+      const row = this.features.find((x) => x.es === f.es && x.lang === lang);
+      if (row) row.approval = mode === "manual" || row.origin === "manual" ? "manual" : "auto";
+    }
+    return version;
+  }
+
+  async markReviewed(catalogId: string, lang: TargetLanguage, textIds: string[], features: string[]): Promise<number> {
+    if (!isTargetLanguage(lang)) throw new Error("invalid_lang");
+    let n = 0;
+    for (const t of this.texts) if (textIds.includes(t.id) && t.lang === lang && t.status === "approved" && t.approval === "auto") { t.approval = "manual"; n++; }
+    for (const f of this.features) if (features.includes(f.es) && f.lang === lang && f.status === "approved" && f.approval === "auto") { f.approval = "manual"; n++; }
+    void catalogId;
+    return n;
+  }
+
+  private async approve(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, parts: ApproveParts): Promise<number> {
     const t = this.textFor(catalogId, propertyId, lang, parts.text.id);
     if (!t) throw new Error("translation_not_found");
     if (t.status === "rejected" || t.rev !== parts.text.rev) throw new Error("translation_changed");
@@ -317,7 +348,7 @@ export class MemoryTranslations implements TrBackend {
     return this.copySet(catalogId, propertyId, lang, sig, t.id, area?.id ?? null, parts.list);
   }
 
-  async copySet(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, textId: string, areaTextId: string | null, features: string[]): Promise<number> {
+  private async copySet(catalogId: string, propertyId: string | null, lang: TargetLanguage, sig: string, textId: string, areaTextId: string | null, features: string[]): Promise<number> {
     const t = this.textFor(catalogId, propertyId, lang, textId);
     if (!t) throw new Error("translation_not_found");
     if (t.status !== "approved") throw new Error("translation_not_approved");
@@ -357,27 +388,13 @@ export class MemoryTranslations implements TrBackend {
     return changed ? this.hooks.bump(catalogId) : this.hooks.version(catalogId);
   }
 
-  async copyRemove(catalogId: string, propertyId: string | null, lang: TargetLanguage): Promise<number> {
-    const before = this.itemCopies.length + this.metaCopies.length;
-    if (propertyId === null) this.metaCopies = this.metaCopies.filter((m) => !(m.catalogId === catalogId && m.lang === lang));
-    else this.itemCopies = this.itemCopies.filter((c) => !(c.catalogId === catalogId && c.propertyId === propertyId && c.lang === lang));
-    return this.itemCopies.length + this.metaCopies.length !== before ? this.hooks.bump(catalogId) : this.hooks.version(catalogId);
-  }
-
+  /** Como catalog_tr_activate (0228): el idioma cambia AL MOMENTO, sin
+   *  exigir que esté completo (lo que falte se ve con el aviso N5). */
   async activate(catalogId: string, linkId: string | null, lang: CatalogLanguage | null, expectedVersion: number, required: ActivationRequired): Promise<number> {
     if (linkId === null && lang === null) throw new Error("invalid_lang");
     if (lang !== null && lang !== "es" && !isTargetLanguage(lang)) throw new Error("invalid_lang");
-    if (lang !== null && lang !== "es") {
-      if (this.hooks.version(catalogId) !== expectedVersion) throw new Error("catalog_changed");
-      const es = await this.hooks.esState(catalogId);
-      const ids = es.map.map((m) => m.p);
-      if (ids.some((p) => !required.items.some((r) => r.p === p))) throw new Error("lang_incomplete");
-      for (const r of required.items) {
-        const c = this.itemCopies.find((x) => x.catalogId === catalogId && x.propertyId === r.p && x.lang === lang);
-        if (!c || c.esSig !== r.s || r.f.some((f) => !c.features.some((p) => p[0] === f))) throw new Error("lang_incomplete");
-      }
-      if (!this.metaCopies.some((m) => m.catalogId === catalogId && m.lang === lang && m.esSig === required.meta)) throw new Error("lang_incomplete");
-    }
+    void expectedVersion;
+    void required;
     if (this.hooks.setLang(catalogId, linkId, lang)) return this.hooks.bump(catalogId);
     return this.hooks.version(catalogId);
   }

@@ -56,10 +56,14 @@ export interface FakeAi {
   last: () => { system: string; userText: string } | null;
 }
 
+export type FakeAiMode = "ok" | "timeout" | "error" | "bad" | "contact" | "warn";
+
 /** IA falsa. `mode`: «ok» traduce; «timeout» espera y lanza TimeoutError;
  *  «error» responde como un 500 del proveedor; «bad» devuelve bloques que no
- *  casan. `delayMs` simula lo que tarda; `gate` permite soltarla a mano. */
-export function fakeTranslationAi(opts: { mode?: () => "ok" | "timeout" | "error" | "bad"; delayMs?: () => number; gate?: () => Promise<void> | null } = {}): FakeAi {
+ *  casan; «contact» mete un teléfono en el primer bloque (bloqueo: no se
+ *  publica); «warn» añade una cifra (aviso: se publica y queda «revisar»).
+ *  `delayMs` simula lo que tarda; `gate` permite soltarla a mano. */
+export function fakeTranslationAi(opts: { mode?: () => FakeAiMode; delayMs?: () => number; gate?: () => Promise<void> | null } = {}): FakeAi {
   let n = 0;
   let lastReq: { system: string; userText: string } | null = null;
   const ai: TrAiFn = async ({ system, userText, signal }) => {
@@ -89,7 +93,10 @@ export function fakeTranslationAi(opts: { mode?: () => "ok" | "timeout" | "error
       catalogo?: { titulo: string; introduccion: string };
     };
     const lang = req.idioma_destino;
-    const blocks = (req.bloques ?? []).map((b) => ({ k: mode === "bad" ? "otra" : b.k, x: tr(lang, b.x) }));
+    const blocks = (req.bloques ?? []).map((b, i) => ({
+      k: mode === "bad" ? "otra" : b.k,
+      x: tr(lang, b.x) + (i === 0 && mode === "contact" ? " Tel. 612 345 678." : i === 0 && mode === "warn" ? " 3 balconies." : ""),
+    }));
     return JSON.stringify({
       title: req.titulo ? tr(lang, req.titulo) : "",
       blocks,

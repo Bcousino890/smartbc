@@ -53,6 +53,7 @@ import { DesignSection } from "./manager/design-section";
 import { ShareSection } from "./manager/share-section";
 import { LanguagesSection, type TranslationActions } from "./manager/languages-section";
 import { LANGUAGE_NAMES_ES } from "@/lib/catalogs/translation-labels";
+import type { CatalogLanguage } from "@/lib/catalogs/i18n";
 import { useManagerUrl } from "./manager/use-manager-url";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
@@ -167,6 +168,28 @@ export function CatalogManager({
   const pdf = usePdfDownload(`/api/admin/catalogos/${encodeURIComponent(catalog.id)}/pdf`, { notFound: "No se encontró este catálogo. Recarga la página." });
   const [pdfMessage, setPdfMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const focusAfter = useRef<string | null>(null);
+  // 0228 · Idioma del catálogo junto a «Compartir» (y en «Idiomas»): al momento.
+  const [catalogLang, setCatalogLang] = useState<CatalogLanguage>(catalog.defaultLang ?? "es");
+  const [langBusy, setLangBusy] = useState(false);
+  const [langMessage, setLangMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  useEffect(() => {
+    if (catalog.defaultLang) setCatalogLang(catalog.defaultLang);
+  }, [catalog.defaultLang]);
+  async function changeCatalogLang(next: CatalogLanguage) {
+    if (!translationActions || next === catalogLang) return;
+    setLangBusy(true);
+    setLangMessage(null);
+    try {
+      const r = await translationActions.setCatalogLang({ catalogId: catalog.id, lang: next });
+      if (r.ok) {
+        setCatalogLang(next);
+        setLangMessage({ kind: "ok", text: `El enlace está ahora en ${LANGUAGE_NAMES_ES[next]}. Los lectores abiertos se actualizan solos.` });
+        if (!onLocalAdd) router.refresh();
+      } else setLangMessage({ kind: "error", text: r.error });
+    } finally {
+      setLangBusy(false);
+    }
+  }
 
   // Acciones con la medición (?medir=1, «sin aviso inmediato»): las MISMAS que
   // antes de E2, envueltas una vez y estables entre renders.
@@ -569,8 +592,8 @@ export function CatalogManager({
       <section {...panel("contenido")} className="min-w-0 focus:outline-none">
         {translationGaps.filter((g) => g.pending.length).map((g) => (
           <p key={g.lang} className="mb-3 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-900" data-testid="content-tr-gap">
-            Enlaces en {LANGUAGE_NAMES_ES[g.lang as keyof typeof LANGUAGE_NAMES_ES] ?? g.lang}: {g.pending.length === 1 ? "1 vivienda se ve" : `${g.pending.length} viviendas se ven`} con «Descripción en preparación» ({g.pending.slice(0, 3).join(", ")}{g.pending.length > 3 ? "…" : ""}).{" "}
-            Si publicas cambios en español, esa vivienda también pasará a «Descripción en preparación» en ese idioma hasta que apruebes su traducción.{" "}
+            Enlaces en {LANGUAGE_NAMES_ES[g.lang as keyof typeof LANGUAGE_NAMES_ES] ?? g.lang}: {g.pending.length === 1 ? "1 vivienda se ve" : `${g.pending.length} viviendas se ven`} con «Descripción en preparación» ({g.pending.slice(0, 3).join(", ")}{g.pending.length > 3 ? "…" : ""}) hasta que se traduzcan solas en la próxima visita.{" "}
+            Si publicas cambios en español, esa vivienda pasa a «Descripción en preparación» en ese idioma y se vuelve a traducir sola en la próxima visita.{" "}
             <button type="button" className="underline" onClick={() => go("idiomas")}>
               Ir a Idiomas
             </button>
@@ -641,6 +664,7 @@ export function CatalogManager({
           measureMode={measureMode}
           measure={measure}
           pdf={{ busy: pdf.busy, message: pdfMessage, onDownload: () => void downloadPdf(false), unsaved: unsaved.length > 0 }}
+          language={translationActions ? { value: catalogLang, busy: langBusy, message: langMessage, onChange: (l) => void changeCatalogLang(l) } : undefined}
         />
       </section>
 
@@ -649,6 +673,8 @@ export function CatalogManager({
           <LanguagesSection
             catalogId={catalog.id}
             actions={translationActions}
+            catalogLang={catalogLang}
+            onCatalogLang={setCatalogLang}
             onPublicChange={() => {
               if (!onLocalAdd) router.refresh();
             }}

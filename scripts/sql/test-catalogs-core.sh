@@ -365,6 +365,41 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $S/test-catalog-operations.sql
 
+echo "== 2zi. 0228: traducción automática (traducciones previas + aplicada dos veces, límites, espera creciente, publicar, idioma al momento, concurrencia, reversión y reaplicación)"
+M20=supabase/migrations/0228_catalog_translations_auto.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-translations-pre.sql $M18 $M19 $S/test-catalog-translations-auto-pre.sql $M20 $M20 $S/test-catalog-translations-auto.sql
+$R sql $S/test-catalog-translations-auto-conc-a.sql &
+CONC_TA=$!
+sleep 0.5
+$R sql $S/test-catalog-translations-auto-conc-b.sql
+wait $CONC_TA
+$R sql $S/test-catalog-translations-auto-conc-check.sql
+$R sql $D19/rollback-0228.sql $S/test-rollback-0228.sql $M20 $M20 $S/test-catalog-translations-auto-reapply.sql
+echo "   0228 se vuelve a aplicar tras su reversión"
+
+echo "== 2zj. 0228 sobre los tests de acabado (0227), idiomas (0223), plantillas (0222), zonas (0220), biblioteca (0219), título (0217), opiniones (0218), fotos (0202) y operación"
+# 0228 no cambia ninguna instantánea: las huellas y comprobaciones de cada «pre» siguen igual.
+# (Los tests de 0226 se siguen ejecutando sin 0228 en 2ze/2zh: 0228 cambia a propósito su regla de «solo completo».)
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-finish-pre.sql $M19 $M20 $S/test-catalog-finish.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $S/test-catalog-languages-pre.sql $M17 $M18 $M19 $M20 $S/test-catalog-languages.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-area-texts-pre.sql $S/test-catalog-area-texts.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-areas-pre.sql $S/test-catalog-areas.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-copy.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $S/test-catalog-texts-pre.sql $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-title-pre.sql $S/test-catalog-title.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-feedback-pre.sql $S/test-catalog-feedback.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $S/test-catalog-photos-pre.sql $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-photos.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $M19 $M20 $S/test-catalog-operations.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

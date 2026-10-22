@@ -20,6 +20,11 @@ import { isCatalogFixtureMode } from "./fixture-mode";
 // PR4 (0223): el idioma del enlace (personal o del catálogo) viene DENTRO de
 // la instantánea (`lang`), así que ya está en la huella del SQL: el lector,
 // el vigilante y la captura del PDF no pueden servir el idioma de otro enlace.
+// Traducción automática (0228, decisión de Fabricio del 22-10-2026): una
+// VISITA (lector, estado, canal en vivo, PDF por token) en un idioma distinto
+// del español con traducciones que faltan las encarga EN SEGUNDO PLANO
+// (requestAutoTranslation, que no se espera: la respuesta sale ya con el
+// aviso N5). El vigilante no cuenta como visita.
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -86,9 +91,19 @@ async function rawStates(tokens: string[]): Promise<Map<string, CatalogTokenStat
   return out;
 }
 
+/** Una visita en un idioma con traducciones pendientes: se encargan en
+ *  segundo plano. No se espera NUNCA (ni siquiera la carga del módulo). */
+function requestTranslationsLater(token: string, snapshot: InternalSnapshot | null | undefined): void {
+  if (!snapshot || snapshotLang(snapshot.lang) === "es") return;
+  void import("./auto-translate-instance")
+    .then((m) => m.requestAutoTranslation(token, snapshot))
+    .catch((err) => console.warn("[catalogos] traducción automática:", err instanceof Error ? err.message : err));
+}
+
 /** PDF del catálogo (K1): los lectores del enlace para la captura fija, por
  *  el MISMO camino que el estado público (versión de su catálogo e instantánea
- *  pública, que ya decide la validez del enlace y la disponibilidad). */
+ *  pública, que ya decide la validez del enlace y la disponibilidad). El PDF
+ *  por token es una visita: encarga lo que falte (sale con N5 mientras). */
 export function linkExportReaders(token: string): {
   checkAccess: () => Promise<boolean>;
   readMeta: () => Promise<CatalogMeta | null>;
@@ -97,15 +112,21 @@ export function linkExportReaders(token: string): {
   return {
     checkAccess: async () => isShareToken(token),
     readMeta: async () => (await shareMetas([token])).get(token) ?? null,
-    readSnapshot: async () => (await rawPublic(token))?.snapshot ?? null,
+    readSnapshot: async () => {
+      const snap = (await rawPublic(token))?.snapshot ?? null;
+      requestTranslationsLater(token, snap);
+      return snap;
+    },
   };
 }
 
 /** Acceso + contenido público + huella. null = no disponible (inexistente,
  *  revocado, caducado o archivado: no se distingue). Lanza si falla la BD o
  *  si la operación no se puede leer de forma coherente (§3.2): nunca se
- *  sirve con otra operación ni con «venta y alquiler» por defecto. */
-export async function getPublicCatalogState(token: string): Promise<PublicCatalogState | null> {
+ *  sirve con otra operación ni con «venta y alquiler» por defecto.
+ *  `visit`: lo pide un lector (no el vigilante): encarga en segundo plano las
+ *  traducciones que falten en el idioma del enlace. */
+export async function getPublicCatalogState(token: string, opts?: { visit?: boolean }): Promise<PublicCatalogState | null> {
   if (!isShareToken(token)) return null;
   const r = await readCoherent({
     readMeta: async () => (await shareMetas([token])).get(token) ?? null,
@@ -113,6 +134,7 @@ export async function getPublicCatalogState(token: string): Promise<PublicCatalo
     isAvailable: (s) => s !== null,
   });
   if (!r.snapshot || !r.operation) return null;
+  if (opts?.visit) requestTranslationsLater(token, r.snapshot.snapshot);
   return {
     fingerprint: composeFingerprint(r.snapshot.fingerprint, r.operation),
     expiresAt: r.snapshot.expiresAt,
