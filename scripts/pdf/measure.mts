@@ -4,7 +4,7 @@
 // del PDF y cuánto se bloquea el bucle de eventos (lo que notaría la web si
 // comparte proceso: p99 y máximo).
 //   NODE_ENV=development CATALOG_FIXTURES=1 node --experimental-strip-types \
-//     --import ./scripts/node-ts-loader.mjs scripts/pdf/measure.mts <token> [px=3600] [pasadas=3]
+//     --import ./scripts/node-ts-loader.mjs --import ./scripts/pdf/engine-patch-hook.mjs scripts/pdf/measure.mts <token> [px=3600] [pasadas=3]
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { exportCatalogPdf } from "../../lib/catalogs/export/generate.ts";
 import { photoNeeds } from "../../lib/catalogs/export/generate.ts";
