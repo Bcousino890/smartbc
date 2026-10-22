@@ -122,6 +122,20 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 | 6.5 | Lectura pública por idioma: instantánea con idioma y huella por idioma; vigilante, lectura coherente y PDF por token. Visitas, valoraciones y PDF públicos nunca preparan ni llaman a la IA. Valoraciones sin cambios. |
 | 6.6 | Pruebas con IA simulada que cuenta llamadas: cero en lo público; peticiones simultáneas que lanzan un solo trabajo; trabajo caducado que no pisa; cancelación; resultado incierto sin reintento; dos clientes en dos idiomas en vivo y PDF; texto propio traducido sin entrar en la biblioteca; vivienda retirada, foto excluida y precio cambiado en idioma activo; C2 en cada idioma. |
 
+**Ajustes al implementar el PR6 (22-10-2026):**
+- **Migración 0226, no 0224.** Mientras se hacía el PR entró en `main` la `0224_crm_host_to_portal.sql` (#350) y la 0225 está reservada para el PR5.
+- **La fuente «propia» del catálogo es lo que el catálogo enseña en español**: su texto publicado o, si no lo tiene, la historia o la descripción limpia que se ve. Así toda vivienda que el cliente ve en español se puede traducir. Es de la **biblioteca** solo si el texto publicado es exactamente una versión aprobada (la que trajo o la que se aprobó ahí); entonces su traducción se reutiliza sin IA en los otros catálogos con esa versión. Traducir lo propio nunca lo lleva a la biblioteca.
+- **Una vivienda, una unidad.** Título y bloques se traducen juntos en una llamada, con la plantilla de zona y las características que falten; la plantilla y las características se guardan aparte y se reutilizan.
+- **Vigencia por huella del español mostrado** (título + bloques con su clave + plantilla), comprobada al leer, igual que la vigencia de la historia. Cubre republicar el español, cambiar la zona confirmada o la plantilla y C2.
+- **Desactualizada → N5, no la traducción anterior.** La spec permitía seguir enseñando la anterior mientras cumpliera C2; N5 (decidida después) y DA34 piden no presentar nunca una desactualizada, y la zona o la plantilla no entran en C2. Se eligió lo más prudente: «Descripción en preparación» hasta aprobar la nueva. El gestor lo avisa antes y después. Si Fabricio prefiere lo otro, es una condición en `applyItemTranslation`.
+- **Título provisional en N5:** «Home in {zona}» del diccionario (o «Sin título» en el idioma si no hay zona), para no enseñar el título español.
+- **Título e introducción del catálogo también se traducen** (si no, la portada y el índice saldrían en español). Si el español cambia después, el cliente sigue viendo el título traducido anterior, que el gestor marca «desactualizado» (no tiene datos de la ficha); sin ninguno, el nombre del catálogo y sin introducción.
+- **Características sin traducción aprobada no se ven** fuera del español (no se mezcla el español); el gestor las cuenta («faltan N características») y bloquean la activación.
+- **«Completo» = todas las viviendas de la lista** (también las de solo datos: su título), sus características y el título del catálogo.
+- **Pestaña «Idiomas»** en el gestor (quinta sección) en vez de repartirlo entre «Contenido» y «Compartir»; «Contenido» lleva el aviso N5. No se añade nada a «Textos aprobados».
+- **Activación con la versión del catálogo:** la gestión calcula la huella de cada vivienda y la base de datos comprueba que no cambió nada desde entonces (`catalog_changed`), que están todas las de la lista y que cada copia tiene esa huella y sus características. Un cambio de la ficha entre medias (que no sube la versión) solo puede dejar esa vivienda en N5.
+- **Tiempos:** la llamada se corta a los 120 s (incierto) y la reserva caduca a los 300 s.
+
 ## PR7a · Resolución de portada y PDF (sin cambio de diseño)
 
 `srcset` en la portada del lector y anchos de foto del PDF acordes a su tamaño impreso (portada a página completa). Pruebas: cabecera de variante del proxy, peso por página y número de páginas del PDF iguales.
