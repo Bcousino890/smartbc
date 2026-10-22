@@ -10,7 +10,7 @@ APP=/opt/smartbc-app
 PY=/opt/wmrm/bin/python
 ENGINE=/opt/wmrm/wm_remove_dynamic.py
 SVC=$(grep "^SUPABASE_SERVICE_ROLE_KEY=" "$APP/.env.local" | cut -d= -f2-)
-BASE=https://crm.bcousinoprop.com/storage/v1/object
+BASE=https://portal.bcousinoprop.com/storage/v1/object
 PSQL="docker exec -i supabase-db psql -U postgres -d postgres -qtA"
 
 work=$(mktemp -d); mkdir -p "$work/in" "$work/out"
