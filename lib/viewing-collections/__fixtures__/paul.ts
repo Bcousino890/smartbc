@@ -27,7 +27,7 @@ export const FORBIDDEN_IN_PUBLIC = {
   sourceUrl: "https://www.idealista.com/inmueble/99887766/",
   externalId: "LEVEL-3291",
   storagePhotoUrl:
-    "https://crm.bcousinoprop.com/storage/v1/object/public/properties-photos/synced/level/3291/0.webp",
+    "https://portal.bcousinoprop.com/storage/v1/object/public/properties-photos/synced/level/3291/0.webp",
   shareLabel: "Para María Pérez",
   clientLastName: "Cabrera",
   clientEmail: "paul@ejemplo.com",

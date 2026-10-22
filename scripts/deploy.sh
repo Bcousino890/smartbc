@@ -39,5 +39,5 @@ ssh "$VPS" "bash $APP_DIR/scripts/apply-migrations.sh"
 
 echo ""
 echo "✅ Deploy completo."
-echo "   Portal:  https://crm.bcousinoprop.com/admin/particulares"
+echo "   Portal:  https://portal.bcousinoprop.com/admin/particulares"
 echo "   (recarga con Cmd+Shift+R para saltar la caché del navegador)"
