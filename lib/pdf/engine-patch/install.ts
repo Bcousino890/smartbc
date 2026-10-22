@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import * as nodeModule from "node:module";
 import path from "node:path";
 import patch from "./patch.cjs";
@@ -18,12 +19,18 @@ import patch from "./patch.cjs";
 
 type G = typeof globalThis & { __bcpPdfEngineHook?: "register" };
 
+// Nunca debe tumbar el servidor: si no se puede instalar (Node sin
+// module.register, archivo ausente o error al registrar), devuelve
+// «unavailable» y solo el PDF en árabe y hebreo queda bloqueado
+// (pdf_engine_unpatched); el resto de la app y los PDF de los demás idiomas
+// siguen igual.
 export function installPdfEngineHook(root: string = process.cwd()): "register" | "already" | "unavailable" {
   const g = globalThis as G;
   if (g.__bcpPdfEngineHook) return "already";
   const m = nodeModule as unknown as { register?: (specifier: string, parentURL?: string) => void };
-  if (typeof m.register === "function") {
-    const file = path.join(root, "lib", "pdf", "engine-patch", "patch.cjs");
+  const file = path.join(root, "lib", "pdf", "engine-patch", "patch.cjs");
+  if (typeof m.register !== "function" || !existsSync(file)) return "unavailable";
+  try {
     m.register(
       "data:text/javascript," +
         encodeURIComponent(`
@@ -39,8 +46,10 @@ export function installPdfEngineHook(root: string = process.cwd()): "register" |
     );
     g.__bcpPdfEngineHook = "register";
     return "register";
+  } catch (err) {
+    console.error("[catalogos] pdf: no se pudo instalar la corrección del motor:", err instanceof Error ? err.message : err);
+    return "unavailable";
   }
-  return "unavailable";
 }
 
 /** Marca de la versión de la corrección (se busca en el build). */
