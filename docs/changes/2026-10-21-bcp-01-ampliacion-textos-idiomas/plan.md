@@ -136,6 +136,31 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 - **Activación con la versión del catálogo:** la gestión calcula la huella de cada vivienda y la base de datos comprueba que no cambió nada desde entonces (`catalog_changed`), que están todas las de la lista y que cada copia tiene esa huella y sus características. Un cambio de la ficha entre medias (que no sube la versión) solo puede dejar esa vivienda en N5.
 - **Tiempos:** la llamada se corta a los 120 s (incierto) y la reserva caduca a los 300 s.
 
+## Traducción automática, como en itinerarios (22-10-2026)
+
+**Decisión de Fabricio del 22-10-2026** (spec.md: DA10, DA11, DA12, DA14, DA16, DA36, AC8, §3 y §7 marcadas): el flujo del PR6 (preparar al pulsar, revisar y aprobar bloque a bloque, activar un idioma solo completo) es demasiado complejo. Debe funcionar **«tal cual en itinerarios»**: se elige el idioma antes de compartir y todo cambia solo. Rama `fabri/bcp-01-traduccion-automatica`, migración **0228**. Resultado en [`result-traduccion-automatica.md`](result-traduccion-automatica.md).
+
+| Tarea | Contenido |
+| --- | --- |
+| A.1 | Migración `0228_catalog_translations_auto.sql` + reversión: `approval` ('auto' \| 'manual') en traducciones y características, `auto` en los trabajos, `catalog_tr_reserve_auto` (la reserva de 0226 con los límites: a la vez por catálogo, tope diario, espera creciente, parada), `catalog_tr_publish` (aprobar + copiar diciendo cómo), `catalog_tr_mark_reviewed` y `catalog_tr_activate` sin «solo completo». |
+| A.2 | Traductor en segundo plano (`lib/catalogs/auto-translate.ts`, puro, y su instancia única por proceso): una **visita** (lector, estado, canal en vivo, PDF por token) en un idioma ≠ es con traducciones que faltan las encarga **sin esperarlas**; la respuesta sale con N5. Cada publicación avisa al vigilante: los lectores abiertos se actualizan solos. |
+| A.3 | Publicación automática con los filtros deterministas existentes: bloqueo (contacto, precio) → no se publica y el gestor la marca; aviso (cifras, nombres) → se publica y queda «Revisar». |
+| A.4 | Gestor: «Idiomas» opcional (estado por idioma, editar y guardar cualquier bloque —se publica al momento y manda—, «Dar por revisada», «Preparar ahora»); selector de idioma junto a «Compartir» y en cada enlace personal, al momento, con «sin revisión nativa» en ar/tr/he. |
+| A.5 | Pruebas: SQL (0228 dos veces, límites, espera, publicar, idioma al momento, concurrencia real, reversión y reaplicación; regresiones), TS con IA falsa que cuenta llamadas, QA en Chromium (`trauto-qa`) y las QA anteriores del lector, PDF e idiomas. |
+
+**Ajustes y decisiones rutinarias:**
+- **Se reutiliza todo el PR6**: fuentes con identidad de versión, bloques por clave (DA18), copias por catálogo con la huella del español, reserva única por fuente e idioma con caducidad, descartes. La lectura pública (`catalog_lang_snapshot`, `to-public.ts`, N5) no cambia.
+- **Disparo en el proceso, sin `after()`**: el canal en vivo es una respuesta larga (hasta 30 min) y `after()` esperaría a que terminara. Se usa una instancia única en `globalThis` (como el vigilante) que lanza el trabajo sin esperarlo; PM2 es de un solo proceso. Si el proceso se reinicia a mitad, la reserva caduca y cuenta como fallo.
+- **El vigilante no cuenta como visita**; sí el lector, `estado`, `eventos` (al conectar) y el PDF por token. Una misma visita (token e idioma) no relanza la comprobación antes de 15 s.
+- **Idioma**: solo el de la base de datos (enlace o catálogo), comprobado otra vez al resolver el token; nunca el de la URL.
+- **Límites** (`AUTO_LIMITS`): 2 trabajos a la vez por catálogo (cerrojo por catálogo en SQL), 4 llamadas a la vez por proceso, 30 llamadas nuevas por visita, 300 trabajos automáticos por catálogo y día, espera 5 min / 30 min / 2 h / 12 h tras 1–4 fallos seguidos (fallido, incierto o caducado) y parada tras 5 (solo «Preparar ahora»). Un trabajo terminado reinicia la cuenta; una cancelación no cuenta.
+- **El incierto ya no exige «Volver a preparar»** para las visitas: espera creciente. El dueño reintenta cuando quiere.
+- **Lo editado a mano se publica al guardar** como 'manual'; un borrador escrito a mano nunca queda como automático (`origin`).
+- **Sin «Aprobar», «Rechazar», «Cancelar», «Usar las aprobadas» ni «Quitar de este catálogo»** en el gestor: con la publicación automática sobran. Las funciones SQL de 0226 siguen ahí.
+- **«Revisar»** solo señala lo publicado solo (o un borrador); lo guardado a mano o dado por revisado no se vuelve a señalar.
+- **Una característica con bloqueo** no se publica (no se ve); el resto de la vivienda sí.
+- **Si la traducción ya existe pero el catálogo no la tiene** (biblioteca o plantilla aprobadas en otro sitio), la visita la copia sin IA.
+
 ## PR7a · Resolución de portada y PDF (sin cambio de diseño)
 
 `srcset` en la portada del lector y anchos de foto del PDF acordes a su tamaño impreso (portada a página completa). Pruebas: cabecera de variante del proxy, peso por página y número de páginas del PDF iguales.
