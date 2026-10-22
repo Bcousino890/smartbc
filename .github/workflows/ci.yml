@@ -88,6 +88,9 @@ jobs:
       # PR7a: variantes por ancho del proxy, srcset de la portada y anchos del PDF (sharp sobre fotos sintéticas). Sin BD.
       - name: "Catálogos (resolución de fotos, offline)"
         run: npm run test:catalogs-photos
+      # PR7b: tono adaptativo por foto (fotos reales del repo y una oscura simulada), rutas con acabado, PDF, contraste y filete. Sin BD.
+      - name: "Catálogos (acabado fotográfico, offline)"
+        run: npm run test:catalogs-finish
       - name: "Importación con borrador: modelo, duplicados, guarda SSRF, fotos y alertas (offline)"
         run: npm run test:import-drafts
       - name: "Importar desde PDF: campos con prueba de página, separación y OCR sobre PDF sintéticos (offline)"
