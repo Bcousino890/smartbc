@@ -85,6 +85,20 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 | 4.3 | Lector: `lang` y `dir` en su raíz, RTL con la navegación reflejada según N2 y la composición intacta; cifras, teléfonos y precios en LTR; familias árabe y hebrea por `next/font` según N3 (sin paquetes nuevos). |
 | 4.4 | Pruebas: claves completas en los 8 idiomas, mismas dos pantallas en LTR y RTL, teclado y deslizar en RTL, sin desbordes a 390 px, capturas por idioma con contenido de fixtures. |
 
+**Ajustes al implementar el PR4 (22-10-2026):**
+- **Migración 0223, no 0222.** La 0221 (particulares) y la 0222 (plantillas «Vivir en…», PR3) ya estaban ocupadas al empezar.
+- **Tanda 1 en paralelo.** El PR4, el PR7a y la prueba técnica del PR5 se hacen a la vez en worktrees separados, con PR y merges independientes. **PR7b queda aplazado** hasta que Fabricio aporte las fotos reales.
+- **N5 decidida** por Fabricio el 22-10-2026 (ver `spec.md` §6): aviso «Descripción en preparación». El PR6 ya no tiene decisiones pendientes.
+- **El idioma entra en la instantánea siempre** (`lang`, también en español), así que al desplegar todas las huellas cambian una vez y los lectores abiertos reciben una actualización sin cambios visibles. Es más simple y explícito que añadirlo solo fuera del español, y es lo que harán las traducciones del PR6.
+- **El PDF sigue en español** pase lo que pase con el idioma del enlace (`toPublicCatalog(…, "es")` en `generate.ts`): el PR5 es quien le pasa el idioma, con sus fuentes.
+- **La composición no se refleja en RTL** ni en la apertura (foto | panel) ni en el detalle (dos paneles): mismas cajas que en español (DA1, DA2, N2). Sí se reflejan el texto, el índice, la barra, las flechas, el teclado, el deslizar, el giro de página y la galería.
+- **Las cifras, los precios y el teléfono van siempre en LTR** (`dir="ltr"`, que aísla la dirección) y con dígitos latinos (el árabe usa `ar-u-nu-latn`, como el itinerario).
+- **Los títulos de las secciones de la descripción siguen con el contenido** (en español, del organizador) hasta el PR6: el diccionario ya tiene los ocho títulos y «Vivir en {zona}», pero traducir solo los títulos mezclaría idiomas en el mismo bloque (DA34). El PR6 pasará la clave de sección con cada bloque traducido.
+- **Sin selector de idioma en el gestor** hasta el PR6 (la interfaz solo puede dar «es»): las funciones SQL del dueño existen y se prueban; los demás idiomas se prueban con la operación `lang` del almacén sintético.
+- **Enlace no válido al abrir** (inexistente, revocado o caducado desde el principio): la página no conoce ningún idioma, así que el aviso va en español. Si el enlace deja de valer con el lector abierto, el aviso va en el idioma del enlace.
+- **La galería a pantalla completa** (portal fuera de la raíz del lector) recibe la dirección y los rótulos del idioma, pero no las familias árabe y hebrea (usa las del sistema para esos rótulos). Es un detalle de dos rótulos; se anota para el PR5/PR6 si se quiere afinar.
+- **Tipografía en ar y he:** se anula el espaciado entre letras de las etiquetas (rompería el árabe ligado y en hebreo no aporta); las familias latinas quedan detrás como respaldo de glifos.
+
 ## PR5 · PDF multilingüe y fuentes
 
 | Tarea | Contenido |
@@ -135,10 +149,9 @@ Rama `fabri/bcp-01-textos-aprobados` desde `origin/main` = `8b640e3b` (comprobad
 
 ## Decisiones de producto pendientes
 
-- **N5** (antes del PR6).
 - La aceptación visual del acabado con fotos reales (antes del PR7b).
 
-N1–N4 ya están cerradas.
+N1–N5 ya están cerradas (N5 el 22-10-2026).
 
 ## Pasos de entorno (aprobados con el plan el 21-10-2026)
 
