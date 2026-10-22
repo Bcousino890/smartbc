@@ -51,9 +51,10 @@ import { AREA_TEXT_MAX, areaTextErrorMessage, draftAreaText } from "@/lib/catalo
 import type { CopyLibraryData } from "@/components/admin/catalogs/copy-library-page";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { isCatalogLanguage, type CatalogLanguage } from "@/lib/catalogs/i18n";
-import { isTargetLanguage, translationErrorMessage, TRANSLATION_TIMEOUT_MS, type PrepareOutcome, type TargetLanguage } from "@/lib/catalogs/translations";
-import { approveItem, loadPanel, META_KEY, prepareItem, prepareMessage, saveReview, setLanguage, useApproved, type PanelState, type ReviewEdit } from "@/lib/catalogs/translation-service";
+import { isTargetLanguage, translationErrorMessage, type TargetLanguage } from "@/lib/catalogs/translations";
+import { loadPanel, markItemReviewed, saveAndPublish, setLanguage, type PanelState, type ReviewEdit } from "@/lib/catalogs/translation-service";
 import { sqlTranslations } from "@/lib/catalogs/translation-data";
+import { prepareNow } from "@/lib/catalogs/auto-translate-instance";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -1261,16 +1262,16 @@ export async function draftAreaTextAiAction(input: { areaId: string }): Promise<
   }));
 }
 
-// ── Traducciones preparadas y revisadas (0226, PR6) ─────────────────────────
-// La IA solo se llama al pulsar «Preparar» (aiComplete, el proveedor de
-// Configuración → IA), solo para el idioma pedido y solo lo que falta. La
-// reserva de 0226 evita preparaciones simultáneas de lo mismo, pero no
-// garantiza una sola llamada de pago (DA36). Nada aquí escribe en properties
-// ni en property_client_descriptions. Visitas y PDF públicos no pasan por aquí.
+// ── Traducciones del catálogo (0226 + 0228: automáticas, como en itinerarios) ─
+// Se traducen SOLAS en segundo plano la primera vez que alguien abre el
+// catálogo en un idioma elegido (lib/catalogs/auto-translate.ts), con la IA
+// de Configuración → IA, y se publican si pasan los filtros deterministas.
+// Aquí solo lo opcional del dueño: ver el estado, «Preparar ahora» (antes de
+// compartir), corregir a mano cualquier bloque y dar por buena una
+// automática. Nada aquí escribe en properties ni en property_client_descriptions.
 
 function trFail(err: unknown): { ok: false; error: string } {
   const msg = err instanceof Error ? err.message : typeof err === "object" && err && "message" in err ? String((err as { message: unknown }).message) : "";
-  if (msg === "tr_unconfirmed") return { ok: false, error: "Hay avisos sin revisar: corrige la traducción o confirma cada aviso antes de aprobar." };
   return { ok: false, error: translationErrorMessage(msg) ?? catalogErrorMessage({ message: msg }) };
 }
 
@@ -1290,115 +1291,55 @@ export async function loadTranslationsAction(input: { catalogId: string; lang: s
   }));
 }
 
-/** «Preparar»: UNA preparación de esta vivienda (o del título del catálogo)
- *  en este idioma, con reserva. Nunca reintenta sola. */
-export async function prepareTranslationAction(input: { catalogId: string; key: string; lang: string; retry?: boolean }): Promise<ActionResult<{ outcome: PrepareOutcome["kind"]; message: { kind: "ok" | "info" | "error"; text: string } }>> {
+/** «Preparar ahora»: traduce en segundo plano todo lo que falte en este
+ *  idioma (el mismo camino que una visita, sin espera creciente). No espera
+ *  a la IA: el panel se actualiza solo mientras haya algo «en preparación». */
+export async function prepareTranslationsNowAction(input: { catalogId: string; lang: string }): Promise<ActionResult<{ started: boolean }>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    const lang = trLang(input?.lang);
+    if (!isUuid(input?.catalogId) || !lang) return fail("forbidden");
+    try {
+      // El dueño lo es (la guarda): la base de datos lo vuelve a comprobar.
+      await loadPanel(sqlTranslations(profile.id), input.catalogId, lang);
+      void prepareNow(profile.id, input.catalogId, lang).catch((err) => console.warn("[catalogos] preparar ahora:", err instanceof Error ? err.message : err));
+      return { ok: true as const, started: true };
+    } catch (err) {
+      return trFail(err);
+    }
+  }));
+}
+
+/** Corrección a mano de un bloque, el título, la plantilla o una
+ *  característica: se publica al momento y ninguna traducción automática la
+ *  pisa mientras el español no cambie. */
+export async function saveTranslationAction(input: { catalogId: string; edit: ReviewEdit }): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId) || !input?.edit || !trLang(input.edit.lang)) return fail("forbidden");
+    const before = await fpBefore(profile.id, input.catalogId);
+    try {
+      const version = await saveAndPublish(sqlTranslations(profile.id), input.catalogId, input.edit);
+      return saved(profile.id, input.catalogId, version ?? 0, before);
+    } catch (err) {
+      return trFail(err);
+    }
+  }));
+}
+
+/** «Dar por revisada» una traducción publicada sola con avisos. */
+export async function markTranslationReviewedAction(input: { catalogId: string; key: string; lang: string }): Promise<ActionResult<{ changed: number }>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     const lang = trLang(input?.lang);
     if (!isUuid(input?.catalogId) || !lang || typeof input.key !== "string" || input.key.length > 80) return fail("forbidden");
     try {
-      const outcome = await prepareItem(sqlTranslations(profile.id), {
-        ai: realAi,
-        timeoutMs: TRANSLATION_TIMEOUT_MS,
-        isNotConfigured: (e) => e instanceof AINotConfiguredError,
-      }, { catalogId: input.catalogId, key: input.key, lang, retry: input.retry === true });
-      revalidateCatalog(input.catalogId);
-      return { ok: true as const, outcome: outcome.kind, message: prepareMessage(outcome) };
+      return { ok: true as const, changed: await markItemReviewed(sqlTranslations(profile.id), input.catalogId, input.key, lang) };
     } catch (err) {
       return trFail(err);
     }
   }));
 }
 
-export async function cancelTranslationAction(input: { catalogId: string; jobId: string }): Promise<ActionResult<{ changed: boolean }>> {
-  return finish(await withHomeAccess(ownerDeps, async (profile) => {
-    if (!isUuid(input?.catalogId) || !isUuid(input?.jobId)) return fail("forbidden");
-    try {
-      return { ok: true as const, changed: await sqlTranslations(profile.id).cancel(input.jobId) };
-    } catch (err) {
-      return trFail(err);
-    }
-  }));
-}
-
-export async function saveTranslationAction(input: { catalogId: string; edit: ReviewEdit }): Promise<ActionResult<object>> {
-  return finish(await withHomeAccess(ownerDeps, async (profile) => {
-    if (!isUuid(input?.catalogId) || !input?.edit || !trLang(input.edit.lang)) return fail("forbidden");
-    try {
-      await saveReview(sqlTranslations(profile.id), input.catalogId, input.edit);
-      return { ok: true as const };
-    } catch (err) {
-      return trFail(err);
-    }
-  }));
-}
-
-export async function rejectTranslationAction(input: { catalogId: string; textId: string }): Promise<ActionResult<{ changed: boolean }>> {
-  return finish(await withHomeAccess(ownerDeps, async (profile) => {
-    if (!isUuid(input?.catalogId) || !isUuid(input?.textId)) return fail("forbidden");
-    try {
-      return { ok: true as const, changed: await sqlTranslations(profile.id).reject(input.textId) };
-    } catch (err) {
-      return trFail(err);
-    }
-  }));
-}
-
-/** Aprueba lo revisado (tal como se vio) y lo copia a este catálogo. */
-export async function approveTranslationAction(input: { catalogId: string; key: string; lang: string; textRev: number; areaRev: number | null; confirmed: string[] }): Promise<ActionResult<Saved>> {
-  return finish(await withHomeAccess(ownerDeps, async (profile) => {
-    const lang = trLang(input?.lang);
-    if (!isUuid(input?.catalogId) || !lang) return fail("forbidden");
-    const before = await fpBefore(profile.id, input.catalogId);
-    try {
-      const version = await approveItem(sqlTranslations(profile.id), {
-        catalogId: input.catalogId, key: String(input.key), lang, textRev: Number(input.textRev),
-        areaRev: input.areaRev === null ? null : Number(input.areaRev), confirmed: Array.isArray(input.confirmed) ? input.confirmed.slice(0, 200) : [],
-      });
-      return saved(profile.id, input.catalogId, version, before);
-    } catch (err) {
-      return trFail(err);
-    }
-  }));
-}
-
-/** «Usar las ya aprobadas» (sin IA). */
-export async function useApprovedTranslationsAction(input: { catalogId: string; lang: string; key?: string }): Promise<ActionResult<Saved & { copied: number }>> {
-  return finish(await withHomeAccess(ownerDeps, async (profile) => {
-    const lang = trLang(input?.lang);
-    if (!isUuid(input?.catalogId) || !lang) return fail("forbidden");
-    const before = await fpBefore(profile.id, input.catalogId);
-    try {
-      const r = await useApproved(sqlTranslations(profile.id), input.catalogId, lang, typeof input.key === "string" ? input.key : undefined);
-      return { ...(await saved(profile.id, input.catalogId, 0, before)), copied: r.copied };
-    } catch (err) {
-      return trFail(err);
-    }
-  }));
-}
-
-export async function removeTranslationCopyAction(input: { catalogId: string; key: string; lang: string }): Promise<ActionResult<Saved>> {
-  return finish(await withHomeAccess(ownerDeps, async (profile) => {
-    const lang = trLang(input?.lang);
-    if (!isUuid(input?.catalogId) || !lang) return fail("forbidden");
-    const be = sqlTranslations(profile.id);
-    const before = await fpBefore(profile.id, input.catalogId);
-    try {
-      let propertyId: string | null = null;
-      if (input.key !== META_KEY) {
-        const es = await be.esState(input.catalogId);
-        propertyId = es.map.find((m) => m.k === input.key)?.p ?? null;
-        if (!propertyId) return fail("not_in_catalog");
-      }
-      return saved(profile.id, input.catalogId, await be.copyRemove(input.catalogId, propertyId, lang), before);
-    } catch (err) {
-      return trFail(err);
-    }
-  }));
-}
-
-/** Idioma del catálogo (enlace general y personales sin idioma propio).
- *  Fuera del español, solo si está completo (0226). */
+/** Idioma del catálogo (enlace general y personales sin idioma propio). Se
+ *  aplica AL MOMENTO (0228): lo que falte se traduce en la primera visita. */
 export async function setCatalogLangAction(input: { catalogId: string; lang: string }): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isCatalogLanguage(input?.lang)) return fail("forbidden");
@@ -1412,7 +1353,7 @@ export async function setCatalogLangAction(input: { catalogId: string; lang: str
 }
 
 /** Idioma de un enlace personal (null = el del catálogo). Solo cambia ese
- *  enlace (DA17). Fuera del español, solo si está completo. */
+ *  enlace (DA17). Se aplica al momento. */
 export async function setLinkLangAction(input: { catalogId: string; linkId: string; lang: string | null }): Promise<ActionResult<Saved>> {
   return finish(await withHomeAccess(ownerDeps, async (profile) => {
     if (!isUuid(input?.catalogId) || !isUuid(input?.linkId) || (input.lang !== null && !isCatalogLanguage(input.lang))) return fail("forbidden");

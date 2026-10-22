@@ -1,6 +1,9 @@
 "use client";
 
-import { FileDown } from "lucide-react";
+import { FileDown, Languages } from "lucide-react";
+import { LANGUAGE_NAMES_ES } from "@/lib/catalogs/translation-labels";
+import type { CatalogLanguage } from "@/lib/catalogs/i18n";
+import { AUTO_NOTE, LanguageOptions, NativeMark } from "./languages-section";
 import type { ContactRaw } from "@/lib/catalogs/manager-state";
 import type { CatalogAdView } from "@/lib/catalogs/types";
 import { AdsPanel, type AdActions } from "../ads-panel";
@@ -34,6 +37,7 @@ export function ShareSection({
   measureMode,
   measure,
   pdf,
+  language,
 }: {
   catalogId: string;
   archived: boolean;
@@ -51,6 +55,8 @@ export function ShareSection({
   measure: HomeMeasure;
   /** PDF del catálogo (descarga de lo guardado). */
   pdf?: { busy: boolean; message: { kind: "ok" | "error"; text: string } | null; onDownload: () => void; unsaved: boolean };
+  /** Idioma del catálogo, junto a «Compartir» (se aplica al momento; 0228). */
+  language?: { value: CatalogLanguage; busy: boolean; message: { kind: "ok" | "error"; text: string } | null; onChange: (lang: CatalogLanguage) => void };
 }) {
   const { name, phone, role } = contactForm.value;
   return (
@@ -94,6 +100,36 @@ export function ShareSection({
           <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="share-notice">
             {shareNotice}
           </p>
+        ) : null}
+        {language ? (
+          <section className="space-y-2 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="share-lang-title" data-testid="share-language" data-check-overflow="idioma">
+            <h2 id="share-lang-title" className="crm-label-sm flex items-center gap-1.5 text-ink/70">
+              <Languages className="h-4 w-4" aria-hidden="true" /> Idioma del enlace
+            </h2>
+            <label className="block text-sm text-ink/70">
+              <span className="sr-only">Idioma del catálogo</span>
+              <select
+                value={language.value}
+                disabled={language.busy}
+                onChange={(e) => language.onChange(e.target.value as CatalogLanguage)}
+                className="w-full rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink"
+                data-testid="share-lang-select"
+              >
+                <LanguageOptions />
+              </select>
+            </label>
+            {language.value !== "es" ? (
+              <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink/60">
+                El cliente verá el catálogo en {LANGUAGE_NAMES_ES[language.value]}. <NativeMark lang={language.value} />
+              </p>
+            ) : null}
+            <p className="text-xs text-ink/55">{AUTO_NOTE} Los enlaces personales pueden tener su propio idioma (pestaña «Idiomas»).</p>
+            {language.message ? (
+              <p role={language.message.kind === "error" ? "alert" : "status"} className={`rounded-lg px-3 py-2 text-sm ${language.message.kind === "error" ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`} data-testid="share-lang-message">
+                {language.message.text}
+              </p>
+            ) : null}
+          </section>
         ) : null}
         {shareActions ? <SharePanel catalogId={catalogId} share={share} archived={archived} actions={shareActions} onChange={onShareChange} /> : null}
         {clientLinkActions ? <ClientLinksPanel catalogId={catalogId} archived={archived} actions={clientLinkActions} /> : null}

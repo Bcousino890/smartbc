@@ -58,13 +58,9 @@ import {
   applyAreaTextAction,
   removeAreaTextAction,
   loadTranslationsAction,
-  prepareTranslationAction,
-  cancelTranslationAction,
+  prepareTranslationsNowAction,
   saveTranslationAction,
-  rejectTranslationAction,
-  approveTranslationAction,
-  useApprovedTranslationsAction,
-  removeTranslationCopyAction,
+  markTranslationReviewedAction,
   setCatalogLangAction,
   setLinkLangAction,
 } from "../../actions";
@@ -103,8 +99,9 @@ export default async function CatalogPage({
   const share = await getCatalogShare(profile.id, id);
   const texts = await listCatalogTexts(profile.id, id);
   const groups = await listOwnerGroups(profile.id);
-  // PR6 · N5: idiomas activos con viviendas sin traducción vigente. Si 0226
-  // aún no está aplicada, el gestor funciona igual, sin el aviso.
+  // N5: idiomas activos con viviendas que el cliente ve aún sin traducir (se
+  // traducen solas en la próxima visita). Si 0226 no está aplicada, el gestor
+  // funciona igual, sin el aviso.
   let translationGaps: Array<{ lang: string; pending: string[] }> = [];
   try {
     translationGaps = await activeLanguageGaps(sqlTranslations(profile.id), id);
@@ -127,13 +124,9 @@ export default async function CatalogPage({
         translationGaps={translationGaps}
         translationActions={{
           load: loadTranslationsAction,
-          prepare: prepareTranslationAction,
-          cancel: cancelTranslationAction,
+          prepareNow: prepareTranslationsNowAction,
           save: saveTranslationAction,
-          reject: rejectTranslationAction,
-          approve: approveTranslationAction,
-          useApproved: useApprovedTranslationsAction,
-          remove: removeTranslationCopyAction,
+          markReviewed: markTranslationReviewedAction,
           setCatalogLang: setCatalogLangAction,
           setLinkLang: setLinkLangAction,
         }}
