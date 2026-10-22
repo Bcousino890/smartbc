@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { CatalogCover, countLabel } from "@/components/catalogs/catalog-cover";
 import type { CoverRaw, MetaRaw } from "@/lib/catalogs/manager-state";
@@ -12,6 +13,8 @@ import type { FormDraft } from "./use-form-draft";
 // Diseño (BCP-01 E2, plan §3.9): título, introducción y portada (vivienda y
 // foto, con las reglas y respaldos de C1), con su vista previa. La vista previa
 // usa lo ESCRITO (marcado si no está guardado) y la foto efectiva GUARDADA.
+// PR7b: interruptor «Acabado fotográfico» (por catálogo, apagado por defecto),
+// que se guarda al pulsar como los ajustes de fotos.
 
 type Run = Parameters<typeof CoverPicker>[0]["run"];
 
@@ -29,6 +32,8 @@ export function DesignSection({
   onSaveMeta,
   coverNotice,
   previewToken,
+  photoFinish,
+  onPhotoFinish,
 }: {
   catalog: CatalogDetail;
   items: CatalogItemView[];
@@ -45,8 +50,15 @@ export function DesignSection({
   coverNotice: string | null;
   /** Token del enlace ACTIVO (o null): «Abrir la vista previa completa». */
   previewToken: string | null;
+  /** PR7b: acabado fotográfico guardado del catálogo. */
+  photoFinish: boolean;
+  onPhotoFinish: (on: boolean) => void;
 }) {
   const { title, intro } = metaForm.value;
+  // PR7b: la casilla responde al pulsar; vuelve a lo guardado al llegar el
+  // catálogo actualizado (o si el guardado falla y no cambia nada).
+  const [finishShown, setFinishShown] = useState(photoFinish);
+  useEffect(() => setFinishShown(photoFinish), [photoFinish, pending]);
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-4">
@@ -94,6 +106,25 @@ export function DesignSection({
           </p>
         ) : null}
         <CoverPicker catalogId={catalog.id} items={items} cover={catalog.cover} actions={coverActions} run={run} pending={pending} form={coverForm} refreshKey={coverRefreshKey} />
+        <label className="flex items-start gap-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="photo-finish">
+          <input
+            type="checkbox"
+            checked={finishShown}
+            disabled={pending}
+            onChange={(e) => {
+              setFinishShown(e.target.checked);
+              onPhotoFinish(e.target.checked);
+            }}
+            className="mt-0.5 h-4 w-4 accent-[#b8956a]"
+            aria-describedby="cm-finish-note"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink">Acabado fotográfico</span>
+            <span id="cm-finish-note" className="block text-xs text-ink/60">
+              Ajusta el tono de cada foto sobre una copia y añade un filete fino a la apertura y la portada; las fotos del CRM no cambian.
+            </span>
+          </span>
+        </label>
       </div>
       <div className="min-w-0 space-y-2">
         <p className="crm-label-sm text-ink/60">Vista previa de la portada</p>

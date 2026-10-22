@@ -63,6 +63,9 @@ export async function catalogPhotoData(catalogId: string | null, propertyIds: st
     const prefs: PhotoPrefs = {
       x: mine.filter((r) => r.kind === "exclude").map((r) => photoKeyOf(r.photo_id)),
       o: mine.find((r) => r.kind === "opening") ? photoKeyOf(mine.find((r) => r.kind === "opening").photo_id) : null,
+      // PR7b (0227): «Sin acabado en esta foto» (la gestión las ve siempre;
+      // la instantánea, solo con el acabado activo).
+      n: mine.filter((r) => r.kind === "no_finish").map((r) => photoKeyOf(r.photo_id)),
     };
     const staleOpening = mine.find((r) => r.kind === "opening" && !existing.has(r.photo_id));
     out.set(pid, {

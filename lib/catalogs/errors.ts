@@ -61,6 +61,7 @@ const MESSAGES: Record<string, string> = {
   photo_excluded: "Esa foto no se usa en este catálogo. Vuelve a usarla antes de elegirla como foto de apertura.",
   photo_not_in_catalog: "Esa vivienda no está ahora en el catálogo.",
   invalid_photo: "Esa foto no es de esta vivienda o ya no existe.",
+  invalid_finish: "No se ha podido cambiar el acabado fotográfico. Recarga la página e inténtalo de nuevo.",
   draft_changed: "El borrador ha cambiado desde que lo abriste (en otra pestaña o con otra acción). Recarga la página antes de guardar o publicar.",
   text_has_contact: "El título o el texto tiene un teléfono, un correo o una web. Quítalo antes de publicar.",
   text_has_price: "El título o el texto menciona un precio. El precio ya se ve aparte y se actualiza solo: quítalo.",

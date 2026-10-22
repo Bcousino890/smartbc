@@ -3,6 +3,7 @@ import { loadLogoDataUri, loadWhiteLogoDataUri } from "@/lib/pdf/load-logo";
 import { prepareCatalogPdfWorker } from "@/lib/pdf/catalog/render-in-worker";
 import { photoId, PRINT_BOXES, type PdfPhoto } from "@/lib/pdf/catalog/document";
 import { PHOTO_STORED_MAX_WIDTH } from "../photo-widths";
+import { isFinishedSrc } from "../photo-selection";
 import { toPublicCatalog, type InternalSnapshot } from "../to-public";
 import type { CatalogOperation } from "../operation-price";
 import { captureFixed, isUnstableRead, verifyFixed, type Captured } from "./capture";
@@ -89,21 +90,23 @@ export interface BuiltPdf {
 // PR5 (idiomas): el PDF va en el idioma del token, el que trae la captura
 // fija (`snapshot.lang`, 0223; ausente = español). Contenido e idioma salen
 // de la MISMA captura (DA19): nunca el idioma de otro enlace.
-/** Fotos que necesita el PDF, con su versión en S1 (`u`) y su ancho. */
+/** Fotos que necesita el PDF, con su versión en S1 (`u`) y su ancho. PR7b:
+ *  con el acabado, las MISMAS fotos que trata el lector (su ruta lleva `t`)
+ *  se piden tratadas (`tone`), con la misma receta. */
 export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperation): Map<string, PhotoNeed> {
   const catalog = toPublicCatalog(snapshot, operation);
   const needs = new Map<string, PhotoNeed>();
   const internal = new Map((snapshot.items ?? []).map((it) => [String(it.key), it]));
-  const needOf = (itemKey: string, photoKey: string, width: number): PhotoNeed | null => {
+  const needOf = (itemKey: string, photoKey: string, width: number, src: string): PhotoNeed | null => {
     const it = internal.get(itemKey);
     const ph = it?.photos.find((p) => p.f === photoKey);
-    return it && ph ? { slug: it.slug, key: photoKey, u: ph.u, width } : null;
+    return it && ph ? { slug: it.slug, key: photoKey, u: ph.u, width, ...(isFinishedSrc(src) ? { tone: true } : {}) } : null;
   };
   for (const item of catalog.items) {
     const x = planItemExport(item);
     for (const idx of photosOfExport(x)) {
       const ph = item.photos[idx];
-      const n = needOf(item.key, ph.key, exportPhotoWidth(idx === x.opening ? "opening" : "more", ph.width, ph.height));
+      const n = needOf(item.key, ph.key, exportPhotoWidth(idx === x.opening ? "opening" : "more", ph.width, ph.height), ph.src);
       if (n) needs.set(photoId(item.key, idx), n);
     }
   }
@@ -111,7 +114,7 @@ export function photoNeeds(snapshot: InternalSnapshot, operation: CatalogOperati
     for (const item of catalog.items) {
       const idx = item.photos.findIndex((p) => p.src === catalog.coverPhoto);
       if (idx < 0) continue;
-      const n = needOf(item.key, item.photos[idx].key, exportPhotoWidth("cover", item.photos[idx].width, item.photos[idx].height));
+      const n = needOf(item.key, item.photos[idx].key, exportPhotoWidth("cover", item.photos[idx].width, item.photos[idx].height), catalog.coverPhoto);
       if (n) needs.set("cover", n);
       break;
     }
@@ -133,7 +136,7 @@ async function loadAll(needs: Map<string, PhotoNeed>, signal: AbortSignal): Prom
         changed = true;
         return;
       }
-      out.set(id, r.ok ? { ok: true, data: r.data, width: r.width, height: r.height } : { ok: false });
+      out.set(id, r.ok ? { ok: true, data: r.data, width: r.width, height: r.height, ...(r.toned ? { finish: true as const } : {}) } : { ok: false });
     }
   };
   await Promise.all(Array.from({ length: Math.min(PHOTO_PARALLEL, entries.length) }, worker));

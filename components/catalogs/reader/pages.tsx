@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChapterMark, DataPoint, Label, Ornament, Rule, StatusLine } from "@/app/v/[token]/_components/editorial";
 import { CatalogCover } from "@/components/catalogs/catalog-cover";
 import { formatDateShort, formatNumber } from "@/lib/catalogs/i18n";
+import { isFinishedSrc } from "@/lib/catalogs/photo-selection";
 import { COVER_FALLBACK_WIDTH, COVER_SIZES, coverPhotoWidth, coverSrcSet } from "@/lib/catalogs/cover-srcset";
 import type { PublicCatalog, PublicItem, PublicPhoto } from "@/lib/catalogs/public-contract";
 import { cn } from "@/lib/utils";
@@ -204,6 +205,8 @@ function PhotoColumn({
       {p ? (
         <button type="button" className={cn(styles.photoBtn, "vc-focus group")} onClick={() => onOpenGallery(photo)} aria-haspopup="dialog" aria-label={dict.viewPhotosOf(item.title)}>
           <ReaderImage variant="frame" {...photoProps(p, url, sizes)} alt={item.title} decoding="async" />
+          {/* PR7b: filete del acabado, solo si la foto va tratada (su ruta lleva `t`). */}
+          {isFinishedSrc(p.src) ? <span aria-hidden="true" className={styles.finishRule} data-finish-rule="apertura" /> : null}
           {item.photos.length > 1 ? (
             <span className="pointer-events-none absolute bottom-6 end-6 border border-cream-50/45 bg-ink/55 px-4 py-2.5 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm">
               {dict.viewPhotos(item.photos.length)}

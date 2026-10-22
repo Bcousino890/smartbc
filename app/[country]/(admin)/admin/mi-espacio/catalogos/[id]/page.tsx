@@ -21,6 +21,8 @@ import {
   listCoverPhotosAction,
   setCatalogPhotoExcludedAction,
   setCatalogPhotoOpeningAction,
+  setCatalogPhotoFinishAction,
+  setCatalogPhotoNoFinishAction,
   setCatalogCoverAction,
   addPropertyByIdAction,
   addPropertyToCatalogAction,
@@ -182,7 +184,8 @@ export default async function CatalogPage({
           adjust: adjustCatalogAction,
           clearAdjustment: clearCatalogAdjustmentAction,
           cover: { set: setCatalogCoverAction, photos: listCoverPhotosAction },
-          photos: { list: listCatalogPhotosAction, setExcluded: setCatalogPhotoExcludedAction, setOpening: setCatalogPhotoOpeningAction },
+          photos: { list: listCatalogPhotosAction, setExcluded: setCatalogPhotoExcludedAction, setOpening: setCatalogPhotoOpeningAction, setNoFinish: setCatalogPhotoNoFinishAction },
+          setPhotoFinish: setCatalogPhotoFinishAction,
           texts: {
             prepare: prepareCatalogTextAction,
             draft: draftCatalogTextAction,

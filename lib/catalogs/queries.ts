@@ -253,10 +253,13 @@ export async function listCoverPhotos(catalogId: string, propertyId: string): Pr
 export async function listCatalogPhotos(catalogId: string, propertyId: string): Promise<CatalogPhotosView | null> {
   const { data: prop } = await db().from("properties").select("slug").eq("id", propertyId).maybeSingle();
   if (!prop?.slug) return null;
-  const { data: cat } = await db().from("catalogs").select("cover_property_id, cover_photo_id").eq("id", catalogId).maybeSingle();
+  const { data: cat } = await db().from("catalogs").select("cover_property_id, cover_photo_id, photo_finish").eq("id", catalogId).maybeSingle();
   const data = (await catalogPhotoData(catalogId, [propertyId])).get(propertyId);
   if (!data) return null;
   const eff = data.eff;
+  // PR7b: con el acabado activo, la miniatura de cada foto en uso es la
+  // tratada (salvo las marcadas «sin acabado»), como la verá el cliente.
+  const finish = cat?.photo_finish === true;
   const openingKey = eff.photos.length ? eff.photos[eff.openingIndex].key : null;
   const coverHere = cat?.cover_property_id === propertyId;
   const photos = eff.all.flatMap((p) => {
@@ -265,12 +268,13 @@ export async function listCatalogPhotos(catalogId: string, propertyId: string): 
     const ids = p.keys.map((k) => data.idByKey.get(k));
     return [{
       photoId,
-      url: withWidth(photoSrc(prop.slug, p), 320),
+      url: withWidth(photoSrc(prop.slug, p, finish && !p.excluded && !p.noFinish), 320),
       excluded: p.excluded,
       opening: !p.excluded && p.key === openingKey,
       chosen: p.opening,
       crmCover: p.crmCover,
       catalogCover: coverHere && !!cat?.cover_photo_id && ids.includes(cat.cover_photo_id),
+      noFinish: p.noFinish,
     }];
   });
   return {
@@ -281,13 +285,14 @@ export async function listCatalogPhotos(catalogId: string, propertyId: string): 
     openingSource: eff.openingSource,
     stale: data.staleIds,
     catalogCoverHere: coverHere,
+    finish,
   };
 }
 
 export async function getCatalogDetail(ownerId: string, catalogId: string): Promise<CatalogDetail | null> {
   const { data: cat, error } = await db()
     .from("catalogs")
-    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role, mode, criteria, cover_property_id, cover_photo_id")
+    .select("id, title, intro, status, version, created_at, updated_at, owner_id, contact_name, contact_phone, contact_role, mode, criteria, cover_property_id, cover_photo_id, photo_finish")
     .eq("id", catalogId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -342,6 +347,7 @@ export async function getCatalogDetail(ownerId: string, catalogId: string): Prom
     autoMatched: auto ? auto.matched : null,
     adjustments: { included, excluded, unavailable, overMax: included > criteria.max },
     cover: await coverState(catalogId, cat, snap),
+    photoFinish: cat.photo_finish === true,
     // E2 (D-QA8): con la MISMA instantánea que ya se ha leído; sin consultas nuevas.
     material: materialByProperty(snap, effective),
   };

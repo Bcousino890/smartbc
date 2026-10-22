@@ -696,6 +696,50 @@ export async function setCatalogPhotoOpeningAction(input: {
   }));
 }
 
+// ── Acabado fotográfico (PR7b, 0227) ────────────────────────────────────────
+// Por catálogo (apagado por defecto) y, por foto, «Sin acabado en esta foto».
+// Pasan por saved() como el resto: aviso inmediato, vigilante y medición.
+// Nunca tocan las fotos del CRM: el tono es una variante del proxy /p.
+
+/** Activa o apaga el acabado fotográfico del catálogo. */
+export async function setCatalogPhotoFinishAction(input: { catalogId: string; on: boolean } & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (typeof input?.on !== "boolean") return fail("invalid_finish");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_set_photo_finish", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_on: input.on,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
+/** «Sin acabado en esta foto» (o volver a tratarla). */
+export async function setCatalogPhotoNoFinishAction(input: {
+  catalogId: string;
+  propertyId: string;
+  photoId: string;
+  noFinish: boolean;
+} & MeasureOpts): Promise<ActionResult<Saved>> {
+  return finish(await withHomeAccess(ownerDeps, async (profile) => {
+    if (!isUuid(input?.catalogId)) return fail("forbidden");
+    if (!isUuid(input?.propertyId) || !isUuid(input?.photoId) || typeof input?.noFinish !== "boolean") return fail("invalid_photo");
+    const before = await fpBefore(profile.id, input.catalogId);
+    const { data, error } = await db().rpc("catalog_photo_no_finish", {
+      p_actor: profile.id,
+      p_catalog: input.catalogId,
+      p_property: input.propertyId,
+      p_photo: input.photoId,
+      p_no_finish: input.noFinish,
+    });
+    if (error) return fail(error);
+    return saved(profile.id, input.catalogId, data, before, input);
+  }));
+}
+
 // ── Textos del catálogo (ampliación C2, 0197) ──────────────────────────────
 // Todo se queda en el catálogo: nunca properties.description, ni la caché de
 // descripciones limpias, ni historias. La IA solo PROPONE (no guarda ni

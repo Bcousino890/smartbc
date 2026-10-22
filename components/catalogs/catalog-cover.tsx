@@ -1,3 +1,4 @@
+import { isFinishedSrc } from "@/lib/catalogs/photo-selection";
 import styles from "./catalog-cover.module.css";
 
 // Portada del catálogo (enmienda visual 2026-10-20, DV9): la portada de la
@@ -82,6 +83,8 @@ export function CatalogCover({
             </div>
             <div className={styles.veil} />
             <div className={styles.veil2} />
+            {/* PR7b: filete del acabado, solo si la foto va tratada (su ruta lleva `t`). */}
+            {isFinishedSrc(data.photoUrl) ? <div className={styles.finishRule} data-finish-rule="portada" /> : null}
           </div>
         ) : null}
 

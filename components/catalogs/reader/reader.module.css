@@ -182,6 +182,22 @@
   transform: scale(1.025);
 }
 
+/* PR7b · Acabado fotográfico: filete interior fino y uniforme sobre la foto de
+   apertura (solo si va tratada). Capa absoluta sin eventos: no mueve nada ni
+   tapa el rótulo «Ver N fotografías», que queda dentro. */
+.finishRule {
+  position: absolute;
+  inset: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  pointer-events: none;
+}
+
+@media (max-width: 899px) {
+  .finishRule {
+    inset: 10px;
+  }
+}
+
 .photoEmpty {
   display: flex;
   align-items: center;

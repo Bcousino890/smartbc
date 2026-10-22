@@ -14,7 +14,7 @@ import type { PublicCatalog } from "@/lib/catalogs/public-contract";
 export const WORKER_PROTOCOL = 1;
 
 export type WorkerPhoto =
-  | { id: string; ok: true; width: number; height: number; data: ArrayBuffer }
+  | { id: string; ok: true; width: number; height: number; data: ArrayBuffer; finish?: true }
   | { id: string; ok: false };
 
 export interface WorkerRenderRequest {

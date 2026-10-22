@@ -450,6 +450,13 @@ export function FixtureCatalogManager({
         return unchanged();
       },
     },
+    // PR7b · como catalog_set_photo_finish (0227): el lector de prueba lo
+    // recibe por el almacén sintético (op «finish»).
+    setPhotoFinish: async ({ on, skipNotify }) => {
+      if (catRef.current.photoFinish === on) return unchanged();
+      refresh({ photoFinish: on });
+      return live({ op: "finish", on, skipNotify });
+    },
     setOperation: async ({ operation, skipNotify }) => {
       if (cat.mode === "auto") return { ok: false as const, error: "Este catálogo es automático (antiguo): su operación es un criterio." };
       if (operation === cat.criteria.operation) return unchanged();
@@ -573,14 +580,34 @@ export function FixtureCatalogManager({
             chosen: p.opening,
             crmCover: p.crmCover,
             catalogCover: coverRef.current.propertyId === propertyId && !!coverRef.current.photoId && p.keys.includes(coverRef.current.photoId),
+            noFinish: p.noFinish,
           })),
           used: e.photos.length,
           total: e.all.length,
           openingSource: e.openingSource,
           stale: { excluded: pr.x.filter((k) => !known.has(k)), opening: pr.o && !known.has(pr.o) ? pr.o : null },
           catalogCoverHere: coverRef.current.propertyId === propertyId,
+          finish: catRef.current.photoFinish,
         };
         return { ok: true as const, view };
+      },
+      // PR7b · las mismas reglas que catalog_photo_no_finish (0227).
+      setNoFinish: async ({ propertyId, photoId, noFinish }) => {
+        if (!cat.items.some((x) => x.propertyId === propertyId)) return { ok: false as const, error: "Esa vivienda no está ahora en el catálogo." };
+        const pr = photoPrefsRef.current.get(propertyId) ?? { x: [], o: null };
+        const group = effOf(propertyId).all.find((p) => p.keys.includes(photoId));
+        const marked = pr.n ?? [];
+        if (noFinish) {
+          if (!group) return { ok: false as const, error: "Esa foto no es de esta vivienda o ya no existe." };
+          if (group.noFinish) return { ok: true as const, version: 1, fingerprint: null, publicChange: false };
+          photoPrefsRef.current.set(propertyId, { ...pr, n: [...marked, photoId] });
+        } else {
+          const drop = new Set(group ? group.keys : [photoId]);
+          if (!marked.some((k) => drop.has(k))) return { ok: true as const, version: 1, fingerprint: null, publicChange: false };
+          photoPrefsRef.current.set(propertyId, { ...pr, n: marked.filter((k) => !drop.has(k)) });
+        }
+        refresh();
+        return { ok: true as const, version: 1, fingerprint: null, publicChange: catRef.current.photoFinish };
       },
       setExcluded: async ({ propertyId, photoId, excluded }) => {
         if (!cat.items.some((x) => x.propertyId === propertyId)) return { ok: false as const, error: "Esa vivienda no está ahora en el catálogo." };

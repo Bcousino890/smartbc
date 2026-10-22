@@ -28,6 +28,10 @@ import {
 // · Fotos: las EN USO en este catálogo (photo-selection.ts, E3), por el proxy
 //   /p/{slug}/{idx}.webp?f={clave}&v={versión}: el proxy sirve por la clave
 //   opaca, no por el índice (N1). Ni ids ni URLs de storage.
+// · PR7b (0227) · Acabado fotográfico: con `fin` en la instantánea, la ruta de
+//   cada foto no marcada «sin acabado» (pp.n) lleva `&t=<versión>`. Es lo
+//   ÚNICO que cambia: el contrato público no gana campos (el lector y el PDF
+//   saben si una foto va tratada por su ruta, isFinishedSrc).
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -52,6 +56,9 @@ export interface InternalSnapshot {
    *  pública de la vivienda (null si ya no está en la lista) y el
    *  identificador opaco de la foto (el mismo `u` de photos; null si no hay). */
   cover?: { key: string | null; photo: string | null } | null;
+  /** 0227 (PR7b): el catálogo tiene el acabado fotográfico activo. Solo
+   *  existe entonces (apagado, la instantánea es la de siempre). */
+  fin?: boolean | null;
 }
 
 export interface InternalItem {
@@ -77,8 +84,9 @@ export interface InternalItem {
   /** 0197: clase de la foto (`k`) solo si se conoce. 0202 (E3): clave
    *  opaca y estable de la foto (`f`). */
   photos: Array<{ u: string; f?: string | null; w: number | null; h: number | null; c: boolean | null; k?: string | null }>;
-  /** 0202 (E3): ajustes de fotos de este catálogo, por clave (solo si hay). */
-  pp?: { x: string[]; o: string | null } | null;
+  /** 0202 (E3): ajustes de fotos de este catálogo, por clave (solo si hay).
+   *  0227 (PR7b): `n` = fotos «sin acabado», solo con el acabado activo. */
+  pp?: { x: string[]; o: string | null; n?: string[] } | null;
   /** 0197 (C2): texto publicado del catálogo, solo si es vigente. */
   text?: { b: string | null; l: string | null; h: string[] | null } | null;
   /** 0220: zona confirmada por el dueño y vigente (solo si la hay). */
@@ -126,13 +134,15 @@ function cleanStrings(list: unknown): string[] {
 }
 
 
-function toPublicPhotos(it: InternalItem): { photos: PublicPhoto[]; coverIndex: number; classes: Array<string | null> } {
+function toPublicPhotos(it: InternalItem, finish = false): { photos: PublicPhoto[]; coverIndex: number; classes: Array<string | null> } {
   // E3: una sola regla (photo-selection.ts). Los índices (apertura, secciones,
   // mosaico, galería) son de la lista YA filtrada; la ruta lleva la clave.
+  // PR7b: con el acabado, la ruta de las fotos no excluidas lleva `t`; la
+  // clave pública (identidad en la galería) sigue siendo la misma.
   const eff = effectivePhotos(it.photos, it.pp);
   const photos: PublicPhoto[] = eff.photos.map((p) => ({
     key: p.key ?? photoSrc(it.slug, p),
-    src: photoSrc(it.slug, p),
+    src: photoSrc(it.slug, p, finish && !p.noFinish),
     width: positiveInt(p.w),
     height: positiveInt(p.h),
     orientation: orientation(positiveInt(p.w), positiveInt(p.h)),
@@ -153,9 +163,9 @@ function photoIndexOf(it: InternalItem, u: string): number {
  *      efectiva de la primera vivienda con fotos;
  *   4. catálogo vacío (o sin fotos): sin foto.
  */
-export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, items?: PublicItem[]): string | null {
+export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover" | "fin">, items?: PublicItem[]): string | null {
   const internal = (snap.items ?? []).filter((it) => it && it.status !== "sold" && it.status !== "archived");
-  const pubs = items ?? internal.map((it) => toPublicItem(it));
+  const pubs = items ?? internal.map((it) => toPublicItem(it, "any", "es", snap.fin === true));
   const key = snap.cover?.key;
   if (typeof key === "string") {
     const i = internal.findIndex((it) => String(it.key) === key);
@@ -171,7 +181,7 @@ export function coverPhotoOf(snap: Pick<InternalSnapshot, "items" | "cover">, it
 /** El recorrido editorial en ESPAÑOL de una vivienda (lo que el lector
  *  pinta en español) y sus fotos. Una sola definición para el lector, el PDF
  *  y la unidad que se traduce (PR6). */
-function editorialOf(it: InternalItem) {
+function editorialOf(it: InternalItem, finish = false) {
   const clean = it.clean;
   const cleanValid =
     !!clean && typeof clean.src === "string" && clean.src === clientDescriptionSrc(it.description, it.features);
@@ -181,7 +191,7 @@ function editorialOf(it: InternalItem) {
     it.title,
     it.description,
   );
-  const { photos, coverIndex, classes } = toPublicPhotos(it);
+  const { photos, coverIndex, classes } = toPublicPhotos(it, finish);
   const ed = deriveEditorial({
     description: it.description,
     features: it.features,
@@ -218,8 +228,8 @@ export function esUnitOfItem(it: InternalItem): EsUnit {
  *  alquiler, la operación y el importe del catálogo; una inclusión de otra
  *  operación, lo suyo real; en «venta y alquiler», como siempre. Sin la otra
  *  operación de las duales: eso es solo de la gestión. */
-export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lang: CatalogLanguage = "es"): PublicItem {
-  const { ed, floorN, photos, coverIndex } = editorialOf(it);
+export function toPublicItem(it: InternalItem, op: CatalogOperation = "any", lang: CatalogLanguage = "es", finish = false): PublicItem {
+  const { ed, floorN, photos, coverIndex } = editorialOf(it, finish);
   const place = [it.subzone, it.zone].filter((x) => typeof x === "string" && x.trim()).join(", ") || null;
   // PR6 · Fuera del español, el contenido sale SOLO de la traducción aprobada
   // y vigente de este catálogo; si no la hay, el caso N5. Los datos
@@ -271,7 +281,7 @@ export function toPublicCatalog(snap: InternalSnapshot, op: CatalogOperation = "
   // Defensa en profundidad: la instantánea ya excluye vendidas y archivadas.
   const items = (snap.items ?? [])
     .filter((it) => it && it.status !== "sold" && it.status !== "archived")
-    .map((it) => toPublicItem(it, op, lang));
+    .map((it) => toPublicItem(it, op, lang, snap.fin === true));
   const contact = snap.contact ?? null;
   const meta = catalogMeta(snap, lang);
   return {

@@ -90,6 +90,8 @@ export interface CatalogManagerActions {
   cover: CoverActions;
   /** E3 · fotos por catálogo. */
   photos: PhotoActions;
+  /** PR7b · acabado fotográfico del catálogo (Diseño). */
+  setPhotoFinish: (i: { catalogId: string; on: boolean } & M) => Promise<Res>;
   /** Ampliación C2 */
   texts: TextActions;
   /** BCP-01 P3 · buscador nuevo y operación del catálogo (selección explícita). */
@@ -192,7 +194,9 @@ export function CatalogManager({
         ...actions.photos,
         setExcluded: (i: Parameters<PhotoActions["setExcluded"]>[0]) => actions.photos.setExcluded({ ...i, ...mo }),
         setOpening: (i: Parameters<PhotoActions["setOpening"]>[0]) => actions.photos.setOpening({ ...i, ...mo }),
+        setNoFinish: (i: Parameters<PhotoActions["setNoFinish"]>[0]) => actions.photos.setNoFinish({ ...i, ...mo }),
       } satisfies PhotoActions,
+      setPhotoFinish: (i: Parameters<CatalogManagerActions["setPhotoFinish"]>[0]) => actions.setPhotoFinish({ ...i, ...mo }),
       texts: {
         ...actions.texts,
         save: (i: Parameters<TextActions["save"]>[0]) => actions.texts.save({ ...i, ...mo }),
@@ -607,6 +611,16 @@ export function CatalogManager({
           onSaveMeta={saveMeta}
           coverNotice={coverNotice}
           previewToken={currentShare && !currentShare.expired && !archived ? currentShare.token : null}
+          photoFinish={catalog.photoFinish}
+          onPhotoFinish={(on) =>
+            run(
+              () => wrapped.setPhotoFinish({ catalogId: catalog.id, on }),
+              on ? "Acabado fotográfico activado en este catálogo." : "Acabado fotográfico desactivado: las fotos vuelven a verse como en el CRM.",
+              undefined,
+              undefined,
+              "acabado",
+            )
+          }
         />
       </section>
 
