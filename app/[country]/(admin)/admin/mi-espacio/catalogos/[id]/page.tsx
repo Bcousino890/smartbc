@@ -55,7 +55,19 @@ import {
   clearAreaAction,
   applyAreaTextAction,
   removeAreaTextAction,
+  loadTranslationsAction,
+  prepareTranslationAction,
+  cancelTranslationAction,
+  saveTranslationAction,
+  rejectTranslationAction,
+  approveTranslationAction,
+  useApprovedTranslationsAction,
+  removeTranslationCopyAction,
+  setCatalogLangAction,
+  setLinkLangAction,
 } from "../../actions";
+import { activeLanguageGaps } from "@/lib/catalogs/translation-service";
+import { sqlTranslations } from "@/lib/catalogs/translation-data";
 import {
   createGroupAction,
   deleteGroupAction,
@@ -89,6 +101,14 @@ export default async function CatalogPage({
   const share = await getCatalogShare(profile.id, id);
   const texts = await listCatalogTexts(profile.id, id);
   const groups = await listOwnerGroups(profile.id);
+  // PR6 · N5: idiomas activos con viviendas sin traducción vigente. Si 0226
+  // aún no está aplicada, el gestor funciona igual, sin el aviso.
+  let translationGaps: Array<{ lang: string; pending: string[] }> = [];
+  try {
+    translationGaps = await activeLanguageGaps(sqlTranslations(profile.id), id);
+  } catch (err) {
+    console.warn("[catalogos] traducciones:", err instanceof Error ? err.message : err);
+  }
   return (
     <div className="mx-auto max-w-[1600px] px-4 lg:px-8">
       <header className="pt-7 md:pt-9">
@@ -102,6 +122,19 @@ export default async function CatalogPage({
         share={share}
         measureMode={medir === "1"}
         texts={texts}
+        translationGaps={translationGaps}
+        translationActions={{
+          load: loadTranslationsAction,
+          prepare: prepareTranslationAction,
+          cancel: cancelTranslationAction,
+          save: saveTranslationAction,
+          reject: rejectTranslationAction,
+          approve: approveTranslationAction,
+          useApproved: useApprovedTranslationsAction,
+          remove: removeTranslationCopyAction,
+          setCatalogLang: setCatalogLangAction,
+          setLinkLang: setLinkLangAction,
+        }}
         groups={{
           initial: groups,
           actions: {
