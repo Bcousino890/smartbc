@@ -24,8 +24,17 @@
 // caché de Playwright, servidor HTTP propio en 127.0.0.1. No toca
 // lib/pdf/catalog/document.ts: las familias nuevas se registran aquí.
 //
+// Dos modos (resultado en <carpeta>/motor-actual o <carpeta>/con-parche-textkit):
+//   · motor actual, intacto: los defectos del motor (E1–E9 de
+//     result-pr5-spike.md) se listan como ⛔ «bloqueos documentados (DA21)» y
+//     no cuentan como fallos;
+//   · con scripts/pdf/textkit-bidi-patch.mjs cargado (--import): la
+//     alternativa propuesta; ahí todo se exige y cualquier defecto es ❌.
+//
 //   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
 //     scripts/pdf-rtl-spike.mts [carpeta-salida] [--port 3140]
+//   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
+//     --import ./scripts/pdf/textkit-bidi-patch.mjs scripts/pdf-rtl-spike.mts
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -41,7 +50,9 @@ const ROOT = resolve(import.meta.dirname, "..");
 const args = process.argv.slice(2);
 const portIdx = args.indexOf("--port");
 const PORT = portIdx >= 0 ? Number(args[portIdx + 1]) : 3140;
-const OUT = resolve(args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--port") ?? join(ROOT, "node_modules/.cache/pdf-rtl"));
+/** ¿Se cargó scripts/pdf/textkit-bidi-patch.mjs (--import)? Entonces todo se exige: ningún bloqueo se tolera. */
+const PATCHED = !!(globalThis as { __textkitBidiPatch?: boolean }).__textkitBidiPatch;
+const OUT = join(resolve(args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--port") ?? join(ROOT, "node_modules/.cache/pdf-rtl")), PATCHED ? "con-parche-textkit" : "motor-actual");
 mkdirSync(OUT, { recursive: true });
 if (!OUT.startsWith(ROOT)) throw new Error("la carpeta de salida debe estar dentro del repositorio (la sirve el servidor local)");
 
@@ -53,7 +64,7 @@ const ok = (name: string, cond: boolean, detail = "") => {
 const info = (s: string) => console.log(`  ℹ️  ${s}`);
 /** Obstáculo del motor documentado (DA21): no cuenta como fallo de la prueba, pero se lista. */
 const BLOCKED: string[] = [];
-const blocked = (msg: string) => { BLOCKED.push(msg); console.log(`  ⛔ ${msg}`); };
+const blocked = (msg: string) => { if (PATCHED) { ok(msg, false); return; } BLOCKED.push(msg); console.log(`  ⛔ ${msg}`); };
 
 // ── Fuentes: las del catálogo + las nuevas de N3 (solo en esta prueba) ──────
 const FDIR = join(ROOT, "lib", "pdf", "fonts");
@@ -75,6 +86,8 @@ Font.register({ family: TEXT_EXT, fonts: W.map((w) => ({ src: f(`inter-latin-ext
 // y sus glifos (ğ, İ, ş, Ÿ) salen con los ids de la otra fuente (basura).
 // Solución local verificada: renombrar el PostScript del objeto fontkit tras
 // cargarlo. Con --sin-parche-ps se ve el fallo.
+const TEXT_EXT_RAW = "SpikeInterExtSinParche";
+Font.register({ family: TEXT_EXT_RAW, fonts: W.map((w) => ({ src: f(`inter-latin-ext-${w}-normal.woff`), fontWeight: w })) });
 const PATCH_PS = !args.includes("--sin-parche-ps");
 if (PATCH_PS) {
   for (const fam of [DISPLAY_EXT, LABEL_EXT, TEXT_EXT]) {
@@ -398,6 +411,22 @@ async function normalized(png: Buffer, flop = false): Promise<Float64Array | nul
   for (let i = 0; i < a.length; i++) a[i] = 255 - t.data[i];
   return a;
 }
+/** Perfil de tinta por columnas (NW columnas) y ancho de tinta en px: no le
+ *  afectan los desplazamientos verticales (un punto o una tilde más alta) y
+ *  sí el orden de lo que hay en la línea. */
+async function profile(png: Buffer, flop = false): Promise<{ p: Float64Array; w: number } | null> {
+  let img = sharp(png).flatten({ background: PAPER }).greyscale();
+  if (flop) img = img.flop();
+  const t = await img.trim({ threshold: 40 }).raw().toBuffer({ resolveWithObject: true }).catch(() => null);
+  if (!t || t.info.width < 2) return null;
+  const r = await sharp(t.data, { raw: { width: t.info.width, height: t.info.height, channels: 1 } }).resize(NW, t.info.height, { fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
+  const p = new Float64Array(NW);
+  for (let x = 0; x < NW; x++) for (let y = 0; y < r.info.height; y++) p[x] += 255 - r.data[y * NW + x];
+  // Media móvil de 9 columnas (≈ 2 % del ancho): un punto desplazado unos píxeles no cuenta como desorden.
+  const sm = new Float64Array(NW);
+  for (let x = 0; x < NW; x++) { let n = 0; for (let k = -4; k <= 4; k++) { const j = x + k; if (j >= 0 && j < NW) { sm[x] += p[j]; n++; } } sm[x] /= n; }
+  return { p: sm, w: t.info.width };
+}
 function pearson(a: Float64Array, b: Float64Array): number {
   let ma = 0, mb = 0;
   for (let i = 0; i < a.length; i++) { ma += a[i]; mb += b[i]; }
@@ -418,7 +447,8 @@ async function gaps(png: Buffer, min = 2): Promise<{ gaps: number; width: number
 }
 
 // ── Principal ───────────────────────────────────────────────────────────────
-const report: Record<string, unknown> = { rawFormats };
+const report: Record<string, unknown> = { rawFormats, textkitParcheado: PATCHED };
+console.log(PATCHED ? "\n▶ textkit CON el parche de reorderLine (scripts/pdf/textkit-bidi-patch.mjs)" : "\n▶ motor actual, sin tocar (textkit 6.3.0)");
 const { chromium } = await import("playwright");
 const stop = await serve();
 const browser = await chromium.launch();
@@ -460,7 +490,7 @@ try {
   let arBlocked = arRaster.error ? `raster: ${arRaster.error}` : "";
   if (!arRaster.error) {
     writeFileSync(join(OUT, "ar-minimo-p01.png"), arRaster.pages[0]);
-    const crop = await sharp(arRaster.pages[0]).extract({ left: Math.round(MARGIN * 2) - 4, top: 40 * 2 - 6, width: Math.round(CONTENT_W * 2) + 8, height: Math.round(28 * 1.4 * 2) + 14 }).png().toBuffer();
+    const crop = await sharp(arRaster.pages[0]).extract({ left: Math.round(MARGIN * 2) - 4, top: 40 * 2 - 24, width: Math.round(CONTENT_W * 2) + 8, height: Math.round(28 * 1.4 * 2) + 48 }).png().toBuffer();
     writeFileSync(join(OUT, "ar-minimo-linea.png"), crop);
     const refHtml = `<!doctype html><meta charset="utf-8"><style>${Object.entries(FILES).flatMap(([fam, fs]) => fs.map((x) => `@font-face{font-family:"${fam}";font-weight:${x.w};font-style:${x.it ? "italic" : "normal"};src:url("${rel(f(x.file))}") format("woff")}`)).join("\n")} body{margin:0;background:${PAPER};color:${INK}} .line{display:inline-block;padding:24px 40px;white-space:nowrap;line-height:1.4}</style><body><div class="line" id="w-ref" dir="rtl" style="font-family:'${NASKH}','${TEXT}';font-size:56px">بيت شقة</div></body>`;
     const refFile = join(OUT, "ar-minimo-ref.html");
@@ -471,18 +501,38 @@ try {
     const refPng = await ref.locator("#w-ref").screenshot({ type: "png" });
     writeFileSync(join(OUT, "ar-minimo-referencia.png"), refPng);
     await ref.close();
-    const A = await normalized(crop), R = await normalized(refPng);
+    const PA = await profile(crop), PR = await profile(refPng);
     const tp = await trimmed(crop), tr = await trimmed(refPng);
-    const c = A && R ? pearson(A, R) : 0;
-    const inkRatio = tp && tr ? (tp.w * tp.h) / (tr.w * tr.h) : 0;
-    const okAr = c > 0.6 && inkRatio > 0.5;
-    if (!okAr) arBlocked = `«بيت شقة»: tinta ${tp ? `${tp.w}×${tp.h}` : "0"} px frente a ${tr ? `${tr.w}×${tr.h}` : "0"} px en Chromium (${(inkRatio * 100).toFixed(0)} %), correlación ${c.toFixed(3)}`;
-    report.arMinimo = { correlacion: +c.toFixed(3), tintaPdf: tp && { w: tp.w, h: tp.h }, tintaChromium: tr && { w: tr.w, h: tr.h } };
+    const c = PA && PR ? pearson(PA.p, PR.p) : 0;
+    const wRatio = PA && PR ? PA.w / PR.w : 0;
+    const okAr = c > 0.9 && Math.abs(wRatio - 1) <= 0.03;
+    if (!okAr) arBlocked = `«بيت شقة»: tinta ${tp ? `${tp.w}×${tp.h}` : "0"} px frente a ${tr ? `${tr.w}×${tr.h}` : "0"} px en Chromium (ancho ${(wRatio * 100).toFixed(0)} %), perfil ${c.toFixed(3)}`;
+    else ok(`árabe mínimo «بيت شقة»: perfil frente a Chromium ${c.toFixed(3)}, ancho ${(wRatio * 100).toFixed(1)} %`, true);
+    report.arMinimo = { perfil: +c.toFixed(3), ancho: +wRatio.toFixed(3), tintaPdf: tp && { w: tp.w, h: tp.h }, tintaChromium: tr && { w: tr.w, h: tr.h } };
   }
   if (arBlocked || crashes.length) {
     blocked(`ÁRABE BLOQUEADO con el motor actual (DA21): ${crashes.length} palabras de ${triggers.length} tiran textkit; ${arBlocked || "y lo que no se cae se dibuja mal"}`);
     info("causa: textkit 6.3.0 corta las runs por índice de carácter y Noto Naskh Arabic descompone cada letra en esqueleto + puntos (glifos con codePoints vacíos); ver result-pr5-spike.md");
-  } else ok("árabe: el motor dibuja «بيت شقة» como Chromium", true);
+  }
+
+  // ── 0b · Página de demostración de los defectos del motor (E1, E2, E4) ──
+  console.log("\n· Demostración E1/E2/E4 (motor-mezcla.pdf → motor-mezcla.png)");
+  const demoT = (fam: string[] | string, text: string, dir: "rtl" | "ltr", extra: Record<string, unknown> = {}) => h(Text, { style: { fontFamily: fam, fontSize: 20, direction: dir, textAlign: dir === "rtl" ? "right" : "left", color: INK, ...extra }, hyphenationCallback: noHyphens }, text);
+  const demoRows: ReactNode[] = [
+    demoT([TEXT, TEXT_EXT_RAW], "E1 sin parche: Işıl Yıldız · dış cepheli · Ağ ğA Ÿ", "ltr"),
+    demoT([TEXT, TEXT_EXT], "E1 con parche PS: Işıl Yıldız · dış cepheli · Ağ ğA Ÿ", "ltr"),
+    demoT([HEBSANS, TEXT], "מחיר: 1,450,000 € · 142 m² (E2: un Text)", "rtl"),
+    h(View, { style: { flexDirection: "row-reverse", alignItems: "baseline" } }, demoT(HEBSANS, "מחיר", "rtl"), demoT(TEXT, ": 1,450,000 € · 142 m² (piezas)", "ltr")),
+    demoT(HEBSANS, "דירה מרווחת ונוף לרחוב", "rtl"),
+    h(Text, { style: { fontFamily: HEBSANS, fontSize: 20, direction: "rtl", textAlign: "right", color: INK } }, "דירה ", h(Text, { style: { color: GOLD_DARK } }, "מרווחת"), " ונוף לרחוב"),
+  ];
+  const demoFile = join(OUT, "motor-mezcla.pdf");
+  writeFileSync(demoFile, await render(h(Document, { title: "motor" }, h(Page, { size: "A4", style: { backgroundColor: PAPER } }, ...demoRows.map((r, i) => h(View, { key: i, style: { position: "absolute", top: 40 + i * 44, left: MARGIN, width: CONTENT_W } }, r))))));
+  const demoRaster = await rasterPages(demoFile);
+  if (!demoRaster.error) {
+    await sharp(demoRaster.pages[0]).extract({ left: Math.round(MARGIN * 2) - 8, top: 40 * 2 - 10, width: Math.round(CONTENT_W * 2) + 16, height: (demoRows.length * 44 + 10) * 2 }).png().toFile(join(OUT, "motor-mezcla.png"));
+    info("escrita motor-mezcla.png: fila 1 basura (E1), fila 2 correcta (parche), fila 3 basura (E2), fila 4 correcta (piezas), fila 5 correcta, fila 6 el color dorado cae en la palabra equivocada (E4)");
+  } else ok("demo: raster", false, demoRaster.error);
 
   for (const s of SAMPLES) {
     console.log(`\n· ${s.lang} (${s.rtl ? "RTL" : "LTR"})`);
@@ -580,7 +630,8 @@ try {
     const lineCrops = new Map<string, Buffer>();
     const b: Record<string, unknown> = {};
     for (const l of lines) {
-      const crop = await sharp(linesPng).extract({ left: Math.round(MARGIN * 2) - 4, top: Math.round(l.top * 2) - 6, width: Math.round(CONTENT_W * 2) + 8, height: Math.round(l.size * 1.4 * 2) + 14 }).png().toBuffer();
+      // Margen vertical amplio: los puntos altos y bajos del Naskh se salen de la caja de línea.
+      const crop = await sharp(linesPng).extract({ left: Math.round(MARGIN * 2) - 4, top: Math.round(l.top * 2) - 24, width: Math.round(CONTENT_W * 2) + 8, height: Math.round(l.size * 1.4 * 2) + 48 }).png().toBuffer();
       lineCrops.set(l.id, crop);
       writeFileSync(join(OUT, `${s.lang}-linea-${l.id}.png`), crop);
       if (l.id.startsWith("palabra") || l.id.startsWith("etiqueta-")) continue;
@@ -590,14 +641,37 @@ try {
       const A = await normalized(crop), R = await normalized(refPng), M = await normalized(refPng, true), V = await normalized(revPng);
       if (!A || !R || !M || !V) { ok(`(b) ${l.id}: recorte vacío`, false); continue; }
       const cRef = pearson(A, R), cMirror = pearson(A, M), cRev = pearson(A, V);
-      b[l.id] = { referencia: +cRef.toFixed(3), espejo: +cMirror.toFixed(3), bidiInvertido: +cRev.toFixed(3) };
-      const pass = cRef > 0.6 && cRef - Math.max(cMirror, cRev) > 0.2;
+      const PA = await profile(crop), PR = await profile(refPng), PM = await profile(refPng, true), PV = await profile(revPng);
+      const pRef = PA && PR ? pearson(PA.p, PR.p) : 0, pMirror = PA && PM ? pearson(PA.p, PM.p) : 0, pRev = PA && PV ? pearson(PA.p, PV.p) : 0;
+      const wRatio = PA && PR ? PA.w / PR.w : 0;
+      b[l.id] = { perfil: +pRef.toFixed(3), perfilEspejo: +pMirror.toFixed(3), perfilBidiInvertido: +pRev.toFixed(3), anchoPdfFrenteChromium: +wRatio.toFixed(3), correlacion2d: +cRef.toFixed(3), espejo2d: +cMirror.toFixed(3), bidiInvertido2d: +cRev.toFixed(3) };
+      // Criterio: perfil de columnas casi idéntico al de Chromium, claramente distinto de los dos controles, y mismo ancho (±3 %).
+      const pass = pRef > 0.9 && pRef - Math.max(pMirror, pRev) > 0.3 && Math.abs(wRatio - 1) <= 0.03;
       const mixed = s.rtl && /[0-9A-Za-z€.,:;]/.test(l.text);
-      const msg = `(b) ${l.id}: correlación con Chromium ${cRef.toFixed(3)} · espejo ${cMirror.toFixed(3)} · bidi invertido ${cRev.toFixed(3)}`;
+      const msg = `(b) ${l.id}: perfil frente a Chromium ${pRef.toFixed(3)} · espejo ${pMirror.toFixed(3)} · bidi invertido ${pRev.toFixed(3)} · ancho ${(wRatio * 100).toFixed(1)} % (2D ${cRef.toFixed(3)})`;
       if (!pass && mixed) blocked(`E2 · ${s.lang} ${l.id}: línea RTL con cifras/latín/puntuación (dos fuentes) sale corrupta — ${msg.slice(4)}`);
       else ok(msg, pass);
     }
     r.ordenVisual = b;
+    // Montaje PDF ↔ Chromium de cada línea (para el expediente).
+    {
+      const tiles: { input: Buffer; top: number; left: number }[] = [];
+      let y = 0;
+      for (const l of lines) {
+        for (const kind of ["linea", "referencia"]) {
+          const p = join(OUT, `${s.lang}-${kind}-${l.id}.png`);
+          if (!existsSync(p)) continue;
+          const t = await sharp(p).flatten({ background: PAPER }).trim({ threshold: 40 }).extend({ top: 6, bottom: 6, left: 6, right: 6, background: PAPER }).toBuffer({ resolveWithObject: true }).catch(() => null);
+          if (!t) continue;
+          const ratio = Math.min(1, 1000 / t.info.width);
+          const w = Math.round(t.info.width * ratio), hh = Math.round(t.info.height * ratio);
+          tiles.push({ input: await sharp(t.data).resize(w, hh).png().toBuffer(), top: y, left: 0 });
+          y += hh + 4;
+        }
+        y += 10;
+      }
+      if (tiles.length) await sharp({ create: { width: 1000, height: y, channels: 3, background: "#8a8a8a" } }).composite(tiles).png().toFile(join(OUT, `${s.lang}-montaje-lineas.png`));
+    }
     if (s.joinedWord) {
       const j = await gaps(lineCrops.get("palabra-unida")!), sep = await gaps(lineCrops.get("palabra-separada")!);
       ok(`(a) «${s.joinedWord}» unida: ${j.gaps} huecos en ${j.width} px · con espacios: ${sep.gaps} huecos en ${sep.width} px`, j.gaps === 0 && sep.gaps >= 2);
@@ -605,8 +679,8 @@ try {
     }
     if (s.rtl) {
       const g0 = await gaps(lineCrops.get("etiqueta-sin-tracking")!), g1 = await gaps(lineCrops.get("etiqueta-con-tracking")!);
-      const refPng = await ref.locator("#etiqueta-ref").screenshot({ type: "png" });
-      const A0 = await normalized(lineCrops.get("etiqueta")!), A1 = await normalized(lineCrops.get("etiqueta-tracking")!), R = await normalized(refPng);
+      const refPng = await ref.locator("#etiqueta-sin-tracking-ref").screenshot({ type: "png" });
+      const A0 = await normalized(lineCrops.get("etiqueta-sin-tracking")!), A1 = await normalized(lineCrops.get("etiqueta-con-tracking")!), R = await normalized(refPng);
       const c0 = A0 && R ? pearson(A0, R) : 0, c1 = A1 && R ? pearson(A1, R) : 0;
       ok(`(e) etiqueta «${s.bedrooms}» sin tracking: ${g0.gaps} huecos (${g0.width} px) · con letterSpacing 1.9: ${g1.gaps} huecos (${g1.width} px); correlación con la referencia sin tracking ${c0.toFixed(3)} → con tracking ${c1.toFixed(3)}`, g1.width > g0.width && c0 >= c1);
       r.tracking = { sinTracking: g0, conTracking: g1, correlacionSin: +c0.toFixed(3), correlacionCon: +c1.toFixed(3) };
