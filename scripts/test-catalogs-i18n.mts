@@ -238,13 +238,16 @@ function snap(over: Partial<InternalSnapshot> = {}): InternalSnapshot {
   eq(toPublicCatalog(snap({ lang: "pt" })).lang, "es", "«lang» desconocido → es");
   eq(toPublicCatalog(snap({ lang: "ar" }), "any", "es").lang, "es", "el PDF puede forzar «es» aunque el enlace esté en árabe");
   const ar = toPublicCatalog(snap({ lang: "ar", items: [item({ title: "  " })] }));
-  eq(ar.items[0].title, catalogDictionary("ar").untitled, "ar: «Sin título» en el idioma");
+  // PR6 (N5): sin traducción aprobada y vigente, el título es el provisional del idioma con la zona.
+  eq(ar.items[0].title, catalogDictionary("ar").homeIn("Recoletos"), "ar sin traducción: título provisional en el idioma (N5)");
+  eq(toPublicCatalog(snap({ lang: "ar", items: [item({ title: "  ", zone: null, subzone: null })] })).items[0].title, catalogDictionary("ar").untitled, "ar sin zona: «Sin título» en el idioma");
   ok(/^[0-9,]+ €$/.test(ar.items[0].price), "ar: precio con dígitos latinos", ar.items[0].price);
-  // El contenido (copy) sigue en español en cualquier idioma hasta el PR6.
+  // PR6: fuera del español el contenido sale SOLO de la traducción aprobada y
+  // vigente; sin ella, el aviso N5 (nunca el español).
   const withText = item({ text: { b: "Piso luminoso. El salón da a la calle. Vivir aquí es cómodo.", l: null, h: [] } });
   const enCopy = toPublicItem(withText, "any", "en").copy;
-  const esCopy = toPublicItem(withText, "any", "es").copy;
-  eq(enCopy, esCopy, "la descripción (contenido) es la misma en es y en en hasta el PR6");
+  eq(enCopy.map((b) => b.heading), [catalogDictionary("en").descriptionPreparing], "en sin traducción: aviso «Description in preparation» (N5), sin el español");
+  ok(toPublicItem(withText, "any", "es").copy[0].text.startsWith("Piso luminoso"), "es: la descripción de siempre");
   // Las claves prohibidas siguen fuera; «lang» y «floorShort» son los únicos campos nuevos.
   eq(Object.keys(en).sort(), ["coverPhoto", "edition", "intro", "items", "lang", "phone", "phoneHref", "preparedBy", "role", "title"], "campos del catálogo público");
   ok("floorShort" in en.items[0], "floorShort en la vivienda pública");

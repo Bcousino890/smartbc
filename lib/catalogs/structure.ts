@@ -46,9 +46,15 @@ export function sectionHeading(key: SectionKey, area: string | null): string {
   return SECTION_HEADINGS[key];
 }
 
+/** PR6 (DA18): clave del bloque. «intro» es la introducción sin título. */
+export type CopyKey = "intro" | SectionKey;
+
 export interface CopyBlock {
   heading: string | null;
   text: string;
+  /** PR6 · Clave de sección del bloque (la traducción la conserva y el título
+   *  sale del diccionario del idioma; nunca se reclasifica texto traducido). */
+  key: CopyKey;
 }
 
 export interface StructureInput {
@@ -69,6 +75,9 @@ export interface Structured {
   copy: CopyBlock[];
   /** Partes de la estructura sin material (para el aviso del editor, DE10). */
   missing: SectionKey[];
+  /** PR6 · El bloque «barrio» es la plantilla «Vivir en…» de este catálogo
+   *  (se traduce aparte, por su versión: DA27). */
+  areaTextUsed?: boolean;
 }
 
 /** Párrafos de un texto (separados por una línea en blanco), sin vacíos. */
@@ -417,16 +426,17 @@ export function organizeDescription(input: StructureInput): Structured {
   // DA25: la plantilla de la zona entra solo si la descripción propia no
   // habla ya de la zona (nunca se repite ni sustituye a lo propio).
   const tpl = (input.areaText ?? "").trim();
-  if (tpl && parts.barrio.length === 0) parts.barrio.push(tpl);
+  const areaTextUsed = !!tpl && parts.barrio.length === 0;
+  if (areaTextUsed) parts.barrio.push(tpl);
 
   const copy: CopyBlock[] = [];
-  if (intro.length) copy.push({ heading: null, text: intro.join("\n\n") });
+  if (intro.length) copy.push({ heading: null, text: intro.join("\n\n"), key: "intro" });
   const missing: SectionKey[] = [];
   for (const key of SECTION_ORDER) {
-    if (parts[key].length) copy.push({ heading: sectionHeading(key, input.area), text: parts[key].join("\n\n") });
+    if (parts[key].length) copy.push({ heading: sectionHeading(key, input.area), text: parts[key].join("\n\n"), key });
     else missing.push(key);
   }
-  return { copy, missing };
+  return areaTextUsed ? { copy, missing, areaTextUsed } : { copy, missing };
 }
 
 /** Texto plano de los bloques (comparaciones y pruebas). */

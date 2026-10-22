@@ -82,6 +82,9 @@ jobs:
       # contenido completo, índice a la página real, fuentes y glifos por idioma.
       - name: "Catálogos (PDF en 8 idiomas, offline)"
         run: npm run test:catalogs-pdf-i18n
+      # 0226 (PR6): traducciones preparadas y revisadas con IA FALSA que cuenta llamadas (reserva, incierto, N5, DA34). Sin BD.
+      - name: "Catálogos (traducciones, offline)"
+        run: npm run test:catalogs-translations
       # PR7a: variantes por ancho del proxy, srcset de la portada y anchos del PDF (sharp sobre fotos sintéticas). Sin BD.
       - name: "Catálogos (resolución de fotos, offline)"
         run: npm run test:catalogs-photos

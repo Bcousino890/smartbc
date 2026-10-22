@@ -62,13 +62,19 @@ export interface PublicItem {
   photos: PublicPhoto[];
   /** Índice de la foto de apertura dentro de photos (0 si no hay marca). */
   coverIndex: number;
+  /** PR6 · N5: en este idioma la vivienda aún no tiene traducción aprobada y
+   *  vigente. `copy` lleva entonces SOLO el aviso «Descripción en
+   *  preparación» del diccionario (nunca el español) y el título es el
+   *  provisional del idioma. Ausente en cualquier otro caso. */
+  copyPending?: boolean;
 }
 
 export interface PublicCatalog {
   /** PR4 (0223) · Idioma del ENLACE: el del enlace personal si lo tiene, si
    *  no el del catálogo. Decide las etiquetas fijas, la dirección (ar y he en
-   *  RTL) y el formato de cifras y fechas. El contenido sigue en español
-   *  hasta el PR6. Entra en la huella: cambiarlo actualiza el lector. */
+   *  RTL) y el formato de cifras y fechas. PR6: fuera del español, el
+   *  contenido sale de las traducciones aprobadas y vigentes de ese idioma
+   *  (N5 si falta). Entra en la huella: cambiarlo actualiza el lector. */
   lang: CatalogLanguage;
   title: string;
   intro: string | null;

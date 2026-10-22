@@ -101,7 +101,15 @@ const nextConfig: NextConfig = {
       },
       {
         // Backend self-host en Hetzner (Supabase Storage). Las fotos
-        // sincronizadas con watermark se sirven desde aquí.
+        // sincronizadas con watermark se sirven desde aquí. Dominio único
+        // desde 2026-10-22: crm.bcousinoprop.com se dejó de usar (sin DNS
+        // público, certificado caducado) y la 0224 reescribió sus URLs.
+        protocol: "https",
+        hostname: "portal.bcousinoprop.com",
+        pathname: "/storage/v1/object/public/**",
+      },
+      {
+        // Dominio antiguo: se mantiene por si queda alguna URL sin migrar.
         protocol: "https",
         hostname: "crm.bcousinoprop.com",
         pathname: "/storage/v1/object/public/**",

@@ -70,12 +70,12 @@ const amelia = {
   country: "es",
   email: "amelia.rivas@bcousinoprop.com",
 };
-const html = buildAutoSignatureHtml(amelia, "https://crm.bcousinoprop.com/");
+const html = buildAutoSignatureHtml(amelia, "https://portal.bcousinoprop.com/");
 check("lleva el nombre", html.includes("Amelia Rivas"));
 check("cargo limpio, sin el nombre de la agencia pegado", html.includes(">Agente Inmobiliario<") && !/Agente Inmobiliario\s*·/.test(html));
 check("teléfono de la agencia SIEMPRE", html.includes("+34 641 457 123") && html.includes("tel:+34641457123"));
 check("lleva la dirección de Serrano", html.includes("Calle Serrano 19 · 28001 Madrid"));
-check("logo por URL absoluta sin doble barra", html.includes("https://crm.bcousinoprop.com/logo.png"));
+check("logo por URL absoluta sin doble barra", html.includes("https://portal.bcousinoprop.com/logo.png"));
 check("cargo personalizado manda", signatureTitle({ role: "owner", title: "Socio fundador" }) === "Socio fundador");
 check("owner → Director", signatureTitle({ role: "owner", title: null }) === "Director");
 

@@ -207,6 +207,15 @@ export type CatalogDictionary = {
   livingIn: (zone: string) => string;
 
   untitled: string;
+
+  // ── PR6 · Traducciones (N5) ──
+  /** Aviso en lugar de la descripción cuando la vivienda no tiene todavía
+   *  traducción aprobada y vigente en este idioma (nunca el español). */
+  descriptionPreparing: string;
+  descriptionPreparingHint: string;
+  /** Título provisional de esa vivienda («Vivienda en Almagro»); la zona es
+   *  un nombre propio y no se traduce. */
+  homeIn: (place: string) => string;
 };
 
 const ES_WORDS = ["", "Una", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve", "Diez", "Once", "Doce"];
@@ -329,6 +338,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "Salón y luz", kitchen: "Cocina y comedor", finishes: "Acabados y confort", building: "La finca", barrio: "El barrio" },
     livingIn: (z) => `Vivir en ${z}`,
     untitled: "Sin título",
+    descriptionPreparing: "Descripción en preparación",
+    descriptionPreparingHint: "Estamos preparando la descripción de esta vivienda en tu idioma. Los datos, las fotos y el precio de esta página están al día.",
+    homeIn: (z) => `Vivienda en ${z}`,
   },
 
   en: {
@@ -448,6 +460,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "Living room and light", kitchen: "Kitchen and dining", finishes: "Finishes and comfort", building: "The building", barrio: "The neighbourhood" },
     livingIn: (z) => `Living in ${z}`,
     untitled: "Untitled",
+    descriptionPreparing: "Description in preparation",
+    descriptionPreparingHint: "We are preparing the description of this home in your language. The details, photos and price on this page are up to date.",
+    homeIn: (z) => `Home in ${z}`,
   },
 
   fr: {
@@ -567,6 +582,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "Séjour et lumière", kitchen: "Cuisine et salle à manger", finishes: "Finitions et confort", building: "L'immeuble", barrio: "Le quartier" },
     livingIn: (z) => `Vivre à ${z}`,
     untitled: "Sans titre",
+    descriptionPreparing: "Description en préparation",
+    descriptionPreparingHint: "Nous préparons la description de ce logement dans votre langue. Les données, les photos et le prix de cette page sont à jour.",
+    homeIn: (z) => `Logement à ${z}`,
   },
 
   it: {
@@ -686,6 +704,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "Soggiorno e luce", kitchen: "Cucina e sala da pranzo", finishes: "Finiture e comfort", building: "Il palazzo", barrio: "Il quartiere" },
     livingIn: (z) => `Vivere a ${z}`,
     untitled: "Senza titolo",
+    descriptionPreparing: "Descrizione in preparazione",
+    descriptionPreparingHint: "Stiamo preparando la descrizione di questo immobile nella tua lingua. I dati, le foto e il prezzo di questa pagina sono aggiornati.",
+    homeIn: (z) => `Immobile a ${z}`,
   },
 
   de: {
@@ -805,6 +826,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "Wohnzimmer und Licht", kitchen: "Küche und Essbereich", finishes: "Ausstattung und Komfort", building: "Das Gebäude", barrio: "Das Viertel" },
     livingIn: (z) => `Leben in ${z}`,
     untitled: "Ohne Titel",
+    descriptionPreparing: "Beschreibung in Vorbereitung",
+    descriptionPreparingHint: "Wir bereiten die Beschreibung dieser Immobilie in Ihrer Sprache vor. Die Angaben, Fotos und der Preis auf dieser Seite sind aktuell.",
+    homeIn: (z) => `Immobilie in ${z}`,
   },
 
   // Árabe: sin revisión nativa (TRANSLATION_REVIEW_REQUIRED). Cifras latinas.
@@ -925,6 +949,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "الصالة والإضاءة", kitchen: "المطبخ وغرفة الطعام", finishes: "التشطيبات والراحة", building: "المبنى", barrio: "الحي" },
     livingIn: (z) => `العيش في ${z}`,
     untitled: "بدون عنوان",
+    descriptionPreparing: "الوصف قيد الإعداد",
+    descriptionPreparingHint: "نُعدّ وصف هذا المسكن بلغتك. البيانات والصور والسعر في هذه الصفحة محدّثة.",
+    homeIn: (z) => `مسكن في ${z}`,
   },
 
   // Turco: sin revisión nativa (TRANSLATION_REVIEW_REQUIRED).
@@ -1045,6 +1072,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "Salon ve ışık", kitchen: "Mutfak ve yemek alanı", finishes: "Donanım ve konfor", building: "Bina", barrio: "Semt" },
     livingIn: (z) => `${z} semtinde yaşamak`,
     untitled: "Başlıksız",
+    descriptionPreparing: "Açıklama hazırlanıyor",
+    descriptionPreparingHint: "Bu konutun açıklamasını dilinizde hazırlıyoruz. Bu sayfadaki bilgiler, fotoğraflar ve fiyat günceldir.",
+    homeIn: (z) => `${z} semtinde konut`,
   },
 
   // Hebreo: sin revisión nativa (TRANSLATION_REVIEW_REQUIRED). Cifras latinas.
@@ -1165,6 +1195,9 @@ const DICTIONARIES: Record<CatalogLanguage, CatalogDictionary> = {
     sections: { living: "סלון ואור", kitchen: "מטבח ופינת אוכל", finishes: "גימורים ונוחות", building: "הבניין", barrio: "השכונה" },
     livingIn: (z) => `לגור ב-${z}`,
     untitled: "ללא כותרת",
+    descriptionPreparing: "התיאור בהכנה",
+    descriptionPreparingHint: "אנחנו מכינים את תיאור הנכס בשפה שלך. הנתונים, התמונות והמחיר בעמוד זה מעודכנים.",
+    homeIn: (z) => `נכס ב-${z}`,
   },
 };
 

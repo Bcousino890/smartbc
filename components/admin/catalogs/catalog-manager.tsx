@@ -51,6 +51,8 @@ import { HomesSection } from "./manager/homes-section";
 import { ContentSection } from "./manager/content-section";
 import { DesignSection } from "./manager/design-section";
 import { ShareSection } from "./manager/share-section";
+import { LanguagesSection, type TranslationActions } from "./manager/languages-section";
+import { LANGUAGE_NAMES_ES } from "@/lib/catalogs/translation-labels";
 import { useManagerUrl } from "./manager/use-manager-url";
 
 // Gestión de un catálogo (BCP-01 T4). Interfaz del admin en Lato. Las acciones
@@ -110,6 +112,8 @@ export function CatalogManager({
   texts = [],
   storyHref = (slug: string) => `/es/admin/propiedades/${encodeURIComponent(slug)}/story`,
   groups = null,
+  translationActions,
+  translationGaps = [],
 }: {
   catalog: CatalogDetail;
   actions: CatalogManagerActions;
@@ -131,6 +135,11 @@ export function CatalogManager({
    *  estado: no cambia la URL, no cierra el panel abierto ni toca lo escrito
    *  sin guardar. Organizar no cambia este catálogo. */
   groups?: { initial: GroupsState; actions: GroupActions } | null;
+  /** PR6 · traducciones (pestaña «Idiomas»). */
+  translationActions?: TranslationActions;
+  /** PR6 · N5: idiomas activos con viviendas sin traducción vigente (el
+   *  cliente las ve con «Descripción en preparación»). */
+  translationGaps?: Array<{ lang: string; pending: string[] }>;
 }) {
   const router = useRouter();
   const [groupsState, setGroupsState] = useState<GroupsState | null>(groups?.initial ?? null);
@@ -554,6 +563,15 @@ export function CatalogManager({
       </section>
 
       <section {...panel("contenido")} className="min-w-0 focus:outline-none">
+        {translationGaps.filter((g) => g.pending.length).map((g) => (
+          <p key={g.lang} className="mb-3 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-900" data-testid="content-tr-gap">
+            Enlaces en {LANGUAGE_NAMES_ES[g.lang as keyof typeof LANGUAGE_NAMES_ES] ?? g.lang}: {g.pending.length === 1 ? "1 vivienda se ve" : `${g.pending.length} viviendas se ven`} con «Descripción en preparación» ({g.pending.slice(0, 3).join(", ")}{g.pending.length > 3 ? "…" : ""}).{" "}
+            Si publicas cambios en español, esa vivienda también pasará a «Descripción en preparación» en ese idioma hasta que apruebes su traducción.{" "}
+            <button type="button" className="underline" onClick={() => go("idiomas")}>
+              Ir a Idiomas
+            </button>
+          </p>
+        ))}
         <ContentSection
           catalogId={catalog.id}
           texts={texts}
@@ -610,6 +628,20 @@ export function CatalogManager({
           measure={measure}
           pdf={{ busy: pdf.busy, message: pdfMessage, onDownload: () => void downloadPdf(false), unsaved: unsaved.length > 0 }}
         />
+      </section>
+
+      <section {...panel("idiomas")} className="min-w-0 focus:outline-none">
+        {translationActions ? (
+          <LanguagesSection
+            catalogId={catalog.id}
+            actions={translationActions}
+            onPublicChange={() => {
+              if (!onLocalAdd) router.refresh();
+            }}
+          />
+        ) : (
+          <p className="text-sm text-ink/60">Las traducciones no están disponibles aquí.</p>
+        )}
       </section>
     </div>
   );

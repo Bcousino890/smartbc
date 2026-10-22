@@ -27,6 +27,10 @@ export default async function FixtureCatalogPage({ searchParams }: { searchParam
   // BCP-01 P3/P4: ?auto=1 abre el mismo catálogo como AUTOMÁTICO antiguo (con
   // criterios), para comprobar que su panel no cambia y para la conversión.
   const catalog = auto === "1" ? { ...base, mode: "auto" as const, criteria: { ...base.criteria, operation: "sale" as const, max: 12 } } : base;
+  // PR6 · N5: aviso de «Contenido» con las viviendas sin traducción vigente en un idioma activo.
+  const { fixtureTranslations } = await import("@/lib/catalogs/fixture-store");
+  const { activeLanguageGaps } = await import("@/lib/catalogs/translation-service");
+  const translationGaps = await activeLanguageGaps((await fixtureTranslations()).mem, catalog.id).catch(() => []);
   return (
     <div className="crm-root relative min-h-screen bg-cream-50">
       <div className="relative z-10">
@@ -51,6 +55,7 @@ export default async function FixtureCatalogPage({ searchParams }: { searchParam
               measureMode={medir === "1"}
               pool={large ? fixturePropertiesLarge : undefined}
               groups={fixtureHomeState().groups}
+              translationGaps={translationGaps}
             />
           </div>
         </main>

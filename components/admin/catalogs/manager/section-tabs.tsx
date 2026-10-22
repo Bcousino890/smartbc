@@ -41,7 +41,7 @@ export function SectionTabs({
       role="tablist"
       aria-label="Secciones del catálogo"
       onKeyDown={onKeyDown}
-      className="grid grid-cols-4 gap-1 rounded-xl border border-gold/20 bg-white/60 p-1"
+      className="grid grid-cols-5 gap-1 rounded-xl border border-gold/20 bg-white/60 p-1"
       data-testid="section-tabs"
     >
       {SECTIONS.map((s, i) => {
