@@ -263,3 +263,18 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 - **CI:** `main` está en rojo desde `42fc5b05`/`fff110c8` por `test:role-model`/`test:user-rank` y `test:permission-scope` (permisos, ajeno a esta tarea). Mientras siga así, la CI de estos PR fallará en esos pasos y no llegará al build; el build aislado de cada PR compila.
 - **Revisión de Codex:** no pedida.
 - **Pendiente de Fabricio:** QA visual en producción tras cada merge y decidir si quiere los datos que la maqueta pinta y la estantería no tiene («Enlace activo» e idiomas por catálogo), que exigen ampliar la consulta.
+
+### Verificación de estilos acotados (2026-10-23, tras el cierre)
+
+`qa-estilos.mjs` (27 comprobaciones, Chromium + fixtures, sobre `fabri/bcp-gestor-compartir`), todas en verde:
+
+- **Errores:** el error del gestor conserva `bg-red-50`/`text-red-800` (rgb 254,242,242 / 153,27,27); el bloqueo de publicación, igual; el error del diálogo «Organizar» (nombre repetido) sigue en `text-red-700`; la validación nativa del título (`required`) sigue activa.
+- **Avisos:** «cambios sin guardar» y material que falta en `text-amber-800`; ajustes de fotos obsoletos en `bg-amber-50`/`text-amber-900`; «sin revisión nativa» en `bg-amber-100`. La nota «Qué ve el cliente» queda en fondo suave, no de aviso.
+- **Desactivados:** «Publicar» y «Elige un cliente» (acción principal desactivada) con opacidad 0,5.
+- **Foco con teclado** (barrido con Tab; cada elemento enfocado debe tener contorno o anillo): estantería (23), diálogo «Organizar» (5), lista de grupos en móvil (3), Compartir (21), Portada y estilo (10), editor de textos (17), pestaña Fotos (4), Idiomas (10), Viviendas (22), menú ⋯ abierto con teclado y diálogo «Grupos» del catálogo (3). Esc cierra el diálogo y devuelve el foco.
+- **Vistas previas incrustadas:** la portada de «Portada y estilo» sigue en Playfair (su tipografía propia); los títulos de apartado de la vista organizada siguen en `text-gold-dark` (rgb 168,138,82).
+- El mismo sondeo del diálogo «Organizar» en un servidor de fixtures con `main` limpio da el mismo comportamiento (Esc, foco, mensajes de nombre repetido y vacío).
+
+### CI de `main` (diagnóstico, 2026-10-23)
+
+En `main` limpio (`fff110c8`) fallan **5** comprobaciones, no 2 (las pruebas se paran en el primer fallo): `test-role-model` «el detalle explica el alcance…» y, en `test-permission-scope`, «defaultScopes por rol», «excepción Ver 'own' sobre advisor/clientes…», «buildScopeOverrides: envía el conjunto COMPLETO…» e «isLeadAllowedForScope: own ve propios y sin asignar». Las cinco vienen de `42fc5b05` (empujado a `main` sin PR) y `fff110c8` (edición en el VPS). Detalle y decisión pendiente en el resumen entregado a Fabricio. Este rediseño no toca permisos.
