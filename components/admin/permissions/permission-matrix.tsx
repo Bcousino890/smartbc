@@ -319,7 +319,7 @@ export function PermissionMatrix({
                           </th>
                         ))}
                         <th scope="col" className="w-[72px] px-3 py-2 text-right text-xs font-medium text-ink/50">
-                          Fila
+                          Atajo
                         </th>
                       </tr>
                     </thead>
@@ -381,7 +381,7 @@ export function PermissionMatrix({
                                 className="rounded-md px-1.5 py-1 text-xs font-medium text-ink/55 transition hover:bg-ink/5 hover:text-ink disabled:opacity-40"
                                 aria-label={`${allOn ? "Quitar" : "Dar"} todos los permisos de ${RESOURCE_LABELS[resource]}`}
                               >
-                                {allOn ? "Quitar" : "Todo"}
+                                {allOn ? "Quitar todo" : "Dar todo"}
                               </button>
                             </td>
                           </tr>
@@ -430,7 +430,7 @@ export function PermissionMatrix({
                             disabled={!canEdit}
                             className="shrink-0 rounded-md px-2 py-1.5 text-xs font-medium text-ink/55 transition hover:bg-ink/5 hover:text-ink disabled:opacity-40"
                           >
-                            {allOn ? "Quitar todo" : "Todo"}
+                            {allOn ? "Quitar todo" : "Dar todo"}
                           </button>
                         </div>
                         {detailOpen.has(resource) && (

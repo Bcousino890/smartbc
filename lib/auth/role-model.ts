@@ -66,7 +66,7 @@ export function roleLabel(role: string | null | undefined): string {
 }
 
 const DETAIL: Record<string, string> = {
-  advisor: "Toda la cartera",
+  advisor: "Solo lo suyo en Solicitudes",
   agent_senior: "Solo su cartera",
   agent_junior: "Solo su cartera · solo lectura (heredado)",
   agent_admin: "Acceso limitado (heredado)",
