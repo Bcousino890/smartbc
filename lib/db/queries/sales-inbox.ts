@@ -14,12 +14,16 @@ import "server-only";
 // ⚠️ ALCANCE. Antes los leads se leían con el cliente de servicio y SIN filtro:
 // todo el mundo veía los 322, daba igual su scope. Ahora se aplica
 // `resolveViewScope("solicitudes")` — 'own'/'team' ven los suyos y los que no
-// tienen dueño (la cola sin asignar es de todos, o nadie la trabajaría).
+// tienen dueño (la cola sin asignar se ve, o nadie la trabajaría); nunca los
+// de otra persona. Ver la cola no da permiso para escribir en ella: las
+// acciones comprueban «Editar» aparte (canActOnLead(s) en view-scope.ts).
+// Decisión de Fabricio del 2026-10-23 (docs/PERMISOS_ALCANCE.md).
 // ============================================================================
 
 import { createAdminClient } from "../admin";
 import { LEADS_COUNTRY, resolveViewScope } from "./view-scope";
 import { isLeadAllowedForScope } from "@/lib/permissions-scope";
+import { applyLeadViewScope, inboxCountQueries } from "@/lib/sales-inbox/scope";
 import { checkPermission } from "@/lib/auth/guard";
 import {
   attentionScore,
@@ -151,13 +155,12 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
 }
 
 /**
- * Aplica el alcance por cartera. Con alcance "solo lo suyo" el usuario ve
- * únicamente los leads asignados a él; la cola sin asignar no se le muestra.
+ * Aplica el alcance por cartera (VER): con «solo lo suyo», los leads del
+ * usuario y la cola sin asignar; nunca los de otra persona. Misma regla que
+ * isLeadAllowedForScope(…, "view") (lib/sales-inbox/scope.ts).
  */
 function applyScope(q: any, scope: InboxScope) {
-  if (scope.restriction === "all") return q;
-  if (!scope.userId) return q;
-  return q.eq("assigned_to", scope.userId);
+  return applyLeadViewScope(q, scope.restriction, scope.userId);
 }
 
 /** Filtros que SÍ se pueden expresar en SQL. Los de atención van aparte. */
@@ -274,7 +277,9 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
     restriction: scopeRaw.restriction as InboxScope["restriction"],
     userId: scopeRaw.userId,
   };
-  if (scope.restriction === "none") {
+  // Sin acceso o sin identidad (resolveViewScope no pudo leer el perfil): nada,
+  // y sin consultar la bandeja.
+  if (scope.restriction === "none" || !scope.userId) {
     return { items: [], groups: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
   }
 
@@ -524,14 +529,21 @@ export async function getInboxCounts(): Promise<InboxCounts> {
     userId: scopeRaw.userId,
   };
 
+  // Sin acceso o sin identidad, la lista sale vacía: los contadores también,
+  // sin consultar la bandeja.
+  if (scope.restriction === "none" || !scope.userId) {
+    return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0 };
+  }
+
   const base = () => applyScope(db().from(VIEW).select("id", { count: "exact", head: true }), scope);
+  const c = inboxCountQueries(base, scope.userId);
 
   const [newCount, followUp, myLeads, unassigned, all] = await Promise.all([
-    base().eq("commercial_state", "new"),
-    base().not("next_action_at", "is", null),
-    scope.userId ? base().eq("assigned_to", scope.userId) : Promise.resolve({ count: 0 }),
-    base().is("assigned_to", null),
-    base(),
+    c.new,
+    c.followUp,
+    c.myLeads ?? Promise.resolve({ count: 0 }),
+    c.unassigned,
+    c.all,
   ]);
 
   // "Necesitan atención" no se puede contar en SQL sin reescribir la regla
@@ -663,6 +675,12 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
   const gate = await checkPermission("solicitudes", "view");
   if (!gate.ok) return null;
 
+  // El alcance también protege el DETALLE: sin esto, una URL directa saltaría
+  // la cartera aunque la lista sí la respete. Se resuelve ANTES de leer el
+  // lead: sin acceso o sin identidad no se lee nada.
+  const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
+  if (scopeRaw.restriction === "none" || !scopeRaw.userId) return null;
+
   const { data: row } = await db()
     .from(VIEW)
     .select("*")
@@ -670,14 +688,12 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     .maybeSingle();
   if (!row) return null;
 
-  // El alcance también protege el DETALLE: sin esto, una URL directa saltaría
-  // la cartera aunque la lista sí la respete.
-  const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
   if (
     !isLeadAllowedForScope(
       scopeRaw.restriction,
       scopeRaw.userId,
       row.assigned_to,
+      "view",
     )
   ) {
     return null;

@@ -143,8 +143,9 @@ export async function canActOnClient(
 }
 
 /**
- * ¿Puede el usuario actual ver/editar este lead? Con alcance "own" solo si
- * está asignado a él (los leads sin asignar no son suyos).
+ * ¿Puede el usuario actual ver/editar este lead? Con alcance "own": VER si
+ * está asignado a él o no tiene dueño (la cola sin asignar se ve); EDITAR
+ * solo si está asignado a él (ver la cola no da permiso de escritura).
  */
 export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boolean> {
   return (await canActOnLeads([leadId], kind)).length === 1;
@@ -158,8 +159,9 @@ export async function canActOnLeads(leadIds: string[], kind: ScopeKind): Promise
   const unique = [...new Set(leadIds)];
   if (unique.length === 0) return [];
   const { restriction, userId } = await resolveViewScope("solicitudes", kind, LEADS_COUNTRY);
-  if (restriction === "none") return [];
-  if (restriction === "all" || !userId) return unique;
+  // Sin identidad (resolveViewScope no pudo leer el perfil) no se aprueba nada.
+  if (restriction === "none" || !userId) return [];
+  if (restriction === "all") return unique;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (createAdminClient() as any)
@@ -168,7 +170,7 @@ export async function canActOnLeads(leadIds: string[], kind: ScopeKind): Promise
       .in("id", unique);
     if (error || !data) return [];
     return (data as { id: string; assigned_to: string | null }[])
-      .filter((r) => isLeadAllowedForScope(restriction, userId, r.assigned_to))
+      .filter((r) => isLeadAllowedForScope(restriction, userId, r.assigned_to, kind))
       .map((r) => r.id);
   } catch {
     return [];
