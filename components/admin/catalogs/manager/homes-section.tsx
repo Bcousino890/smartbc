@@ -14,6 +14,7 @@ import type { SearchResultRow } from "@/lib/catalogs/search";
 import { SelectionPanel, type SelectionActions } from "../selection-panel";
 import { draftsStore, useDraftsVersion } from "./drafts-store";
 import { SidePanel, SidePanelFooter } from "./side-panel";
+import st from "../studio/studio.module.css";
 import type { FormDraft } from "./use-form-draft";
 
 // Viviendas (BCP-01 E2, plan §3.7): criterios resumidos con su editor
@@ -114,9 +115,7 @@ export function HomesSection(props: HomesSectionProps) {
       type="button"
       aria-pressed={view === v}
       onClick={() => setUi("homesView", v)}
-      className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold sm:flex-none sm:px-3 sm:text-sm ${
-        view === v ? "bg-white text-ink shadow-sm" : "text-ink/60 hover:text-ink"
-      }`}
+      className={`${st.pill} ${view === v ? st.pillOn : ""} text-sm`}
       data-testid={testId}
     >
       {label}
@@ -125,6 +124,13 @@ export function HomesSection(props: HomesSectionProps) {
 
   const listCol = (
     <div className={`min-w-0 space-y-3 ${openId ? "hidden xl:block" : ""}`}>
+      {/* Rediseño 2026-10-23: título de la sección (qué es y qué decide). */}
+      <div data-testid="homes-intro">
+        <h2 className="text-base font-medium text-ink">Viviendas de esta selección</h2>
+        <p className="mt-0.5 text-sm text-ink/65">
+          {auto ? "Catálogo automático antiguo: la lista sale de sus criterios y se actualiza sola." : "El orden de la lista es el que ve el cliente. Máximo 24 viviendas."}
+        </p>
+      </div>
       {/* BCP-01 P3: la selección explícita no tiene criterios ni modo; solo
           la operación del catálogo (qué precio ve el cliente). Los
           automáticos antiguos conservan su barra de criterios tal cual. */}
@@ -193,7 +199,7 @@ export function HomesSection(props: HomesSectionProps) {
 
       {/* Vistas */}
       <div className="flex flex-wrap items-center gap-2">
-        <div role="group" aria-label="Vista de la lista" className="flex min-w-0 flex-1 gap-1 rounded-lg bg-ink/5 p-1 sm:flex-none">
+        <div role="group" aria-label="Vista de la lista" className="flex min-w-0 flex-wrap gap-1">
           {auto
             ? [
                 tabBtn("catalogo", `En el catálogo · ${items.length}`, "view-catalogo"),

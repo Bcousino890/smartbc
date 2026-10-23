@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SECTIONS, SECTION_LABEL, type Section } from "@/lib/catalogs/manager-state";
+import st from "../studio/studio.module.css";
 
 // Pestañas del gestor (BCP-01 E2, AC-G1): tablist accesible. ← → mueven el
 // foco, Inicio/Fin van a la primera y a la última, Intro/Espacio activan
 // (activación manual: mover el foco con flechas no llena el historial). Un
 // punto marca las secciones con cambios sin guardar.
+// Rediseño 2026-10-23: pestañas subrayadas de la referencia; en móvil bajan
+// de línea en vez de desplazarse, para que se vean las cinco.
 
 export function SectionTabs({
   section,
@@ -41,7 +44,7 @@ export function SectionTabs({
       role="tablist"
       aria-label="Secciones del catálogo"
       onKeyDown={onKeyDown}
-      className="grid grid-cols-5 gap-1 rounded-xl border border-gold/20 bg-white/60 p-1"
+      className={st.tabs}
       data-testid="section-tabs"
     >
       {SECTIONS.map((s, i) => {
@@ -62,19 +65,17 @@ export function SectionTabs({
               setFocusIdx(i);
               if (!on) onSelect(s);
             }}
-            className={`relative min-w-0 rounded-lg px-1 py-2 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold sm:px-3 sm:text-sm ${
-              on ? "bg-ink text-cream-50" : "text-ink/70 hover:bg-white"
-            }`}
+            className={`${st.tab} ${on ? st.tabOn : ""} text-sm`}
           >
-            <span className="block truncate">
+            <span className="inline-flex items-center gap-1.5">
               {SECTION_LABEL[s]}
-              {counts[s] !== undefined ? <span className={`ml-1 hidden font-normal sm:inline ${on ? "text-cream-50/70" : "text-ink/45"}`}>{counts[s]}</span> : null}
+              {counts[s] !== undefined ? <span className="font-normal text-ink/50">{counts[s]}</span> : null}
+              {marks[s] ? (
+                <span className="h-2 w-2 rounded-full bg-amber-500" data-testid={`tab-dirty-${s}`}>
+                  <span className="sr-only"> (cambios sin guardar)</span>
+                </span>
+              ) : null}
             </span>
-            {marks[s] ? (
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500" data-testid={`tab-dirty-${s}`}>
-                <span className="sr-only"> (cambios sin guardar)</span>
-              </span>
-            ) : null}
           </button>
         );
       })}

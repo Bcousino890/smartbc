@@ -20,15 +20,17 @@ import type { CatalogTextView } from "./texts";
 
 // --- Secciones y URL -------------------------------------------------------
 
-export const SECTIONS = ["viviendas", "contenido", "diseno", "compartir", "idiomas"] as const;
+// Rediseño 2026-10-23 (D5): etiquetas visibles y orden nuevos; los
+// identificadores (y por tanto ?seccion=) no cambian.
+export const SECTIONS = ["viviendas", "contenido", "diseno", "idiomas", "compartir"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_LABEL: Record<Section, string> = {
   viviendas: "Viviendas",
-  contenido: "Contenido",
-  diseno: "Diseño",
-  compartir: "Compartir",
+  contenido: "Textos y fotos",
+  diseno: "Portada y estilo",
   idiomas: "Idiomas",
+  compartir: "Compartir",
 };
 
 export function parseSection(raw: string | null | undefined): Section {

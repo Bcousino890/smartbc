@@ -151,7 +151,7 @@ await shot(page, "7-convertido");
 void title;
 
 console.log("\n· Las demás secciones abren");
-for (const s of ["Contenido", "Diseño", "Compartir"]) {
+for (const s of ["Textos y fotos", "Portada y estilo", "Idiomas", "Compartir"]) {
   await page.getByRole("tab", { name: new RegExp(s) }).click();
   await page.waitForTimeout(250);
   ok(`sección ${s}`, await page.getByRole("tabpanel").filter({ hasNot: page.locator("[hidden]") }).count() >= 1);

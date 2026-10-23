@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, ExternalLink, Link2, MoreHorizontal } from "lucide-react";
 import { shareExpiryLabel, sharePath } from "@/lib/catalogs/share";
 import type { ShareView } from "../share-panel";
+import st from "../studio/studio.module.css";
 
 // Cabecera del gestor (BCP-01 E2, plan §3.3). «Vista previa» abre el lector
 // del enlace ACTIVO en otra pestaña; sin enlace activo lleva a Compartir y
@@ -12,6 +13,10 @@ import type { ShareView } from "../share-panel";
 // publica ni crea nada. Archivar/Reactivar vive en el menú ⋯ (la acción de
 // siempre). En escritorio es fija; en móvil no (el botón de menú del CRM está
 // fijo arriba a la izquierda).
+// Rediseño 2026-10-23 (D4): es el ÚNICO título de la página (h1 en Unbounded)
+// con las acciones a su derecha y la línea de estado debajo. Las migas («Mi
+// espacio / Catálogos») van encima y no son fijas; al quedar fija, el título
+// se reduce a una línea.
 
 export type NoLinkReason = "none" | "expired" | "archived";
 
@@ -94,37 +99,93 @@ export function ManagerHeader({
   }, [menu, list]);
 
   const linkLabel = !share ? "Sin enlace" : share.expired ? "Enlace caducado" : archived ? "Enlace en pausa (archivado)" : `Enlace hasta el ${shareExpiryLabel(share.expiresAt)}`;
-  const btn = "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-60";
+  const item = "block w-full rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-[color:var(--st-soft)] disabled:opacity-60";
 
   return (
     <>
-      <div ref={sentinel} aria-hidden="true" className="h-px" />
+      <nav aria-label="Ruta" className="flex min-h-[3rem] items-center gap-2 border-b border-[color:var(--st-line)] pt-4 pb-3 text-sm text-ink/60 md:pt-6">
+        <Link href={basePath} className="inline-flex items-center gap-1 hover:text-ink">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Mi espacio
+        </Link>
+        <span aria-hidden="true">/</span>
+        <span className="text-ink">Catálogos</span>
+      </nav>
+      <div ref={sentinel} aria-hidden="true" className="!mt-0 h-px" />
       <div
-        className={`relative z-20 -mx-4 space-y-2 bg-cream-50/95 px-4 py-2 backdrop-blur lg:sticky lg:top-0 lg:-mx-8 lg:px-8 ${stuck ? "lg:border-b lg:border-gold/20 lg:shadow-sm" : ""}`}
+        className={`relative z-20 -mx-4 !mt-0 bg-cream-50/95 px-4 pb-3 pt-5 backdrop-blur lg:sticky lg:top-0 lg:-mx-8 lg:px-8 ${stuck ? "lg:border-b lg:border-[color:var(--st-line)] lg:pt-3 lg:shadow-sm" : ""}`}
         data-testid="manager-header"
       >
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Link href={basePath} className="inline-flex items-center gap-1 text-sm text-ink/60 hover:text-ink">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Mi espacio
-          </Link>
-          {stuck ? <p className="crm-body-strong hidden min-w-0 max-w-[40ch] truncate text-ink lg:block">{title}</p> : null}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 flex-1 basis-72">
+            <h1 className={`${st.heading} text-[22px] leading-tight sm:text-2xl ${stuck ? "lg:line-clamp-1 lg:text-lg" : "line-clamp-3"}`} data-testid="manager-title">
+              {title}
+            </h1>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink/65" data-testid="manager-status">
+              <span className={`${st.status} ${archived ? st.statusOff : ""}`}>{archived ? "Archivado" : "Activo"}</span>
+              <span aria-hidden="true">·</span>
+              {/* BCP-01 P3: sin modos; solo se avisa de los automáticos antiguos. */}
+              {mode === "auto" ? (
+                <>
+                  <span>Automático (antiguo)</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
+              <span data-testid="header-count">
+                {count} vivienda{count === 1 ? "" : "s"}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span data-testid="header-link">{linkLabel}</span>
+              {unsaved.length ? (
+                <div ref={listRef} className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={list}
+                    onClick={() => setList((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-sm font-medium text-amber-900"
+                    data-testid="header-unsaved"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                    Cambios sin guardar ({unsaved.length})
+                  </button>
+                  {list ? (
+                    <ul className={`${st.panel} absolute left-0 top-full z-30 mt-1 w-64 max-w-[80vw] p-1 shadow-lg`} data-testid="header-unsaved-list">
+                      {unsaved.map((u) => (
+                        <li key={u.key}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setList(false);
+                              u.go();
+                            }}
+                            className={`${item} truncate`}
+                          >
+                            {u.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {active ? (
-              <a href={sharePath(share!.token)} target="_blank" rel="noopener noreferrer" className={`${btn} border border-gold/40 text-ink/80 hover:bg-white`} data-testid="preview-link">
-                Vista previa <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              <a href={sharePath(share!.token)} target="_blank" rel="noopener noreferrer" className={`${st.btn} text-sm`} data-testid="preview-link">
+                Vista previa <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </a>
             ) : (
               <button
                 type="button"
                 onClick={() => onPreviewWithoutLink(archived ? "archived" : share?.expired ? "expired" : "none")}
-                className={`${btn} border border-gold/40 text-ink/80 hover:bg-white`}
+                className={`${st.btn} text-sm`}
                 data-testid="preview-link"
               >
                 Vista previa
               </button>
             )}
-            <button type="button" onClick={onShare} className={`${btn} bg-gold/90 font-semibold text-white hover:bg-gold`} data-testid="share-button">
-              Compartir
+            <button type="button" onClick={onShare} className={`${st.btnPrimary} text-sm`} data-testid="share-button">
+              <Link2 className="h-4 w-4" aria-hidden="true" /> Compartir
             </button>
             <div ref={menuRef} className="relative">
               <button
@@ -134,12 +195,12 @@ export function ManagerHeader({
                 aria-haspopup="menu"
                 aria-expanded={menu}
                 onClick={() => setMenu((v) => !v)}
-                className={`${btn} px-2 text-ink/70 hover:bg-white`}
+                className={`${st.btnQuiet} px-2`}
               >
                 <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
               </button>
               {menu ? (
-                <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-[12rem] rounded-lg border border-gold/25 bg-white p-1 shadow-lg">
+                <div role="menu" className={`${st.panel} absolute right-0 top-full z-30 mt-1 min-w-[12rem] p-1 shadow-lg`}>
                   <button
                     type="button"
                     role="menuitem"
@@ -149,7 +210,7 @@ export function ManagerHeader({
                       setMenu(false);
                       onToggleStatus();
                     }}
-                    className="block w-full rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-cream-50 disabled:opacity-60"
+                    className={item}
                   >
                     {archived ? "Reactivar" : "Archivar"}
                   </button>
@@ -162,7 +223,7 @@ export function ManagerHeader({
                         setMenu(false);
                         onDownloadPdf();
                       }}
-                      className="block w-full rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-cream-50 disabled:opacity-60"
+                      className={item}
                       data-testid="menu-pdf"
                     >
                       {pdfBusy ? "Preparando el PDF…" : "Descargar PDF"}
@@ -176,7 +237,7 @@ export function ManagerHeader({
                         setMenu(false);
                         onOpenGroups(menuButton.current);
                       }}
-                      className="block w-full rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-cream-50"
+                      className={item}
                       data-testid="menu-groups"
                     >
                       Grupos…
@@ -186,53 +247,6 @@ export function ManagerHeader({
               ) : null}
             </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink/60" data-testid="manager-status">
-          <span className={`rounded-full px-2.5 py-0.5 ${archived ? "bg-ink/10 text-ink/60" : "bg-gold/15 text-ink/80"}`}>{archived ? "Archivado" : "Activo"}</span>
-          {/* BCP-01 P3: sin modos; solo se avisa de los automáticos antiguos. */}
-          {mode === "auto" ? (
-            <>
-              <span>Automático (antiguo)</span>
-              <span aria-hidden="true">·</span>
-            </>
-          ) : null}
-          <span data-testid="header-count">
-            {count} vivienda{count === 1 ? "" : "s"}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span data-testid="header-link">{linkLabel}</span>
-          {unsaved.length ? (
-            <div ref={listRef} className="relative">
-              <button
-                type="button"
-                aria-expanded={list}
-                onClick={() => setList((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 font-semibold text-amber-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                data-testid="header-unsaved"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-                Cambios sin guardar ({unsaved.length})
-              </button>
-              {list ? (
-                <ul className="absolute left-0 top-full z-30 mt-1 w-64 max-w-[80vw] rounded-lg border border-gold/25 bg-white p-1 shadow-lg" data-testid="header-unsaved-list">
-                  {unsaved.map((u) => (
-                    <li key={u.key}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setList(false);
-                          u.go();
-                        }}
-                        className="block w-full truncate rounded-md px-3 py-2 text-left text-sm text-ink/80 hover:bg-cream-50"
-                      >
-                        {u.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </div>
     </>
