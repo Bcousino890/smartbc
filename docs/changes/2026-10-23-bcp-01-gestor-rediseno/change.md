@@ -260,7 +260,7 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 ## Cierre
 
 - **PR:** #357 (1/4, a `main`), #358 (2/4, sobre #357), #359 (3/4, sobre #358) y #360 (4/4, sobre #359). Orden de merge: 1 → 2 → 3 → 4; cada uno se retargetea a `main` al fusionar el anterior y entonces corre su CI.
-- **CI:** `main` está en rojo desde `42fc5b05`/`fff110c8` por `test:role-model`/`test:user-rank` y `test:permission-scope` (permisos, ajeno a esta tarea). Mientras siga así, la CI de estos PR fallará en esos pasos y no llegará al build; el build aislado de cada PR compila.
+- **CI:** `main` estuvo en rojo desde `42fc5b05`/`fff110c8` (permisos, ajeno a esta tarea) hasta que Fabricio fusionó #361 (`243aa7a8`, decisiones D-S1 y D-S2, ver `docs/PERMISOS_ALCANCE.md`). Después, cada PR se actualizó desde `main` con un merge (sin forzar) y pasó la CI completa, build incluido, antes de su merge.
 - **Revisión de Codex:** no pedida.
 - **Pendiente de Fabricio:** QA visual en producción tras cada merge y decidir si quiere los datos que la maqueta pinta y la estantería no tiene («Enlace activo» e idiomas por catálogo), que exigen ampliar la consulta.
 
@@ -277,4 +277,8 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 
 ### CI de `main` (diagnóstico, 2026-10-23)
 
-En `main` limpio (`fff110c8`) fallan **5** comprobaciones, no 2 (las pruebas se paran en el primer fallo): `test-role-model` «el detalle explica el alcance…» y, en `test-permission-scope`, «defaultScopes por rol», «excepción Ver 'own' sobre advisor/clientes…», «buildScopeOverrides: envía el conjunto COMPLETO…» e «isLeadAllowedForScope: own ve propios y sin asignar». Las cinco vienen de `42fc5b05` (empujado a `main` sin PR) y `fff110c8` (edición en el VPS). Detalle y decisión pendiente en el resumen entregado a Fabricio. Este rediseño no toca permisos.
+En `main` limpio (`fff110c8`) fallan **5** comprobaciones, no 2 (las pruebas se paran en el primer fallo): `test-role-model` «el detalle explica el alcance…» y, en `test-permission-scope`, «defaultScopes por rol», «excepción Ver 'own' sobre advisor/clientes…», «buildScopeOverrides: envía el conjunto COMPLETO…» e «isLeadAllowedForScope: own ve propios y sin asignar». Las cinco vienen de `42fc5b05` (empujado a `main` sin PR) y `fff110c8` (edición en el VPS). Resuelto aparte en #361 con las decisiones de Fabricio (D-S1, D-S2) y la guarda «sin identidad, nada» de la bandeja; fusionado en `main` (`243aa7a8`). Este rediseño no toca permisos.
+
+### Merges (2026-10-23)
+
+#361 → `243aa7a8` · #357 → `e3874ac0` · #358 → `0cf6ecc7` · #359 → `f9bdef87` (en ese orden, por Fabricio). Cada PR siguiente se actualizó con `main`, se retargeteó a `main` y pasó la CI completa antes de presentarlo. En #359 el build de la CI falló dos veces dentro del cargador de Google Fonts de `next/font` (URL de fuente sin extensión, `loader.js:122`) y pasó al relanzar el mismo commit; la petición de `next/font` reproducida en local daba URL correctas para las nueve familias, y `main` relanzado en paralelo también pasó.
