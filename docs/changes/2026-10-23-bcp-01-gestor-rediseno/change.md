@@ -133,4 +133,36 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 
 ## Resultado
 
-_(Se completa por PR.)_
+### PR1 · Base del módulo y estantería
+
+**Commits:** `39f28da2` expediente · `14e18343` tipografía y superficies del módulo · `3631f7c5` estantería (y el commit de este resultado).
+
+**Qué cambia**
+
+- `components/admin/catalogs/studio/`: `fonts.ts` (Unbounded 400/500, Roboto 400/500/700, `next/font/google`), `studio.module.css` (tokens, primitivas y `crm-label-sm` en frase solo dentro del módulo), `StudioRoot` y `StudioPageBar` (migas + los mismos `NotificationsBell` y `LanguageSwitcher` que ponía `AdminPageHeader`).
+- «Mi espacio» (real y de prueba): sin el título grande; h1 «Catálogos» en Unbounded con «Nuevo catálogo» como acción principal y «Organizar» secundaria; biblioteca en una fila; accesos (Clientes, Propiedades, Solicitudes) compactos al final.
+- Estantería: grupos (pestañas suaves; misma lógica, móvil igual) y búsqueda a la vista; «Filtros» abre estado, operación, zona de los criterios, anuncio de origen y modo; «Mostrando …» con el estado siempre visible y cada filtro activo como etiqueta quitable; «Quitar filtros»; «Ver archivo» si hay archivados ocultos. Fila editorial: portada compacta (la misma `CatalogCover`), estado, título, «N viviendas · criterios», grupos, anuncios, fecha, «Abrir catálogo», «Grupos» y «Compartir» (`?seccion=compartir`).
+- `NewCatalogForm` acepta `open`/`onOpenChange` (se abre bajo la cabecera y sigue montado: cerrar y abrir conserva lo escrito). Creación idéntica.
+- Se retira el rótulo sin función «Próximos módulos» (inventario).
+
+**Verificaciones**
+
+| Comprobación | Resultado |
+| --- | --- |
+| `npx tsc --noEmit` | sin errores |
+| `node scripts/check-crm-typography.mjs` | 23 violaciones, todas previas (eran 24: desaparece `text-[15px]` de `group-selector.tsx`); ninguna nueva |
+| 29 pasos `npm run …` de la CI (sin `build`) + `lint-migrations` | 27 en verde. **Fallan `test:role-model`/`test:user-rank` y `test:permission-scope`, igual que en `main`** (CI de `main` en rojo desde `42fc5b05` y `fff110c8`, cambios de permisos ajenos a esta tarea: «Solo lo suyo en Solicitudes» frente a «Toda la cartera»). No se tocan. |
+| Build aislado: `git archive 3631f7c5` en una carpeta temporal, sin `.env.production`, `node_modules` enlazado, `NEXT_BUILD_DIR=.next.qa npx next build` | «Compiled successfully»; solo el aviso conocido «supabaseUrl is required» (sin base de datos) |
+| QA en Chromium con fixtures (`node_modules/.cache/visual-qa/qa-shelf.mjs`, 33 comprobaciones) | todas en verde: un solo h1, Unbounded/Roboto calculadas, panel oculto al entrar, búsqueda por título y por código, los cinco filtros secundarios con su etiqueta, quitar una etiqueta, «Quitar filtros», «Ver archivo», `?grupo=`, subgrupos, Atrás tras abrir un catálogo, grupo recordado sin `?grupo`, «Compartir», diálogo «Grupos», formulario nuevo conserva lo escrito, foco visible (contorno dorado 2 px) y teclado, vacío, 320 px sin desborde, sin errores de página |
+| Fuera del módulo (`qa-outside.mjs`) | «Textos aprobados» y «Plantillas de zona»: Optima/Lato como antes; lector `/seleccion`: Playfair/Cinzel como antes; variables del gestor no definidas fuera |
+| Desbordes (`html[data-check]` de las fixtures y `scrollWidth`) | 0 en 1440, 390 y 320 |
+
+**Capturas** ([capturas-pr1/](capturas-pr1/)): `estanteria-escritorio.png`, `filtros-escritorio.png`, `estanteria-movil.png` (referencia | implementación), `estanteria-320.png` y `antes-escritorio.png`. En las capturas se ocultan el distintivo de Next y la barra de diagnóstico de las fixtures.
+
+**Diferencias con la referencia, dichas tal cual**
+
+- La fila no dice «Enlace activo» ni los idiomas de cada catálogo: la estantería no recibe hoy esos datos (fuera de alcance). Dice «Activo»/«Archivado» y, en los antiguos, «Automático (antiguo)».
+- Se añaden a la fila los metadatos que ya existían (criterios, grupos, anuncios, fecha) y el botón «Grupos».
+- Los iconos de la maqueta no se ven en su captura (dependían de un script del entorno de la maqueta); en la implementación son los de `lucide-react` que ya usa el CRM.
+- Tamaños en la escala del CRM: título 24 px, texto 14 px, metadatos 12 px (la maqueta usa 13 px en algunos textos).
+- Sin modo oscuro (I4).
