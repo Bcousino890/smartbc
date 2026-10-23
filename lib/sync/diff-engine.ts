@@ -11,6 +11,7 @@ import type {
 import { downloadAndWatermark } from "./watermark";
 import { scraperPriceIsUnknown, syncPriceChanged } from "./price-rules";
 import { enqueueAfterSync } from "@/lib/services/video/queue";
+import { cleanDynamicWatermark } from "./watermark-dynamic";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -189,6 +190,22 @@ async function insertProperty(
 // sobrescriben en sync. Tampoco `price` cuando el scraper manda 0 (agencias
 // sin precio público, p.ej. Rentals HD): ahí el precio lo pone el equipo a
 // mano y el sync lo conserva.
+// Limpia la marca de agua de las propiedades recién insertadas, una tras otra.
+// cleanDynamicWatermark es best-effort: si el motor no está (p.ej. en local) o
+// una ficha falla, sigue con la siguiente y las fotos quedan como estaban.
+async function cleanWatermarksSequentially(
+  agencySlug: string,
+  jobs: Array<{ propertyId: string; externalId: string; photoCount: number }>,
+): Promise<void> {
+  for (const job of jobs) {
+    try {
+      await cleanDynamicWatermark({ agencySlug, ...job });
+    } catch (err) {
+      console.error(`[sync] marca de agua no limpiada en ${job.externalId}:`, err);
+    }
+  }
+}
+
 async function updateExistingProperty(
   supabase: AdminClient,
   existing: ExistingProperty,
@@ -347,6 +364,9 @@ export async function runSyncForFeed(params: {
       // Propiedades tocadas en este sync: al terminar se les encola el vídeo
       // (la cola descarta sola las que ya lo tienen al día).
       const touchedPropertyIds: string[] = [];
+      // Propiedades NUEVAS cuyas fotos hay que limpiar de la marca de la
+      // agencia (solo scrapers con `dynamicWatermark`).
+      const watermarkJobs: Array<{ propertyId: string; externalId: string; photoCount: number }> = [];
 
       for (const normalized of normalizedList) {
         seenExternal.add(normalized.external_id);
@@ -362,6 +382,13 @@ export async function runSyncForFeed(params: {
               params.scraper.rehostPhotos !== false,
             );
             touchedPropertyIds.push(newId);
+            if (params.scraper.dynamicWatermark) {
+              watermarkJobs.push({
+                propertyId: newId,
+                externalId: normalized.external_id,
+                photoCount: normalized.photos.length,
+              });
+            }
             counters.inserted++;
           } else if (needsUpdate(existing, normalized)) {
             await updateExistingProperty(supabase, existing, normalized);
@@ -413,6 +440,13 @@ export async function runSyncForFeed(params: {
         await enqueueAfterSync(touchedPropertyIds);
       } catch (err) {
         console.error("[sync] no se pudieron encolar los vídeos:", err);
+      }
+
+      // Marca de agua de la agencia (solo scrapers con `dynamicWatermark`): en
+      // SEGUNDO PLANO, sin await, para no alargar el sync ni su log. De una en
+      // una a propósito: el motor Python satura la CPU que comparte con la web.
+      if (watermarkJobs.length > 0) {
+        void cleanWatermarksSequentially(params.agencySlug, watermarkJobs);
       }
     }
   }

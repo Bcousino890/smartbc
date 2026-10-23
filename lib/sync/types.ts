@@ -70,6 +70,16 @@ export type Scraper = {
    * re-aloja, como siempre.
    */
   rehostPhotos?: boolean;
+  /**
+   * Si es `true`, tras INSERTAR cada propiedad nueva el motor le quita a sus
+   * fotos ya alojadas la marca de agua de la agencia con el borrador dinámico
+   * (lib/sync/watermark-dynamic.ts), en segundo plano y de una en una.
+   *
+   * Solo para agencias que marcan TODAS sus fotos con el mismo logo (p.ej.
+   * Embassy Properties). El borrador no se activa por defecto en ningún otro
+   * sitio porque en un anuncio sin marca puede estropear las fotos.
+   */
+  dynamicWatermark?: boolean;
   scrape: (ctx: ScraperContext) => Promise<RawProperty[]>;
   /**
    * Lista barata (sin scrapear contenido) de TODAS las referencias externas
