@@ -479,7 +479,7 @@ export function CatalogManager({
   });
 
   return (
-    <div ref={rootRef} className="mt-4 space-y-4 pb-12">
+    <div ref={rootRef} className="space-y-5 pb-12">
       <ManagerHeader
         basePath={basePath}
         title={catalog.title}
@@ -513,7 +513,7 @@ export function CatalogManager({
       ) : null}
       <SectionTabs section={section} onSelect={(s) => go(s)} counts={{ viviendas: items.length }} marks={marks} />
       {returned && unsaved.length ? (
-        <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="returned-notice">
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="returned-notice">
           <span className="min-w-0 flex-1">Tienes cambios sin guardar de antes en este catálogo: {unsaved.map((u) => u.label).join(", ")}.</span>
           <button type="button" onClick={() => setReturned(false)} className="underline">
             Entendido

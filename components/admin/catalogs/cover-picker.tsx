@@ -70,7 +70,7 @@ export function CoverPicker({
   }
 
   return (
-    <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="cp-title" data-testid="cover-picker">
+    <section className="space-y-3 border-t border-gold/20 pt-4" aria-labelledby="cp-title" data-testid="cover-picker">
       <h3 id="cp-title" tabIndex={-1} className="crm-label-sm text-ink/70 focus:outline-none">
         Portada
       </h3>

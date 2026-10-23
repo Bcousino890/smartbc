@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { CatalogManager } from "@/components/admin/catalogs/catalog-manager";
+import { StudioRoot } from "@/components/admin/catalogs/studio/studio-root";
 import { requireHomeOwnerPage } from "@/lib/catalogs/owner";
 import { getCatalogShare } from "@/lib/catalogs/public-data";
 import { getCatalogDetail, listOwnerCatalogs } from "@/lib/catalogs/queries";
@@ -81,7 +82,8 @@ export const dynamic = "force-dynamic";
 
 /** Gestión de un catálogo (BCP-01 T4/T7/T10). Misma guarda que la HOME;
  *  además el catálogo tiene que ser del dueño (si no, 404 sin revelar que
- *  existe). Con ?medir=1, modo medición de D13. */
+ *  existe). Con ?medir=1, modo medición de D13. Rediseño 2026-10-23: un
+ *  solo título, el de la cabecera compacta del gestor (D4). */
 export default async function CatalogPage({
   params,
   searchParams,
@@ -109,11 +111,7 @@ export default async function CatalogPage({
     console.warn("[catalogos] traducciones:", err instanceof Error ? err.message : err);
   }
   return (
-    <div className="mx-auto max-w-[1600px] px-4 lg:px-8">
-      <header className="pt-7 md:pt-9">
-        <p className="crm-label-sm text-gold">Catálogo</p>
-        <h1 className="crm-page-title mt-1 line-clamp-2 text-ink">{catalog.title}</h1>
-      </header>
+    <StudioRoot className="mx-auto max-w-[1600px] px-4 lg:px-8">
       <CatalogManager
         catalog={catalog}
         basePath="/es/admin/mi-espacio"
@@ -196,6 +194,6 @@ export default async function CatalogPage({
           },
         }}
       />
-    </div>
+    </StudioRoot>
   );
 }

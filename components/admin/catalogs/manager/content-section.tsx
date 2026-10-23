@@ -251,7 +251,7 @@ export function ContentSection({
               </>
             ) : null
           }
-          backLabel="Contenido"
+          backLabel="Textos y fotos"
           onClose={() => onOpen(null)}
           onPrev={pos > 0 ? () => onOpen(order[pos - 1].propertyId) : null}
           onNext={pos >= 0 && pos < order.length - 1 ? () => onOpen(order[pos + 1].propertyId) : null}

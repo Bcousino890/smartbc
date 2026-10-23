@@ -21,13 +21,56 @@
 }
 
 /* Etiquetas densas del CRM, solo dentro del gestor: en frase, sin
-   espaciado, 14 px (suelo de lectura del CRM para texto operativo). */
-:global(.crm-root) .root :global(.crm-label-sm) {
+   espaciado, 14 px (suelo de lectura del CRM para texto operativo). La
+   segunda forma cubre los diálogos que se pintan en <body> con las dos
+   clases en el mismo elemento (groups-modal.tsx). */
+:global(.crm-root) .root :global(.crm-label-sm),
+.root:global(.crm-root) :global(.crm-label-sm) {
   font-size: 14px;
   line-height: 1.43;
   font-weight: 500;
   letter-spacing: normal;
   text-transform: none;
+}
+
+.root :global(.crm-body-strong) {
+  font-weight: 500;
+}
+
+/* Re-skin del módulo (I8): los paneles internos (viviendas, textos, fotos,
+   idiomas, compartir…) ya usan estas utilidades de Tailwind; dentro de .root
+   pasan a las superficies de la referencia sin tocar su marcado ni su
+   lógica. Fuera de .root las utilidades siguen igual. */
+.root :global(:is(.border-gold\/10, .border-gold\/15, .border-gold\/20, .border-gold\/25, .border-gold\/30)) {
+  border-color: var(--st-line);
+}
+.root :global(:is(.divide-gold\/10, .divide-gold\/15)) > :global(:not([hidden]) ~ :not([hidden])) {
+  border-color: var(--st-line);
+}
+.root :global(:is(.bg-white\/40, .bg-white\/50, .bg-white\/55, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/85, .bg-white\/90)) {
+  background-color: var(--st-panel);
+}
+.root :global(:is(.bg-cream-50\/50, .bg-cream-50\/60, .bg-cream-50\/70)) {
+  background-color: #f7f6f1;
+}
+.root :global(:is(.bg-gold\/10, .bg-gold\/15, .bg-gold\/20)) {
+  background-color: var(--st-gold-soft);
+}
+.root :global(.rounded-xl) {
+  border-radius: 8px;
+}
+.root :global(.text-gold) {
+  color: var(--st-gold);
+}
+/* Acción principal: tinta oscura, como la referencia (I6). */
+.root :global(.bg-gold\/90) {
+  background-color: var(--st-primary);
+  border-color: var(--st-primary);
+  color: #ffffff;
+}
+.root :global(.bg-gold\/90:hover),
+.root :global(.hover\:bg-gold:hover) {
+  background-color: var(--st-primary-hover);
 }
 
 /* Títulos elegidos y nombres de catálogo (Unbounded). */
@@ -193,15 +236,13 @@
 }
 
 /* Pestañas subrayadas (secciones del gestor y del editor). */
+/* En móvil bajan de línea (como la referencia): siempre se ven todas. */
 .tabs {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  column-gap: 1.25rem;
+  row-gap: 0.25rem;
   border-bottom: 1px solid var(--st-line);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.tabs::-webkit-scrollbar {
-  display: none;
 }
 .tab {
   position: relative;

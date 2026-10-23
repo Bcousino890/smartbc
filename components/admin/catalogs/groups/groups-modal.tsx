@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { studioFontVariables } from "../studio/fonts";
+import st from "../studio/studio.module.css";
 import { X } from "lucide-react";
 
 // Diálogo de los grupos de la HOME (expediente 2026-10-16-bcp-01-home-grupos).
@@ -107,7 +109,8 @@ export function GroupsModal({
         : "inset-0 sm:inset-auto sm:left-1/2 sm:top-24 sm:w-[30rem] sm:-translate-x-1/2 sm:rounded-2xl";
 
   return createPortal(
-    <div className={`${inCrm ? "crm-root " : ""}fixed inset-0 z-50`} data-testid={testId ? `${testId}-layer` : undefined}>
+    // Se pinta en <body>: lleva su propia raíz del gestor (fuentes y superficies).
+    <div className={`${inCrm ? "crm-root " : ""}${studioFontVariables} ${st.root} fixed inset-0 z-50`} data-testid={testId ? `${testId}-layer` : undefined}>
       <div
         className="absolute inset-0 bg-ink/45 backdrop-blur-[1px]"
         aria-hidden="true"

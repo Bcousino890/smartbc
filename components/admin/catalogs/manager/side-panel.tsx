@@ -26,7 +26,7 @@ export function SidePanel({
   label: string;
   heading: string;
   sub?: ReactNode;
-  /** Texto del botón de vuelta en móvil («Viviendas», «Contenido»). */
+  /** Texto del botón de vuelta en móvil («Viviendas», «Textos y fotos»). */
   backLabel: string;
   onClose: () => void;
   onPrev?: (() => void) | null;

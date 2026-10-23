@@ -9,12 +9,16 @@ import type { CatalogDetail, CatalogItemView } from "@/lib/catalogs/types";
 import { CoverPicker, type CoverActions } from "../cover-picker";
 import { ConflictNote } from "./conflict-note";
 import type { FormDraft } from "./use-form-draft";
+import st from "../studio/studio.module.css";
 
 // Diseño (BCP-01 E2, plan §3.9): título, introducción y portada (vivienda y
 // foto, con las reglas y respaldos de C1), con su vista previa. La vista previa
 // usa lo ESCRITO (marcado si no está guardado) y la foto efectiva GUARDADA.
 // PR7b: interruptor «Acabado fotográfico» (por catálogo, apagado por defecto),
 // que se guarda al pulsar como los ajustes de fotos.
+// Rediseño 2026-10-23: un panel «Portada y presentación» (título e
+// introducción, portada, acabado) y otro con la vista previa; mismos
+// formularios y acciones.
 
 type Run = Parameters<typeof CoverPicker>[0]["run"];
 
@@ -60,9 +64,15 @@ export function DesignSection({
   const [finishShown, setFinishShown] = useState(photoFinish);
   useEffect(() => setFinishShown(photoFinish), [photoFinish, pending]);
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="min-w-0 space-y-4">
-        <form onSubmit={onSaveMeta} className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="meta-form">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <section className={`${st.panel} min-w-0 space-y-5 p-4 sm:p-5`} aria-labelledby="ds-title">
+        <div>
+          <h2 id="ds-title" className="text-base font-medium text-ink">
+            Portada y presentación
+          </h2>
+          <p className="mt-0.5 text-sm text-ink/65">La primera impresión del catálogo: título, introducción, foto de portada y acabado.</p>
+        </div>
+        <form onSubmit={onSaveMeta} className="space-y-3" data-testid="meta-form">
           {metaForm.conflict ? <ConflictNote saved={metaForm.conflict.raw.title} onDiscard={metaForm.discard} onKeep={metaForm.keepMine} /> : null}
           <label className="block">
             <span className="crm-label-sm text-ink/70">Título</span>
@@ -72,7 +82,7 @@ export function DesignSection({
               onChange={(e) => metaForm.set({ ...metaForm.value, title: e.target.value })}
               maxLength={160}
               required
-              className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+              className={`${st.input} mt-1 w-full text-sm`}
             />
           </label>
           <label className="block">
@@ -82,15 +92,11 @@ export function DesignSection({
               onChange={(e) => metaForm.set({ ...metaForm.value, intro: e.target.value })}
               maxLength={2000}
               rows={4}
-              className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+              className={`${st.input} mt-1 w-full text-sm`}
             />
           </label>
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
-            >
+            <button type="submit" disabled={pending} className={`${st.btnPrimary} text-sm`}>
               Guardar
             </button>
             {metaForm.edited ? (
@@ -106,7 +112,7 @@ export function DesignSection({
           </p>
         ) : null}
         <CoverPicker catalogId={catalog.id} items={items} cover={catalog.cover} actions={coverActions} run={run} pending={pending} form={coverForm} refreshKey={coverRefreshKey} />
-        <label className="flex items-start gap-3 rounded-xl border border-gold/20 bg-white/60 p-4" data-testid="photo-finish">
+        <label className="flex items-start gap-3 border-t border-[color:var(--st-line)] pt-4" data-testid="photo-finish">
           <input
             type="checkbox"
             checked={finishShown}
@@ -115,19 +121,21 @@ export function DesignSection({
               setFinishShown(e.target.checked);
               onPhotoFinish(e.target.checked);
             }}
-            className="mt-0.5 h-4 w-4 accent-[#b8956a]"
+            className="mt-0.5 h-4 w-4 accent-[#856329]"
             aria-describedby="cm-finish-note"
           />
           <span className="min-w-0">
-            <span className="block text-sm font-semibold text-ink">Acabado fotográfico</span>
+            <span className="block text-sm font-medium text-ink">Acabado fotográfico</span>
             <span id="cm-finish-note" className="block text-xs text-ink/60">
               Ajusta el tono de cada foto sobre una copia y añade un filete fino a la apertura y la portada; las fotos del CRM no cambian.
             </span>
           </span>
         </label>
-      </div>
-      <div className="min-w-0 space-y-2">
-        <p className="crm-label-sm text-ink/60">Vista previa de la portada</p>
+      </section>
+      <aside className={`${st.panel} min-w-0 space-y-3 p-4 sm:p-5`} aria-labelledby="ds-preview">
+        <h2 id="ds-preview" className="text-base font-medium text-ink">
+          Vista previa de la portada
+        </h2>
         {metaForm.edited ? (
           <p className="text-xs text-amber-800" data-testid="preview-unsaved">
             Con cambios sin guardar: el cliente sigue viendo lo guardado.
@@ -151,13 +159,13 @@ export function DesignSection({
             href={sharePath(previewToken)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mx-auto flex w-fit items-center gap-1 text-sm text-ink/70 underline"
+            className={`${st.link} mx-auto flex w-fit items-center gap-1 text-sm`}
             data-testid="design-preview-link"
           >
             Abrir la vista previa completa <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         ) : null}
-      </div>
+      </aside>
     </div>
   );
 }
