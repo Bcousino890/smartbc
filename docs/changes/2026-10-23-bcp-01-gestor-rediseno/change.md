@@ -259,7 +259,7 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 
 ## Cierre
 
-- **PR:** #357 (1/4, a `main`), #358 (2/4, sobre #357), #359 (3/4, sobre #358) y el PR 4/4 (sobre #359). Orden de merge: 1 → 2 → 3 → 4; cada uno se retargetea a `main` al fusionar el anterior y entonces corre su CI.
+- **PR:** #357 (1/4, a `main`), #358 (2/4, sobre #357), #359 (3/4, sobre #358) y #360 (4/4, sobre #359). Orden de merge: 1 → 2 → 3 → 4; cada uno se retargetea a `main` al fusionar el anterior y entonces corre su CI.
 - **CI:** `main` está en rojo desde `42fc5b05`/`fff110c8` por `test:role-model`/`test:user-rank` y `test:permission-scope` (permisos, ajeno a esta tarea). Mientras siga así, la CI de estos PR fallará en esos pasos y no llegará al build; el build aislado de cada PR compila.
 - **Revisión de Codex:** no pedida.
 - **Pendiente de Fabricio:** QA visual en producción tras cada merge y decidir si quiere los datos que la maqueta pinta y la estantería no tiene («Enlace activo» e idiomas por catálogo), que exigen ampliar la consulta.
