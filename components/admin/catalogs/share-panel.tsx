@@ -119,9 +119,13 @@ export function SharePanel({
 
   return (
     <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="sp-title" data-check-overflow="enlace">
-      <h2 id="sp-title" tabIndex={-1} className="crm-label-sm flex items-center gap-1.5 text-ink/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-        <Link2 className="h-4 w-4" aria-hidden="true" /> Enlace para compartir
-      </h2>
+      {/* Rediseño 2026-10-23 (D7): el enlace general, distinto a simple vista del personal. */}
+      <div>
+        <h2 id="sp-title" tabIndex={-1} className="flex items-center gap-2 text-base font-medium text-ink focus:outline-none">
+          <Link2 className="h-5 w-5 text-[#856329]" aria-hidden="true" /> Enlace general
+        </h2>
+        <p className="mt-1 text-sm text-ink/65">Un solo enlace para compartir el catálogo sin atribuir opiniones a ningún cliente.</p>
+      </div>
 
       {share ? (
         <>
