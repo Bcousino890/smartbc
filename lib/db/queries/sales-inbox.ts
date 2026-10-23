@@ -277,7 +277,9 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
     restriction: scopeRaw.restriction as InboxScope["restriction"],
     userId: scopeRaw.userId,
   };
-  if (scope.restriction === "none") {
+  // Sin acceso o sin identidad (resolveViewScope no pudo leer el perfil): nada,
+  // y sin consultar la bandeja.
+  if (scope.restriction === "none" || !scope.userId) {
     return { items: [], groups: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
   }
 
@@ -527,8 +529,9 @@ export async function getInboxCounts(): Promise<InboxCounts> {
     userId: scopeRaw.userId,
   };
 
-  // Sin acceso a ningún lead, la lista sale vacía: los contadores también.
-  if (scope.restriction === "none") {
+  // Sin acceso o sin identidad, la lista sale vacía: los contadores también,
+  // sin consultar la bandeja.
+  if (scope.restriction === "none" || !scope.userId) {
     return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0 };
   }
 
@@ -672,6 +675,12 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
   const gate = await checkPermission("solicitudes", "view");
   if (!gate.ok) return null;
 
+  // El alcance también protege el DETALLE: sin esto, una URL directa saltaría
+  // la cartera aunque la lista sí la respete. Se resuelve ANTES de leer el
+  // lead: sin acceso o sin identidad no se lee nada.
+  const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
+  if (scopeRaw.restriction === "none" || !scopeRaw.userId) return null;
+
   const { data: row } = await db()
     .from(VIEW)
     .select("*")
@@ -679,9 +688,6 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     .maybeSingle();
   if (!row) return null;
 
-  // El alcance también protege el DETALLE: sin esto, una URL directa saltaría
-  // la cartera aunque la lista sí la respete.
-  const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
   if (
     !isLeadAllowedForScope(
       scopeRaw.restriction,

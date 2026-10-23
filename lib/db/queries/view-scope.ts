@@ -159,8 +159,9 @@ export async function canActOnLeads(leadIds: string[], kind: ScopeKind): Promise
   const unique = [...new Set(leadIds)];
   if (unique.length === 0) return [];
   const { restriction, userId } = await resolveViewScope("solicitudes", kind, LEADS_COUNTRY);
-  if (restriction === "none") return [];
-  if (restriction === "all" || !userId) return unique;
+  // Sin identidad (resolveViewScope no pudo leer el perfil) no se aprueba nada.
+  if (restriction === "none" || !userId) return [];
+  if (restriction === "all") return unique;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (createAdminClient() as any)

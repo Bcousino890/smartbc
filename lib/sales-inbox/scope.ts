@@ -12,11 +12,11 @@ export interface ScopeQuery<Q> {
 
 /**
  * VER con alcance restringido: los leads del usuario y los sin asignar.
- * "all" (o sin usuario) no filtra; "none" no deja pasar ninguno.
+ * "all" no filtra; "none" o sin identidad (userId null) no deja pasar ninguno.
  */
 export function applyLeadViewScope<Q extends ScopeQuery<Q>>(q: Q, restriction: string, userId: string | null): Q {
-  if (restriction === "none") return q.in("id", []);
-  if (restriction === "all" || !userId) return q;
+  if (restriction === "none" || !userId) return q.in("id", []);
+  if (restriction === "all") return q;
   return q.or(`assigned_to.eq.${userId},assigned_to.is.null`);
 }
 

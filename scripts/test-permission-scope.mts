@@ -297,7 +297,16 @@ t("isLeadAllowedForScope: own ve propios y sin asignar", () => {
   assert.equal(isLeadAllowedForScope("all", "u1", "u2", "view"), true);
   assert.equal(isLeadAllowedForScope("none", "u1", null, "view"), false);
   assert.equal(isLeadAllowedForScope("none", "u1", "u1", "view"), false);
-  assert.equal(isLeadAllowedForScope("own_only", null, "u2", "view"), true);
+});
+
+t("isLeadAllowedForScope: sin identidad se rechaza siempre (también con «Todo»)", () => {
+  for (const restriction of ["own_only", "team", "assigned_only", "all", "none"]) {
+    for (const kind of ["view", "edit"] as const) {
+      for (const assignedTo of ["u2", null]) {
+        assert.equal(isLeadAllowedForScope(restriction, null, assignedTo, kind), false, `${restriction}/${kind}/${assignedTo}`);
+      }
+    }
+  }
 });
 
 t("isLeadAllowedForScope: ver la cola sin asignar no da permiso de escritura", () => {
@@ -351,14 +360,15 @@ t("bandeja con «Solo lo suyo»: propio sí, ajeno no, sin asignar sí", () => {
   }
 });
 
-t("bandeja: fuera de los demás límites no se ve nada (none) y «Todo» lo ve todo", () => {
+t("bandeja: fuera de los demás límites no se ve nada (none, sin identidad) y «Todo» lo ve todo", () => {
   assert.deepEqual(visible("none", "u1"), []);
+  for (const restriction of ["own_only", "team", "all", "none"]) assert.deepEqual(visible(restriction, null), [], `sin identidad/${restriction}`);
   assert.deepEqual(visible("all", "u1"), LEADS.map((r) => r.id).sort());
 });
 
 t("bandeja: el filtro SQL y la regla TypeScript (ver) coinciden lead a lead", () => {
   for (const restriction of ["own_only", "team", "assigned_only", "all", "none"]) {
-    for (const userId of ["u1", "u2"]) {
+    for (const userId of ["u1", "u2", null]) {
       const sql = new Set(visible(restriction, userId));
       for (const r of LEADS) {
         assert.equal(sql.has(r.id), isLeadAllowedForScope(restriction, userId, r.assigned_to, "view"), `${restriction}/${userId}/${r.id}`);

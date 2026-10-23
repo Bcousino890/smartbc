@@ -302,8 +302,10 @@ export function buildScopeOverrides(scopes: ScopeMatrix, defaults: ScopeMatrix):
  *       - EDITAR: solo los asignados al usuario. Ver la cola sin asignar no da
  *         permiso para escribir en ella (asignar, editar en bloque…); eso queda
  *         como estaba y pendiente de decisión.
- * Sin usuario (no debería ocurrir con un alcance restringido) no se filtra,
- * como antes.
+ * Sin identidad (sin usuario) se rechaza siempre, también con "all":
+ * resolveViewScope devuelve "all" + userId null cuando no puede leer el perfil
+ * (p. ej. si la relectura falla después de checkPermission), y eso no puede
+ * abrir la bandeja ni aprobar acciones.
  */
 export type LeadScopeKind = "view" | "edit";
 
@@ -313,8 +315,8 @@ export function isLeadAllowedForScope(
   assignedTo: string | null | undefined,
   kind: LeadScopeKind,
 ): boolean {
-  if (restriction === "none") return false;
-  if (restriction === "all" || !userId) return true;
+  if (restriction === "none" || !userId) return false;
+  if (restriction === "all") return true;
   if (assignedTo === userId) return true;
   return kind === "view" && assignedTo == null;
 }
