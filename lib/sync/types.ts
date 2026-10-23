@@ -75,9 +75,11 @@ export type Scraper = {
    * fotos ya alojadas la marca de agua de la agencia con el borrador dinámico
    * (lib/sync/watermark-dynamic.ts), en segundo plano y de una en una.
    *
-   * Solo para agencias que marcan TODAS sus fotos con el mismo logo (p.ej.
-   * Embassy Properties). El borrador no se activa por defecto en ningún otro
-   * sitio porque en un anuncio sin marca puede estropear las fotos.
+   * Hoy NINGÚN scraper lo activa. El borrador dinámico estima la marca con las
+   * fotos de un solo anuncio: si no hay marca, o si todas las fotos son de la
+   * misma estancia (caso Embassy, probado 2026-10-23), deja "fantasmas" en las
+   * fotos. Antes de activarlo para una agencia, probarlo en local con
+   * scripts/wmrm/wm_remove_dynamic.py sobre fotos reales y revisarlas a ojo.
    */
   dynamicWatermark?: boolean;
   scrape: (ctx: ScraperContext) => Promise<RawProperty[]>;
