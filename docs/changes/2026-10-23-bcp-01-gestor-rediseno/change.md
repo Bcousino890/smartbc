@@ -44,6 +44,7 @@ Todas del encargo de Fabricio del 2026-10-23. No se vuelven a preguntar.
 - **I4:** el CRM no tiene modo oscuro; la maqueta sí lo dibuja. Se mantiene solo el claro, como el resto del admin.
 - **I5:** el orden de las pestañas pasa a ser el de D5 (Idiomas antes de Compartir). Los identificadores (`viviendas`, `contenido`, `diseno`, `idiomas`, `compartir`) y las URL no cambian; el teclado (← → Inicio Fin) sigue el orden visible.
 - **I6:** los botones principales siguen la referencia (tinta oscura sobre crema); el dorado queda para acentos, enlaces y la pestaña activa. Contraste del dorado de texto ≥ 4,5:1 (`#856329` sobre blanco).
+- **I8 (PR2):** re-skin acotado. Dentro de `StudioRoot`, las utilidades que ya usan los paneles internos (`border-gold/10…30`, `divide-gold/10`, `bg-white/40…90`, `bg-cream-50/50…70`, `bg-gold/10…20`, `rounded-xl`, `text-gold`, `bg-gold/90` y `hover:bg-gold`) toman los tonos de la referencia (separador neutro, panel blanco, resalte dorado suave, acción principal en tinta oscura, dorado de texto accesible). Así ~30 componentes internos cambian de aspecto sin tocar su marcado ni su lógica. Fuera de `StudioRoot` esas utilidades siguen igual. El diálogo de grupos, que se pinta en `<body>`, lleva su propia raíz.
 - **I7:** el editor de una vivienda separa «Título y descripción» y «Fotos» en dos pestañas internas. Las dos quedan **montadas** (la oculta con `hidden`): cambiar de pestaña no cancela la IA ni pierde nada.
 
 ### Alcance
@@ -166,3 +167,36 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 - Los iconos de la maqueta no se ven en su captura (dependían de un script del entorno de la maqueta); en la implementación son los de `lucide-react` que ya usa el CRM.
 - Tamaños en la escala del CRM: título 24 px, texto 14 px, metadatos 12 px (la maqueta usa 13 px en algunos textos).
 - Sin modo oscuro (I4).
+
+### PR2 · Marco del gestor
+
+**Commits:** `f22792c9` superficies del módulo (I8) · `6113824a` cabecera única y pestañas (y el commit de este resultado).
+
+**Qué cambia**
+
+- Página del catálogo (real y de prueba): fuera el bloque «CATÁLOGO / título»; todo dentro de `StudioRoot`.
+- `ManagerHeader`: migas «← Mi espacio / Catálogos» (no fijas) y, debajo, la cabecera fija en escritorio con el único h1 (Unbounded, 22–24 px; 18 px y una línea al quedar fija), la línea de estado (Activo/Archivado, «Automático (antiguo)», nº de viviendas, enlace, «Cambios sin guardar (N)» con su lista) y las acciones «Vista previa», «Compartir» (principal) y ⋯ (Archivar/Reactivar, Descargar PDF, Grupos…). En móvil: título, estado y acciones, en ese orden, sin fijar.
+- `SectionTabs`: subrayadas, etiquetas y orden de D5 (I5), mismos `id`, `aria-*`, teclado y punto ámbar de cambios. En móvil bajan de línea.
+- «Viviendas»: título de sección («Viviendas de esta selección» y qué decide el orden), vistas como pestañas suaves; listas, buscador, importación y paneles sin cambios.
+- «Portada y estilo»: panel «Portada y presentación» (título e introducción, portada, acabado fotográfico separados por líneas) y panel «Vista previa de la portada».
+- Textos que nombraban las secciones viejas: «‹ Textos y fotos» en el panel móvil; `scripts/qa/catalog-search-e2e.mts` busca las pestañas por sus etiquetas nuevas (mismas aserciones).
+
+**Verificaciones**
+
+| Comprobación | Resultado |
+| --- | --- |
+| `npx tsc --noEmit` | sin errores |
+| `check-crm-typography` | 23, ninguna nueva |
+| Pasos de la CI en local (sin `build`) + `lint-migrations` | 28 en verde; los mismos dos fallos previos de `main` (permisos) |
+| Build aislado (`git archive 6113824a`, sin `.env.production`, `NEXT_BUILD_DIR=.next.qa`) | «Compiled successfully»; solo el aviso conocido «supabaseUrl is required» |
+| `qa-marco.mjs` (37 comprobaciones, Chromium + fixtures) | todas en verde: un solo h1 en Unbounded; migas; etiquetas y orden; cada pestaña → su `?seccion=` y su panel; Atrás/Adelante; ← → Intro Inicio Fin; foco visible; `?seccion` desconocida → viviendas; punto de cambios y «Cambios sin guardar (1)»; el título escrito sobrevive a cambiar de sección; la lista lleva al campo; error de guardado con alerta y lo escrito intacto; conflicto con «Mantener los míos»; edición durante el guardado (se envía la instantánea, lo nuevo queda sin guardar); salir con cambios pide confirmación; archivar y reactivar; PDF desde ⋯ (descarga real del endpoint de fixtures); «Grupos…» en la raíz del gestor; vista previa sin enlace → Compartir con el motivo; cabecera fija de 81 px (< 112 px del panel lateral); título largo a 320 px sin desborde; sin errores de página |
+| `BASE=… node --experimental-strip-types scripts/qa/catalog-search-e2e.mts` | «Todo en verde» (buscador, operación, automático antiguo, conversión P4, las cuatro secciones, móvil) |
+
+**Capturas** ([capturas-pr2/](capturas-pr2/)): `viviendas-escritorio.png`, `portada-escritorio.png`, `viviendas-movil.png`, `portada-movil.png` (referencia | implementación), `portada-320.png`, `antes-viviendas-escritorio.png`.
+
+**Diferencias con la referencia**
+
+- Las acciones están a la derecha del título, como en la referencia, pero las migas no son fijas y la cabecera sí lo es en escritorio (comportamiento previo).
+- «Compartir» sigue visible también dentro de la pestaña Compartir (la maqueta lo oculta); hace lo mismo que antes (lleva al formulario y limpia el aviso).
+- «Viviendas» no tiene el botón «Añadir viviendas» de la maqueta en su título: ya existe la vista «Añadir viviendas» al lado de «En el catálogo», con el buscador real.
+- En la referencia móvil, las filas de «Viviendas» salen muy altas y vacías (defecto de la maqueta); la implementación conserva las filas compactas actuales.
