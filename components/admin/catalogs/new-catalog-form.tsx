@@ -6,6 +6,7 @@ import { createCatalogAction } from "@/app/[country]/(admin)/admin/mi-espacio/ac
 import type { ActionResult } from "@/lib/catalogs/access";
 import { CONTACT_DEFAULT_PHONE, CONTACT_DEFAULT_ROLE, formatContactPhone, type ContactRole } from "@/lib/catalogs/contact-format";
 import { ContactFields } from "./contact-fields";
+import st from "./studio/studio.module.css";
 
 export type CreateCatalogInput = Parameters<typeof createCatalogAction>[0];
 
@@ -15,6 +16,8 @@ export type CreateCatalogInput = Parameters<typeof createCatalogAction>[0];
 // y lo escrito se conserva. Un segundo envío mientras se crea (doble clic,
 // Intro repetido) se ignora, y tras crear con éxito el formulario sigue
 // bloqueado hasta salir: un envío crea como mucho un catálogo.
+// Rediseño 2026-10-23: con `open`/`onOpenChange` la estantería pone el botón
+// en su cabecera y el formulario debajo (la lógica de creación no cambia).
 
 export function NewCatalogForm({
   basePath,
@@ -22,6 +25,8 @@ export function NewCatalogForm({
   defaultContactName,
   group = null,
   create,
+  open: openProp,
+  onOpenChange,
 }: {
   basePath: string;
   mode?: "live" | "demo";
@@ -31,9 +36,15 @@ export function NewCatalogForm({
   group?: { id: string; label: string } | null;
   /** Solo las fixtures: crear en el almacén sintético. */
   create?: (i: CreateCatalogInput) => Promise<ActionResult<{ id: string }>>;
+  /** Abierto desde fuera (la estantería pinta su propio botón). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+  const setOpen = (v: boolean) => (controlled ? onOpenChange?.(v) : setOpenState(v));
   const [title, setTitle] = useState("");
   const [intro, setIntro] = useState("");
   const [contactName, setContactName] = useState(defaultContactName);
@@ -48,12 +59,9 @@ export function NewCatalogForm({
   useEffect(() => setInGroup(false), [group?.id]);
 
   if (!open) {
+    if (controlled) return null;
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-gold/60 bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold"
-      >
+      <button type="button" onClick={() => setOpen(true)} className={`${st.btnPrimary} text-sm`}>
         Nuevo catálogo
       </button>
     );
@@ -94,8 +102,13 @@ export function NewCatalogForm({
   return (
     <form
       onSubmit={submit}
-      className="w-full max-w-xl space-y-3 rounded-xl border border-gold/20 bg-white/70 p-4"
+      className={`${st.panel} w-full max-w-xl space-y-3 p-4`}
+      aria-labelledby="nc-heading"
+      data-testid="new-catalog-form"
     >
+      <h2 id="nc-heading" className="text-base font-medium text-ink">
+        Nuevo catálogo
+      </h2>
       <label className="block">
         <span className="crm-label-sm text-ink/70">Título</span>
         <input
@@ -103,7 +116,7 @@ export function NewCatalogForm({
           onChange={(e) => setTitle(e.target.value)}
           maxLength={160}
           required
-          className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+          className={`${st.input} mt-1 w-full text-sm`}
           placeholder="Por ejemplo: Salamanca y Chamberí"
         />
       </label>
@@ -114,7 +127,7 @@ export function NewCatalogForm({
           onChange={(e) => setIntro(e.target.value)}
           maxLength={2000}
           rows={3}
-          className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+          className={`${st.input} mt-1 w-full text-sm`}
         />
       </label>
       <ContactFields
@@ -128,7 +141,7 @@ export function NewCatalogForm({
       />
       {group ? (
         <label className="flex items-start gap-2 text-sm text-ink/80" data-testid="new-catalog-group">
-          <input type="checkbox" checked={inGroup} onChange={(e) => setInGroup(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#c9a96e]" />
+          <input type="checkbox" checked={inGroup} onChange={(e) => setInGroup(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#856329]" />
           <span>
             Ponerlo también en «{group.label}»
             <span className="block text-xs text-ink/55">Opcional. Solo ordena tu HOME: no cambia qué propiedades entran.</span>
@@ -144,7 +157,7 @@ export function NewCatalogForm({
         <button
           type="submit"
           disabled={pending || done}
-          className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gold disabled:opacity-60"
+          className={`${st.btnPrimary} text-sm`}
           data-testid="new-catalog-submit"
         >
           {pending || done ? "Creando…" : "Crear catálogo"}
@@ -152,7 +165,7 @@ export function NewCatalogForm({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-lg border border-gold/30 px-4 py-2 text-sm text-ink/70"
+          className={`${st.btnQuiet} text-sm`}
         >
           Cancelar
         </button>
