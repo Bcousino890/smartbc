@@ -229,3 +229,37 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 - Siete filtros (los de hoy) en vez de tres; sin paginación (la lista ya cabe: máximo 24 viviendas).
 - El editor conserva todos los bloques que la maqueta omite (zona, plantilla «Vivir en…», texto aprobado, entrada y puntos, avisos, retirar, borrar, historia) y los avisos de zona no se pliegan, para no esconder nada pendiente.
 - Las fotos se gestionan con los controles actuales (apertura, no usar, sin acabado), no con la cuadrícula de selección única de la maqueta.
+
+### PR4 · Idiomas y Compartir
+
+**Commits:** `6b07f6e6` (y el commit de este resultado).
+
+**Qué cambia**
+
+- «Compartir»: título «Comparte esta selección»; dos bloques lado a lado (apilados en móvil): **«Para un cliente · enlace personal»** (el panel de enlaces personales de siempre, con su explicación) y **«Enlace general»** (crear, duración, copiar, renovar, revocar) con su **«Idioma del enlace general»** debajo. Después, un panel de ajustes comunes: contacto que ve el cliente, «PDF del catálogo» con su botón a la derecha y «Organización interna · anuncios de origen» plegado. Medición (`?medir=1`) igual.
+- «Idiomas»: título «Idiomas del catálogo»; mismos paneles. `text-[11px]` → `text-xs` en la marca «sin revisión nativa» y en la nota de la plantilla: la comprobación tipográfica baja a 21 violaciones (todas fuera de este módulo salvo `copy-library-page.tsx`, que no se toca).
+
+**Verificaciones**
+
+| Comprobación | Resultado |
+| --- | --- |
+| `tsc`, tipografía | sin errores; 21 (antes 24), ninguna nueva |
+| Pasos de la CI en local + `lint-migrations` | 28 en verde; los dos fallos previos de `main` (permisos) |
+| Build aislado (`git archive 6b07f6e6`) | «Compiled successfully» |
+| `qa-compartir.mjs` (27 comprobaciones, servidor de fixtures recién arrancado) | todas en verde: dos bloques distintos (lado a lado en escritorio, apilados en móvil); duración no válida desactiva «Crear enlace»; crear, copiar, renovar y revocar el enlace general (y la cabecera lo refleja); buscar cliente, asignar, opiniones y caducidad, renovar y revocar enlaces personales; idioma del enlace general (árabe con «sin revisión nativa»); validación del teléfono; aviso del PDF con cambios sin guardar y descarga; conflicto del contacto; anuncios de origen; idioma por cliente sin cambiar los demás; 8 idiomas; nota de coste; «Preparar ahora» (traductor sintético de las fixtures, ninguna IA real); archivado bloquea asignar; sin desborde |
+| Regresión de toda la pila en el último commit | `qa-shelf`, `qa-marco`, `qa-textos`, `qa-compartir` y `scripts/qa/catalog-search-e2e.mts` en verde; fuera del módulo nada cambia (`qa-outside`) |
+
+**Capturas** ([capturas-pr4/](capturas-pr4/)): `compartir-escritorio.png`, `idiomas-escritorio.png`, `compartir-movil.png`, `idiomas-movil.png` (referencia | implementación), `compartir-320.png`, `antes-compartir.png`, `antes-idiomas.png`.
+
+**Diferencias con la referencia**
+
+- La referencia resume el contacto, el idioma y el enlace en filas con «Editar/Cambiar/Gestionar»; aquí los formularios siguen abiertos (los mismos de hoy), para no esconder cambios sin guardar ni conflictos.
+- La explicación del enlace personal es la actual (más larga), porque dice consecuencias reales (sin contraseña, reenvío).
+- La lista de idiomas es la del panel actual (progreso por idioma y traducciones), no las filas simplificadas de la maqueta.
+
+## Cierre
+
+- **PR:** #357 (1/4, a `main`), #358 (2/4, sobre #357), #359 (3/4, sobre #358) y el PR 4/4 (sobre #359). Orden de merge: 1 → 2 → 3 → 4; cada uno se retargetea a `main` al fusionar el anterior y entonces corre su CI.
+- **CI:** `main` está en rojo desde `42fc5b05`/`fff110c8` por `test:role-model`/`test:user-rank` y `test:permission-scope` (permisos, ajeno a esta tarea). Mientras siga así, la CI de estos PR fallará en esos pasos y no llegará al build; el build aislado de cada PR compila.
+- **Revisión de Codex:** no pedida.
+- **Pendiente de Fabricio:** QA visual en producción tras cada merge y decidir si quiere los datos que la maqueta pinta y la estantería no tiene («Enlace activo» e idiomas por catálogo), que exigen ampliar la consulta.
