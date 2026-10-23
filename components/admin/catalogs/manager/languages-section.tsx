@@ -69,7 +69,7 @@ function hhmm(iso: string): string {
 export function NativeMark({ lang }: { lang: CatalogLanguage }) {
   if (!TRANSLATION_REVIEW_REQUIRED.has(lang)) return null;
   return (
-    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900" data-testid={`native-${lang}`}>
+    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900" data-testid={`native-${lang}`}>
       sin revisión nativa
     </span>
   );
@@ -183,12 +183,18 @@ export function LanguagesSection({
   const active = panel?.active.includes(lang) ?? false;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]" data-testid="languages-section">
+    <div className="space-y-5">
+    {/* Rediseño 2026-10-23: título de la sección; paneles y controles, los de siempre. */}
+    <div>
+      <h2 className="text-base font-medium text-ink">Idiomas del catálogo</h2>
+      <p className="mt-0.5 text-sm text-ink/65">El idioma del enlace general y el de cada cliente, y las traducciones de este catálogo.</p>
+    </div>
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]" data-testid="languages-section">
       <div className="min-w-0 space-y-4">
         <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="lang-cat-title" data-testid="lang-catalog" data-check-overflow="idiomas">
-          <h2 id="lang-cat-title" className="crm-label-sm flex items-center gap-1.5 text-ink/70">
+          <h3 id="lang-cat-title" className="crm-label-sm flex items-center gap-1.5 text-ink">
             <Languages className="h-4 w-4" aria-hidden="true" /> Idioma de los enlaces
-          </h2>
+          </h3>
           <p className="text-xs text-ink/60" data-testid="lang-auto-note">{AUTO_NOTE}</p>
           <label className="block text-sm text-ink/70">
             <span className="block">Idioma del catálogo</span>
@@ -249,7 +255,7 @@ export function LanguagesSection({
       <div className="min-w-0 space-y-4">
         <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="lang-work-title" data-testid="lang-work">
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 id="lang-work-title" className="crm-label-sm text-ink/70">Traducciones (opcional)</h2>
+            <h3 id="lang-work-title" className="crm-label-sm text-ink">Traducciones (opcional)</h3>
             <label className="text-sm text-ink/70">
               <span className="sr-only">Idioma</span>
               <select value={lang} onChange={(e) => { setOpen(null); setPanel(null); setLang(e.target.value as TargetLanguage); }} className="rounded-lg border border-gold/25 bg-white px-2 py-1.5 text-sm text-ink" data-testid="lang-work-select">
@@ -319,6 +325,7 @@ export function LanguagesSection({
           )}
         </section>
       </div>
+    </div>
     </div>
   );
 }
@@ -471,7 +478,7 @@ function Editor({ item, lang, disabled, onSave }: { item: PanelItem; lang: Targe
           <div>
             <p className="crm-label-sm text-ink/55">{areaBlock.headingEs} · plantilla de zona</p>
             <p className="mt-1 whitespace-pre-line text-sm text-ink/80">{areaBlock.es}</p>
-            <p className="mt-1 text-[11px] text-ink/50">Se traduce una vez y se reutiliza en todas las viviendas con esta plantilla.</p>
+            <p className="mt-1 text-xs text-ink/55">Se traduce una vez y se reutiliza en todas las viviendas con esta plantilla.</p>
           </div>
           <label className="block">
             <span className="crm-label-sm text-ink/55">{areaBlock.headingTr}</span>
