@@ -223,7 +223,7 @@ interface Cat {
   token: string;
   library?: Record<string, string>;
 }
-function world() {
+function world(team?: () => MemoryTranslations[]) {
   let clock = Date.parse("2026-10-22T10:00:00Z");
   const cats = new Map<string, Cat>();
   const mem = new MemoryTranslations({
@@ -247,6 +247,7 @@ function world() {
       return true;
     },
     libraryVersionOf: (id, p) => cats.get(id)?.library?.[p] ?? null,
+    team,
     now: () => clock,
   });
   const byToken = (token: string) => {
@@ -657,7 +658,7 @@ console.log("· descartes, fuentes (DA31) y plantillas (DA27)");
   ok(!toPublicCatalog(w.snapOf("B-tok")).items[0].copyPending, "y se publica en B");
   visit(w, t, "C-tok");
   await t.whenIdle();
-  eq(fake.calls(), 5, "catálogo C con texto propio: no reutiliza la de la biblioteca (DA31)");
+  eq(fake.calls(), 4, "catálogo C con texto propio IDÉNTICO: reutiliza la traducción (0230, decisión del 23-10-2026; antes DA31 la repetía)");
   ok(w.mem.sources.filter((s) => s.kind === "library").length === 1 && w.mem.sources.some((s) => s.kind === "catalog" && s.catalogId === "C"), "la de A cuelga de la biblioteca; la de C es propia (no se promociona)");
   // Plantilla: una traducción, reutilizada en otra vivienda.
   const T = "Recoletos es un barrio de fincas señoriales.";
@@ -673,6 +674,75 @@ console.log("· descartes, fuentes (DA31) y plantillas (DA27)");
   ok(zonas === 3, "plantilla: se traduce una vez (con la primera vivienda) y la segunda la reutiliza");
   const pub = toPublicCatalog(w.snapOf("T-tok"));
   ok(pub.items.every((x) => x.copy.at(-1)?.heading === "Living in Recoletos" && !x.copyPending), "las dos con «Living in Recoletos» (nombre propio intacto)");
+}
+
+// ── 10b. Equipo (0230): una vivienda ya traducida no se vuelve a pagar ──────
+console.log("· equipo: la misma vivienda en otro catálogo reutiliza su traducción (0230)");
+{
+  const team: MemoryTranslations[] = [];
+  const a = world(() => team);
+  const b = world(() => team);
+  team.push(a.mem, b.mem);
+  const same = (id: string) => ({ map: [{ p: "A1-P1", k: "k1", av: null }, { p: "A1-P2", k: "k2", av: null }].map((m) => ({ ...m })), token: `${id}-tok` });
+  addCat(a, "A1", [item(), item2()]);
+  const fa = fakeTranslationAi();
+  const ta = translator(a, fa.ai).t;
+  await setLanguage(a.mem, "A1", null, "en");
+  visit(a, ta, "A1-tok");
+  await ta.whenIdle();
+  eq(fa.calls(), 3, "primer catálogo (Ana): dos viviendas y el título → tres llamadas");
+  const aSnap = a.snapOf("A1-tok");
+
+  // Otra persona del equipo pone las MISMAS viviendas en su catálogo, en inglés.
+  addCat(b, "B1", [item(), item2()], same("B1"));
+  const fb = fakeTranslationAi();
+  const tb = translator(b, fb.ai).t;
+  await setLanguage(b.mem, "B1", null, "en");
+  visit(b, tb, "B1-tok");
+  await tb.whenIdle();
+  eq(fb.calls(), 1, "segundo catálogo (otra persona): solo el título de SU catálogo; las viviendas, sin IA");
+  const bSnap = b.snapOf("B1-tok");
+  ok(bSnap.items.every((x) => x.tr), "las dos viviendas se publican en inglés al momento");
+  eq(bSnap.items.map((x) => [x.tr?.t, x.tr?.b, x.tr?.f]), aSnap.items.map((x) => [x.tr?.t, x.tr?.b, x.tr?.f]), "con la MISMA traducción (texto y características)");
+  const panelB = await loadPanel(b.mem, "B1", "en");
+  ok(panelB.items.filter((x) => x.kind === "item").every((x) => x.text?.reused === true && x.text.approval === "auto"), "en «Idiomas»: «reutilizada», publicada sola en este catálogo");
+
+  // El mismo dueño, otro catálogo: tampoco se vuelve a pagar.
+  addCat(a, "A2", [item()], { map: [{ p: "A1-P1", k: "k1", av: null }] });
+  await setLanguage(a.mem, "A2", null, "en");
+  visit(a, ta, "A2-tok");
+  await ta.whenIdle();
+  eq(fa.calls(), 4, "el mismo dueño, otro catálogo: solo el título");
+
+  // Español distinto (otra descripción del mismo piso): se traduce.
+  addCat(b, "B2", [item({ text: { b: "Ático reformado con vistas.", l: null, h: [] } })], { map: [{ p: "A1-P1", k: "k1", av: null }] });
+  await setLanguage(b.mem, "B2", null, "en");
+  visit(b, tb, "B2-tok");
+  await tb.whenIdle();
+  eq(fb.calls(), 3, "si el español NO es idéntico, se traduce (vivienda + título)");
+
+  // Otro idioma: no hay nada que reutilizar.
+  await setLanguage(b.mem, "B1", null, "fr");
+  visit(b, tb, "B1-tok");
+  await tb.whenIdle();
+  eq(fb.calls(), 6, "otro idioma: se traduce (dos viviendas + título)");
+
+  // Lo corregido a mano gana, y solo se reutiliza lo PUBLICADO.
+  const pa = (await loadPanel(a.mem, "A1", "en")).items.find((x) => x.key === "k1")!;
+  await saveAndPublish(a.mem, "A1", { key: "k1", lang: "en", text: { id: pa.text!.id, rev: pa.text!.rev, title: "Penthouse with terrace (corrected)", blocks: pa.es.blocks.filter((x) => !x.area).map((x) => x.tr ?? "") } });
+  addCat(b, "B3", [item()], { map: [{ p: "A1-P1", k: "k1", av: null }] });
+  await setLanguage(b.mem, "B3", null, "en");
+  visit(b, tb, "B3-tok");
+  await tb.whenIdle();
+  eq(b.snapOf("B3-tok").items[0].tr?.t, "Penthouse with terrace (corrected)", "si alguien la corrigió a mano, se reutiliza la corregida");
+  for (const t of a.mem.texts) if (t.lang === "en") t.status = "draft";
+  for (const t of b.mem.texts) if (t.lang === "en") t.status = "draft";
+  const before = fb.calls();
+  addCat(b, "B4", [item()], { map: [{ p: "A1-P1", k: "k1", av: null }] });
+  await setLanguage(b.mem, "B4", null, "en");
+  visit(b, tb, "B4-tok");
+  await tb.whenIdle();
+  eq(fb.calls() - before, 2, "un borrador sin publicar no se reutiliza (vivienda + título)");
 }
 
 // ── 11. Fuente: lo público nunca espera a la IA (DA12 sustituida) ───────────

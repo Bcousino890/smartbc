@@ -413,6 +413,17 @@ $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $M18 $S/test-catalog-finish-pre.sql $M19 $M20 $M21 $S/test-catalog-finish.sql
 
+echo "== 2zm. 0230: traducciones reutilizadas en todo el equipo (aplicada dos veces, reversión y reaplicación)"
+M22=supabase/migrations/0230_catalog_translations_team_reuse.sql
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-translations-pre.sql $M18 $M19 $M20 $M21 $M22 $M22 $S/test-catalog-translation-reuse.sql
+$R sql $D19/rollback-0230.sql $S/test-rollback-0230.sql $M22 $M22
+echo "   0230 se vuelve a aplicar tras su reversión"
+
+echo "== 2zn. 0230 sobre los tests de la traducción automática (0228) y de los precios (0229)"
+$R reset
+$R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M $M3 $M4 $M5 $M6 $M7 $M8 $M9 $M10 $M11 $M12 $M13 $M14 $M15 $M16 $M17 $S/test-catalog-translations-pre.sql $M18 $M19 $S/test-catalog-translations-auto-pre.sql $M20 $M21 $M22 $S/test-catalog-translations-auto.sql $S/test-catalog-translation-prices.sql
+
 echo "== 3. siembra sin coincidencias"
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/seed-case-none.sql $M $S/test-seed-empty.sql

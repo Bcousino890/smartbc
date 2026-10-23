@@ -19,7 +19,7 @@ import type {
 } from "./translation-service";
 
 // ============================================================================
-// Almacén EN MEMORIA de las traducciones (PR6 + 0228) con las MISMAS reglas
+// Almacén EN MEMORIA de las traducciones (PR6 + 0228 + 0230) con las MISMAS reglas
 // que las funciones SQL: reserva única por fuente e idioma con caducidad,
 // límites de 0228 (trabajos a la vez por catálogo, tope diario, espera
 // creciente tras fallos y parada tras N seguidos), resultado descartado si la
@@ -45,6 +45,8 @@ export interface MemoryHooks {
   /** Si el texto publicado de esa vivienda en ese catálogo es exactamente una
    *  versión aprobada de la biblioteca, su id (fuente reutilizable). */
   libraryVersionOf?(catalogId: string, propertyId: string): string | null;
+  /** El resto del equipo (otros dueños), para la reutilización de 0230. */
+  team?(): MemoryTranslations[];
   now?(): number;
 }
 
@@ -159,6 +161,55 @@ export class MemoryTranslations implements TrBackend {
     const row: SourceRow = { id: uid("b"), kind: "area", propertyId: null, copyVersionId: null, catalogId: null, areaVersionId, esSig: sig, es: es as SourceRow["es"] };
     this.sources.push(row);
     return row.id;
+  }
+
+  // ── Reutilización en el equipo ──
+  /** Como catalog_tr_reuse (0230): copia lo ya publicado (aprobado) en
+   *  cualquier catálogo del equipo — este dueño incluido — para la misma
+   *  vivienda con el mismo español, la misma plantilla o la misma
+   *  característica. Gana lo corregido o visto a mano y, después, lo último. */
+  async reuse(i: { sourceId: string | null; areaSourceId: string | null; lang: TargetLanguage; features: string[] }): Promise<{ text: boolean; area: boolean; features: number }> {
+    if (!isTargetLanguage(i.lang)) throw new Error("invalid_lang");
+    if (i.features.length > 80) throw new Error("invalid_text");
+    const stores: MemoryTranslations[] = [this, ...(this.hooks.team?.() ?? []).filter((m) => m !== this)];
+    const manual = (t: { approval: string | null; origin?: string }) => t.approval === "manual" || t.origin === "manual";
+    const pick = (src: SourceRow, same: (s: SourceRow) => boolean): TextRow | null => {
+      let best: TextRow | null = null;
+      for (const m of stores) {
+        for (const s of m.sources) {
+          if (s.id === src.id || !same(s) || s.esSig !== src.esSig || JSON.stringify(s.es) !== JSON.stringify(src.es)) continue;
+          for (const t of m.texts) {
+            if (t.sourceId !== s.id || t.lang !== i.lang || t.status !== "approved" || !keysMatch(t.content.b, src.es.b) || blockerOf(t.content)) continue;
+            if (!best || manual(t) >= manual(best)) best = t;
+          }
+        }
+      }
+      return best;
+    };
+    const copy = (sourceId: string, kinds: SourceKind[], same: (src: SourceRow, s: SourceRow) => boolean): boolean => {
+      const src = this.sources.find((s) => s.id === sourceId);
+      if (!src || !kinds.includes(src.kind)) throw new Error("source_not_found");
+      if (this.texts.some((t) => t.sourceId === sourceId && t.lang === i.lang)) return false;
+      const from = pick(src, (s) => kinds.includes(s.kind) && same(src, s));
+      if (!from) return false;
+      this.texts.push({ id: uid("d"), sourceId, lang: i.lang, status: "draft", content: structuredClone(from.content), rev: 1, origin: "ai", approval: null, updatedAt: this.iso(this.now()), reusedFrom: from.id });
+      return true;
+    };
+    const text = i.sourceId ? copy(i.sourceId, ["library", "catalog"], (a, b) => a.propertyId === b.propertyId) : false;
+    const area = i.areaSourceId ? copy(i.areaSourceId, ["area"], () => true) : false;
+    let n = 0;
+    for (const es of [...new Set(i.features)]) {
+      if (!es.trim() || es.length > 200 || this.features.some((f) => f.es === es && f.lang === i.lang)) continue;
+      let best: FeatureRow | null = null;
+      for (const m of stores) {
+        if (m === this) continue;
+        for (const f of m.features) if (f.es === es && f.lang === i.lang && f.status === "approved" && !trBlocker(f.tr) && (!best || manual(f) >= manual(best))) best = f;
+      }
+      if (!best) continue;
+      this.features.push({ es, lang: i.lang, tr: best.tr, status: "draft", approval: null, origin: "ai" });
+      n++;
+    }
+    return { text, area, features: n };
   }
 
   // ── Preparación ──

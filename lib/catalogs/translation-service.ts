@@ -92,6 +92,8 @@ export interface TextRow {
   /** 0228: cómo se publicó una aprobada ('auto' sola, 'manual' el dueño). */
   approval: "auto" | "manual" | null;
   updatedAt: string | null;
+  /** 0230: copiada de una traducción ya publicada en otro catálogo del equipo. */
+  reusedFrom?: string | null;
 }
 
 export interface FeatureRow {
@@ -167,6 +169,10 @@ export interface TrBackend {
   }>;
   ensureSource(catalogId: string, propertyId: string | null, sig: string, es: object): Promise<{ id: string; kind: SourceKind }>;
   ensureAreaSource(areaVersionId: string, sig: string, es: object): Promise<string>;
+  /** catalog_tr_reuse (0230): copia a las filas del dueño lo que ya esté
+   *  publicado en cualquier catálogo del equipo (misma vivienda y mismo
+   *  español, misma plantilla, misma característica). Sin IA. */
+  reuse(i: { sourceId: string | null; areaSourceId: string | null; lang: TargetLanguage; features: string[] }): Promise<{ text: boolean; area: boolean; features: number }>;
   /** catalog_tr_reserve_auto (0228): la reserva de 0226 con los límites. */
   reserve(i: { sourceId: string; lang: TargetLanguage; catalogId: string; propertyId: string | null; needs: PrepareNeeds; ttlSeconds: number; limits: ReturnType<typeof reserveLimits> }): Promise<ReserveResult>;
   finish(i: { jobId: string; outcome: "done" | "failed" | "uncertain"; result: TranslationResult | null; note: string | null }): Promise<FinishResult>;
@@ -256,7 +262,7 @@ export interface PanelItem {
   library: boolean;
   sig: string;
   es: { title: string; intro: string | null; blocks: PanelBlock[]; features: string[] };
-  text: { id: string; rev: number; status: TextRow["status"]; title: string | null; intro: string | null; origin: TextRow["origin"]; approval: Approval } | null;
+  text: { id: string; rev: number; status: TextRow["status"]; title: string | null; intro: string | null; origin: TextRow["origin"]; approval: Approval; reused: boolean } | null;
   area: { id: string; rev: number; status: TextRow["status"]; approval: Approval } | null;
   features: Array<{ es: string; tr: string | null; status: FeatureRow["status"] | null; approval: Approval }>;
   featuresMissing: number;
@@ -382,7 +388,7 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
       library: false,
       sig: meta.sig,
       es: { title: meta.title, intro: meta.intro, blocks: [], features: [] },
-      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: text.content.i ?? null, origin: text.origin, approval: text.approval } : null,
+      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: text.content.i ?? null, origin: text.origin, approval: text.approval, reused: !!text.reusedFrom } : null,
       area: null,
       features: [],
       featuresMissing: 0,
@@ -447,7 +453,7 @@ export async function loadPanel(be: TrBackend, catalogId: string, lang: TargetLa
       library: src?.kind === "library",
       sig: x.unit.sig,
       es: { title: x.unit.title, intro: null, blocks, features: x.unit.features },
-      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: null, origin: text.origin, approval: text.approval } : null,
+      text: text ? { id: text.id, rev: text.rev, status: text.status, title: text.content.t ?? null, intro: null, origin: text.origin, approval: text.approval, reused: !!text.reusedFrom } : null,
       area: area ? { id: area.id, rev: area.rev, status: area.status, approval: area.approval } : null,
       features: x.unit.features.map((f, i) => ({ es: f, tr: feats[i]?.tr ?? null, status: feats[i]?.status ?? null, approval: feats[i]?.approval ?? null })),
       featuresMissing,
@@ -471,6 +477,42 @@ export interface PrepareDeps {
   limits?: Pick<AutoLimits, "maxActivePerCatalog" | "dailyCapPerCatalog" | "maxFailures" | "retryWaitsSeconds">;
 }
 
+/** Las fuentes de una vivienda (o del título del catálogo) en un idioma y lo
+ *  que se pediría a la IA. Crea las fuentes si aún no existen. */
+async function unitSources(be: TrBackend, input: { catalogId: string; key: string; lang: TargetLanguage }): Promise<{
+  sourceId: string;
+  areaSourceId: string | null;
+  propertyId: string | null;
+  request: TranslationRequest;
+  needs: PrepareNeeds;
+}> {
+  const es = await be.esState(input.catalogId);
+  if (input.key === META_KEY) {
+    const meta = esMetaOf(es);
+    const sourceId = (await be.ensureSource(input.catalogId, null, meta.sig, { t: meta.title, i: meta.intro })).id;
+    return {
+      sourceId,
+      areaSourceId: null,
+      propertyId: null,
+      request: { lang: input.lang, text: null, area: null, features: [], meta: { t: meta.title, i: meta.intro }, names: [] },
+      needs: { text: false, area: null, features: [], meta: true },
+    };
+  }
+  const x = esItemsOf(es).find((i) => i.key === input.key);
+  if (!x) throw new Error("not_in_catalog");
+  const sourceId = (await be.ensureSource(input.catalogId, x.propertyId, x.unit.ownSig, { t: x.unit.title, b: x.unit.ownBlocks })).id;
+  const areaSourceId = x.unit.areaText && x.areaVersionId
+    ? await be.ensureAreaSource(x.areaVersionId, x.unit.areaSig!, { b: [{ k: "barrio", x: x.unit.areaText }] })
+    : null;
+  return {
+    sourceId,
+    areaSourceId,
+    propertyId: x.propertyId,
+    request: { lang: input.lang, text: { t: x.unit.title, b: x.unit.ownBlocks }, area: x.unit.areaText, features: x.unit.features, meta: null, names: x.names },
+    needs: { text: true, area: areaSourceId, features: x.unit.features, meta: false },
+  };
+}
+
 /** UNA llamada a la IA para una vivienda (o el título del catálogo) en un
  *  idioma, solo con lo que falta. `manual`: la lanza el dueño («Preparar
  *  ahora»): sin espera creciente ni tope diario (sí con el límite de
@@ -481,27 +523,7 @@ export async function prepareItem(
   input: { catalogId: string; key: string; lang: TargetLanguage; manual?: boolean },
 ): Promise<PrepareOutcome> {
   if (!isTargetLanguage(input.lang)) throw new Error("invalid_lang");
-  const es = await be.esState(input.catalogId);
-  let sourceId: string;
-  let request: TranslationRequest;
-  let needs: PrepareNeeds;
-  let propertyId: string | null = null;
-  if (input.key === META_KEY) {
-    const meta = esMetaOf(es);
-    sourceId = (await be.ensureSource(input.catalogId, null, meta.sig, { t: meta.title, i: meta.intro })).id;
-    request = { lang: input.lang, text: null, area: null, features: [], meta: { t: meta.title, i: meta.intro }, names: [] };
-    needs = { text: false, area: null, features: [], meta: true };
-  } else {
-    const x = esItemsOf(es).find((i) => i.key === input.key);
-    if (!x) throw new Error("not_in_catalog");
-    propertyId = x.propertyId;
-    sourceId = (await be.ensureSource(input.catalogId, x.propertyId, x.unit.ownSig, { t: x.unit.title, b: x.unit.ownBlocks })).id;
-    const areaSource = x.unit.areaText && x.areaVersionId
-      ? await be.ensureAreaSource(x.areaVersionId, x.unit.areaSig!, { b: [{ k: "barrio", x: x.unit.areaText }] })
-      : null;
-    request = { lang: input.lang, text: { t: x.unit.title, b: x.unit.ownBlocks }, area: x.unit.areaText, features: x.unit.features, meta: null, names: x.names };
-    needs = { text: true, area: areaSource, features: x.unit.features, meta: false };
-  }
+  const { sourceId, propertyId, request, needs } = await unitSources(be, input);
   const ttl = deps.ttlSeconds ?? RESERVATION_TTL_SECONDS;
   const limits = reserveLimits(input.manual === true, deps.limits ?? AUTO_LIMITS);
   return runPreparation(
@@ -516,6 +538,21 @@ export async function prepareItem(
     },
     { sourceId, request, needs, manual: input.manual === true },
   );
+}
+
+/** Equipo (0230): antes de pagar una traducción, lo que esta vivienda ya
+ *  tenga traducido y PUBLICADO a este idioma en cualquier catálogo del equipo
+ *  (mismo español exacto; misma plantilla; misma característica) se copia a
+ *  este dueño. Sin IA. El título del catálogo no se comparte. ¿Copió algo? */
+export async function reuseItem(be: TrBackend, input: { catalogId: string; key: string; lang: TargetLanguage }, it: PanelItem): Promise<boolean> {
+  if (it.kind === "meta") return false;
+  const wantText = !it.text;
+  const wantArea = it.es.blocks.some((b) => b.area) && !it.area;
+  const features = it.features.filter((f) => f.status === null).map((f) => f.es);
+  if (!wantText && !wantArea && features.length === 0) return false;
+  const u = await unitSources(be, input);
+  const r = await be.reuse({ sourceId: wantText ? u.sourceId : null, areaSourceId: wantArea ? u.areaSourceId : null, lang: input.lang, features });
+  return r.text || r.area || r.features > 0;
 }
 
 // ── Publicar (sola o a mano) ────────────────────────────────────────────────
@@ -557,7 +594,7 @@ export function needsAutoWork(it: PanelItem, now = Date.now()): boolean {
 }
 
 export type AutoUnitResult =
-  | { key: string; kind: "published" }
+  | { key: string; kind: "published"; reused?: boolean }
   | { key: string; kind: "blocked"; code: string }
   | { key: string; kind: "skipped"; reason: string }
   | { key: string; kind: "ai"; outcome: PrepareOutcome["kind"]; published: boolean };
@@ -577,11 +614,19 @@ export async function autoUnit(
   if (!it) return { key: input.key, kind: "skipped", reason: "not_in_catalog" };
   if (!input.manual && !needsAutoWork(it, now())) return { key: input.key, kind: "skipped", reason: it.state };
   if (input.manual && (it.state === "busy" || it.state === "blocked")) return { key: input.key, kind: "skipped", reason: it.state };
+  // Lo que el equipo ya tradujo (misma vivienda y mismo español): sin IA.
+  const reused = await reuseItem(be, input, it);
+  if (reused) {
+    it = await find();
+    if (!it) return { key: input.key, kind: "skipped", reason: "not_in_catalog" };
+  }
   const first = await publishItem(be, input.catalogId, input.lang, it, "auto");
   if (first.kind === "published") {
     // Lo publicado puede seguir sin alguna característica traducida.
     it = await find();
-    if (!it || !needsAutoWork(it, now()) || it.features.every((f) => f.status !== null && f.status !== "rejected")) return { key: input.key, kind: "published" };
+    if (!it || !needsAutoWork(it, now()) || it.features.every((f) => f.status !== null && f.status !== "rejected")) {
+      return reused ? { key: input.key, kind: "published", reused: true } : { key: input.key, kind: "published" };
+    }
   } else if (first.kind === "blocked") {
     return { key: input.key, kind: "blocked", code: first.code };
   } else if (first.kind === "nothing" && !it.features.some((f) => f.status === null || f.status === "rejected")) {

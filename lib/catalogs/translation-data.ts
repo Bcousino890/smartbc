@@ -21,7 +21,7 @@ import type {
 import { listClientLinks } from "./client-links";
 
 // ============================================================================
-// Traducciones del catálogo (PR6 + 0228): el «backend» de la gestión sobre
+// Traducciones del catálogo (PR6 + 0228 + 0230): el «backend» de la gestión sobre
 // las funciones SQL de 0226/0228 (service_role, con la guarda del dueño en
 // cada una). Lo usan las acciones del dueño y el traductor en segundo plano
 // (auto-translate-instance.ts, con el dueño del catálogo como actor); la
@@ -101,12 +101,12 @@ export function sqlTranslations(ownerId: string): TrBackend {
       const jobs: JobRow[] = [];
       for (const c of chunk(ids, 50)) {
         const [t, j] = await Promise.all([
-          db().from("catalog_tr_texts").select("id, source_id, lang, status, content, rev, origin, approval, updated_at").in("source_id", c).eq("lang", lang),
+          db().from("catalog_tr_texts").select("id, source_id, lang, status, content, rev, origin, approval, updated_at, reused_from").in("source_id", c).eq("lang", lang),
           db().from("catalog_tr_jobs").select("id, source_id, lang, status, reserved_at, expires_at, finished_at, discarded_at, note, auto").in("source_id", c).eq("lang", lang).order("reserved_at", { ascending: false }).limit(200),
         ]);
         if (t.error) raise(t.error, "catalog_tr_texts");
         if (j.error) raise(j.error, "catalog_tr_jobs");
-        for (const r of (t.data ?? []) as any[]) texts.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, content: r.content ?? {}, rev: Number(r.rev), origin: r.origin, approval: r.approval ?? null, updatedAt: r.updated_at ?? null });
+        for (const r of (t.data ?? []) as any[]) texts.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, content: r.content ?? {}, rev: Number(r.rev), origin: r.origin, approval: r.approval ?? null, updatedAt: r.updated_at ?? null, reusedFrom: r.reused_from ?? null });
         for (const r of (j.data ?? []) as any[]) jobs.push({ id: String(r.id), sourceId: String(r.source_id), lang: r.lang, status: r.status, reservedAt: r.reserved_at, expiresAt: r.expires_at, finishedAt: r.finished_at ?? null, discardedAt: r.discarded_at ?? null, note: r.note ?? null, auto: r.auto === true });
       }
       const features: FeatureRow[] = [];
@@ -123,6 +123,10 @@ export function sqlTranslations(ownerId: string): TrBackend {
     },
     async ensureAreaSource(areaVersionId, sig, es) {
       return String(await rpc("catalog_tr_area_source_ensure", { p_area_version: areaVersionId, p_es_sig: sig, p_es: es }));
+    },
+    async reuse(i) {
+      const d = await rpc("catalog_tr_reuse", { p_source: i.sourceId, p_area: i.areaSourceId, p_lang: i.lang, p_features: i.features });
+      return { text: d?.text === true, area: d?.area === true, features: Number(d?.features ?? 0) };
     },
     async reserve(i): Promise<ReserveResult> {
       const d = await rpc("catalog_tr_reserve_auto", {

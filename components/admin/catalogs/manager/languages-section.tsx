@@ -361,8 +361,9 @@ function TrRow(p: {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-ink">{it.kind === "meta" ? "Título e introducción del catálogo" : it.title}</p>
           <p className="text-xs text-ink/55">
-            {it.kind === "meta" ? it.title : it.library ? "Texto aprobado de la biblioteca (su traducción se reutiliza en tus catálogos)" : "Lo que enseña hoy este catálogo"}
+            {it.kind === "meta" ? it.title : it.library ? "Texto aprobado de la biblioteca" : "Lo que enseña hoy este catálogo"}
             {it.text?.approval === "manual" || it.text?.origin === "manual" ? " · corregida a mano" : it.text?.approval === "auto" ? " · publicada sola" : ""}
+            {it.text?.reused ? " · reutilizada de otro catálogo (sin IA)" : ""}
           </p>
         </div>
         <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${STATE_TONE[it.state]}`} data-testid="tr-state">
