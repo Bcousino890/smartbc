@@ -19,6 +19,7 @@ import "server-only";
 
 import { createAdminClient } from "../admin";
 import { LEADS_COUNTRY, resolveViewScope } from "./view-scope";
+import { isLeadAllowedForScope } from "@/lib/permissions-scope";
 import { checkPermission } from "@/lib/auth/guard";
 import {
   attentionScore,
@@ -150,14 +151,13 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
 }
 
 /**
- * Aplica el alcance por cartera. La cola SIN ASIGNAR queda visible para todos
- * a propósito: si solo la viera quien ya la tiene asignada, no la trabajaría
- * nadie.
+ * Aplica el alcance por cartera. Con alcance "solo lo suyo" el usuario ve
+ * únicamente los leads asignados a él; la cola sin asignar no se le muestra.
  */
 function applyScope(q: any, scope: InboxScope) {
   if (scope.restriction === "all") return q;
   if (!scope.userId) return q;
-  return q.or(`assigned_to.eq.${scope.userId},assigned_to.is.null`);
+  return q.eq("assigned_to", scope.userId);
 }
 
 /** Filtros que SÍ se pueden expresar en SQL. Los de atención van aparte. */
@@ -674,10 +674,11 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
   // la cartera aunque la lista sí la respete.
   const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
   if (
-    scopeRaw.restriction !== "all" &&
-    scopeRaw.userId &&
-    row.assigned_to &&
-    row.assigned_to !== scopeRaw.userId
+    !isLeadAllowedForScope(
+      scopeRaw.restriction,
+      scopeRaw.userId,
+      row.assigned_to,
+    )
   ) {
     return null;
   }

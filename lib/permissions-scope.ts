@@ -294,8 +294,8 @@ export function buildScopeOverrides(scopes: ScopeMatrix, defaults: ScopeMatrix):
 
 /**
  * Decisión pura de alcance sobre un lead de la bandeja: con "own" (o "team",
- * que equivale a own) solo los asignados al usuario o sin asignar (la cola sin
- * dueño es de todos); "all" todos; "none" ninguno.
+ * que equivale a own) solo los asignados al usuario; los leads sin asignar
+ * NO se ven. "all" todos; "none" ninguno.
  */
 export function isLeadAllowedForScope(
   restriction: "all" | "own_only" | "team" | "none" | string,
@@ -304,7 +304,7 @@ export function isLeadAllowedForScope(
 ): boolean {
   if (restriction === "none") return false;
   if (restriction === "all" || !userId) return true;
-  return assignedTo == null || assignedTo === userId;
+  return assignedTo === userId;
 }
 
 /**

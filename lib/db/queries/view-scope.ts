@@ -144,7 +144,7 @@ export async function canActOnClient(
 
 /**
  * ¿Puede el usuario actual ver/editar este lead? Con alcance "own" solo si
- * está asignado a él o no está asignado a nadie (los sin asignar son de todos).
+ * está asignado a él (los leads sin asignar no son suyos).
  */
 export async function canActOnLead(leadId: string, kind: ScopeKind): Promise<boolean> {
   return (await canActOnLeads([leadId], kind)).length === 1;

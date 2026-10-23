@@ -599,7 +599,7 @@ function normalizeCaptacionRestriction(
  *   ------------------|------------|------------|-------------|-------------------
  *   owner             | all        | all        | all         | all
  *   admin             | all        | all        | all         | all
- *   advisor           | all        | all        | all         | all
+ *   advisor           | all        | all        | own_only    | all
  *   agent_admin       | all        | all        | all         | all
  *   agent_senior      | all        | team       | team        | own_only (*)
  *   agent_junior      | all        | own_only   | own_only    | own_only (*)
@@ -634,6 +634,10 @@ export function getViewRestriction(
     resource === "solicitudes" ||
     resource === "documentacion" ||
     resource === "viewing_collections";
+
+  // Regla de negocio: todo Asesor (advisor) ve en Solicitudes solo lo suyo
+  // (leads asignados a él). Clientes/documentación siguen con su matriz.
+  if (role === "advisor" && resource === "solicitudes") return "own_only";
 
   switch (role) {
     case "owner":
