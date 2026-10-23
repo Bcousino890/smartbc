@@ -24,6 +24,7 @@ import {
 } from "@/lib/catalogs/manager-state";
 import { draftsStore, useDraftsVersion } from "./manager/drafts-store";
 import { SidePanelFooter } from "./manager/side-panel";
+import st from "./studio/studio.module.css";
 
 // Textos de las viviendas del catálogo (BCP-01 ampliación C2, Z5). Todo se
 // queda en el catálogo: nunca toca la ficha global ni las historias.
@@ -344,7 +345,7 @@ export function TextEditor({
           placeholder={view.title}
           aria-label="Título en este catálogo"
           data-testid="text-title"
-          className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+          className={`${st.input} mt-1 w-full text-sm`}
         />
         <span className="mt-1 block text-xs text-ink/50">Vacío = el de la ficha («{view.title}»). Solo cambia en este catálogo.</span>
       </label>
@@ -357,12 +358,65 @@ export function TextEditor({
           rows={10}
           aria-label="Descripción para este catálogo"
           data-testid="text-body"
-          className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+          className={`${st.input} mt-1 w-full text-sm`}
         />
         <span className="mt-1 block text-xs text-ink/50">
           Escribe con naturalidad: el catálogo la organiza solo en «Salón y luz», «Cocina y comedor», «Acabados y confort», «La finca» y «Vivir en {view.area ?? "…"}» según lo que diga cada frase. Separa los párrafos con una línea en blanco.
         </span>
       </label>
+      <div className="flex flex-wrap items-center gap-2" data-testid="text-ai">
+        {aiBusy ? (
+          <>
+            <span className="text-xs text-ink/60" role="status">
+              La IA está {aiBusy === "prepare" ? "preparando el texto de la ficha" : "redactando un borrador"}…
+            </span>
+            <button type="button" onClick={cancelAi} className={`${st.btn} text-sm`}>
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => askAi("prepare")}
+              disabled={pending || busy || !view.source.hasText}
+              title={view.source.hasText ? undefined : "La ficha no tiene texto que preparar"}
+              className={`${st.btn} text-sm`}
+            >
+              Preparar desde la ficha (IA)
+            </button>
+            <button
+              type="button"
+              onClick={() => askAi("draft")}
+              disabled={pending || busy}
+              className={`${st.btn} text-sm`}
+            >
+              Borrador con IA (título y descripción)
+            </button>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-ink/50">
+        La IA usa el proveedor ya configurado (Configuración → IA) solo cuando pulsas el botón. Propone un texto; nada se guarda ni se publica sin ti.
+      </p>
+      {proposal ? (
+        <div className="rounded-lg bg-sky-50 px-2 py-1.5 text-xs text-sky-900" data-testid="ai-proposal">
+          La IA ha terminado, pero has cambiado el texto mientras tanto: no se ha pisado.{" "}
+          <button type="button" className="underline" onClick={() => applyProposal(proposal)}>
+            Usar la propuesta
+          </button>{" "}
+          ·{" "}
+          <button type="button" className="underline" onClick={() => setSess(() => ({ proposal: null }))}>
+            Descartarla
+          </button>
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-800">
+          {error}
+        </p>
+      ) : null}
+
       <StructurePreview body={body} lead={lead} area={view.area} areaText={view.areaText?.copy?.shown ? view.areaText.copy.body : null} />
       <AreaBlock catalogId={catalogId} view={view} actions={actions} run={run} pending={pending || busy} />
       <details className="rounded-lg border border-gold/15 bg-white/50 px-3 py-2" data-testid="text-more" open={!!(lead || highlights.length) || undefined}>
@@ -375,7 +429,7 @@ export function TextEditor({
             maxLength={280}
             rows={2}
             aria-label="Entrada"
-            className="mt-1 w-full rounded-lg border border-gold/25 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+            className={`${st.input} mt-1 w-full text-sm`}
           />
         </label>
         <fieldset className="mt-2">
@@ -414,59 +468,6 @@ export function TextEditor({
           setSess(() => ({ origin: "manual", check: null, confirmed: [], proposal: null }));
         }}
       />
-
-      <div className="flex flex-wrap gap-2">
-        {aiBusy ? (
-          <>
-            <span className="text-xs text-ink/60" role="status">
-              La IA está {aiBusy === "prepare" ? "preparando el texto de la ficha" : "redactando un borrador"}…
-            </span>
-            <button type="button" onClick={cancelAi} className="rounded-lg border border-gold/40 px-3 py-1.5 text-xs text-ink/80">
-              Cancelar
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => askAi("prepare")}
-              disabled={pending || busy || !view.source.hasText}
-              title={view.source.hasText ? undefined : "La ficha no tiene texto que preparar"}
-              className="rounded-lg border border-gold/40 px-3 py-1.5 text-xs text-ink/80 hover:bg-white disabled:opacity-50"
-            >
-              Preparar desde la ficha (IA)
-            </button>
-            <button
-              type="button"
-              onClick={() => askAi("draft")}
-              disabled={pending || busy}
-              className="rounded-lg border border-gold/40 px-3 py-1.5 text-xs text-ink/80 hover:bg-white disabled:opacity-50"
-            >
-              Borrador con IA (título y descripción)
-            </button>
-          </>
-        )}
-      </div>
-      <p className="text-xs text-ink/50">
-        La IA usa el proveedor ya configurado (Configuración → IA) solo cuando pulsas el botón. Propone un texto; nada se guarda ni se publica sin ti.
-      </p>
-      {proposal ? (
-        <div className="rounded-lg bg-sky-50 px-2 py-1.5 text-xs text-sky-900" data-testid="ai-proposal">
-          La IA ha terminado, pero has cambiado el texto mientras tanto: no se ha pisado.{" "}
-          <button type="button" className="underline" onClick={() => applyProposal(proposal)}>
-            Usar la propuesta
-          </button>{" "}
-          ·{" "}
-          <button type="button" className="underline" onClick={() => setSess(() => ({ proposal: null }))}>
-            Descartarla
-          </button>
-        </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-800">
-          {error}
-        </p>
-      ) : null}
 
       {check && (check.blockers.length || check.warnings.length) ? (
         <div className="space-y-1" data-testid="text-check">
@@ -524,12 +525,7 @@ export function TextEditor({
       </div>
       <SidePanelFooter message={message}>
         <div className="flex w-full flex-wrap items-center gap-2" data-testid="text-actions">
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || busy || !dirty}
-          className="rounded-lg bg-gold/90 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
+        <button type="button" onClick={save} disabled={pending || busy || !dirty} className={`${st.btn} text-sm`} data-testid="text-save">
           Guardar borrador
         </button>
         <button
@@ -537,7 +533,8 @@ export function TextEditor({
           onClick={publish}
           disabled={pending || busy || !canPublish}
           title={dirty ? "Guarda el borrador antes de publicar" : pendingWarnings.length ? "Revisa los avisos antes de publicar" : undefined}
-          className="rounded-lg border border-gold bg-white px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+          className={`${st.btnPrimary} text-sm`}
+          data-testid="text-publish"
         >
           Publicar
         </button>
@@ -548,11 +545,12 @@ export function TextEditor({
             onChange={(e) => setApproveOnPublish(e.target.checked)}
             disabled={pending || busy}
             data-testid="text-approve-on-publish"
+            className="accent-[#856329]"
           />
           Guardar como texto aprobado de la vivienda
         </label>
         {edited ? (
-          <span className="text-xs font-semibold text-amber-800" data-testid="text-unsaved">
+          <span className="text-xs font-medium text-amber-800" data-testid="text-unsaved">
             Cambios sin guardar
           </span>
         ) : dirty ? (

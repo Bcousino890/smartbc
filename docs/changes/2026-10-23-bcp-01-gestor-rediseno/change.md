@@ -200,3 +200,32 @@ El encargo del 2026-10-23 aprueba el diseño y pide continuar la implementación
 - «Compartir» sigue visible también dentro de la pestaña Compartir (la maqueta lo oculta); hace lo mismo que antes (lleva al formulario y limpia el aviso).
 - «Viviendas» no tiene el botón «Añadir viviendas» de la maqueta en su título: ya existe la vista «Añadir viviendas» al lado de «En el catálogo», con el buscador real.
 - En la referencia móvil, las filas de «Viviendas» salen muy altas y vacías (defecto de la maqueta); la implementación conserva las filas compactas actuales.
+
+### PR3 · Textos y fotos
+
+**Commits:** `c3cfe305` lista y editor (y el commit de este resultado).
+
+**Qué cambia**
+
+- Título de sección «Lo que leerá el cliente» con un resumen (viviendas, textos propios publicados, con la descripción de la ficha y, en ámbar, sin descripción).
+- Los siete filtros de siempre (mismos `data-testid` y recuentos) como pestañas suaves; búsqueda «Buscar vivienda o referencia».
+- Fila: miniatura (la de Viviendas), título, referencia y zona, estado y avisos. **D9:** sin texto propio, la fila dice «Usa la descripción de la ficha» o «Usa la historia aprobada» en gris; solo es ámbar «Sin descripción: solo datos y fotos», el material que falta («Sin fotos»…) y «Publicado · revisar (cambió …)». El «Qué ve el cliente · Por qué» sigue en cada fila (plegado). Reserva y borradores huérfanos, igual.
+- Editor: el mismo `SidePanel` (anterior/siguiente, Esc, foco de vuelta, pantalla propia en móvil con «‹ Textos y fotos»), más ancho, con «Editar vivienda · BC · n de N · Solo cambia este catálogo» y dos pestañas internas, **«Título y descripción»** y **«Fotos»**, montadas las dos (I7). Las ayudas de IA van junto a la descripción. Pie fijo: «Guardar borrador» (secundario) y «Publicar» (principal), con las mismas reglas de activación; «Guardar como texto aprobado» sigue desmarcado.
+
+**Verificaciones**
+
+| Comprobación | Resultado |
+| --- | --- |
+| `tsc`, tipografía | sin errores; 23, ninguna nueva |
+| Pasos de la CI en local + `lint-migrations` | 28 en verde; los dos fallos previos de `main` (permisos) |
+| Build aislado (`git archive c3cfe305`) | «Compiled successfully» |
+| `qa-textos.mjs` (41 comprobaciones) | todas en verde: D9 (gris) frente a «Sin descripción» (ámbar) y «Sin fotos»; un solo editor; `?vivienda=`; vista organizada en vivo; Fotos/Texto con ← y lo escrito intacto; cambiar de sección y volver conserva título y descripción exactos (y la fila marca «Cambios sin guardar»); anterior/siguiente; Publicar desactivado sin guardar; error al guardar; guardar no publica; publicar; «texto aprobado» desmarcado y sin llamada; foco de vuelta a la fila; edición durante el guardado (se envía la instantánea A y B queda pendiente); conflicto y «Mantener los míos»; cancelar IA; la IA no pisa lo escrito y ofrece la propuesta; **cambiar a «Fotos» no cancela la IA**; bloqueo por teléfono; aviso al salir; apertura, excluir, volver a usar, salvaguarda de la última foto, aviso de ajustes obsoletos; móvil 390 (pantalla propia, pie dentro de la pantalla, vuelta a la lista, sin desborde); sin errores |
+| `qa-stale.mjs` | tras cambiar la ficha: fila «Publicado · revisar (cambió los dormitorios)» en ámbar, aviso `text-stale` en el editor y el filtro «Por revisar» la encuentra |
+
+**Capturas** ([capturas-pr3/](capturas-pr3/)): `editor-escritorio.png`, `fotos-escritorio.png`, `editor-movil.png` (referencia | implementación), `lista-escritorio.png`, `lista-movil.png`, `editor-320.png`, `antes-contenido.png`.
+
+**Diferencias con la referencia**
+
+- Siete filtros (los de hoy) en vez de tres; sin paginación (la lista ya cabe: máximo 24 viviendas).
+- El editor conserva todos los bloques que la maqueta omite (zona, plantilla «Vivir en…», texto aprobado, entrada y puntos, avisos, retirar, borrar, historia) y los avisos de zona no se pliegan, para no esconder nada pendiente.
+- Las fotos se gestionan con los controles actuales (apertura, no usar, sin acabado), no con la cuadrícula de selección única de la maqueta.

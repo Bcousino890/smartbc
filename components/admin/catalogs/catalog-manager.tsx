@@ -591,7 +591,7 @@ export function CatalogManager({
 
       <section {...panel("contenido")} className="min-w-0 focus:outline-none">
         {translationGaps.filter((g) => g.pending.length).map((g) => (
-          <p key={g.lang} className="mb-3 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-900" data-testid="content-tr-gap">
+          <p key={g.lang} className="mb-3 rounded-md bg-orange-50 px-3 py-2 text-sm text-orange-900" data-testid="content-tr-gap">
             Enlaces en {LANGUAGE_NAMES_ES[g.lang as keyof typeof LANGUAGE_NAMES_ES] ?? g.lang}: {g.pending.length === 1 ? "1 vivienda se ve" : `${g.pending.length} viviendas se ven`} con «Descripción en preparación» ({g.pending.slice(0, 3).join(", ")}{g.pending.length > 3 ? "…" : ""}) hasta que se traduzcan solas en la próxima visita.{" "}
             Si publicas cambios en español, esa vivienda pasa a «Descripción en preparación» en ese idioma y se vuelve a traducir sola en la próxima visita.{" "}
             <button type="button" className="underline" onClick={() => go("idiomas")}>
@@ -616,6 +616,7 @@ export function CatalogManager({
           photoActions={wrapped.photos}
           photoRun={run}
           refreshKey={photoRefreshKey}
+          thumbs={Object.fromEntries(items.map((it) => [it.propertyId, it.photoUrl ?? null]))}
         />
       </section>
 
