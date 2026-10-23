@@ -56,7 +56,8 @@ t("las etiquetas no enseñan la palabra «agente»", () => {
 });
 
 t("el detalle explica el alcance de cada Asesor y marca lo heredado", () => {
-  assert.equal(roleDetail("advisor"), "Toda la cartera");
+  // Decisión de Fabricio (2026-10-23): el Asesor ve en Solicitudes solo lo suyo.
+  assert.equal(roleDetail("advisor"), "Solo lo suyo en Solicitudes");
   assert.equal(roleDetail("agent_senior"), "Solo su cartera");
   assert.match(roleDetail("agent_junior") ?? "", /heredado/i);
   assert.match(roleDetail("agent_admin") ?? "", /heredado/i);
