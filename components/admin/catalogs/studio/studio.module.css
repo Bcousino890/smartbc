@@ -1,0 +1,241 @@
+/* Gestor de catálogos · rediseño «Lista editorial» (expediente
+   2026-10-23-bcp-01-gestor-rediseno, D2, D8, I2, I3, I6).
+   Todo cuelga de .root, que solo pintan las páginas de «Mi espacio» que usan
+   el gestor: fuera de su árbol no cambia nada. Los tamaños siguen la escala
+   del CRM (12/14/16/18 y 22/24/28); nada de pesos sintéticos (las caras
+   cargadas están en fonts.ts). */
+
+.root {
+  --st-panel: #ffffff;
+  --st-ink: #242720;
+  --st-muted: #686b61;
+  --st-line: #e6e7df;
+  --st-soft: #f1f2eb;
+  --st-gold: #856329;
+  --st-gold-soft: #f5ecd9;
+  --st-green: #366147;
+  --st-primary: #282d25;
+  --st-primary-hover: #3a4036;
+  --crm-font-sans: var(--font-bcp-studio-text), Roboto, Arial, sans-serif;
+  font-family: var(--crm-font-sans);
+}
+
+/* Etiquetas densas del CRM, solo dentro del gestor: en frase, sin
+   espaciado, 14 px (suelo de lectura del CRM para texto operativo). */
+:global(.crm-root) .root :global(.crm-label-sm) {
+  font-size: 14px;
+  line-height: 1.43;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* Títulos elegidos y nombres de catálogo (Unbounded). */
+.heading {
+  font-family: var(--font-bcp-studio-heading), Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  color: var(--st-ink);
+}
+
+.ink {
+  color: var(--st-ink);
+}
+.muted {
+  color: var(--st-muted);
+}
+.gold {
+  color: var(--st-gold);
+}
+.green {
+  color: var(--st-green);
+}
+
+/* Superficies y separadores. */
+.panel {
+  background: var(--st-panel);
+  border: 1px solid var(--st-line);
+  border-radius: 8px;
+}
+.rule {
+  border-color: var(--st-line);
+}
+.soft {
+  background: var(--st-soft);
+}
+.goldSoft {
+  background: var(--st-gold-soft);
+}
+
+/* Botones. Altura mínima 36 px (40 px en móvil, objetivo táctil). */
+.btn,
+.btnPrimary,
+.btnQuiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--st-line);
+  border-radius: 6px;
+  background: var(--st-panel);
+  color: var(--st-ink);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 120ms, border-color 120ms;
+}
+.btn:hover {
+  border-color: #cfc9b8;
+  background: #fcfbf7;
+}
+.btnPrimary {
+  border-color: var(--st-primary);
+  background: var(--st-primary);
+  color: #ffffff;
+}
+.btnPrimary:hover {
+  border-color: var(--st-primary-hover);
+  background: var(--st-primary-hover);
+}
+.btnQuiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--st-muted);
+}
+.btnQuiet:hover {
+  color: var(--st-ink);
+  background: var(--st-soft);
+}
+.btn:disabled,
+.btnPrimary:disabled,
+.btnQuiet:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Enlace dorado (contraste ≥ 4,5:1 sobre blanco y crema). */
+.link {
+  color: var(--st-gold);
+  text-underline-offset: 3px;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+/* Pestañas suaves (grupos, filtros de estado). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  color: var(--st-muted);
+  white-space: nowrap;
+}
+.pill:hover {
+  color: var(--st-ink);
+}
+.pillOn {
+  background: var(--st-soft);
+  color: var(--st-ink);
+  font-weight: 500;
+}
+.pillCount {
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+/* Etiqueta neutra y etiqueta de filtro activo. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: var(--st-soft);
+  color: var(--st-ink);
+}
+
+/* Estado con punto. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--st-green);
+}
+.status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.statusOff {
+  color: var(--st-muted);
+}
+
+/* Campos. */
+/* Sin ancho: lo pone cada sitio (w-full, w-64…), para no pisar a Tailwind. */
+.input {
+  min-height: 36px;
+  border: 1px solid var(--st-line);
+  border-radius: 6px;
+  background: var(--st-panel);
+  color: var(--st-ink);
+  padding: 0.4rem 0.7rem;
+}
+.input:focus {
+  border-color: var(--st-gold);
+  outline: none;
+}
+
+/* Pestañas subrayadas (secciones del gestor y del editor). */
+.tabs {
+  display: flex;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--st-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  position: relative;
+  flex: none;
+  padding: 0.25rem 0 0.7rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--st-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--st-ink);
+}
+.tabOn {
+  border-bottom-color: var(--st-gold);
+  color: var(--st-ink);
+}
+
+/* Foco visible en todo lo interactivo del gestor. */
+.root :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--st-gold);
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .btn,
+  .btnPrimary,
+  .btnQuiet,
+  .pill {
+    min-height: 40px;
+  }
+  /* iOS no amplía la página al escribir con campos de 16 px. */
+  .root :is(input, select, textarea) {
+    font-size: 16px;
+  }
+}

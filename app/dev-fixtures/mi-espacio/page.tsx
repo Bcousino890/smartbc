@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { HomeView } from "@/components/admin/catalogs/home-view";
+import { StudioPageBar } from "@/components/admin/catalogs/studio/page-bar";
+import { StudioRoot } from "@/components/admin/catalogs/studio/studio-root";
 import { FixtureHome } from "./fixture-home";
 import { FixtureReport } from "@/components/catalogs/dev/fixture-report";
 import { isCatalogFixtureMode } from "@/lib/catalogs/fixture-mode";
@@ -23,20 +25,17 @@ export default async function FixtureHomePage({ searchParams }: { searchParams: 
       <p className="bg-amber-100 px-4 py-1 text-xs text-amber-900">
         Datos de prueba sintéticos · solo desarrollo local · nada se guarda
       </p>
-      <div className="mx-auto max-w-[1600px] px-4 lg:px-8">
-        <header className="pt-7">
-          <h1 className="crm-page-title text-ink">Mi espacio</h1>
-          <p className="mt-1 max-w-2xl text-sm text-ink/55">
-            Tu espacio para trabajar con el CRM e ir mejorándolo módulo a módulo. Primer módulo: catálogos.
-          </p>
-        </header>
+      {/* Mismo marco que la página real (rediseño 2026-10-23), sin avisos ni
+          idioma: necesitan sesión. */}
+      <StudioRoot className="mx-auto max-w-[1600px] px-4 lg:px-8">
+        <StudioPageBar tools={false} />
         {/* ?sinGrupos=1: la HOME exactamente como antes de los grupos (regresión). */}
         {sinGrupos === "1" || vacio ? (
           <HomeView catalogs={vacio ? [] : fixtureCatalogs} preparedBy="Fabricio Andree" basePath="/dev-fixtures/mi-espacio" mode="demo" />
         ) : (
           <FixtureHome catalogs={home.catalogs} groups={home.groups} grupo={typeof grupo === "string" ? grupo : null} />
         )}
-      </div>
+      </StudioRoot>
       <FixtureReport />
     </div>
   );
