@@ -24,7 +24,7 @@ Reglas:
 | Sección | «Lo suyo» |
 |---|---|
 | Clientes | Clientes asignados a la persona (`assigned_advisor`) |
-| Solicitudes y visitas | Leads asignados a la persona; los leads sin dueño cuentan como de todos (cola sin asignar). Las visitas se acotan por su cliente |
+| Solicitudes y visitas | **Ver:** leads asignados a la persona **y** los sin dueño (cola sin asignar); nunca los de otra persona. **Editar:** solo los asignados a la persona (ver la cola no da permiso de escritura; ver la sección 4, punto 12). Las visitas se acotan por su cliente |
 | Documentación | Solicitudes de documentos de sus clientes asignados |
 | Colecciones de visitas | Las de sus clientes asignados (también enlaces de portales y shortlists) |
 | Captaciones (Chile) | Asignadas o creadas por la persona (más las reglas propias del rol: `confirmed_and_own`, `assigned_only`...) |
@@ -86,11 +86,15 @@ Encontrados durante la revisión:
 4. `agent_junior` pierde verificar, analizar y subida automática de documentos (su matriz tiene `documentacion.edit = false`).
 5. Los roles `agent_junior` y `agent` legado pierden listings, broker-check y scrape sobre captaciones ajenas.
 6. El personal no puede aprobar, rechazar, reabrir, actualizar ni recalcular su **propia** solicitud de documentos (evita la auto-aprobación). No afecta a los clientes.
-7. Un asesor restringido a «Solo lo suyo» no puede quitar ni reasignar leads de otros; sí puede coger leads sin dueño. Tampoco puede reasignar clientes ajenos ni «tomar» un cliente sin asignar.
+7. Un asesor restringido a «Solo lo suyo» no puede quitar ni reasignar leads de otros. Tampoco puede reasignar clientes ajenos ni «tomar» un cliente sin asignar. *(Lo de «sí puede coger leads sin dueño» dejó de valer con `42fc5b05` y sigue pendiente: sección 4, punto 12.)*
 8. Un administrador con excepción Editar = «Solo lo suyo» no reasigna ni borra captaciones ajenas.
 9. Se conserva que un **senior** (regla de Ver `confirmed_and_own`) mueva o convierta captaciones **confirmadas** ajenas. La excepción vale **solo** para esa regla: un administrador o asesor que ve todo pero tiene la excepción Editar = «Solo lo suyo» ya no mueve ni convierte confirmadas ajenas.
 10. **Exportar en Documentación (decidido por el dueño el 2026-10-20: se acepta la pérdida).** Descargar el resumen de candidato (`export-summary`) y «Enviar» (`/send`) exigen ahora `documentacion.export` (`STAFF_EXPORT` en `lib/property-applications/staff-access.ts`). El «Asesor · Solo su cartera» (`agent_senior`) y el heredado `agent_junior` no lo tienen en `PERMISSIONS_BY_ROLE`, así que **pierden** esas dos acciones (antes cualquier miembro del equipo podía). El «Asesor · Toda la cartera» (`advisor`), los administradores y los propietarios la conservan. No se ha cambiado ninguna matriz de roles. Si más adelante se quiere devolver, basta una excepción por persona en el panel (Documentación › Exportar) o activar `documentacion.export` para `agent_senior` en `lib/permissions.ts`.
 11. Los valores por defecto de Captaciones en el panel ahora salen del rol de Chile (antes el panel usaba el rol global y la aplicación real el de Chile: el panel decía una cosa y el servidor otra).
+12. **Solicitudes, decidido por Fabricio el 2026-10-23** (tras `42fc5b05`, que llegó a `main` sin PR, y la edición del VPS `fff110c8`):
+    - **D-S1.** El Asesor (`advisor`) tiene por defecto «Solo lo suyo» en Solicitudes (Ver y Editar). Su etiqueta es «Solo lo suyo en Solicitudes». Las demás secciones del `advisor` siguen en «Todo».
+    - **D-S2.** Quien tenga «Solo lo suyo» en Solicitudes (el `advisor` por defecto, `agent_senior`/`agent_junior` y cualquier excepción por persona) **ve también los leads sin asignar**, dentro del resto de límites que ya tenía (permiso de la sección, alcance «Ninguno», país fijo `es` de la bandeja). Nunca ve los asignados a otra persona. Vale para la lista, la agrupación por piso, los contadores (que cuentan lo mismo que enseña la lista), el detalle y la lectura para «Preparar visitas».
+    - **Sin decidir:** si con Editar «Solo lo suyo» se puede **escribir** en un lead sin asignar (cogerlo/asignárselo, cambiar su estado, notas, acciones en bloque). Hasta el 2026-10-20 sí (punto 7); desde `42fc5b05`, no; D-S2 solo habla de ver. Se mantiene el «no» de `main` (`isLeadAllowedForScope(…, "edit")`): esa persona ve la cola sin asignar pero no puede tomar un lead de ella; lo asigna quien tenga Editar «Todo». Si se quiere que pueda cogerlo, es un cambio de una línea y su prueba, con decisión expresa.
 
 ## 5. Límites conocidos (pendientes, no bloquean)
 
@@ -114,7 +118,7 @@ Encontrados durante la revisión:
 - `createItineraryFromShortlist` escribe selecciones con solo alcance Ver (decisión: crear → Ver). `getClientCountry` no falla cerrado ante un error de lectura.
 - Acciones masivas de leads descartan en silencio los ids fuera de alcance. `canActOnLead` devuelve `false` si el lead no existe.
 - `updateCaptacionData` (sin uso ni gate; conviene borrarla). `GET contacts` de captaciones se gatea con Editar en vez de Ver. `captacionMatchesView` sin país.
-- Lead sin dueño con Editar «Solo lo suyo»: editable por todos (coherente con la cola sin asignar).
+- Lead sin dueño con «Solo lo suyo»: se ve (D-S2) pero no se edita; escribir en la cola sin asignar está pendiente de decisión (sección 4, punto 12).
 - Un clic en Ver → «Solo lo suyo» cuenta como 2 excepciones (Ver y Editar). Si se apaga el interruptor de un recurso, su excepción de alcance queda oculta pero guardada.
 - Panel: ids duplicados `scope-lock-*` (tabla y móvil a la vez en el DOM), chip táctil pequeño (~24 px), `text-xs` en lugar de 11 px; la descripción de `captaciones.view` aún dice «según el perfil» en algún texto.
 - Auditoría de permisos: registra el input, no el estado resultante. `created_by` de la tabla sin `ON DELETE`.

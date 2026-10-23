@@ -293,18 +293,30 @@ export function buildScopeOverrides(scopes: ScopeMatrix, defaults: ScopeMatrix):
 }
 
 /**
- * Decisión pura de alcance sobre un lead de la bandeja: con "own" (o "team",
- * que equivale a own) solo los asignados al usuario; los leads sin asignar
- * NO se ven. "all" todos; "none" ninguno.
+ * Decisión pura de alcance sobre un lead de la bandeja (contrato decidido por
+ * Fabricio el 2026-10-23, docs/PERMISOS_ALCANCE.md):
+ *   · "all": todos. "none": ninguno.
+ *   · Cualquier otro alcance («Solo lo suyo»: own_only, team, assigned_only):
+ *       - VER: los asignados al usuario y los SIN ASIGNAR (la cola sin dueño
+ *         se ve, para que alguien la trabaje); nunca los de otra persona.
+ *       - EDITAR: solo los asignados al usuario. Ver la cola sin asignar no da
+ *         permiso para escribir en ella (asignar, editar en bloque…); eso queda
+ *         como estaba y pendiente de decisión.
+ * Sin usuario (no debería ocurrir con un alcance restringido) no se filtra,
+ * como antes.
  */
+export type LeadScopeKind = "view" | "edit";
+
 export function isLeadAllowedForScope(
   restriction: "all" | "own_only" | "team" | "none" | string,
   userId: string | null,
   assignedTo: string | null | undefined,
+  kind: LeadScopeKind,
 ): boolean {
   if (restriction === "none") return false;
   if (restriction === "all" || !userId) return true;
-  return assignedTo === userId;
+  if (assignedTo === userId) return true;
+  return kind === "view" && assignedTo == null;
 }
 
 /**
