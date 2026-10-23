@@ -46,6 +46,19 @@
 }
 
 @layer components {
+  /* Fondo de la cáscara del CRM (degradado y halos). Las variables solo
+     existen con la apariencia oscura (tailwind.config.ts, crmAppearance); sin
+     ellas, los colores de siempre. */
+  .crm-shell-wash {
+    background-image: linear-gradient(135deg, var(--crm-shell-wash-from, #fbf8f3) 0%, var(--crm-shell-wash-to, #f1e9d6) 100%);
+  }
+  .crm-shell-glow-a {
+    background-image: radial-gradient(circle at center, var(--crm-shell-glow-a, rgba(255, 235, 190, 0.45)), transparent 70%);
+  }
+  .crm-shell-glow-b {
+    background-image: radial-gradient(circle at center, var(--crm-shell-glow-b, rgba(201, 169, 110, 0.2)), transparent 70%);
+  }
+
   /* ==========================================================================
      Tokens semánticos CRM (sistema EMAAR medido en el benchmark v1.0)
      --------------------------------------------------------------------------

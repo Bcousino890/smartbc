@@ -103,8 +103,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
+    // suppressHydrationWarning: las cáscaras del CRM ponen `data-crm-theme`
+    // en <html> antes de hidratar (apariencia oscura, sin destello). Solo
+    // afecta a los atributos del propio <html>.
     <html
       lang="es"
+      suppressHydrationWarning
       className={`${cinzel.variable} ${playfair.variable} ${inter.variable} ${lato.variable}`}
     >
       <body>

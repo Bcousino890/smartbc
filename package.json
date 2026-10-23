@@ -10,6 +10,7 @@
     "lint": "next lint",
     "test:extension-filters": "node scripts/test-extension-filters.mjs",
     "test:typography": "node scripts/check-crm-typography.mjs",
+    "test:crm-appearance": "node --experimental-strip-types --no-warnings scripts/test-crm-appearance.mts",
     "test:pdf-extract": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-pdf-extract.mts",
     "test:import-drafts": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs --import ./scripts/shims/test-loader-db-psql.mjs scripts/test-import-drafts.mts",
     "test:admin-properties": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-admin-properties-filter.mts && node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-admin-properties-search.mts",
