@@ -108,7 +108,7 @@ check("sin fotos en la ficha → se descarta", mapEmbassyProperty(astros, "<html
 console.log("── utilidades y config ──");
 check("parseEmbassyPrice", parseEmbassyPrice("3.000/Mes") === 3000 && parseEmbassyPrice("1.090.000 €") === 1090000 && parseEmbassyPrice("") === 0);
 check("splitEmbassyHeading con 'Ático / Dúplex en …'", splitEmbassyHeading("Ático / Dúplex en Calle Genil, El Viso").type === "Ático / Dúplex");
-check("el scraper pide quitar la marca de agua", embassyScraper.dynamicWatermark === true);
+check("NO usa el borrador dinámico (estropea sus fotos, ver embassy.ts)", !embassyScraper.dynamicWatermark);
 check("y re-aloja las fotos (necesario para limpiarlas)", embassyScraper.rehostPhotos !== false);
 
 console.log(`\n${ok} ok, ${fail} fallos`);

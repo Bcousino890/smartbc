@@ -15,10 +15,14 @@ import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 // descripción completa. Solo las fotos y las características están en la ficha.
 //
 // ⚠️ Fotos: llevan el logo "EMBASSY PROPERTIES" grabado en el centro. No hay
-// variante limpia (la agencia sube así las fotos a Idealista). Por eso este
-// scraper activa `dynamicWatermark`: tras importar cada piso, el motor quita la
-// marca con el borrador dinámico (ver lib/sync/diff-engine.ts). Es seguro aquí
-// porque TODAS sus fotos llevan el mismo logo (verificado en cuatro anuncios).
+// variante limpia (la agencia sube así las fotos a Idealista).
+//
+// NO usar aquí el borrador DINÁMICO (`dynamicWatermark`). Probado el
+// 2026-10-23 con las 28 fotos de Serrano: estima la marca comparando las fotos
+// del MISMO piso, y como todas comparten estancia confunde la escena con la
+// marca; deja el logo casi igual y pinta "fantasmas" de otras fotos en las
+// paredes. Para Embassy hace falta un perfil horneado con fotos de MUCHOS
+// pisos distintos (lib/sync/watermark-removal.ts), no el dinámico.
 //
 // Criterios de captación (decididos con BC): venta a cualquier precio, alquiler
 // desde 3.000 €/mes, solo viviendas (fuera terrenos, garajes, locales…).
@@ -327,10 +331,8 @@ export function mapEmbassyProperty(card: EmbassyCard, adHtml: string | null): Ra
 
 export const embassyScraper: Scraper = {
   key: "embassy",
-  label: "Embassy Properties (web Idealista, quita su marca)",
+  label: "Embassy Properties (web Idealista)",
   agencySlug: "embassy-properties",
-  // Todas sus fotos llevan su logo: el motor lo quita tras importar.
-  dynamicWatermark: true,
   scrape: async () => {
     const cards = (await listEmbassyCards()).filter(embassyAccepts);
     const results: RawProperty[] = [];
