@@ -5,7 +5,7 @@ Que la lista de Propiedades envíe menos datos, que cada clic dé respuesta visu
 - **Tamaño:** medio (aprobado por Fabricio el 2026-10-24, E0–E3). Cualquier cambio en identidad, autorización, vigencia de permisos, middleware de sesión o esquema de base de datos queda fuera y requiere su propio plan explícito como grande o sensible (D5 de CRM-01).
 - **Responsable:** Fabricio
 - **Rama:** una por PR (ver «Entregas»), cada una desde el `main` remoto vigente **que ya incluya el merge de #368**. Este documento vive en `fabri/crm-02-rendimiento-propiedades` hasta entonces.
-- **Estado:** plan aprobado (2026-10-24). **Implementación bloqueada** hasta que `main` incluya #368: a 2026-10-24 el `main` remoto sigue en `e0be8c7a` y #368 está abierto.
+- **Estado:** plan aprobado (2026-10-24). `main` incluye #368 (merge `d31075fd`, comprobado con `git merge-base --is-ancestor`). E0 implementado (PR CRM-02a).
 
 ## Especificación
 
@@ -31,9 +31,7 @@ Medido sobre `main` (`e0be8c7a`):
 | `GET /api/admin/notifications` | se dispara en **cada** navegación. La campana vive en `AdminPageHeader` (usado por 21 páginas), así que se remonta con cada página y vuelve a pedir; además repite cada 60 s. La ruta hace `getCurrentProfile` y lee conversaciones, visitas, mensajes y `crm_notifications` | `components/admin/admin-page-header.tsx:36`, `notifications-bell.tsx:75`, `app/api/admin/notifications/route.ts` |
 | Precargas | al entrar en `/es/admin` salen 21 precargas RSC automáticas (enlaces de la sidebar y fichas visibles). Sin frontera de carga, cada una pasa por el middleware: ~2 `getUser` + 1 `profiles`. Son unas 60-70 consultas de ~112 en esa ventana | ventana de «menú → Propiedades (repetida)» |
 
-**Sin medir todavía:**
-- Las consultas exactas de una precarga y de `/api/admin/notifications` por separado. En los datos sintéticos la ruta de notificaciones lanza un `TypeError` (`slice`) con las filas de mensajes, así que hoy se corta antes de terminar.
-- El efecto de añadir `loading.tsx` sobre las precargas. Con una frontera de carga, Next precarga hasta esa frontera y podría renderizar más del árbol por cada precarga.
+Lo que la tabla anterior dejaba sin medir (las consultas exactas de una precarga y de `/api/admin/notifications`) lo mide ya E0: ver «Resultado · E0». El efecto de `loading.tsx` sobre las precargas se mide en E2.
 
 ### Decisiones ya tomadas (no se reabren)
 
@@ -163,6 +161,56 @@ Si una mejora no se ve en los números locales, no se presenta como mejora. Los 
 CRM-02b, c y d tocan archivos distintos y pueden abrirse en paralelo contra `main`, sin apilarse, para que cada uno tenga su CI.
 
 **Condiciones de parada:** si un criterio no se puede cumplir (por ejemplo, AC1 sin romper AC3, o AC6 superado), se para y se informa con los números antes de seguir.
+
+## Resultado
+
+### E0 · Medición ampliada y línea base tras #368
+
+Todo es **local**: build de producción de `main` (`d31075fd`, merge de #368) más el arnés de este PR, en una copia exportada sin ningún `.env`, contra el simulador con datos sintéticos.
+- «lat40» son 40 ms de latencia **simulada** por consulta.
+- «móvil» es CPU 4× más lenta y red limitada, **simuladas**.
+- 3 pasadas por variante, cada una con un servidor nuevo: «frío» y luego «caliente».
+- Cifra = mediana (mín–máx).
+- Salidas completas en `medidas/e0-base/`; tabla completa en `medidas/e0-base/resumen.md`.
+
+Cambios de E0 (sin tocar la app):
+- **Datos sintéticos de notificaciones corregidos:**
+  - mensajes con `content`, `read_at` y remitente embebido;
+  - visitas pendientes recientes y avisos de catálogo.
+  - Con ello `/api/admin/notifications` responde entero (antes fallaba con `TypeError`).
+- **Arnés (`scripts/qa/crm-01-navegacion.mts`):**
+  - repite por separado las precargas RSC y cada `GET /api/…` de la ventana;
+  - nueva métrica `primerIndicadorMs` (`[data-crm-pending="true"]` o `[data-crm-skeleton]`);
+  - cuenta las peticiones a la campana por recorrido;
+  - nuevo recorrido R10: abrir, reabrir y cambiar de galería.
+- **Lanzador y resumen:**
+  - `scripts/qa/crm-02-medir.sh` hace la copia aislada, el build y las pasadas en frío y en caliente;
+  - `scripts/qa/crm-02-resumen.mts` calcula medianas y dispersión, y avisa si las consultas varían entre pasadas.
+
+**Contrato de navegación de CRM-01**, en las 18 pasadas: **31/31** en escritorio y con lat40, **30/30** en móvil.
+
+| Navegación | Consultas (aislada) | KB sin comprimir | Útil, escritorio | Útil, lat40 | Útil, móvil | Tareas largas, móvil |
+|---|---|---|---|---|---|---|
+| Menú → Propiedades | 9 | 2.103 | 309 (296–380) | 588 (561–659) | 1.971 (1.871–1.985) | 184 (155–238) |
+| Ficha → «Volver» | 9 | 2.102 | 238 (236–261) | 507 (492–507) | 1.229 (1.199–1.254) | 338 (324–366) |
+| Lista → ficha | 13 | 9 | 104 (97–110) | 634 (630–661) | 614 (585–625) | 0 |
+| «Ver archivadas» | 9 | 2.373 | 354 (240–361) | 838 (831–858) | 1.422 (1.415–1.588) | 148 (114–247) |
+| Menú → Clientes | 16 | 194 | 75 (75–82) | 586 (529–599) | 1.030 (1.029–1.055) | 0 |
+| Clientes → ficha | 29 | 5 | 69 (64–73) | 875 (857–898) | 1.561 (1.545–1.614) | 130 (0–442) |
+| Menú → Solicitudes | 16 | 3 | 48 (39–51) | 551 (543–558) | 937 (917–944) | 0 |
+| Abrir la galería (1.ª vez) | — | — | 69 (66–85) | 72 (56–76) | 198 (124–207) | 107 (59–127) |
+| Reabrir la galería | — | — | 54 (41–60) | 41 (37–53) | 102 (89–157) | 0 |
+
+Qué se ve:
+
+1. **Ningún indicador explícito.** `primerIndicadorMs` está vacío en todas las navegaciones: hoy no hay ni esqueleto ni estado pendiente (lo cubre E2).
+2. **Precargas.** Cada precarga cuesta **3 consultas**, siempre: 2 `getUser` y 1 `profiles` del middleware, sin datos de página. La entrada en `/es/admin` dispara **21 precargas = 63 consultas**, además de las 28 de la propia página y las 9 de la navegación siguiente. En móvil salen menos: 17 precargas, 51 consultas.
+3. **Campana.** Cada `GET /api/admin/notifications` cuesta **12 consultas**, y se repite en casi cada navegación. Peticiones por recorrido (mediana): R1 = 3, R2 = 3, R8 = 3, R9 = 2, R5 = 2, R4/R10/R7 = 1. Es la base de AC8.
+4. **Contadores de la sidebar.** Confirmado de nuevo: la petición aislada de una navegación interna no toca `visit_requests`, `crm_notifications` ni `team_*`.
+5. **Galería.** Hoy abre en ~70 ms en escritorio porque las fotos ya vienen con la lista. Abrirla pide además 1 `/api` de 9 consultas, la de «fotos desde la web». Es la referencia de AC13.
+6. **Consultas estables.** Las consultas aisladas no varían entre las 18 pasadas: los criterios de consultas (AC2, AC9) se pueden comparar exactos.
+
+**Verificaciones de E0** (en `wt/crm-02`, rama `fabri/crm-02a-medicion`): `npx tsc --noEmit`, los `npm run test:*` de CI, `next build` en la copia aislada y las 18 pasadas, todo en verde. CI del PR: ver el PR.
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 
