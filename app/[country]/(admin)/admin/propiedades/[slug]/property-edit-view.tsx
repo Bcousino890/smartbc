@@ -27,7 +27,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
 // Mapa editable (Leaflet). ssr:false porque Leaflet toca `window`. Reutiliza el
@@ -54,6 +54,7 @@ import {
   SmartLinksPanel,
 } from "@/components/admin/smart-links-panel";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
+import { listReturnHref, withReturnContext } from "@/lib/properties/admin-list-url";
 import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { sectorsForCommune } from "@/lib/mock-properties";
 import { useT } from "@/lib/i18n/provider";
@@ -149,6 +150,11 @@ export function PropertyEditView({
   const params = useParams<{ country?: string }>();
   const country = isCountry(params?.country) ? params.country : "es";
   const config = getCountryConfig(country);
+  // Regreso a la lista con sus filtros, página y fila (`?volver=`, CRM-01).
+  // La ruta la pone siempre el país actual; de `volver` solo se toma la
+  // consulta saneada.
+  const volver = useSearchParams().get("volver");
+  const backHref = listReturnHref(config.prefix, volver, property.slug);
   const isCL = country === "cl";
   const checklistFeatures = propertyFeaturesForCountry(country);
   const [isPending, startTransition] = useTransition();
@@ -170,7 +176,8 @@ export function PropertyEditView({
     try {
       const res = await deleteProperty(property.slug, country);
       if (res.ok) {
-        router.push(`/${country}/admin/propiedades`);
+        // `replace`: la ficha ya no existe, Atrás no debe volver a ella.
+        router.replace(listReturnHref(config.prefix, volver));
       } else {
         window.alert(`No se pudo eliminar: ${res.error}`);
         setDeletingProperty(false);
@@ -645,7 +652,7 @@ export function PropertyEditView({
       {/* Cabecera */}
       <div className="flex items-center justify-between pt-7">
         <Link
-          href={`${config.prefix}/propiedades`}
+          href={backHref}
           className="inline-flex items-center gap-2 text-xs font-medium text-ink/65 transition hover:text-ink"
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
@@ -708,7 +715,7 @@ export function PropertyEditView({
             {" · "}
             {/* SmartLink 2.0: workflow de story (generar/revisar/publicar). */}
             <a
-              href={`/${country}/admin/propiedades/${property.slug}/story`}
+              href={withReturnContext(`${config.prefix}/propiedades/${property.slug}/story`, volver ?? "")}
               className="text-gold-dark hover:underline"
             >
               Story del SmartLink

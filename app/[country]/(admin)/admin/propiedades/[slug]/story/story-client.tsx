@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, RefreshCw, ShieldAlert, X } from "lucide-react";
 import { Button, Panel, Pill, TextArea, TextInput } from "@/components/admin/ui/primitives";
+import { withReturnContext } from "@/lib/properties/admin-list-url";
 import { CHAPTER_HEADINGS, type StoryChapter } from "@/lib/services/story/types";
 import {
   approveVersionAction,
@@ -66,6 +67,7 @@ export function StoryClient({
   gate,
   fromQueue,
   bucket,
+  returnSearch = "",
 }: {
   country: string;
   slug: string;
@@ -80,6 +82,8 @@ export function StoryClient({
   gate?: { pass: boolean; failures: Array<{ code: string; label: string; blockIds: string[]; detail?: string }> } | null;
   fromQueue?: boolean;
   bucket?: string;
+  /** Consulta saneada de la lista de Propiedades de la que se vino (`?volver=`). */
+  returnSearch?: string;
 }) {
   const path = `/${country}/admin/propiedades/${slug}/story`;
   const [pending, startTransition] = useTransition();
@@ -129,7 +133,7 @@ export function StoryClient({
           href={
             fromQueue
               ? `/${country}/admin/propiedades/story-review?bucket=${bucket ?? "short"}`
-              : `/${country}/admin/propiedades/${slug}`
+              : withReturnContext(`/${country}/admin/propiedades/${slug}`, returnSearch)
           }
           className="inline-flex items-center gap-1.5 text-sm text-ink/55 hover:text-ink"
         >

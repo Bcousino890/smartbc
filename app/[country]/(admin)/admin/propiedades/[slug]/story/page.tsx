@@ -3,6 +3,7 @@ import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { getStoryForAdmin } from "@/lib/db/queries/story";
 import { getStoryReviewDetail } from "@/lib/db/queries/story-review";
 import { createAdminClient } from "@/lib/db/admin";
+import { sanitizeListQuery } from "@/lib/properties/admin-list-url";
 import { StoryClient } from "./story-client";
 
 // SmartLink 2.0 · revisión del story de una propiedad.
@@ -15,10 +16,10 @@ export default async function StoryPage({
   searchParams,
 }: {
   params: Promise<{ country: string; slug: string }>;
-  searchParams: Promise<{ from?: string; bucket?: string }>;
+  searchParams: Promise<{ from?: string; bucket?: string; volver?: string }>;
 }) {
   const { country, slug } = await params;
-  const { from, bucket } = await searchParams;
+  const { from, bucket, volver } = await searchParams;
   const row = (await getPropertyBySlugForAdmin(slug)) as
     | { id: string; title: string; description: string | null }
     | null;
@@ -59,6 +60,9 @@ export default async function StoryPage({
       gate={detail?.gate ?? null}
       fromQueue={from === "queue"}
       bucket={bucket ?? "short"}
+      // Contexto de la lista de origen (CRM-01): solo la consulta saneada; la
+      // ruta del regreso la pone siempre el país de esta URL.
+      returnSearch={sanitizeListQuery(typeof volver === "string" ? volver : null)}
     />
   );
 }
