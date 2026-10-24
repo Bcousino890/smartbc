@@ -5,7 +5,7 @@ Cada persona del equipo puede elegir en el CRM interno una apariencia clara, osc
 - **Tamaño:** medio (solo interfaz; sin migraciones, datos, permisos ni integraciones).
 - **Responsable:** Fabricio
 - **Rama base:** `fabri/crm-apariencia` (worktree `wt/crm-apariencia`), con una rama por PR apilada sobre la anterior (ver «Plan»).
-- **Estado:** implementado en 3 PR apilados (#364 y siguientes), pendientes del merge de Fabricio.
+- **Estado:** fusionado (#364, #365 y #366, 2026-10-24).
 
 ## Especificación
 
@@ -171,3 +171,15 @@ Capturas (antes en claro de `main` · después en oscuro): [dashboard](capturas/
 Capturas: [selector en escritorio y con almacenamiento bloqueado](capturas/selector-escritorio.png), [selector en el cajón móvil](capturas/selector-movil.png).
 
 Sin revisión de Codex (no pedida).
+
+### Cierre
+
+| PR | Rama | Merge en `main` | CI en `main` |
+| --- | --- | --- | --- |
+| #364 · motor del tema | `fabri/crm-apariencia` | `9a25173b` | en verde |
+| #365 · superficies y módulos | `fabri/crm-apariencia-superficies` | `4eceef63` | en verde |
+| #366 · selector | `fabri/crm-apariencia-selector` | `e9b8718b` | en verde (build incluido) |
+
+Fusionados por Fabricio el 2026-10-24. Tras fusionar cada PR, el siguiente se actualizó con un merge de `main` (sin reescribir historia) y se reapuntó a `main` antes de su CI; en #366 hizo falta un commit vacío (`c5f9d948`) para que la CI arrancara tras el cambio de base. No se ha comprobado el despliegue en el VPS (fuera del alcance de los agentes, política P-1).
+
+Sigue pendiente lo listado como no visto con datos en «Resultado · PR2» (textos aprobados y plantillas de zona, correo con buzón conectado, chat de WhatsApp con mensajes, mapa de zonas del scraper), por si Fabricio quiere revisarlo con datos reales.
