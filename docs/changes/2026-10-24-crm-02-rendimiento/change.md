@@ -2,10 +2,10 @@
 
 Que la lista de Propiedades envíe menos datos, que cada clic dé respuesta visual al momento y entender las peticiones de notificaciones y precarga antes de tocar nada compartido.
 
-- **Tamaño propuesto:** medio (lo confirma Fabricio). Cualquier cambio en identidad, autorización, vigencia de permisos, middleware de sesión o esquema de base de datos queda fuera y requiere su propio plan explícito como grande o sensible (D5 de CRM-01).
+- **Tamaño:** medio (aprobado por Fabricio el 2026-10-24, E0–E3). Cualquier cambio en identidad, autorización, vigencia de permisos, middleware de sesión o esquema de base de datos queda fuera y requiere su propio plan explícito como grande o sensible (D5 de CRM-01).
 - **Responsable:** Fabricio
-- **Rama:** `fabri/crm-02-rendimiento-propiedades` (local; se crea desde el `main` vigente cuando se apruebe)
-- **Estado:** borrador de especificación y plan, **pendiente de aprobación**. No implementar.
+- **Rama:** una por PR (ver «Entregas»), cada una desde el `main` remoto vigente **que ya incluya el merge de #368**. Este documento vive en `fabri/crm-02-rendimiento-propiedades` hasta entonces.
+- **Estado:** plan aprobado (2026-10-24). **Implementación bloqueada** hasta que `main` incluya #368: a 2026-10-24 el `main` remoto sigue en `e0be8c7a` y #368 está abierto.
 
 ## Especificación
 
@@ -40,13 +40,25 @@ Medido sobre `main` (`e0be8c7a`):
 - `D2 (CRM-01)`: la respuesta al clic será un esqueleto del módulo más el elemento de la sidebar en estado pendiente (`loading.tsx` + `useLinkStatus`), con los tokens de claro/oscuro.
 - `D5 (CRM-01)`: identidad, autorización, vigencia de permisos y esquema son trabajo grande o sensible y van en su propio plan.
 
-### Decisiones pendientes de Fabricio
+### Decisiones de Fabricio (2026-10-24)
 
-1. **Política de precarga de la sidebar.**
-   - (a) Mantener la precarga automática al aparecer en pantalla: el clic es más rápido, pero el servidor recibe más carga.
-   - (b) Precargar solo con intención (al pasar el ratón o al tocar): menos tráfico, pero el primer clic puede ser algo más lento.
-   - Se decide **después** de medir E0 con y sin `loading.tsx`. La propuesta por defecto es (a) si el coste por precarga sigue siendo solo el del middleware.
-2. **Frescura de la campana.** Hoy se refresca en cada navegación y cada 60 s. Propuesta: el mismo sitio en pantalla, con un intervalo mínimo de 60 s entre peticiones dentro de la misma pestaña, y refresco inmediato tras marcar una notificación como leída. Si se prefiere que cada navegación compruebe de nuevo, la campana se queda como está y solo se arregla la ruta.
+- `D1`: CRM-02 aprobado como trabajo **medio**, con E0–E3.
+- `D2` · **Campana de notificaciones**:
+  - Los datos se reutilizan hasta **60 s por pestaña**, en lugar de pedirlos en cada navegación.
+  - **Excepción explícita:** tras marcar una notificación como leída se refresca **al momento**, sin esperar el intervalo.
+  - Los datos en caché y las peticiones en curso se **aíslan por usuario y país**.
+  - Al cerrar sesión o perder el acceso, los datos privados **se borran**.
+  - Una respuesta que pertenezca a un contexto anterior (otro usuario, otro país, una sesión cerrada) **se descarta**.
+  - Las peticiones simultáneas se **deduplican**, sin cambiar ninguna regla de autenticación ni de permisos: la ruta sigue decidiendo quién ve qué.
+- `D3` · **Política de precarga de la sidebar**: se decide **solo después** de medir E0 y E2, incluido el efecto de las fronteras de carga. Antes de cambiarla, Claude presenta las alternativas **con números**. Cualquier opción basada en la intención del usuario debe funcionar con **foco de teclado** y con **toque**, sin pedir un segundo toque.
+- `D4` · **Entorno**:
+  - Copias aisladas **sin ningún fichero `.env`** ni credenciales reales (exportación de git sin `.env*`). Los ficheros de entorno existentes **no se mueven**.
+  - Autorizado: herramientas existentes, datos sintéticos, tests, mediciones, commits, push, PR y CI.
+  - No autorizado: paquetes nuevos, acceso a producción, cambios de autenticación o permisos, SQL o esquema, migraciones y revisiones adicionales de Codex.
+- `D5` · **Entrega**:
+  - PR pequeños y coherentes, con la CI en verde, incluidas las regresiones de identidad de #361 y los recorridos de navegación de #368.
+  - Claude **se detiene antes de cada merge**, y también si algún criterio de aceptación no se puede cumplir.
+  - Los recuentos de producción son contexto útil, pero no bloquean.
 
 ### Alcance
 
@@ -55,8 +67,9 @@ Medido sobre `main` (`e0be8c7a`):
   - Arreglar los datos sintéticos para que esa ruta termine.
   - Nueva métrica «clic → primer indicador» (esqueleto o sidebar pendiente), separada de «clic → contenido útil».
 - **E1 · Propiedades ligera:**
-  - La lista recibe `photoCount` y la portada, no el array de fotos.
-  - La galería completa se carga al abrir el modal de fotos.
+  - La lista recibe solo la **portada efectiva** (`coverPhotoUrl`, o la primera foto tras ordenar y deduplicar) y el **número de fotos deduplicado**, no el array.
+  - Se conservan todos los campos que usan el filtrado, la búsqueda, la ordenación, los totales y la selección múltiple.
+  - La galería completa se carga al abrir el modal, con las reglas de acceso y los límites de país actuales. Se conservan la subida, el borrado, el orden y la elección de portada.
   - Etiquetas en paralelo.
   - Agencias reducidas a `name, slug` en esta página.
   - Proyección explícita de columnas en lugar de `*` para la lista.
@@ -66,8 +79,8 @@ Medido sobre `main` (`e0be8c7a`):
   - Estado pendiente en la sidebar con `useLinkStatus`.
   - Retirar o corregir el `particulares/loading.tsx`, que nunca se usa en el listado.
 - **E3 · Notificaciones y precargas, sin tocar autenticación:**
-  - La campana no vuelve a pedir en cada navegación (decisión 2).
-  - La política de precarga según la decisión 1.
+  - Campana según D2.
+  - Política de precarga según D3, solo con números de E0 y E2 delante y con una propuesta aceptada.
 
 ### Fuera de alcance
 
@@ -98,6 +111,10 @@ Se miden con el mismo arnés de CRM-01 (`scripts/qa/crm-01-navegacion.mts`, ampl
 | AC10 | Contrato de navegación de CRM-01 | 29/29 · 29/29 · 28/28 | igual |
 | AC11 | Identidad y CI | verde | `test:permission-scope` (regresiones de #361), `test:user-rank`, `tsc`, build y CI en verde; sin cambios en sesión ni permisos |
 | AC12 | Estilo | — | esqueletos y estados pendientes con tokens en claro y oscuro; capturas en escritorio y móvil |
+| AC13 | Apertura de la galería (medida aparte) | hoy instantánea: las fotos ya vienen en la lista | clic → estado de carga visible ≤ 100 ms; clic → galería útil medido y anotado (local, 40 ms simulados y móvil simulado) |
+| AC14 | Robustez de la galería | — | casos probados: error y reintento; cerrar y reabrir; cambiar de propiedad con una petición en curso (una respuesta tardía nunca sobrescribe otra galería ni ediciones más nuevas); subir, borrar, reordenar y cambiar la portada; la portada y el número de fotos de la fila siguen siendo correctos después de cada cambio |
+| AC15 | Campana (D2) | — | probado: 60 s por pestaña; refresco inmediato tras marcar como leída; aislamiento por usuario y país; datos borrados al cerrar sesión o perder el acceso; respuestas de un contexto anterior descartadas; peticiones simultáneas deduplicadas; sin cambios en las reglas de la ruta |
+| AC16 | Honestidad de la medición | — | builds equivalentes (`main` y rama compilados igual), varias pasadas en frío y en caliente, mediana y dispersión. El trabajo de la base de datos solo se da por reducido si lo muestra el registro del simulador (consultas y filas pedidas), no porque el navegador reciba menos bytes |
 
 Si una mejora no se ve en los números locales, no se presenta como mejora. Los tiempos de producción solo se afirman si Fabricio los mide con el fragmento de consola de CRM-01.
 
@@ -107,7 +124,7 @@ Si una mejora no se ve en los números locales, no se presenta como mejora. Los 
 - E1 añade una ruta de solo lectura para la galería, que reutiliza el guard existente y cumple `test:api-guards`.
 - Un merge a `main` despliega.
 
-## Plan (borrador)
+## Plan (aprobado 2026-10-24; empieza cuando `main` incluya #368)
 
 1. **E0 · Medición ampliada:**
    - Arnés: repetir por separado también las peticiones `[rsc·precarga]` y `GET /api/admin/notifications`.
@@ -126,7 +143,26 @@ Si una mejora no se ve en los números locales, no se presenta como mejora. Los 
    - Medir AC5, AC6 y AC9 y presentar la decisión 1 con números.
 4. **E3 · Campana y precargas:** según las decisiones 1 y 2. Medir AC8 y AC9.
 
-Pasos de entorno: los mismos de CRM-01 (worktree desde `origin/main`, `node_modules` enlazado, `.env.production` apartado sin leerlo y restaurado al cerrar, simulador :54371, `next start` :3271).
+**Pasos de entorno (D4):**
+- `git ls-remote origin refs/heads/main`. Comprobar con `git merge-base --is-ancestor <merge de #368> <main>` que incluye #368; si no, parar.
+- Rama de la entrega desde ese SHA.
+- Copia aislada para compilar y medir: `git archive <commit> | tar -x -C <scratchpad>/<copia> --exclude='.env*'`. La copia no tiene ningún `.env`; `node_modules` se enlaza desde el checkout principal tras comprobar que `next` es la versión del lockfile. Así no se toca ningún fichero de entorno existente.
+- `main` y rama se compilan en copias equivalentes, con las mismas variables dummy.
+- Simulador `:54371` y `next start` `:3271`; para parar, solo los procesos que escuchan (`lsof -ti tcp:<puerto> -sTCP:LISTEN`).
+
+**Entregas (PR pequeños; ninguno se fusiona sin Fabricio):**
+
+| PR | Contenido | Depende de |
+|---|---|---|
+| CRM-02a · E0 | datos sintéticos de notificaciones corregidos; arnés con medición separada de precargas, notificaciones y galería; línea base nueva tras #368; este expediente | #368 en `main` |
+| CRM-02b · E1 | lista ligera, galería bajo demanda, script de paridad en CI | CRM-02a en `main` (necesita su arnés) |
+| CRM-02c · E2 | esqueletos y estado pendiente; números con y sin fronteras de carga para D3 | CRM-02a en `main` |
+| CRM-02d · E3 | campana según D2 | CRM-02a en `main` |
+| CRM-02e · precarga | solo si Fabricio acepta una de las alternativas presentadas con números (D3) | CRM-02c en `main` |
+
+CRM-02b, c y d tocan archivos distintos y pueden abrirse en paralelo contra `main`, sin apilarse, para que cada uno tenga su CI.
+
+**Condiciones de parada:** si un criterio no se puede cumplir (por ejemplo, AC1 sin romper AC3, o AC6 superado), se para y se informa con los números antes de seguir.
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 
