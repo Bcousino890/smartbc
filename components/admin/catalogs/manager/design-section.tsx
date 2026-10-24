@@ -141,7 +141,7 @@ export function DesignSection({
             Con cambios sin guardar: el cliente sigue viendo lo guardado.
           </p>
         ) : null}
-        <div className="mx-auto aspect-[150/212] w-full max-w-[240px] overflow-hidden rounded-sm shadow-[0_10px_24px_-14px_rgba(60,40,20,0.45)]" data-check-overflow="portada">
+        <div className="crm-theme-light mx-auto aspect-[150/212] w-full max-w-[240px] overflow-hidden rounded-sm shadow-[0_10px_24px_-14px_rgba(60,40,20,0.45)]" data-check-overflow="portada">
           <CatalogCover
             data={{
               title: title || catalog.title,

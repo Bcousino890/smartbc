@@ -251,7 +251,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                     <Icon size={17} strokeWidth={1.75} />
                     <span className="flex-1">{t(labelKey)}</span>
                     {isCalendario && pendingVisits > 0 && (
-                      <span className="crm-number flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-xs text-ink">
+                      <span className="crm-number flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-xs text-fixed-ink">
                         {pendingVisits}
                       </span>
                     )}

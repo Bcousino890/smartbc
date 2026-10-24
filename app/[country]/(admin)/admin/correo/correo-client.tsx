@@ -694,7 +694,7 @@ function Mailbox({
                   <Icon size={16} strokeWidth={1.75} className={active ? "text-gold" : "text-ink/45"} />
                   <span className="flex-1 truncate">{f.name}</span>
                   {f.unseen > 0 && f.specialUse !== "\\Trash" && f.specialUse !== "\\Sent" && (
-                    <span className="crm-number rounded-full bg-gold/90 px-1.5 text-xs text-ink">{f.unseen}</span>
+                    <span className="crm-number rounded-full bg-gold/90 px-1.5 text-xs text-fixed-ink">{f.unseen}</span>
                   )}
                 </button>
               );

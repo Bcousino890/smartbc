@@ -47,7 +47,7 @@ export function GroupSelector({
 
   // Rediseño 2026-10-23: pestañas suaves de la referencia «Lista editorial».
   // El grupo padre de un subgrupo elegido se marca con un subrayado dorado.
-  const chip = (on: boolean, soft = false) => `${st.pill} ${on ? st.pillOn : ""} ${soft ? "underline decoration-[#856329] decoration-2 underline-offset-[6px]" : ""} text-sm`;
+  const chip = (on: boolean, soft = false) => `${st.pill} ${on ? st.pillOn : ""} ${soft ? "underline decoration-gold-text decoration-2 underline-offset-[6px]" : ""} text-sm`;
 
   const pick = (sel: GroupSelection) => {
     setList(false);

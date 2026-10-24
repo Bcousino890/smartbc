@@ -116,6 +116,8 @@ assert.equal(darkValue("fg", "cream", "50"), null, "text-cream-* (sobre fondos o
 assert.equal(darkValue("fg", "white"), null, "text-white no cambia");
 assert.equal(darkValue("bg", "gold"), null, "el dorado de fondo no cambia");
 assert.equal(parse((family("bg") as any).white({ opacityValue: "0.1" })).v, null, "bg-white/10 (velo) no cambia");
+assert.equal(parse((family("bg") as any).cream["50"]({ opacityValue: "0.08" })).v, null, "bg-cream-50/8 (velo en la barra lateral) no cambia");
+assert.equal(parse((family("bg") as any).cream["100"]({ opacityValue: "0.3" })).v, varName("bg", "cream", "100"), "bg-cream-100/30 (panel) pasa a superficie oscura");
 assert.equal(parse((family("bg") as any).ink.DEFAULT({ opacityValue: "0.05" })).v, varName("fg", "ink"), "bg-ink/5 (hover) = velo claro en oscuro");
 assert.equal(parse((family("bg") as any).ink.DEFAULT({ opacityValue: "0.8" })).v, varName("bg", "ink"), "bg-ink/80 = fondo profundo");
 

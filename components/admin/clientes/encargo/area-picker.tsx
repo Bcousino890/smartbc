@@ -109,7 +109,7 @@ export function AreaPicker({
                 <button
                   type="button"
                   onClick={apply}
-                  className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark"
+                  className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-fixed-ink transition hover:bg-gold-dark"
                 >
                   Aplicar
                 </button>

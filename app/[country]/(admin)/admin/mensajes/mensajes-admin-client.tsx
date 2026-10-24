@@ -213,7 +213,7 @@ function ConversationsList({
                 </div>
               </div>
               {c.unreadCount > 0 && (
-                <span className="mt-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1.5 text-xs font-semibold text-ink">
+                <span className="mt-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1.5 text-xs font-semibold text-fixed-ink">
                   {c.unreadCount}
                 </span>
               )}

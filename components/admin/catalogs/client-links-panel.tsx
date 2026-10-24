@@ -116,7 +116,7 @@ export function ClientLinksPanel({ catalogId, archived, actions }: { catalogId: 
     <section className="space-y-3 rounded-xl border border-gold/20 bg-white/60 p-4" aria-labelledby="cl-title" data-testid="client-links" data-check-overflow="clientes">
       {/* Rediseño 2026-10-23 (D7): enlaces personales, distintos del general. */}
       <h2 id="cl-title" className="flex items-center gap-2 text-base font-medium text-ink">
-        <UserPlus className="h-5 w-5 text-[#856329]" aria-hidden="true" /> Para un cliente · enlace personal
+        <UserPlus className="h-5 w-5 text-gold-text" aria-hidden="true" /> Para un cliente · enlace personal
       </h2>
       <p className="text-sm text-ink/65">
         Cada cliente recibe su propio enlace a este mismo catálogo, sin contraseña. Con él puede valorar cada vivienda; la opinión aparece en su

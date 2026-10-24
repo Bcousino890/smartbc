@@ -648,7 +648,7 @@ function MediaUploadZone({
                   />
                   {/* Insignia de portada en la primera foto. */}
                   {i === 0 && (
-                    <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-xs font-semibold text-ink shadow">
+                    <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-xs font-semibold text-fixed-ink shadow">
                       Portada
                     </span>
                   )}

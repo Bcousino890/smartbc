@@ -245,7 +245,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
           {(fresh || drop != null) && (
             <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap items-center gap-1">
               {fresh && (
-                <span className="rounded-md bg-gold px-2 py-1 text-xs font-bold leading-none text-ink shadow-sm">Nuevo</span>
+                <span className="rounded-md bg-gold px-2 py-1 text-xs font-bold leading-none text-fixed-ink shadow-sm">Nuevo</span>
               )}
               {drop != null && (
                 <span

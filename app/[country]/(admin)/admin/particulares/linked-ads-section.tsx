@@ -134,7 +134,7 @@ function AdRow({
       )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-ink">{portalName(ad.portal)}</span>
+          <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-fixed-ink">{portalName(ad.portal)}</span>
           <SourceKindBadge kind={kindOfAdvertiser(ad.advertiser_type)} />
           <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(ad.operation)}</span>
           <span className="text-sm font-semibold text-ink">{priceText(ad)}</span>

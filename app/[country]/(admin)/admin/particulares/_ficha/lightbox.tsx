@@ -230,7 +230,7 @@ export function Lightbox({
             </span>
             <span className="sr-only"> elementos</span>
           </span>
-          {kindLabel && <span className="rounded-full bg-gold px-3 py-1.5 crm-label-sm text-ink">{kindLabel}</span>}
+          {kindLabel && <span className="rounded-full bg-gold px-3 py-1.5 crm-label-sm text-fixed-ink">{kindLabel}</span>}
           <span className="hidden min-w-0 truncate text-sm text-white/70 sm:block">{title}</span>
         </div>
         <div className="flex items-center gap-1.5">

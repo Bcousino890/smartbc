@@ -767,7 +767,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                     </span>
                     <span className="flex-1 truncate">{conv.otherName}</span>
                     {conv.unreadCount > 0 && (
-                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-xs font-semibold text-ink">
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-xs font-semibold text-fixed-ink">
                         {conv.unreadCount}
                       </span>
                     )}

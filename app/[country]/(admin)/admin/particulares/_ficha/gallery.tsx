@@ -345,7 +345,7 @@ export function Gallery({
         {/* Etiquetas */}
         <div className="pointer-events-none absolute left-3 top-3 z-[3] flex flex-wrap items-center gap-1.5">
           <span className="rounded-md bg-ink/85 px-2.5 py-1 crm-label-sm text-cream-50 backdrop-blur">{operationLabel}</span>
-          <span className="rounded-md bg-gold px-2.5 py-1 crm-label-sm text-ink">{portalLabel}</span>
+          <span className="rounded-md bg-gold px-2.5 py-1 crm-label-sm text-fixed-ink">{portalLabel}</span>
           {retired && <span className="rounded-md bg-red-600 px-2.5 py-1 crm-label-sm text-white">Retirado</span>}
         </div>
 
