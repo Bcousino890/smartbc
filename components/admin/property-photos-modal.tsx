@@ -325,7 +325,7 @@ function PhotoCard({
       </span>
 
       {isPrincipal && (
-        <span className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 crm-label-sm text-ink">
+        <span className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 crm-label-sm text-fixed-ink">
           <Star size={10} strokeWidth={2} fill="currentColor" />
           {t("adminProps.photos.principal")}
         </span>

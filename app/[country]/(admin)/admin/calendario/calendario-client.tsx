@@ -381,7 +381,7 @@ export function CalendarioClient({
             <button
               type="button"
               onClick={() => openCreate()}
-              className="flex items-center gap-2 rounded-lg bg-gold px-3.5 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-gold/80"
+              className="flex items-center gap-2 rounded-lg bg-gold px-3.5 py-2 text-sm font-medium text-fixed-ink shadow-sm transition hover:bg-gold/80"
             >
               <Plus size={14} strokeWidth={2} />
               Nueva visita
@@ -442,7 +442,7 @@ export function CalendarioClient({
               >
                 <span
                   className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                    isToday ? "bg-gold text-ink" : "text-ink/70"
+                    isToday ? "bg-gold text-fixed-ink" : "text-ink/70"
                   }`}
                 >
                   {day}
@@ -710,7 +710,7 @@ export function CalendarioClient({
                 <button
                   type="submit"
                   disabled={creating}
-                  className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/80 disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-medium text-fixed-ink transition hover:bg-gold/80 disabled:opacity-60"
                 >
                   {creating ? (
                     <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />
@@ -827,7 +827,7 @@ export function CalendarioClient({
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/80 disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-medium text-fixed-ink transition hover:bg-gold/80 disabled:opacity-60"
                 >
                   {saving ? (
                     <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />

@@ -10,6 +10,10 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useThemed } from "@/components/admin/crm-theme";
+import { DARK_CHART } from "@/lib/theme/crm-chart";
+
+const LIGHT_CHROME = { grid: "#e5e7eb", axis: "#6b7280", tooltipBg: "#ffffff", tooltipBorder: "#e5e7eb", tooltipText: undefined as string | undefined, legend: "#6b7280" };
 
 interface TimelineChartProps {
   data: Array<{
@@ -20,6 +24,7 @@ interface TimelineChartProps {
 }
 
 export function TimelineChart({ data }: TimelineChartProps) {
+  const c = useThemed(LIGHT_CHROME, DARK_CHART);
   if (data.length === 0) {
     return (
       <div className="h-80 flex items-center justify-center">
@@ -39,19 +44,20 @@ export function TimelineChart({ data }: TimelineChartProps) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-        <XAxis dataKey="date" stroke="#6b7280" fontSize={12} />
-        <YAxis stroke="#6b7280" fontSize={12} />
+        <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+        <XAxis dataKey="date" stroke={c.axis} fontSize={12} />
+        <YAxis stroke={c.axis} fontSize={12} />
         <Tooltip
           contentStyle={{
-            backgroundColor: "#ffffff",
-            border: "1px solid #e5e7eb",
+            backgroundColor: c.tooltipBg,
+            border: `1px solid ${c.tooltipBorder}`,
             borderRadius: "0.5rem",
+            color: c.tooltipText,
           }}
           formatter={(value: any) => Number(value).toLocaleString()}
         />
         <Legend
-          wrapperStyle={{ fontSize: 12, color: "#6b7280" }}
+          wrapperStyle={{ fontSize: 12, color: c.legend }}
           iconType="line"
         />
         <Line

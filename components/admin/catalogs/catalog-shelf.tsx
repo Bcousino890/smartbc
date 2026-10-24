@@ -250,7 +250,7 @@ function ShelfRow({ c, basePath, groups }: { c: CatalogSummary; basePath: string
       data-testid="shelf-row"
     >
       <Link href={href} tabIndex={-1} aria-hidden="true" className={`block self-start ${archived ? "opacity-60" : ""}`}>
-        <div className="aspect-[150/212] w-full overflow-hidden rounded-sm" data-check-overflow="cover">
+        <div className="crm-theme-light aspect-[150/212] w-full overflow-hidden rounded-sm" data-check-overflow="cover">
           <CatalogCover
             data={{
               title: c.title,

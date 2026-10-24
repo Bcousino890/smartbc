@@ -111,3 +111,12 @@ export function CrmThemeProvider({ userId, children }: { userId: string; childre
 export function useCrmTheme(): Ctx | null {
   return useContext(CrmThemeContext);
 }
+
+/**
+ * Valor según el tema del CRM, para lo que no se pinta con utilidades de
+ * Tailwind (colores de gráficos SVG, estilos en línea). Fuera del CRM, o en
+ * claro, devuelve siempre `light`: así el claro no cambia nunca.
+ */
+export function useThemed<T>(light: T, dark: T): T {
+  return useCrmTheme()?.theme === "dark" ? dark : light;
+}

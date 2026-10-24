@@ -1196,7 +1196,7 @@ function SelectCheckbox({
       className={cn(
         "flex h-[18px] w-[18px] items-center justify-center rounded border transition",
         checked
-          ? "border-gold bg-gold text-ink"
+          ? "border-gold bg-gold text-fixed-ink"
           : "border-ink/25 bg-white hover:border-gold/60",
       )}
     >

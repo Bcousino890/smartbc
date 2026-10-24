@@ -7,6 +7,8 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useToast } from "@/components/ui/toast";
+import { useThemed } from "@/components/admin/crm-theme";
+import { DARK_CHART } from "@/lib/theme/crm-chart";
 import { Modal } from "@/components/ui/modal";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { cn } from "@/lib/utils";
@@ -124,7 +126,7 @@ function EditPhoneModal({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+            className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-fixed-ink transition hover:bg-gold-dark disabled:opacity-60"
           >
             {saving ? "Guardando..." : "Guardar"}
           </button>
@@ -355,6 +357,7 @@ function changeToEntry(c: ParticularChangeRow): TimelineEntry {
 // Historial de cambios del anuncio: timeline (particulares_changes) + gráfico
 // de evolución del precio cuando ha habido al menos un cambio real.
 function ChangeHistory({ row }: { row: ParticularRow }) {
+  const dark = useThemed(false, true);
   const [changes, setChanges] = useState<ParticularChangeRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -466,15 +469,15 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
           <>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(10, 10, 10, 0.08)" />
-                <XAxis dataKey="label" stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} tickLine={false} />
-                <YAxis stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} width={64} domain={["auto", "auto"]} tickFormatter={(v) => groupThousands(Math.round(Number(v)))} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={dark ? DARK_CHART.grid : "rgba(10, 10, 10, 0.08)"} />
+                <XAxis dataKey="label" stroke={dark ? DARK_CHART.axis : "rgba(10, 10, 10, 0.6)"} style={{ fontSize: "12px" }} tickLine={false} />
+                <YAxis stroke={dark ? DARK_CHART.axis : "rgba(10, 10, 10, 0.6)"} style={{ fontSize: "12px" }} width={64} domain={["auto", "auto"]} tickFormatter={(v) => groupThousands(Math.round(Number(v)))} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "rgba(251, 248, 243, 0.97)", border: "1px solid rgba(10, 10, 10, 0.1)", borderRadius: "10px", fontSize: "13px" }}
+                  contentStyle={dark ? { backgroundColor: DARK_CHART.tooltipBg, border: `1px solid ${DARK_CHART.tooltipBorder}`, borderRadius: "10px", fontSize: "13px", color: DARK_CHART.tooltipText } : { backgroundColor: "rgba(251, 248, 243, 0.97)", border: "1px solid rgba(10, 10, 10, 0.1)", borderRadius: "10px", fontSize: "13px" }}
                   formatter={(value: unknown) => [typeof value === "number" ? `${groupThousands(Math.round(value))} €` : "—", "Precio"]}
                   labelFormatter={(label) => `Fecha: ${label}`}
                 />
-                <Line type="stepAfter" dataKey="price" stroke="#8a6d2f" strokeWidth={2.5} dot={{ r: 4, fill: "#8a6d2f", strokeWidth: 0 }} isAnimationActive={false} name="Precio" />
+                <Line type="stepAfter" dataKey="price" stroke={dark ? DARK_CHART.gold : "#8a6d2f"} strokeWidth={2.5} dot={{ r: 4, fill: dark ? DARK_CHART.gold : "#8a6d2f", strokeWidth: 0 }} isAnimationActive={false} name="Precio" />
               </LineChart>
             </ResponsiveContainer>
             {!showChart && (
@@ -685,7 +688,7 @@ function ContactLog({ particularId }: { particularId: string }) {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-fixed-ink transition hover:bg-gold-dark disabled:opacity-60"
             >
               {saving ? (
                 <><Loader2 size={14} className="animate-spin" /> Guardando…</>
@@ -1087,7 +1090,7 @@ export function ParticularModal({
             Propiedad creada · abrir ficha
           </Link>
         ) : (
-          <button onClick={handleCreateProperty} disabled={creating} className={cn(btnPrimary, "w-full bg-gold text-ink hover:bg-gold-dark disabled:opacity-60")}>
+          <button onClick={handleCreateProperty} disabled={creating} className={cn(btnPrimary, "w-full bg-gold text-fixed-ink hover:bg-gold-dark disabled:opacity-60")}>
             <Plus size={14} strokeWidth={2} />
             {creating ? "Creando…" : "Crear propiedad"}
           </button>

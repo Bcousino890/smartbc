@@ -122,7 +122,7 @@ export function SharePanel({
       {/* Rediseño 2026-10-23 (D7): el enlace general, distinto a simple vista del personal. */}
       <div>
         <h2 id="sp-title" tabIndex={-1} className="flex items-center gap-2 text-base font-medium text-ink focus:outline-none">
-          <Link2 className="h-5 w-5 text-[#856329]" aria-hidden="true" /> Enlace general
+          <Link2 className="h-5 w-5 text-gold-text" aria-hidden="true" /> Enlace general
         </h2>
         <p className="mt-1 text-sm text-ink/65">Un solo enlace para compartir el catálogo sin atribuir opiniones a ningún cliente.</p>
       </div>
