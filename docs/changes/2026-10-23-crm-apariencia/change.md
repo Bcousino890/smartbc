@@ -134,3 +134,24 @@ QA local con un Supabase falso en `127.0.0.1` (sesiones sintéticas de dos usuar
 | `npm run test:typography` | Las mismas 21 violaciones que `main` (preexistentes), ninguna nueva. |
 
 Sin selector: nadie puede activar el oscuro con este PR solo.
+
+### PR2 · Superficies y módulos (`fabri/crm-apariencia-superficies`)
+
+Cambios: texto tinta sobre dorado sólido → `text-fixed-ink` (23 sitios); dorado de texto `#856329` como token `gold-text`; gráficos (`recharts`) con rejilla, ejes y tooltip según el tema (`useThemed`, series intactas); variables `--st-*` del gestor con valores oscuros; portadas incrustadas dentro de `.crm-theme-light`; el «velo claro» queda solo para `white` y `cream-50` (el panel `bg-cream-100/30` de Solicitudes salía gris en la primera pasada).
+
+| Comprobación | Resultado |
+| --- | --- |
+| Colores calculados en claro (como en PR1) | 1.651 de 1.651 clases idénticas y las 6 renombradas (`text-fixed-ink`, `text-gold-text`, `decoration-gold-text` y los degradados) idénticas a su versión anterior. |
+| Recorrido en oscuro: 37 rutas × escritorio y móvil (74 capturas) | Todas las secciones del inventario en los dos países con datos sintéticos. Fondos carbón, superficies distinguibles, texto blanco roto; avisos, errores y éxitos con su tono; barra lateral oscura igual que en claro. |
+| Gestor de catálogos (páginas de fixtures; 7 pantallas × claro/oscuro × escritorio/móvil) | Estantería, Viviendas, Textos y fotos, Portada y estilo, Idiomas y Compartir en oscuro con Unbounded/Roboto intactas; la portada incrustada no cambia. |
+| Estados interactivos (11 escenarios × claro/oscuro × escritorio/móvil) | Diálogo «Nuevo cliente» (se pinta en `<body>`), «Nueva visita», cajón de permisos, menú ⋯, desplegable de idioma, notificaciones, panel de filtros, solicitud abierta y foco de teclado: todos en oscuro. |
+| Gráficos | Analytics (líneas y tarta) y precio de particulares legibles en oscuro, series con sus colores. |
+| `npx tsc --noEmit`, `npm run test:crm-appearance`, `npm run test:typography` | En verde; tipografía con las mismas 21 violaciones previas. |
+
+Capturas (antes en claro de `main` · después en oscuro): [dashboard](capturas/dashboard.png), [propiedades](capturas/propiedades.png), [ficha de propiedad](capturas/ficha-propiedad.png), [clientes](capturas/clientes.png), [ficha de cliente](capturas/ficha-cliente.png), [particulares](capturas/particulares.png), [calendario](capturas/calendario.png), [analytics](capturas/analytics-graficos.png), [sindicación](capturas/sindicacion.png), [captación Chile](capturas/chile-captacion.png), [propiedades en móvil](capturas/propiedades-movil.png), [diálogo](capturas/dialogo-nuevo-cliente.png), [solicitud abierta](capturas/solicitud-abierta.png), [permisos](capturas/permisos-usuario.png), [notificaciones](capturas/notificaciones.png), [menú y foco](capturas/menu-y-foco.png), [gestor · viviendas](capturas/gestor-viviendas.png), [gestor · portada](capturas/gestor-portada.png), [gestor · compartir](capturas/gestor-compartir.png).
+
+**Lo que no se ha visto con datos, dicho tal cual:**
+- `mi-espacio/textos-aprobados` y `plantillas-zona`: en el entorno de QA dan error de servidor también en `main` (una acción del servidor pasada a un componente cliente con el Supabase falso). Sus componentes usan las mismas utilidades que el resto del gestor, pero no hay captura.
+- Correo con buzón conectado, chat de WhatsApp con mensajes y `particulares/scraper` (el mapa de zonas propio, con su lienzo claro `#fbf9f4`, se deja como mapa): no hay datos sintéticos para ellos; vistos solo vacíos o sin acceso.
+- La ficha de propiedad en oscuro se capturó antes de que cargaran las teselas del mapa (teselas de OpenStreetMap: se muestran tal cual).
+- Las capturas son de `next dev`: abajo a la izquierda se ve el distintivo de Next.
