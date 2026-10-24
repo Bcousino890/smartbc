@@ -132,6 +132,11 @@ jobs:
       - name: Scrapers de sindicación (fixtures reales, offline)
         run: npm run test:sindicacion
 
+      # Apariencia del CRM: preferencia por usuario, guion previo a la pintura,
+      # claro idéntico al de siempre y contraste del oscuro. Puro, sin red.
+      - name: "Apariencia del CRM: claro intacto y contraste del oscuro (offline)"
+        run: npm run test:crm-appearance
+
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
         env:

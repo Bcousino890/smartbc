@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { ToastProvider } from "@/components/ui/toast";
+import { CrmThemeProvider } from "@/components/admin/crm-theme";
+import { CrmThemeScript } from "@/components/admin/crm-theme-script";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
@@ -156,31 +158,35 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="crm-root relative min-h-screen bg-cream-50">
-      {/* Soft warm background */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[linear-gradient(135deg,#fbf8f3_0%,#f1e9d6_100%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed -left-40 -top-40 z-0 h-[640px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,rgba(255,235,190,0.45),transparent_70%)] blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed -right-32 bottom-0 z-0 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,rgba(201,169,110,0.20),transparent_70%)] blur-3xl"
-      />
+    <CrmThemeProvider userId={profile.id}>
+      <div className="crm-root relative min-h-screen bg-cream-50">
+        {/* Apariencia guardada de este usuario, antes de pintar nada. */}
+        <CrmThemeScript userId={profile.id} />
+        {/* Soft warm background */}
+        <div
+          aria-hidden="true"
+          className="crm-shell-wash pointer-events-none fixed inset-0 z-0"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed -left-40 -top-40 z-0 h-[640px] w-[640px] crm-shell-glow-a rounded-full blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed -right-32 bottom-0 z-0 h-[520px] w-[520px] crm-shell-glow-b rounded-full blur-3xl"
+        />
 
-      <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} country={country} canSwitchCountry={canSwitchCountry} isHomeOwner={homeOwner} />
-        {/* En mobile no hay margen izquierdo (el sidebar está oculto).
-            En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
-            En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
-        <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">
-          <ToastProvider>{children}</ToastProvider>
-        </main>
+        <div className="relative z-10">
+          <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} country={country} canSwitchCountry={canSwitchCountry} isHomeOwner={homeOwner} />
+          {/* En mobile no hay margen izquierdo (el sidebar está oculto).
+              En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
+              En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
+          <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">
+            <ToastProvider>{children}</ToastProvider>
+          </main>
+        </div>
       </div>
-    </div>
+    </CrmThemeProvider>
   );
 }
 
