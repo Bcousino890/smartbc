@@ -30,6 +30,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
+import { AppearanceSelect } from "@/components/admin/appearance-select";
 import { useT } from "@/lib/i18n/provider";
 import {
   canAccess,
@@ -286,6 +287,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
               </p>
             </div>
           </div>
+          <AppearanceSelect />
           <form action={signOutAction} className="mt-3">
             <button
               type="submit"
