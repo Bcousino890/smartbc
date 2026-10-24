@@ -18,6 +18,12 @@
 //   · tareasLargasMs: suma de long tasks del navegador en la ventana.
 //   · consultasVentana: peticiones al simulador (REST/auth) durante la ventana,
 //     agrupadas por tabla. Incluyen precargas y llamadas a /api de la página.
+//   · primerIndicadorMs: clic → aparece un indicador de carga explícito
+//     (`[data-crm-pending="true"]` en la sidebar o `[data-crm-skeleton]`), medido
+//     aparte del primer cambio y del contenido útil (CRM-02, E0).
+//   · precargasAisladas / apisAisladas: las precargas RSC (`Next-Router-Prefetch`)
+//     y las llamadas GET a /api (p. ej. /api/admin/notifications) de la ventana,
+//     repetidas solas: consultas exactas de cada una (CRM-02, E0).
 //   · navegacionAislada: la petición RSC de la navegación repetida sola, con
 //     sus mismas cabeceras: consultas exactas de ESA petición y tamaño de la
 //     respuesta (sin comprimir y gzip). Las consultas son exactas aunque los
@@ -84,9 +90,14 @@ type Net = {
   // Peticiones de navegación (RSC sin precarga, o documento) con sus cabeceras, para
   // repetirlas aisladas: así se cuentan las consultas de ESA petición sola.
   navs: { url: string; headers: Promise<Record<string, string>> }[];
+  prefetches: { url: string; headers: Promise<Record<string, string>> }[];
+  apis: { url: string; headers: Promise<Record<string, string>> }[];
 };
+// Peticiones a /api/admin/notifications por recorrido (todas, no solo las de
+// las ventanas medidas): la campana pide en cada navegación (CRM-02, D2).
+const notificationsBySection: Record<string, number> = {};
 function trackNetwork(page: Page) {
-  let acc: Net = { peticiones: 0, app: [], navs: [] };
+  let acc: Net = { peticiones: 0, app: [], navs: [], prefetches: [], apis: [] };
   let inflight = 0;
   let last = Date.now();
   page.on("request", (req) => {
@@ -99,6 +110,9 @@ function trackNetwork(page: Page) {
     const rsc = h["rsc"] === "1" || u.searchParams.has("_rsc");
     if (isApp && (rsc || req.resourceType() === "document" || req.method() === "POST" || u.pathname.startsWith("/api/"))) {
       if ((rsc ? !h["next-router-prefetch"] : req.resourceType() === "document") && req.method() === "GET") acc.navs.push({ url: req.url(), headers: req.allHeaders() });
+      if (rsc && h["next-router-prefetch"] && req.method() === "GET") acc.prefetches.push({ url: req.url(), headers: req.allHeaders() });
+      if (!rsc && u.pathname.startsWith("/api/") && req.method() === "GET") acc.apis.push({ url: req.url(), headers: req.allHeaders() });
+      if (u.pathname === "/api/admin/notifications" && req.method() === "GET") notificationsBySection[current] = (notificationsBySection[current] ?? 0) + 1;
       acc.app.push(`${req.method()} ${u.pathname}${rsc ? (h["next-router-prefetch"] ? " [rsc·precarga]" : " [rsc]") : req.resourceType() === "document" ? " [documento]" : ""}`);
     }
   });
@@ -110,7 +124,7 @@ function trackNetwork(page: Page) {
   page.on("requestfailed", done);
   return {
     reset: () => {
-      acc = { peticiones: 0, app: [], navs: [] };
+      acc = { peticiones: 0, app: [], navs: [], prefetches: [], apis: [] };
     },
     read: () => acc,
     idle: async (quietMs = 500, maxMs = 30000) => {
@@ -136,8 +150,15 @@ async function measure(
   net.reset();
   // Marca en la página: primer nodo añadido/quitado y long tasks desde ahora.
   await page.evaluate(() => {
-    const w = window as unknown as { __crm01: { t0: number; first: number | null; lt: number } };
-    w.__crm01 = { t0: performance.now(), first: null, lt: 0 };
+    const w = window as unknown as { __crm01: { t0: number; first: number | null; indicator: number | null; lt: number } };
+    w.__crm01 = { t0: performance.now(), first: null, indicator: null, lt: 0 };
+    const INDICATOR = '[data-crm-pending="true"], [data-crm-skeleton]';
+    new MutationObserver((_list, obs) => {
+      if (w.__crm01.indicator === null && document.querySelector(INDICATOR)) {
+        w.__crm01.indicator = performance.now() - w.__crm01.t0;
+        obs.disconnect();
+      }
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-crm-pending", "data-crm-skeleton"] });
     new MutationObserver((list, obs) => {
       if (w.__crm01.first === null && list.some((m) => m.addedNodes.length || m.removedNodes.length)) {
         w.__crm01.first = performance.now() - w.__crm01.t0;
@@ -160,7 +181,7 @@ async function measure(
   const completoMs = Math.max(utilMs, idleAt - t0);
   // Si la navegación recargó el documento, el marcador se perdió.
   const marks = await page
-    .evaluate(() => (window as unknown as { __crm01?: { first: number | null; lt: number } }).__crm01 ?? null)
+    .evaluate(() => (window as unknown as { __crm01?: { first: number | null; indicator: number | null; lt: number } }).__crm01 ?? null)
     .catch(() => null);
   await new Promise((r) => setTimeout(r, 150));
   const sim = summarizeSim(simLines().slice(before));
@@ -180,11 +201,27 @@ async function measure(
       consultas: summarizeSim(simLines().slice(b)),
     });
   }
+  const replayGroup = async (items: { url: string; headers: Promise<Record<string, string>> }[]) => {
+    const out: { peticion: string; estado: number; consultas: ReturnType<typeof summarizeSim> }[] = [];
+    for (const n of items) {
+      const headers = await n.headers;
+      const b = simLines().length;
+      const res = await fetch(n.url, { headers: { ...headers, "accept-encoding": "identity" } });
+      await res.arrayBuffer();
+      await new Promise((r) => setTimeout(r, 60));
+      out.push({ peticion: new URL(n.url).pathname, estado: res.status, consultas: summarizeSim(simLines().slice(b)) });
+    }
+    const total = out.reduce((a, x) => a + x.consultas.total, 0);
+    return { peticiones: out.length, consultasTotal: total, consultasPorPeticion: out.length ? +(total / out.length).toFixed(1) : 0, detalle: out };
+  };
+  const precargasAisladas = await replayGroup(net.read().prefetches);
+  const apisAisladas = await replayGroup(net.read().apis);
   const m = {
     recorrido: current,
     navegacion: name,
     url: new URL(page.url()).pathname + new URL(page.url()).search,
     primerCambioMs: marks?.first != null ? Math.round(marks.first) : null,
+    primerIndicadorMs: marks?.indicator != null ? Math.round(marks.indicator) : null,
     documentoRecargado: marks === null,
     utilMs,
     completoMs,
@@ -192,11 +229,13 @@ async function measure(
     red: { peticiones: net.read().peticiones, app: net.read().app },
     consultasVentana: sim,
     navegacionAislada: aislada,
+    precargasAisladas,
+    apisAisladas,
   };
   measurements.push(m);
   const iso = aislada.map((a) => `${a.peticion} ${a.consultas.total} consultas, ${(a.bytesSinComprimir / 1024).toFixed(0)} KB (${(a.bytesGzip / 1024).toFixed(0)} KB gzip)`).join(" · ");
   console.log(
-    `  ⏱  ${name}: primer cambio ${m.primerCambioMs ?? "—"} ms · útil ${utilMs} ms · completo ${completoMs} ms · ventana ${sim.total} consultas${iso ? ` · aislada: ${iso}` : ""}`,
+    `  ⏱  ${name}: indicador ${m.primerIndicadorMs ?? "—"} ms · primer cambio ${m.primerCambioMs ?? "—"} ms · útil ${utilMs} ms · completo ${completoMs} ms · ventana ${sim.total} consultas${iso ? ` · aislada: ${iso}` : ""}${precargasAisladas.peticiones ? ` · ${precargasAisladas.peticiones} precargas = ${precargasAisladas.consultasTotal} consultas` : ""}${apisAisladas.peticiones ? ` · ${apisAisladas.peticiones} /api = ${apisAisladas.consultasTotal} consultas` : ""}`,
   );
   return m;
 }
@@ -432,6 +471,45 @@ section("R9 · Lista filtrada → ficha → story → ficha → lista");
   await tab.close();
 }
 
+section("R10 · Galería de fotos desde la lista (abrir, cerrar, reabrir, otra propiedad)");
+{
+  // «Lista» = el modal muestra sus miniaturas (o marca data-crm-gallery="ready").
+  const modalTitle = page.getByText("Fotos de la propiedad", { exact: true });
+  const thumbs = () => page.locator('[data-crm-gallery-item], div[draggable="true"]');
+  const galleryReady = async () => {
+    await modalTitle.waitFor({ timeout: 60000 });
+    await page.waitForFunction(
+      () => Boolean(document.querySelector('[data-crm-gallery="ready"]')) || document.querySelectorAll('[data-crm-gallery-item], div[draggable="true"]').length > 0,
+      undefined,
+      { timeout: 60000 },
+    );
+  };
+  const closeModal = async () => {
+    await page.keyboard.press("Escape");
+    await modalTitle.waitFor({ state: "hidden", timeout: 10000 }).catch(async () => {
+      await page.getByRole("button", { name: /Cerrar/ }).first().click();
+      await modalTitle.waitFor({ state: "hidden", timeout: 10000 });
+    });
+  };
+  // Número de fotos que anuncia la fila (insignia sobre la portada).
+  const rowCount = async (i: number) =>
+    Number((await page.locator('li[id^="propiedad-"]').nth(i).getByRole("button", { name: /Gestionar fotos/ }).textContent())?.match(/\d+/)?.[0] ?? NaN);
+  await page.goto(listUrl, { waitUntil: "domcontentloaded" });
+  await listReady(page);
+  await net.idle();
+  const manage = (i: number) => page.locator('li[id^="propiedad-"]').nth(i).getByRole("button", { name: /Gestionar fotos/ });
+  const expected0 = await rowCount(0);
+  await measure(page, net, "abrir galería (1.ª vez)", () => manage(0).click(), galleryReady);
+  check("la galería muestra tantas fotos como anuncia la fila", (await thumbs().count()) === expected0, `fila=${expected0} galería=${await thumbs().count()}`);
+  await closeModal();
+  await measure(page, net, "reabrir la misma galería", () => manage(0).click(), galleryReady);
+  await closeModal();
+  const expected1 = await rowCount(1);
+  await measure(page, net, "abrir la galería de otra propiedad", () => manage(1).click(), galleryReady);
+  check("otra propiedad: la galería es la suya", (await thumbs().count()) === expected1, `fila=${expected1} galería=${await thumbs().count()}`);
+  await closeModal();
+}
+
 section("R5 · Sidebar → Clientes → ficha → Atrás");
 await page.goto(`${BASE}/${COUNTRY}/admin`, { waitUntil: "domcontentloaded" });
 await page.locator("aside").first().waitFor();
@@ -485,7 +563,7 @@ if (OUT) {
   writeFileSync(
     OUT,
     JSON.stringify(
-      { etiqueta: LABEL, variante: VARIANT, base: BASE, fecha: new Date().toISOString(), nota: "Mediciones LOCALES contra el simulador; no son tiempos de producción.", comprobaciones: checks, mediciones: measurements, externasAbortadas: [...new Set(blocked)] },
+      { etiqueta: LABEL, variante: VARIANT, pasada: process.env.PASADA ?? null, base: BASE, fecha: new Date().toISOString(), nota: "Mediciones LOCALES contra el simulador; no son tiempos de producción.", comprobaciones: checks, mediciones: measurements, notificacionesPorRecorrido: notificationsBySection, externasAbortadas: [...new Set(blocked)] },
       null,
       2,
     ),
