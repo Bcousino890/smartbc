@@ -11,6 +11,7 @@ import { getPropertyTags, getTagLinksByProperty } from "@/lib/db/queries/propert
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { ArchivedToggle } from "./archived-toggle";
 import { PropertiesAdminClient } from "./properties-admin-client";
 
 // Datos en vivo: el catálogo tiene que reflejar altas/ediciones/imports al
@@ -108,12 +109,7 @@ export default async function AdminPropiedadesPage({
             Mostrando también propiedades archivadas
           </span>
         )}
-        <a
-          href={showArchived ? "?archivadas=0" : "?archivadas=1"}
-          className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
-        >
-          {showArchived ? "Ocultar archivadas" : "Ver archivadas"}
-        </a>
+        <ArchivedToggle showArchived={showArchived} />
       </div>
 
       <PropertiesAdminClient

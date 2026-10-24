@@ -10,14 +10,22 @@
 //   · Sirve tablas en memoria cargadas de un JSON sintético.
 //   · Respeta lo que la app pide de verdad: las columnas del `select` (con las
 //     relaciones anidadas tal como están en el JSON) y los filtros eq, neq,
-//     in, is, gt, gte, lt, lte, ilike, además de order, limit y offset.
+//     in, is, gt, gte, lt, lte, ilike y `or=(…)` de condiciones simples,
+//     además de order, limit y offset.
 //     Si la app pide una columna, la recibe; si no la pide, no.
 //   · `Accept: application/vnd.pgrst.object+json` (single) → un objeto, o 406.
 //   · Una tabla desconocida devuelve []. Una escritura devuelve 201/204 sin
 //     guardar. Las RPC devuelven null. Todo queda en el registro de
 //     peticiones, para poder comprobar qué consultas hizo la app.
 //
-//   node --experimental-strip-types scripts/sim/postgrest-sim.mts <puerto> <datos.json> <registro.jsonl> [carpeta-imágenes]
+//   · Opcional `--auth`: sirve `GET /auth/v1/user` SOLO para los tokens
+//     sintéticos de la clave `auth.users` del JSON (token → usuario). Cualquier
+//     otro token, o ninguno, recibe 401. No hay login, refresco ni escrituras.
+//   · Opcional `--latency <ms>`: espera SIMULADA antes de cada respuesta, para
+//     modelar el viaje de red a Supabase. Queda anotada en cada línea del
+//     registro (`simLatencyMs`): un tiempo medido así no es un tiempo real.
+//
+//   node --experimental-strip-types scripts/sim/postgrest-sim.mts <puerto> <datos.json> <registro.jsonl> [carpeta-imágenes] [--auth] [--latency <ms>]
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -84,6 +92,20 @@ export function applyFilters(rows: Row[], params: URLSearchParams): { rows: Row[
   let out = rows;
   for (const [col, raw] of params) {
     if (RESERVED.has(col)) continue;
+    // `or=(a.eq.1,b.eq.2)`: basta con que una condición simple se cumpla.
+    // Las anidadas (`and(…)`, `or(…)`) no se simulan y quedan como desconocidas.
+    if (col === "or" && /^\(.*\)$/s.test(raw)) {
+      const parts = splitTop(raw.slice(1, -1)).map((c) => {
+        const i = c.indexOf(".");
+        return [c.slice(0, i), c.slice(i + 1)] as const;
+      });
+      if (parts.some(([c, v]) => !c || /^(and|or)\(/.test(c) || v.startsWith("("))) {
+        unknown.push(`${col}=${raw}`);
+        continue;
+      }
+      out = out.filter((r) => parts.some(([c, v]) => applyFilters([r], new URLSearchParams([[c, v]])).rows.length === 1));
+      continue;
+    }
     const dot = raw.indexOf(".");
     const neg = raw.startsWith("not.");
     const expr = neg ? raw.slice(4) : raw;
@@ -158,18 +180,22 @@ export function applyOrder(rows: Row[], order: string | null): Row[] {
   });
 }
 
-function startServer(port: number, dataFile: string, logFile: string, imgDir: string | null) {
+type Options = { auth: boolean; latencyMs: number };
+
+function startServer(port: number, dataFile: string, logFile: string, imgDir: string | null, opts: Options) {
   const all = JSON.parse(readFileSync(dataFile, "utf8")) as Record<string, unknown>;
   const rpcs = (all.rpc ?? {}) as Record<string, unknown>;
-  const tables = Object.fromEntries(Object.entries(all).filter(([k]) => k !== "rpc")) as Record<string, Row[]>;
-  const log = (entry: Record<string, unknown>) => appendFileSync(logFile, JSON.stringify({ t: Date.now(), ...entry }) + "\n");
+  const authUsers = ((all.auth as { users?: Record<string, Row> } | undefined)?.users ?? {}) as Record<string, Row>;
+  const tables = Object.fromEntries(Object.entries(all).filter(([k]) => k !== "rpc" && k !== "auth")) as Record<string, Row[]>;
+  const log = (entry: Record<string, unknown>) =>
+    appendFileSync(logFile, JSON.stringify({ t: Date.now(), ...entry, ...(opts.latencyMs ? { simLatencyMs: opts.latencyMs } : {}) }) + "\n");
 
   const send = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
     res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...headers });
     res.end(body === undefined ? "" : JSON.stringify(body));
   };
 
-  const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+  const handle = (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
     const method = req.method ?? "GET";
     const path = url.pathname;
@@ -185,6 +211,14 @@ function startServer(port: number, dataFile: string, logFile: string, imgDir: st
       log({ method, path, kind: "img", status: 200, bytes: body.length });
       res.writeHead(200, { "Content-Type": "image/jpeg", "Content-Length": String(body.length) });
       return res.end(body);
+    }
+    if (opts.auth && path === "/auth/v1/user" && method === "GET") {
+      req.resume();
+      const token = (req.headers["authorization"] ?? "").replace(/^Bearer\s+/i, "");
+      const user = token ? authUsers[token] : undefined;
+      log({ method, path, kind: "auth", hit: Boolean(user) });
+      if (!user) return send(res, 401, { code: 401, error_code: "bad_jwt", msg: "invalid JWT" });
+      return send(res, 200, user);
     }
     if (path.startsWith("/rest/v1/rpc/")) {
       const fn = path.slice("/rest/v1/rpc/".length);
@@ -232,11 +266,20 @@ function startServer(port: number, dataFile: string, logFile: string, imgDir: st
       return send(res, 200, projected[0]);
     }
     return send(res, 200, projected, { "Content-Range": `0-${Math.max(0, projected.length - 1)}/${filtered.length}` });
+  };
+  const server = createServer((req, res) => {
+    if (opts.latencyMs > 0) setTimeout(() => handle(req, res), opts.latencyMs);
+    else handle(req, res);
   });
   server.listen(port, "127.0.0.1", () => console.log(`postgrest-sim en http://127.0.0.1:${port} (${Object.keys(tables).join(", ")})`));
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()!)) {
-  const [port, dataFile, logFile, imgDir] = process.argv.slice(2);
-  startServer(Number(port), dataFile, logFile, imgDir ?? null);
+  const args = process.argv.slice(2);
+  const auth = args.includes("--auth");
+  const li = args.indexOf("--latency");
+  const latencyMs = li >= 0 ? Number(args[li + 1]) || 0 : 0;
+  const positional = args.filter((a, i) => !a.startsWith("--") && !(li >= 0 && i === li + 1));
+  const [port, dataFile, logFile, imgDir] = positional;
+  startServer(Number(port), dataFile, logFile, imgDir ?? null, { auth, latencyMs });
 }

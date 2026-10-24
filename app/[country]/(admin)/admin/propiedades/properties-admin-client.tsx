@@ -57,6 +57,7 @@ import { useT } from "@/lib/i18n/provider";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { canAccess } from "@/lib/permissions";
 import { type AdminPropertyFilters, matchesAdminPropertyFilters } from "@/lib/properties/admin-filter";
+import { buildListSearch, rowAnchorId, withReturnContext } from "@/lib/properties/admin-list-url";
 import { PORTAL_URL } from "@/lib/portal-url";
 import type { AdminProperty, AdminPropertyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -77,19 +78,48 @@ const STATUS_LABELS: Record<AdminPropertyStatus, string> = {
   draft: "Borrador",
 };
 
-export function PropertiesAdminClient({
-  properties: propertiesProp,
-  agencies,
-  currentRole,
-  country,
-  initialTags = [],
-}: {
+type PropertiesAdminProps = {
   properties: AdminProperty[];
   agencies: AgencyOption[];
   currentRole?: string;
   country: Country;
   initialTags?: PropertyTag[];
-}) {
+};
+
+// La lista lee los filtros de la URL al montarse y después la escribe ella
+// misma con replaceState. Si la URL cambia por OTRA vía sin remontar la página
+// (el menú «Propiedades» estando en una lista filtrada, «Ver archivadas»…), se
+// remonta para que el estado vuelva a salir de la URL: la URL manda, y los
+// controles nunca contradicen la barra de direcciones (CRM-01).
+export function PropertiesAdminClient(props: PropertiesAdminProps) {
+  const search = useSearchParams().toString();
+  const ownWrite = useRef<string | null>(null);
+  const seen = useRef(search);
+  const [generation, setGeneration] = useState(0);
+  useEffect(() => {
+    if (search === seen.current) return;
+    seen.current = search;
+    if (search !== ownWrite.current) setGeneration((g) => g + 1);
+  }, [search]);
+  return (
+    <PropertiesAdminList
+      key={generation}
+      {...props}
+      onUrlWrite={(qs) => {
+        ownWrite.current = qs;
+      }}
+    />
+  );
+}
+
+function PropertiesAdminList({
+  properties: propertiesProp,
+  agencies,
+  currentRole,
+  country,
+  initialTags = [],
+  onUrlWrite,
+}: PropertiesAdminProps & { onUrlWrite: (search: string) => void }) {
   const config = getCountryConfig(country);
   const t = useT();
   const { toast } = useToast();
@@ -285,33 +315,33 @@ export function PropertiesAdminClient({
   // siendo instantáneo con el catálogo entero en memoria. `replace` en vez de
   // `push` para no llenar el historial de estados intermedios: "atrás" desde
   // una ficha te devuelve a la lista, no a cada letra que tecleaste.
+  const urlState = {
+    query,
+    tagFilter,
+    operationFilter,
+    statusFilter,
+    zoneFilter,
+    subzoneFilter,
+    agencyFilter,
+    stayFilter,
+    bedroomsFilter,
+    bathroomsFilter,
+    floorFilter,
+    minPrice,
+    maxPrice,
+    minM2,
+    maxM2,
+    page,
+  };
   useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    const set = (key: string, value: string) => {
-      if (value) sp.set(key, value);
-      else sp.delete(key);
-    };
-    set("q", query);
-    set("etiquetas", tagFilter.join(","));
-    set("operacion", operationFilter);
-    set("estado", statusFilter);
-    set("distrito", zoneFilter);
-    set("zona", subzoneFilter);
-    set("agencia", agencyFilter);
-    set("estancia", stayFilter);
-    set("dormitorios", bedroomsFilter);
-    set("banos", bathroomsFilter);
-    set("planta", floorFilter);
-    set("precioMin", minPrice);
-    set("precioMax", maxPrice);
-    set("m2Min", minM2);
-    set("m2Max", maxM2);
-    set("pagina", page > 1 ? String(page) : "");
-    const qs = sp.toString();
+    const qs = buildListSearch(urlState, window.location.search);
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     if (url !== window.location.pathname + window.location.search) {
+      onUrlWrite(qs);
       window.history.replaceState(null, "", url);
     }
+    // urlState se reconstruye en cada render; las dependencias son sus campos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     query,
     operationFilter,
@@ -330,6 +360,39 @@ export function PropertiesAdminClient({
     page,
     tagFilter,
   ]);
+
+  // Si la página ya no existe (otro conjunto tras «Ver archivadas», datos que
+  // cambiaron…), se queda en la última y la URL se corrige: la página de la
+  // URL siempre es la que se ve. Si sigue existiendo, no se toca.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  // Consulta actual de la lista para el «Volver» de cada ficha (`?volver=`).
+  // Se calcula del estado, no de window.location: en este render la URL aún no
+  // se ha reescrito. `searchParams` aporta lo que la lista no maneja
+  // (`archivadas`).
+  const returnSearch = buildListSearch({ ...urlState, page: safePage }, searchParams.toString());
+
+  // Al volver de una ficha, la URL trae el ancla de su fila (#propiedad-…):
+  // se lleva a la vista y se resalta un momento (decisión D1).
+  const [highlightSlug, setHighlightSlug] = useState<string | null>(null);
+  useEffect(() => {
+    let hash = "";
+    try {
+      hash = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
+    const slug = hash.startsWith(rowAnchorId("")) ? hash.slice(rowAnchorId("").length) : "";
+    if (!slug) return;
+    const el = document.getElementById(rowAnchorId(slug));
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    setHighlightSlug(slug);
+    const timer = window.setTimeout(() => setHighlightSlug(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const hasActiveFilters = Boolean(
     tagFilter.length > 0 ||
@@ -840,6 +903,8 @@ export function PropertiesAdminClient({
                 canEdit={canEdit}
                 selected={selected.has(p.id)}
                 onToggleSelect={() => toggleOne(p.id)}
+                highlighted={highlightSlug === p.id}
+                returnSearch={returnSearch}
                 config={config}
                 tags={(p.tagIds ?? []).map((id) => tagById.get(id)).filter((t): t is PropertyTag => Boolean(t))}
               />
@@ -860,6 +925,8 @@ function PropertyRow({
   canEdit = true,
   selected = false,
   onToggleSelect,
+  highlighted = false,
+  returnSearch = "",
   config,
   tags = [],
 }: {
@@ -867,6 +934,8 @@ function PropertyRow({
   canEdit?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
+  highlighted?: boolean;
+  returnSearch?: string;
   config: ReturnType<typeof getCountryConfig>;
   tags?: PropertyTag[];
 }) {
@@ -877,18 +946,20 @@ function PropertyRow({
   const formatted = config.formatPrice(property.price, property.currency);
   const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
   const photoCount = property.photos?.length ?? 0;
-  const editHref = `${config.prefix}/propiedades/${property.id}`;
+  const editHref = withReturnContext(`${config.prefix}/propiedades/${property.id}`, returnSearch);
   // Referencia visible: SIEMPRE la BC. Las de portal y la PROP-… viven en la
   // ficha (Notas internas), no aquí.
   const bcRef = property.bcReference;
 
   return (
     <li
+      id={rowAnchorId(property.id)}
       className={cn(
-        "relative flex flex-col gap-3 rounded-2xl border p-3 transition sm:flex-row sm:items-center sm:gap-4 sm:p-3.5",
+        "relative flex scroll-mt-24 flex-col gap-3 rounded-2xl border p-3 transition sm:flex-row sm:items-center sm:gap-4 sm:p-3.5",
         selected
           ? "border-gold/50 bg-gold/10"
           : "border-gold/10 bg-white/65 hover:border-gold/35 hover:bg-white/90",
+        highlighted && "ring-2 ring-gold/60",
       )}
     >
       <div className="flex items-start gap-3 sm:contents">
