@@ -118,3 +118,19 @@ Sin migraciones, datos, permisos ni integraciones. La preferencia vive en el nav
 ### Aprobación
 
 Encargo de Fabricio del 2026-10-23: alcance y decisiones D1–D10 aprobados; pide registrar especificación, plan e inventario antes de programar y ejecutar en PR pequeños sin reabrir decisiones. Paradas: antes de cada merge, y si aparece un bloqueo que exija dependencia nueva, migración o cambio de comportamiento.
+
+## Resultado
+
+QA local con un Supabase falso en `127.0.0.1` (sesiones sintéticas de dos usuarios del equipo y una clienta, filas inventadas para las tablas que piden las páginas, fotos SVG generadas); `next dev` sin `.env` y con claves ficticias. Ninguna llamada a producción, IA ni servicios de pago. Los guiones de QA viven en el scratchpad de la sesión (no se versionan).
+
+### PR1 · Motor del tema (`fabri/crm-apariencia`)
+
+| Comprobación | Resultado |
+| --- | --- |
+| `npm run test:crm-appearance` | En verde: preferencia por usuario, almacenamiento roto o ausente, guion previo (mismas reglas que `resolveTheme`, `<` escapado), 4.608 combinaciones utilidad·opacidad con el color de siempre como respaldo, cada variable usada tiene valor oscuro, contrastes del oscuro. |
+| Colores calculados en claro (Tailwind compilado de `main` y de la rama, cada clase medida en Chromium sin el atributo) | 1.650 de 1.650 clases idénticas, más las 3 renombradas (degradados de la cáscara) idénticas a su versión anterior. Es la prueba de que la web pública, el portal y el CRM en claro no cambian. |
+| Capturas en claro antes/después (51 pantallas del CRM comparadas píxel a píxel) | 25 idénticas. Las distintas que se revisaron (calendario, agencias) cambian por contenido que depende de la hora: el «hoy» del calendario y los «hace N min» cambiaron de día entre una pasada y otra. Por eso la prueba de identidad que vale es la de colores calculados, no la de píxeles. |
+| `npx tsc --noEmit` | Sin errores. |
+| `npm run test:typography` | Las mismas 21 violaciones que `main` (preexistentes), ninguna nueva. |
+
+Sin selector: nadie puede activar el oscuro con este PR solo.
