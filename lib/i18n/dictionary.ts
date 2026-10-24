@@ -57,6 +57,11 @@ const es: Strings = {
   "sidebar.mensajes": "Mensajes",
   "sidebar.role.client": "Cliente",
   "sidebar.logout": "Cerrar sesión",
+  "appearance.label": "Apariencia",
+  "appearance.light": "Claro",
+  "appearance.dark": "Oscuro",
+  "appearance.system": "Según el sistema",
+  "appearance.notSaved": "Este navegador no deja guardarla: vale solo para esta página.",
 
   // Propiedades page
   "propiedades.title": "Propiedades disponibles",
@@ -1570,6 +1575,11 @@ const en: Strings = {
   "sidebar.mensajes": "Messages",
   "sidebar.role.client": "Client",
   "sidebar.logout": "Sign out",
+  "appearance.label": "Appearance",
+  "appearance.light": "Light",
+  "appearance.dark": "Dark",
+  "appearance.system": "Match system",
+  "appearance.notSaved": "This browser can't save it: it only applies to this page.",
 
   "propiedades.title": "Available properties",
   "propiedades.subtitle":
@@ -3052,6 +3062,11 @@ const fr: Strings = {
   "sidebar.mensajes": "Messages",
   "sidebar.role.client": "Client",
   "sidebar.logout": "Déconnexion",
+  "appearance.label": "Apparence",
+  "appearance.light": "Clair",
+  "appearance.dark": "Sombre",
+  "appearance.system": "Selon le système",
+  "appearance.notSaved": "Ce navigateur ne permet pas de l’enregistrer : elle ne vaut que pour cette page.",
 
   "propiedades.title": "Propriétés disponibles",
   "propiedades.subtitle":
@@ -4520,6 +4535,11 @@ const de: Strings = {
   "sidebar.mensajes": "Nachrichten",
   "sidebar.role.client": "Kunde",
   "sidebar.logout": "Abmelden",
+  "appearance.label": "Darstellung",
+  "appearance.light": "Hell",
+  "appearance.dark": "Dunkel",
+  "appearance.system": "Wie das System",
+  "appearance.notSaved": "Dieser Browser kann sie nicht speichern: Sie gilt nur für diese Seite.",
 
   "propiedades.title": "Verfügbare Immobilien",
   "propiedades.subtitle":

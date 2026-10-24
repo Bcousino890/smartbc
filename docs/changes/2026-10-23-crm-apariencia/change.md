@@ -5,7 +5,7 @@ Cada persona del equipo puede elegir en el CRM interno una apariencia clara, osc
 - **Tamaño:** medio (solo interfaz; sin migraciones, datos, permisos ni integraciones).
 - **Responsable:** Fabricio
 - **Rama base:** `fabri/crm-apariencia` (worktree `wt/crm-apariencia`), con una rama por PR apilada sobre la anterior (ver «Plan»).
-- **Estado:** plan aprobado por el encargo del 2026-10-23 (alcance y decisiones aprobados por Fabricio; ver «Decisiones»).
+- **Estado:** implementado en 3 PR apilados (#364 y siguientes), pendientes del merge de Fabricio.
 
 ## Especificación
 
@@ -155,3 +155,19 @@ Capturas (antes en claro de `main` · después en oscuro): [dashboard](capturas/
 - Correo con buzón conectado, chat de WhatsApp con mensajes y `particulares/scraper` (el mapa de zonas propio, con su lienzo claro `#fbf9f4`, se deja como mapa): no hay datos sintéticos para ellos; vistos solo vacíos o sin acceso.
 - La ficha de propiedad en oscuro se capturó antes de que cargaran las teselas del mapa (teselas de OpenStreetMap: se muestran tal cual).
 - Las capturas son de `next dev`: abajo a la izquierda se ve el distintivo de Next.
+
+### PR3 · Selector (`fabri/crm-apariencia-selector`)
+
+`<select>` nativo «Apariencia» (Claro / Oscuro / Según el sistema; es, en, fr, de) en la tarjeta de cuenta de la barra lateral, encima de «Cerrar sesión»; también en el cajón móvil.
+
+| Comprobación (Chromium, servidor de QA) | Resultado |
+| --- | --- |
+| `qa-selector`: 34 comprobaciones, escritorio y móvil | Todas en verde: etiqueta accesible y tres opciones; sin preferencia = claro; «Oscuro» se aplica al momento y se guarda para ese usuario; al recargar el oscuro ya está puesto antes de que aparezca el primer `<main>` (sin destello); sigue al navegar a otra sección y al cambiar de España a Chile; al salir a `/login` en la misma pestaña se quita; «Según el sistema» sigue al sistema en vivo (oscuro → claro → oscuro); otro usuario en el mismo navegador abre en claro y su elección no toca la del primero (una clave por usuario); `/login`, `/seleccion/…` y el portal del cliente (`/inicio`) no reciben el tema aunque haya oscuro guardado; con el almacenamiento bloqueado abre en claro, el selector funciona en la página y avisa de que no se guarda; se alcanza con Tab; sin errores de página. |
+| Permisos | El selector no añade enlaces ni rutas: el diff de la barra lateral es una línea (`<AppearanceSelect />`) y la lista de módulos sigue saliendo de `visibleItems`. |
+| Pasos de la CI en local sobre este commit (todos los `npm run` de `ci.yml` salvo `build`, más `tsc` y `lint-migrations`) | 33 de 33 en verde. |
+| Build aislado (`git archive`, sin `.env.production`, `NEXT_BUILD_DIR=.next.qa`) | Compila (153 páginas) en PR2 y en PR3. El de PR3 falló una vez en el cargador de `next/font` de Google (`loader.js:122`, en `studio/fonts.ts`, que este trabajo no toca; fallo intermitente ya conocido) y compiló al repetir. |
+| `npm run test:typography` | Las mismas 21 violaciones previas. |
+
+Capturas: [selector en escritorio y con almacenamiento bloqueado](capturas/selector-escritorio.png), [selector en el cajón móvil](capturas/selector-movil.png).
+
+Sin revisión de Codex (no pedida).
