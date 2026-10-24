@@ -5,7 +5,7 @@ Volver de una ficha a la lista de Propiedades sin perder filtros, página ni fil
 - **Tamaño:** medio. Cualquier cambio posterior en identidad, autorización, vigencia de permisos o esquema de base de datos es grande o sensible y requiere su propio plan explícito.
 - **Responsable:** Fabricio
 - **Rama:** `fabri/crm-01-regreso-propiedades`: un solo PR, con el arnés y la línea base, la implementación y el resultado en commits separados
-- **Estado:** plan aprobado; T0 implementado
+- **Estado:** implementado; PR abierto, pendiente de merge por Fabricio
 
 ## Especificación
 
@@ -25,6 +25,9 @@ Comprobado en el código (`e0be8c7a`):
 
 - `D1 (2026-10-24)`: «conservar la posición de lectura» = volver a la **fila de origen**, con un ancla en la URL y un resalte breve. No se guarda el píxel de scroll. Si la fila ya no está en esa página, la lista queda arriba.
 - `D2 (2026-10-24)`: respuesta al clic (PR-B) = **esqueleto del módulo y elemento de la sidebar en estado pendiente** (`loading.tsx` + `useLinkStatus`), con los tokens de claro/oscuro.
+- `D3 (2026-10-24)`: el trayecto lista filtrada → ficha → story → ficha → lista entra en esta corrección, con pestañas nuevas y salidas seguras, reutilizando el mismo contrato de `volver` y los mismos límites de país.
+- `D4 (2026-10-24)`: un solo PR contra `main` desde la rama superior, con el arnés y la línea base y la implementación en commits separados. Sin un PR apilado solo con el arnés.
+- `D5 (2026-10-24)`: esta corrección de navegación es de tamaño medio. Los cambios posteriores en identidad, autorización, vigencia de permisos o esquema de base de datos siguen siendo grandes o sensibles y requieren su propio plan explícito.
 
 ### Alcance
 
@@ -33,12 +36,13 @@ Comprobado en el código (`e0be8c7a`):
 - Reproducción del defecto.
 - Mediciones de referencia.
 
-**PR-A, contrato de regreso en Propiedades:**
+**Implementación, contrato de regreso en Propiedades:**
 - `volver=` en los enlaces de las filas, saneado con una lista blanca.
 - «Volver» y «borrar» con contexto.
 - Ancla a la fila.
 - Archivadas conservando filtros.
 - Página fuera de rango corregida.
+- Trayecto por la story (D3).
 
 **Siguientes entregas** (cada una con su propio plan):
 - PR-B: respuesta inmediata al clic.
@@ -48,7 +52,6 @@ Comprobado en el código (`e0be8c7a`):
 ### Fuera de alcance
 
 - Persistir la selección múltiple entre ficha y lista.
-- Propagar `volver` por ficha → story → ficha.
 - Paginación en servidor.
 - Cachés globales de identidad o permisos.
 - Cambios de SQL, índices o esquema.
@@ -69,7 +72,7 @@ Comprobado en el código (`e0be8c7a`):
 
 ### Impacto en datos y despliegue
 
-Ninguno: sin migraciones, sin datos reales ni integraciones. T0 solo añade scripts de prueba y documentación. PR-A cambia código de cliente y una página del admin. Un merge a `main` despliega.
+Ninguno: sin migraciones, sin datos reales ni integraciones. El commit de T0 solo añade scripts de prueba y documentación. La implementación cambia código de cliente y páginas del admin (lista, ficha y story). Un merge a `main` despliega.
 
 ### Aprobación de la especificación
 
@@ -83,7 +86,7 @@ Ninguno: sin migraciones, sin datos reales ni integraciones. T0 solo añade scri
 
 ### Tareas
 
-1. **T0 · Arnés y línea base** (este PR, sin cambios en la app):
+1. **T0 · Arnés y línea base** (primer commit del PR, sin cambios en la app):
    - `scripts/sim/postgrest-sim.mts`: nuevas opciones `--auth` (sirve `GET /auth/v1/user` solo para los tokens sintéticos del JSON) y `--latency <ms>` (espera simulada, anotada en el registro). Además entiende `or=(…)` de condiciones simples.
    - `scripts/sim/fixtures/crm-01-admin.gen.mts`: datos sintéticos deterministas.
      - 1.700 propiedades con 8-15 fotos cada una, 30 agencias, 20 etiquetas, 300 clientes y conversaciones.
@@ -92,10 +95,10 @@ Ninguno: sin migraciones, sin datos reales ni integraciones. T0 solo añade scri
      - Mide clic → primer cambio, clic → contenido útil y clic → red en reposo.
      - Repite la petición de cada navegación por separado, para contar sus consultas y su tamaño exactos.
    - Verificación: el arnés reproduce el defecto (rojo) y deja cifras de referencia en `medidas/`.
-2. **PR-A · Regreso con contexto:**
+2. **Implementación · Regreso con contexto** (segundo commit del mismo PR):
    - `lib/properties/admin-list-url.ts` (puro), con test `scripts/test-admin-properties-list-url.mts` en CI.
-   - Cambios en `properties-admin-client.tsx`, `property-edit-view.tsx` y `propiedades/page.tsx` (interruptor cliente).
-   - Verificación: el mismo arnés en verde en R1-R4, `tsc`, los tests de CI y el build.
+   - Cambios en `properties-admin-client.tsx`, `property-edit-view.tsx`, `propiedades/page.tsx` (interruptor cliente) y la story (`[slug]/story/page.tsx` y `story-client.tsx`).
+   - Verificación: el mismo arnés en verde en R1-R4, R8 y R9, `tsc`, los tests de CI y el build.
 3. **PR-B, PR-C y PR-D:** según el plan aprobado, cada uno medido con este mismo arnés antes y después.
 
 ### Pasos de entorno que autoriza el plan
@@ -170,6 +173,39 @@ Qué dicen estos números:
    - Las precargas automáticas: al entrar en `/es/admin` se precargan 20 rutas, cada una pasa por el middleware.
 5. **Clientes → ficha = 29 consultas en una sola petición** (7 de `profiles`) y **Solicitudes = 16** (6 de `lead_inbox_facts`). Es el candidato de PR-D.
 
+### Implementación · Regreso con contexto
+
+Cambios (commit `CRM-01: volver a la lista de Propiedades…`):
+
+- `lib/properties/admin-list-url.ts` (nuevo, puro):
+  - `buildListSearch` construye la consulta de la lista; es el mismo serializador que usa el efecto que escribe la URL.
+  - `sanitizeListQuery` la sanea: lista blanca de claves, primera aparición de cada una, valores de 200 caracteres como máximo, `pagina` entero ≥ 2, `archivadas` solo `1`. Un array (parámetro repetido) da vacío.
+  - `withReturnContext`, `listReturnHref` y `rowAnchorId` forman los enlaces. La ruta del regreso la pone siempre el prefijo del país actual.
+- `properties-admin-client.tsx`:
+  - La fila enlaza con `?volver=`.
+  - Cada fila lleva `id="propiedad-<slug>"` y `scroll-mt-24`. La fila de origen se resalta 2,5 s con `ring-gold/60` (D1).
+  - Una página fuera de rango se corrige a la última.
+  - Un envoltorio remonta la lista si la URL cambia por otra vía que no sea su propio `replaceState`. Así la URL manda (R2: menú «Propiedades» desde una lista filtrada).
+- `[slug]/property-edit-view.tsx`:
+  - «Volver» usa `listReturnHref(prefijo, volver, slug)`.
+  - El enlace «Story del SmartLink» lleva el mismo `volver`.
+  - Borrar hace `router.replace` a la lista con contexto.
+- `[slug]/story/page.tsx` y `story-client.tsx`: la story recibe la consulta ya saneada en el servidor, y «Volver a la propiedad» la devuelve a la ficha. El flujo de la cola (`from=queue`, «Volver a la cola») no cambia.
+- `archived-toggle.tsx` (nuevo, cliente) en lugar del `<a href="?archivadas=…">`. Cambia solo `archivadas` sobre la consulta actual y navega con `Link`.
+- `scripts/test-admin-properties-list-url.mts`: 34 comprobaciones. Cubren `volver` manipulados (`//evil`, `https://…`, `javascript:`, otro país, codificación doble, barras invertidas, arrays), la ida y vuelta fila → ficha → lista y el trayecto con la story. Encadenado en `npm run test:admin-properties`, que ya corre en CI.
+
+Resultado del arnés: los mismos datos, los mismos recorridos y la misma máquina; `main` y la rama compiladas por separado (`medidas/base-*.json` frente a `medidas/pr-a-*.json`).
+
+| Variante | `main` (`e0be8c7a`) | Esta rama |
+|---|---|---|
+| Escritorio | 11/29 | **29/29** |
+| Escritorio, 40 ms simulados | 11/29 | **29/29** |
+| Móvil simulado | 11/28 | **28/28** |
+
+- Rendimiento: la corrección no cambia el número de consultas ni el tamaño de ninguna navegación. Los tiempos quedan dentro del ruido de medida (por ejemplo, menú → Propiedades: 335 → 296 ms en escritorio y 1.843 → 1.890 ms en móvil simulado).
+- La excepción es «Ver archivadas»: deja de recargar el documento (23 consultas y 2.809 KB) y pasa a ser una navegación interna (9 consultas y 2.372 KB). Tiempo hasta el contenido útil: 270 → 244 ms en escritorio y 2.074 → 1.421 ms en móvil simulado.
+- Capturas en claro y oscuro, escritorio y móvil, de la ficha, del regreso con la fila resaltada y de «Ver archivadas»: revisadas a ojo. No hay cambios de estilo fuera del resalte. La story no cambia de aspecto, solo el destino de su enlace.
+
 ### Medición en producción (opcional; la ejecuta Fabricio)
 
 Pegar en la consola de DevTools del CRM real **después** de navegar por el recorrido. Solo devuelve la ruta sin consulta, la duración y el tamaño; no lee cookies, tokens ni contenido. No exportar HAR, porque contiene cookies.
@@ -190,13 +226,24 @@ copy(JSON.stringify(performance.getEntriesByType("resource").concat(performance.
 | Arnés, escritorio con 40 ms simulados | ídem, `--latency 40` | 11/29 |
 | Arnés, móvil simulado | ídem | 11/28 (R7 solo en escritorio) |
 | Peticiones externas | arnés | solo teselas de `tile.openstreetmap.org` (mapa de la ficha), abortadas |
+| Rama: arnés en las tres variantes | ídem, build de la rama | 29/29, 29/29, 28/28 |
+| Rama: `npx tsc --noEmit` | `wt/crm-01` | sin errores |
+| Rama: los 33 `npm run test:*` de CI (incluidos `test:admin-properties` con el test nuevo, `test:permission-scope` con las regresiones de identidad de #361, `test:user-rank` y `test:crm-appearance`) | `wt/crm-01` | 33/33 en verde |
+| Rama: `python3 scripts/lint-migrations.py` | `wt/crm-01` | en verde (sin migraciones) |
+| Rama: `next build` con variables dummy | `wt/crm-01` | correcto |
 
 ### Criterios de aceptación
 
 | Criterio | Estado | Evidencia |
 |---|---|---|
-| AC1-AC6 | fallido en `e0be8c7a` (esperado: es la reproducción) | `medidas/base-escritorio.json` |
-| AC7 | demostrado en `e0be8c7a` | arnés, sección «Identidad» |
+| AC1 fila, filtros y página al volver, también por la story | fallido en `main` → **demostrado** | R1, R3 y R9, `medidas/pr-a-*.json` |
+| AC2 Atrás/Adelante y menú sin contradicciones | fallido → **demostrado** | R2 |
+| AC3 la URL manda, recarga, sin historial por tecla | **demostrado** | R2 («una URL explícita reconstruye los filtros»); la lista sigue usando `replaceState` |
+| AC4 salida segura y sin destinos externos ni de otro país | **demostrado** | R3, R9 (story sin contexto y con `volver` manipulado) y los 34 tests de `admin-list-url` |
+| AC5 archivadas conserva filtros y ajusta la página | fallido → **demostrado** | R4 y R8 (página fuera de rango) |
+| AC6 borrar vuelve con contexto, sin la ficha en el historial | fallido → **demostrado** | R8 (historial +1, no +2) |
+| AC7 identidad | **demostrado** antes y después | arnés «Identidad»; `test:permission-scope` y `test:user-rank` en verde sin cambios |
+| AC8 estilo y claro/oscuro | **demostrado a ojo** | capturas en claro/oscuro, escritorio/móvil |
 
 ### Revisión
 
@@ -206,8 +253,10 @@ Sin revisión de Codex: no se ha pedido.
 
 - Los tiempos son locales o con latencia simulada; los de producción los obtiene Fabricio con el fragmento de consola.
 - El recuento real de propiedades por país, archivadas incluidas, frente al tope de 2.000 (C3b) lo confirma Fabricio.
-- La medición no cubre el recorrido 8 del informe (guardar o archivar y volver con datos que cambian): el simulador no guarda escrituras. PR-A lo cubre por diseño (siempre se vuelven a pedir los datos) y con la prueba de borrado.
+- La medición no cubre el recorrido 8 del informe (guardar o archivar y volver con datos que cambian): el simulador no guarda escrituras. La corrección lo cubre por diseño (el regreso es una navegación nueva y siempre vuelve a pedir los datos) y con la prueba de borrado.
+- La selección múltiple sigue sin conservarse entre ficha y lista, como hasta ahora y a propósito (fuera de alcance).
+- La falta de indicador pendiente, las precargas y `/api/admin/notifications` en cada navegación siguen igual: son la siguiente entrega de rendimiento, con su propio plan.
 
 ### PR, CI y merge
 
-Pendiente de abrir. El merge lo hace Fabricio y despliega.
+Un solo PR desde `fabri/crm-01-regreso-propiedades` contra `main` (D4). El merge lo hace Fabricio y despliega.
