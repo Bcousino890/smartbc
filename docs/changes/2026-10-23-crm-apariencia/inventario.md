@@ -21,7 +21,7 @@ Qué cubre el tema, qué se revisa a mano y qué queda protegido. Base: `origin/
 
 | Área | Rutas | Piezas con riesgo |
 | --- | --- | --- |
-| Inicio / panel | `admin`, `admin/dashboard`, `admin/mi-espacio` | `dashboard-greeting-card` (hex), `components/dashboard/*` |
+| Inicio / panel | `admin`, `admin/dashboard`, `admin/mi-espacio` | `dashboard-greeting-card` (sombras con hex, sin cambio). `components/dashboard/*` no lo importa nadie (código sin uso): no se toca. |
 | Propiedades | `propiedades`, `[slug]`, `[slug]/story`, `story-review`, `importar`, `importar/pdf` | `properties-admin-client` (hex, `bg-gold text-ink`), `property-edit-view` (hex, `iframe`), fotos, vídeo, etiquetas (colores de datos) |
 | Catálogos (gestor) | `mi-espacio/catalogos/[id]`, `textos-aprobados`, `plantillas-zona` | `studio.module.css` (`--st-*` + retoques), `catalog-cover` incrustada (protegida) |
 | Clientes | `clientes`, `clientes/[id]` | `client-detail-panel(-cl)` (hex), mapas Leaflet, enlaces del portal, itinerarios |
@@ -39,11 +39,11 @@ Qué cubre el tema, qué se revisa a mano y qué queda protegido. Base: `origin/
 
 ## 3. Pares que la regla general no resuelve (se arreglan uno a uno en PR2)
 
-- **Texto tinta sobre dorado sólido** (`bg-gold … text-ink`): ~20 sitios (calendario, mensajes, particulares, propiedades, agencias, clientes, publicación, fotos, recomendaciones). En oscuro el texto tinta pasa a claro → `text-fixed-ink`.
+- **Texto tinta sobre dorado sólido** (`bg-gold … text-ink`): 23 sitios (hecho en PR2) (calendario, mensajes, particulares, propiedades, agencias, clientes, publicación, fotos, recomendaciones). En oscuro el texto tinta pasa a claro → `text-fixed-ink`.
 - **Texto sobre foto**: rótulos y botones sobre imágenes con `bg-black/…` o `bg-ink/…` y `text-white` (siguen igual por diseño); revisar los que usen `text-ink` sobre `bg-white/…` encima de fotos.
 - **Colores literales**: `bg-[#…]`, `text-[#…]` y hex en `style` (lista de ~50 archivos en la exploración): verde de WhatsApp (marca, se queda), `#856329` (dorado de texto) → token, degradados de las cáscaras → tokens, ejes y rejillas de gráficos → tokens.
 - **Gráficos** (`recharts`): `timeline-chart`, `device-chart`, `particular-modal`. Series con sus colores; ejes, rejilla y tooltip con tokens.
-- **Mapas** (Leaflet): teselas y controles propios del mapa sin tocar; solo el marco.
+- **Mapas** (Leaflet y el mapa de zonas propio de `scraper-control`): teselas, lienzo y controles del mapa sin tocar.
 - **Colores de datos** (etiquetas de propiedades con color elegido por el usuario): se muestran tal cual.
 
 ## 4. Protegido (no recibe nunca el tema)
