@@ -72,7 +72,7 @@ Lo que la tabla anterior dejaba sin medir (las consultas exactas de una precarga
   - La galería completa se carga al abrir el modal, con las reglas de acceso y los límites de país actuales. Se conservan la subida, el borrado, el orden y la elección de portada.
   - Etiquetas en paralelo.
   - Agencias reducidas a `name, slug` en esta página.
-  - Proyección explícita de columnas en lugar de `*` para la lista.
+  - Proyección explícita de columnas en lugar de `*` para la lista. **Aplazada; no se hizo en E1** (ver «Cierre · Alcance aprobado que quedó pendiente»).
 - **E2 · Respuesta inmediata (D2):**
   - `app/[country]/(admin)/admin/loading.tsx` genérico.
   - Esqueletos específicos de Propiedades, ficha, Clientes y Solicitudes.
@@ -134,7 +134,7 @@ Si una mejora no se ve en los números locales, no se presenta como mejora. Los 
    - Repetir la línea base en las tres variantes.
 2. **E1 · Propiedades ligera:**
    - `propertyRowToAdminListItem` (adaptador nuevo): `photoCount` = número tras `dedupePhotosByUrl`, `coverPhotoUrl` (o la primera foto) y sin `photos`. Se mantienen los campos que usan `admin-filter.ts`, `admin-search.ts` y la fila; `floor` se sigue resolviendo en el servidor con título, características y descripción.
-   - Consulta de lista con columnas explícitas. Agencias `name, slug`. `getPropertyTags` dentro del `Promise.all`.
+   - Consulta de lista con columnas explícitas (**aplazado**, ver «Cierre»). Agencias `name, slug`. `getPropertyTags` dentro del `Promise.all`.
    - Galería: `GET /api/admin/properties/[slug]/photos`, con el mismo permiso que hoy deja abrir el modal; el modal la pide al abrirse.
    - Script de paridad (AC3) en CI.
 3. **E2 · Respuesta inmediata:**
@@ -377,19 +377,49 @@ Alternativa B: medición con el código de E2 más una variante solo para medir,
 - Las combinaciones que no se habían medido juntas se comprobaron en local con el arnés antes de subirlas:
   - E3 sobre E2: 33/33 y 31/31;
   - E1 sobre todo lo anterior: 38/38 y 36/36, con 879 KB y 9 consultas en la lista.
-- La CI de `main` pasa en verde tras #373 y #372. La de `94c19f46` se lanzó tras el merge de #370.
+- **CI de `main`** en verde en el último merge, `94c19f46299d5e2ca97b2cf93e49078ee4ceea96` (run 40209174652). También en `000c3070` (#372, run 40207849153) y `d9c35b43` (#373, run 40207416142).
 - Fabricio hizo todos los merges. Ninguno incluye migraciones ni cambios de sesión o permisos.
 
-**Pendiente de comprobar en producción** (no se pudo con el simulador):
-- **Modal de fotos de la lista:** abrir la galería, subir, borrar, reordenar y cambiar la portada, y que el número de fotos y la portada de la fila se actualicen después. Subir y borrar no llegaron nunca al almacenamiento real en las pruebas.
-- **Campana:** cerrar sesión y entrar con otra cuenta en la misma pestaña no debe enseñar avisos de la anterior. Está cubierto solo por tests puros.
-- **Tiempos reales:** todas las cifras de este expediente son locales o simuladas. Para tenerlos de producción, sirve el fragmento de consola de CRM-01 (`docs/changes/2026-10-24-crm-01-navegacion/change.md`).
+**QA de producción:** pendiente; ver la tabla «QA de producción» más abajo. Subir y borrar fotos nunca llegaron al almacenamiento real en las pruebas. El cambio de cuenta en la misma pestaña solo está cubierto por tests puros. Todas las cifras de tiempo de este expediente son locales o simuladas.
 
-**Fuera de este expediente** (requieren su propio plan, grande o sensible, D5):
-- quitar la segunda llamada a `getUser()` del middleware;
-- reducir las lecturas repetidas de identidad y permisos por petición (12 consultas por petición a la campana; 29 en la ficha de un cliente);
-- agregar los recuentos de mensajes en SQL;
-- que la consulta de la lista deje de traer `*` con todas las fotos: E1 no reduce el trabajo de la base de datos.
+**Alcance aprobado que quedó pendiente: columnas explícitas en la consulta de la lista**
+
+El plan aprobado de E1 incluía cambiar `select("*, agencies(name, slug), property_photos(url, is_cover, position)")` de `getProperties` por una lista explícita de columnas. **No se hizo.** E1 se fusionó sin ese punto, y la consulta de la lista sigue siendo la misma (AC16 ya lo decía: el trabajo de la base de datos no bajó).
+
+Motivo técnico:
+- **Lo que hay que inventariar:** el adaptador de la lista usa más columnas de las que parece. `resolveFloor` deduce la planta a partir de `floor_override`, `features`, `features_manual`, `title` y `description`, y además están `currency`, `property_reference`, `bc_reference`, `operations`, `stay`, `cover_photo_url` y otras. Hay que inventariarlas todas.
+- **El riesgo:** si falta una, la planta, los filtros o la búsqueda pueden cambiar sin dar ningún error. Si sobra una que no existe, PostgREST responde 400 y la lista entera deja de cargar.
+- **Lo que el simulador no puede demostrar:** sirve cualquier columna que se le pida, así que no confirma que la lista de columnas coincida con el esquema real.
+- **Las fotos:** se siguen necesitando todas para contar las fotos sin repetidos y elegir la portada de respaldo. Contarlas en la base de datos cambiaría la regla de deduplicación o requeriría SQL nuevo.
+- Se aplazó para no fusionar algo que no se podía verificar de punta a punta en este entorno.
+
+Clasificación: **mediano**, no grande ni sensible.
+- No toca identidad, autorización, vigencia de permisos ni el esquema. Tampoco necesita migraciones ni SQL nuevo: es la lista de columnas de una consulta PostgREST que ya existe.
+- Necesita: el inventario de columnas desde el adaptador, los filtros y la búsqueda; contrastarlo con el esquema real (`lib/db/database.types.ts` y migraciones); una prueba de paridad del adaptador con filas completas frente a filas proyectadas; y medir el tráfico entre la base de datos y Next.
+- Las fotos se mantienen como hoy, salvo que se apruebe aparte cambiar la regla de recuento.
+- Puede ir en una tarea propia con `change.md`, como E1.
+
+**Otras optimizaciones medidas y no abordadas**, cada una con el tamaño que le corresponde según el flujo (`docs/workflow/README.md`) y D5:
+- **Grandes o sensibles** (identidad y permisos):
+  - quitar la segunda llamada a `getUser()` del middleware;
+  - reducir las lecturas repetidas de identidad y permisos por petición: 12 consultas por cada petición a la campana y 29 en la ficha de un cliente.
+- **Grande o sensible** (SQL y esquema): agregar los recuentos de mensajes del layout en una función SQL o RPC. Requiere una migración.
+- **Medianas, sin tocar identidad, permisos, SQL ni esquema** (candidatas, no evaluadas en detalle):
+  - aplicar el mismo patrón de E2 a lista → ficha y «Volver», que hoy no tienen indicador;
+  - en la ficha de una propiedad, paralelizar `getSharesForProperty` y las etiquetas, y leer solo los enlaces de etiquetas de esa propiedad.
+  - Cada una se dimensiona al proponerla. No requieren por sí mismas un plan grande.
+
+### QA de producción (pendiente; lo hace Fabricio)
+
+Nada de lo siguiente está verificado. Las pruebas de este expediente usan datos sintéticos y un simulador, y no demuestran el rendimiento en producción ni el funcionamiento del almacenamiento real.
+
+| Comprobación | Resultado |
+|---|---|
+| Modal de fotos de la lista: abrir, subir, borrar, reordenar y cambiar la portada; el número de fotos y la portada de la fila se actualizan | pendiente |
+| Campana: cerrar sesión y entrar con otra cuenta en la misma pestaña no muestra avisos de la anterior | pendiente |
+| Tiempos reales de navegación (fragmento de consola de CRM-01) | pendiente; opcional |
+
+Los resultados se anotarán aquí cuando Fabricio los facilite.
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 
