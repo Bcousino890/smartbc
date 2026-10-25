@@ -277,7 +277,8 @@ async function clickSidebar(page: Page, name: RegExp) {
   // dentro, se abre y se espera a que termine de entrar.
   const box = await nav.boundingBox().catch(() => null);
   if (!box || box.x < 0) {
-    await page.waitForTimeout(350);
+    // Solo si está a medio cerrar (parte visible); cerrado del todo, como siempre.
+    if (box && box.x + box.width > 0) await page.waitForTimeout(350);
     await page.getByRole("button", { name: "Abrir menú" }).click();
     await page.waitForFunction(
       (re) => {
