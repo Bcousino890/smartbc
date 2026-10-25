@@ -124,7 +124,7 @@ Se mide con el arnés de CRM-01/CRM-02, en builds equivalentes (copia aislada si
 
 Sin migraciones ni datos reales. Las consultas siguen siendo lecturas PostgREST. Un merge a `main` despliega.
 
-## Plan (borrador)
+## Plan
 
 **Entregas** (PR pequeños e independientes, cada uno contra `main` con su CI; ninguno se fusiona sin Fabricio):
 
@@ -144,6 +144,48 @@ Orden propuesto: C, B y A. A espera a la consulta autorizada para no fusionar co
   - **Tamaño almacenado** por fila (`pg_column_size` de la consulta autorizada): da una proporción orientativa entre la fila entera y las columnas de la lista en los datos reales. **No es tráfico de red**: el JSON tiene otra codificación (nombres de clave, comillas, números en texto, arrays) y su tamaño no coincide con el almacenado.
   - La reducción real del tráfico en producción quedará **sin medir** salvo que alguien la mida allí.
 - Ninguna mejora de tiempo se presentará como de producción.
+
+## Resultado · PR-C (ficha)
+
+Medido el 2026-10-25 en la misma sesión: `main` `a604f260` (base) frente a la rama (`2997bb93`, el código de la ficha). Copias aisladas sin `.env`, 3 pasadas por variante, en frío y en caliente; mediana (mín–máx). **Todo es local o simulado: no son tiempos de producción.** Los datos sintéticos y el arnés son los de esta rama para los dos builds (`FIXTURE_GEN`/`HARNESS`), así que la base y la rama se miden con lo mismo.
+
+**Contenido útil en lista → ficha (ms):**
+
+| Variante | Recorrido | Base frío | Rama frío | Base caliente | Rama caliente |
+|---|---|---|---|---|---|
+| 40 ms simulados | R1 (filtros y página 2) | 654 (649–672) | **536** (523–546) | 662 (648–681) | **530** (506–535) |
+| 40 ms simulados | R2 | 656 (628–656) | **520** (519–525) | 656 (639–678) | **539** (508–540) |
+| escritorio | R1 | 120 (106–130) | 116 (109–123) | 115 (105–115) | 95 (90–100) |
+| escritorio | R2 | 74 (58–76) | 70 (62–73) | 77 (76–84) | 68 (64–69) |
+| móvil (CPU y red simuladas) | R1 | 608 (598–613) | 592 (591–598) | 593 (589–613) | 588 (587–590) |
+| móvil | R2 | 561 (561–606) | 560 (548–592) | 562 (557–628) | 548 (548–557) |
+
+- Con 40 ms por consulta se ahorran ~120 ms: los tres viajes en serie que desaparecen. Sin latencia, y en móvil (donde manda la red simulada del navegador, no la de la base de datos), la diferencia está dentro del ruido. Que la mejora real en producción sea mayor o menor depende de la latencia real, que no se ha medido.
+- «Volver», la lista y el resto de recorridos no cambian (dentro del ruido).
+
+| # | Criterio | Resultado |
+|---|---|---|
+| AC1 | Contrato de navegación | 42/42 (escritorio y 40 ms) y 40/40 (móvil) en las 36 corridas, base y rama |
+| AC8 | Saltos de datos en serie | 6 → 3: (propiedad ‖ etiquetas del país) → (medios ‖ SmartLinks ‖ etiquetas de la ficha) → aperturas, solo si hay SmartLinks. Con 40 ms simulados, el ahorro medido (~120 ms) cuadra con 3 saltos |
+| AC9 | Consultas de la ficha | 13 → 13: identidad y permisos 8 (igual); datos 5 (`properties`, `property_media`, `property_shares`, `property_tags`, `property_tag_links`). Los enlaces de etiquetas pasan a una lectura por `property_id`, sin paginar el país |
+| AC10 | Contenido útil lista → ficha (40 ms) | 654 → 536 ms (R1) y 656 → 520 ms (R2), en frío |
+| AC11 | Paridad de la ficha | ver abajo; y `test-admin-property-detail-tags` (cruce con el catálogo del país, igual que el mapa completo anterior) |
+| AC12 | CI | `tsc`, tests y build en local; CI del PR |
+
+**Paridad de texto (R13).** Se compara el texto completo de 6 fichas sintéticas (con y sin etiquetas, con etiquetas de `cl` que no deben salir, con y sin SmartLinks, aperturas, vídeo y plano) entre base y rama, en las 18 pasadas de cada una: 108 comparaciones.
+- 88 idénticas.
+- 20 difieren **solo** en marcas de tiempo relativas («Hace 212 h» → «Hace 213 h», 30 líneas en total): la última apertura de un SmartLink se pinta relativa a la hora actual y la base se midió antes. La comparación acepta únicamente líneas `Hace N min|h|d` en las dos versiones; cualquier otra diferencia contaría como fallo.
+- 0 diferencias de otro tipo.
+
+**Story, PDF y errores.** Mismo estado y tipo de respuesta en base y rama (una pasada adicional de cada build):
+
+| Petición | Base | Rama |
+|---|---|---|
+| Ficha que existe / que no | 200 html / 404 html | 200 html / 404 html |
+| Story que existe / que no | 200 html / 404 html | 200 html / 404 html |
+| PDF que existe / que no | 200 pdf / 404 json | 200 pdf / 404 json |
+
+Los errores de la base de datos no se pueden provocar en el simulador. Se conservan por construcción: la lectura de la propiedad sigue lanzando su error (antes y ahora); los medios siguen ignorando el suyo (lista vacía); los SmartLinks siguen lanzando; las etiquetas del país y de la ficha siguen fallando en vacío. La story y el PDF usan `getPropertyBySlugForAdmin`, que ahora se compone de las dos piezas nuevas en el mismo orden y devuelve el mismo objeto.
 
 ## Consulta de solo lectura para la persona autorizada
 

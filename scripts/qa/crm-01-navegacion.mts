@@ -692,6 +692,7 @@ await ctx.close();
 // `es` no debe mostrarlas.
 section("R13 · Ficha: etiquetas, SmartLinks, aperturas y medios (paridad)");
 const fichas: Record<string, string> = {};
+const salidas: Record<string, string> = {};
 {
   const c = await newContext(TOKEN);
   const { page: p } = await newPage(c);
@@ -706,6 +707,20 @@ const fichas: Record<string, string> = {};
   check("la ficha 1 muestra sus dos etiquetas del país", /Destacada/.test(fichas["sim-propiedad-1"]) && /Lujo/.test(fichas["sim-propiedad-1"]));
   check("la ficha 1 muestra su plano y su SmartLink", /plano-sintetico-1\.pdf/.test(fichas["sim-propiedad-1"]) && /simtoken0x0/.test(fichas["sim-propiedad-1"]));
   check("una ficha sin enlaces ni medios no muestra los de otra", !/simtoken|plano-sintetico/.test(fichas["sim-propiedad-2"]));
+  // Mismos resultados y errores en los otros usos de la lectura de la ficha:
+  // story y PDF, con un slug que existe y con uno que no.
+  for (const [nombre, ruta] of [
+    ["ficha", `${LIST}/sim-propiedad-1`],
+    ["ficha inexistente", `${LIST}/no-existe-crm03`],
+    ["story", `${LIST}/sim-propiedad-1/story`],
+    ["story inexistente", `${LIST}/no-existe-crm03/story`],
+    ["PDF", `/api/admin/properties/sim-propiedad-1/pdf`],
+    ["PDF inexistente", `/api/admin/properties/no-existe-crm03/pdf`],
+  ] as const) {
+    const r = await p.request.get(`${BASE}${ruta}`, { maxRedirects: 0 });
+    salidas[nombre] = `${r.status()} ${(r.headers()["content-type"] ?? "").split(";")[0]}`;
+  }
+  check("ficha, story y PDF responden (estado y tipo anotados para comparar builds)", salidas["ficha"].startsWith("200") && salidas["story"].startsWith("200") && salidas["PDF"].startsWith("200"), JSON.stringify(salidas));
   await c.close();
 }
 
@@ -729,7 +744,7 @@ if (OUT) {
   writeFileSync(
     OUT,
     JSON.stringify(
-      { etiqueta: LABEL, variante: VARIANT, pasada: process.env.PASADA ?? null, base: BASE, fecha: new Date().toISOString(), nota: "Mediciones LOCALES contra el simulador; no son tiempos de producción.", comprobaciones: checks, mediciones: measurements, notificacionesPorRecorrido: notificationsBySection, externasAbortadas: [...new Set(blocked)], fichas },
+      { etiqueta: LABEL, variante: VARIANT, pasada: process.env.PASADA ?? null, base: BASE, fecha: new Date().toISOString(), nota: "Mediciones LOCALES contra el simulador; no son tiempos de producción.", comprobaciones: checks, mediciones: measurements, notificacionesPorRecorrido: notificationsBySection, externasAbortadas: [...new Set(blocked)], fichas, salidas },
       null,
       2,
     ),
