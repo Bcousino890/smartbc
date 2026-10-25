@@ -14,6 +14,10 @@
 # Necesita node_modules del checkout principal (NODE_MODULES_DIR, por defecto
 # el de `git worktree list` en primera posición) con la versión de `next` del
 # lockfile del commit. Puertos: 3271 (app) y 54371 (simulador).
+#
+# FIXTURE_GEN y HARNESS (rutas absolutas, opcionales) usan el generador de datos
+# y el arnés de OTRO checkout en vez de los del commit medido: así la línea base
+# y la rama se miden con los mismos datos y los mismos recorridos (CRM-03).
 set -euo pipefail
 
 COMMIT=${1:?commit}
@@ -50,7 +54,9 @@ have=$(node -p "require('$NODE_MODULES_DIR/next/package.json').version")
 
 ENVV=(NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:$SIM_PORT NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon SUPABASE_SERVICE_ROLE_KEY=dummy-service NEXT_TELEMETRY_DISABLED=1)
 echo "· datos sintéticos"
-(cd "$COPY" && node --experimental-strip-types scripts/sim/fixtures/crm-01-admin.gen.mts "$OUT/fixture.json" "$OUT/img" 2>/dev/null)
+FIXTURE_GEN=${FIXTURE_GEN:-$COPY/scripts/sim/fixtures/crm-01-admin.gen.mts}
+HARNESS=${HARNESS:-$COPY/scripts/qa/crm-01-navegacion.mts}
+(cd "$COPY" && node --experimental-strip-types "$FIXTURE_GEN" "$OUT/fixture.json" "$OUT/img" 2>/dev/null)
 
 start_sim() {
   stop $SIM_PORT
@@ -75,7 +81,7 @@ run() {
   [ "$variant" = "escritorio-lat40" ] && vv=escritorio
   (cd "$COPY" && BASE=http://127.0.0.1:$APP_PORT SIM_LOG="$OUT/sim-$LABEL.jsonl" OUT="$OUT/$LABEL-$variant-$pasada.json" \
     LABEL="$LABEL-$variant" PASADA="$pasada" VARIANT=$vv \
-    node --experimental-strip-types scripts/qa/crm-01-navegacion.mts > "$OUT/run-$LABEL-$variant-$pasada.log" 2>&1) || true
+    node --experimental-strip-types "$HARNESS" > "$OUT/run-$LABEL-$variant-$pasada.log" 2>&1) || true
   echo "  $variant $pasada: $(grep -e 'comprobaciones' -e 'Error' "$OUT/run-$LABEL-$variant-$pasada.log" | head -1)"
 }
 

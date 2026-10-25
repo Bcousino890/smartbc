@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
-import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
+import {
+  getPropertyMediaForAdmin,
+  getPropertyRowBySlugForAdmin,
+} from "@/lib/db/queries/properties";
 import { getSharesForProperty } from "@/lib/db/queries/shares";
-import { getPropertyTags, getTagLinksByProperty } from "@/lib/db/queries/property-tags";
+import { getPropertyTags, getTagIdsForProperty } from "@/lib/db/queries/property-tags";
+import { tagIdsInCatalog } from "@/lib/properties/tags";
 import { guardPage } from "@/lib/auth/guard";
 import type { Country } from "@/lib/country-config";
 import { PropertyEditView } from "./property-edit-view";
@@ -14,10 +18,16 @@ export default async function PropertyDetailPage({
   params: Promise<{ slug: string; country: Country }>;
 }) {
   const { slug, country } = await params;
+  // El acceso se decide antes de leer ningún dato de la ficha.
   await guardPage("properties", country);
+  // La propiedad y el catálogo de etiquetas del país no dependen entre sí.
+  const [row, allTags] = await Promise.all([
+    getPropertyRowBySlugForAdmin(slug),
+    getPropertyTags(country),
+  ]);
   // Cast: supabase-js no infiere bien filas tipo `properties` con joins,
   // así que la respuesta llega como `never`. Forzamos el shape concreto.
-  const property = (await getPropertyBySlugForAdmin(slug)) as
+  const property = row as
     | (Record<string, unknown> & {
         id: string;
         slug: string;
@@ -72,18 +82,26 @@ export default async function PropertyDetailPage({
               source_height: number | null;
             }>
           | null;
-        property_media:
-          | Array<{
-              id: string;
-              url: string;
-              file_name: string;
-              type: "video" | "plan";
-              storage_path: string;
-            }>
-          | null;
       })
     | null;
   if (!property) notFound();
+
+  // Con el id ya conocido: medios, SmartLinks (con stats de aperturas) y las
+  // etiquetas de ESTA propiedad, en paralelo. Mismos errores que antes: los
+  // SmartLinks lanzan; medios y etiquetas fallan en vacío.
+  const [allMedia, shares, linkedTagIds] = await Promise.all([
+    getPropertyMediaForAdmin(property.id) as Promise<
+      Array<{
+        id: string;
+        url: string;
+        file_name: string;
+        type: "video" | "plan";
+        storage_path: string;
+      }>
+    >,
+    getSharesForProperty(property.id),
+    allTags.length > 0 ? getTagIdsForProperty(property.id) : Promise.resolve([]),
+  ]);
 
   const agency = Array.isArray(property.agencies)
     ? property.agencies[0] ?? null
@@ -93,20 +111,14 @@ export default async function PropertyDetailPage({
     .slice()
     .sort((a, b) => a.position - b.position);
 
-  const allMedia = property.property_media ?? [];
   const videos = allMedia.filter((m) => m.type === "video");
   const plans = allMedia.filter((m) => m.type === "plan");
-
-  // SmartLinks de esta propiedad (con stats de aperturas).
-  const shares = await getSharesForProperty(property.id);
-  const allTags = await getPropertyTags(country);
-  const tagLinks = await getTagLinksByProperty(allTags.map((t) => t.id));
 
   return (
     <PropertyEditView
       shares={shares}
       allTags={allTags}
-      tagIds={tagLinks[property.id] ?? []}
+      tagIds={tagIdsInCatalog(linkedTagIds, allTags)}
       country={country}
       videos={videos}
       plans={plans}
