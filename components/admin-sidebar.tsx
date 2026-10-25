@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { AppearanceSelect } from "@/components/admin/appearance-select";
@@ -115,6 +115,12 @@ interface AdminSidebarProps {
 export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, unreadNotifications = 0, onOpenChange, country = "es", canSwitchCountry = false, isHomeOwner = false }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
+  // Precarga por intención (CRM-02 · D7): los enlaces del menú no se precargan
+  // al aparecer en pantalla (21 precargas y 63 consultas al entrar en el panel,
+  // sin adelantar la página); se precargan al pasar el puntero, con el foco de
+  // teclado o al tocar, y el mismo toque navega.
+  const router = useRouter();
+  const intent = (href: string) => () => router.prefetch(href);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Build nav prefix based on country
@@ -241,6 +247,10 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                 <li key={href}>
                   <Link
                     href={href}
+                    prefetch={false}
+                    onMouseEnter={intent(href)}
+                    onTouchStart={intent(href)}
+                    onFocus={intent(href)}
                     onClick={closeMobile}
                     className={cn(
                       "crm-nav flex items-center gap-3 rounded-lg px-3 py-2.5 transition",
