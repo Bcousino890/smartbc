@@ -214,6 +214,55 @@ Qué se ve:
 
 **Verificaciones de E0** (en `wt/crm-02`, rama `fabri/crm-02a-medicion`): `npx tsc --noEmit`, los `npm run test:*` de CI, `next build` en la copia aislada y las 18 pasadas, todo en verde. CI del PR: ver el PR.
 
+### E1 · Lista de Propiedades ligera y galería bajo demanda
+
+**Cambios**
+- **Adaptador (`lib/db/adapters.ts`):** la lista ya no envía `photos`. Envía `photoCount`, el número tras ordenar por posición y quitar URLs repetidas, y `coverPhotoUrl`, la portada efectiva: la marcada o, si no hay, la primera de la galería. `adminGalleryFromRows` es la única regla, compartida por la lista y por la galería.
+- **Ruta nueva `GET /api/admin/properties/[slug]/photos?country=…`**, de solo lectura:
+  - mismo `canAccess(role, "properties", "view")` que la página de la lista;
+  - la regla de país del layout del admin, copiada en `canSeeAdminCountry`: **no** se usa `canOperateInCountry`, que deja pasar `multi_country` a un país que el layout bloquea;
+  - la propiedad debe ser de ese país (si no, 404);
+  - `Cache-Control: private, no-store`.
+- **Modal de fotos:**
+  - En la lista pide la galería al abrirse. En la ficha sigue recibiéndola hecha.
+  - Mientras carga muestra un esqueleto (`data-crm-skeleton`).
+  - Si falla, un aviso con «Reintentar»; nunca una galería vacía.
+  - Subir queda desactivado hasta tener la galería.
+  - Los turnos (`createGalleryTurns`) descartan las respuestas de un modal cerrado, de otra propiedad o anteriores a una edición.
+  - Subir, borrar, ordenar y portada usan los mismos manejadores y acciones de siempre, y siguen haciendo `router.refresh()`. Así el número de fotos y la portada de la fila salen otra vez del servidor tras cada cambio.
+- **Página:** agencias con `select("slug, name")` (antes `*` más colaboraciones) y `getPropertyTags` en paralelo con el resto.
+
+**Resultado** (local; mismas condiciones que la línea base de E0; `medidas/e1/`, tabla completa en `medidas/e1/resumen.md`; mediana de 3 pasadas en frío)
+
+| | Línea base | E1 | Criterio |
+|---|---|---|---|
+| RSC de menú → Propiedades, sin comprimir | 2.103 KB | **879 KB** | AC1 ≤ 1.000 ✓ |
+| Ídem, gzip | 158 KB | 73 KB | que no crezca ✓ |
+| Consultas de esa navegación | 9 | 9 | AC2 ≤ 9 ✓ |
+| Útil, menú → Propiedades (escritorio · lat40 · móvil) | 309 · 588 · 1.971 ms | 306 · **490** · **1.452** ms | AC6: no empeora más de un 10 % ✓ |
+| Útil, «Volver» (escritorio · lat40 · móvil) | 238 · 507 · 1.229 ms | 194 · 415 · **731** ms | ✓ |
+| Tareas largas en móvil al volver | 338 ms | 150 ms | AC7: bajan ✓ |
+| Carga completa de la lista (documento) | 2.517 KB | 1.191 KB | — |
+| Contrato de navegación (escritorio · lat40 · móvil) | 31 · 31 · 30 | **36 · 36 · 35** (5 comprobaciones nuevas de R11) | AC10 ✓ |
+
+- **AC3 · Paridad:** `scripts/test-admin-properties-gallery.mts`, en `npm run test:admin-properties`, en CI. Compara 400 propiedades sintéticas, con fotos desordenadas y repetidas y portadas vacías:
+  - el número de fotos y la portada son los mismos que pintaba la fila;
+  - los campos de la lista son los de antes, con `photoCount` en lugar de `photos`;
+  - los 14 casos de filtros y búsqueda devuelven las mismas propiedades;
+  - los totales y las opciones de operación, distrito, zona y agencia son iguales.
+  - La selección múltiple usa los mismos ids (`slug`) y no depende de las fotos.
+- **AC13 · Apertura de la galería, medida aparte** (frío; escritorio · lat40 · móvil):
+  - **Indicador de carga:** 29 · 22 · 21 ms.
+  - **Galería útil:** 74 · **206** · 198 ms, frente a 69 · 72 · 198 ms antes. Es el coste de pedirla al abrir: con 40 ms simulados por consulta sube ~130 ms.
+  - **Reabrir:** 63 · 51 · 101 ms. Se enseña lo último conocido mientras se pide la versión al día.
+- **AC14 · Robustez:** recorrido R11 en el build, con la ruta retrasada o haciéndola fallar con `page.route`. Pasa en las 18 pasadas:
+  - fallo, aviso y reintento correcto;
+  - cerrar y reabrir con la petición en vuelo;
+  - cambiar de propiedad con una respuesta tardía de la anterior;
+  - una edición («Hacer principal») hecha mientras llegaba una respuesta más vieja se conserva.
+  - Los turnos tienen además tests puros.
+  - **No demostrado con el simulador:** que subir y borrar lleguen al almacenamiento (el simulador no lo sirve). Esos caminos no cambian de código.
+- **AC16 · Base de datos:** el registro del simulador muestra las **mismas tablas y el mismo número de consultas** (9). La consulta de propiedades es idéntica (`select=*` con fotos): **el trabajo de la base de datos para la lista no ha bajado**, solo lo que llega al navegador. Cambian dos cosas menores: agencias pide dos columnas en lugar de `*` más colaboraciones, y las etiquetas ya no esperan a la primera tanda (una espera menos con latencia).
 ### E2 · Respuesta inmediata al pulsar el menú
 
 **Qué se probó y por qué cambió el diseño (D6).** La primera versión, la aprobada en D2 (`loading.tsx` general y uno por sección, más `useLinkStatus`), daba indicador en 17-49 ms. Pero el contenido útil no llegaba nunca antes de **~810-890 ms**, con o sin latencia: Propiedades pasaba de 309 a 889 ms y Solicitudes de 48 a 816 ms.
