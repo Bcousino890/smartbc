@@ -6,7 +6,7 @@ import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { propertyRowToAdminProperty } from "@/lib/db/adapters";
 import { getAgencyOptions } from "@/lib/db/queries/agencies";
-import { getProperties } from "@/lib/db/queries/properties";
+import { getAdminPropertyList } from "@/lib/db/queries/properties";
 import { getPropertyTags, getTagLinksByProperty } from "@/lib/db/queries/property-tags";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
@@ -34,7 +34,8 @@ export default async function AdminPropiedadesPage({
     // de todas las agencias). Con un tope bajo, el total y el filtro de agencia
     // se quedaban cortos (faltaban agencias). Buscador/filtros operan en cliente.
     // country: filtra por país; sin esto se mezclaba con el catálogo del otro país.
-    getProperties({ includeUnavailable: true, includeArchived: showArchived, country }, 2000),
+    // Columnas explícitas (CRM-03, PR-A): solo lo que pinta la lista.
+    getAdminPropertyList({ includeArchived: showArchived, country }, 2000),
     getAgencyOptions(),
     getCurrentProfile(),
     // El catálogo de etiquetas no depende de nada anterior: en paralelo.

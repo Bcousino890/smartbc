@@ -259,7 +259,10 @@ function startServer(port: number, dataFile: string, logFile: string, imgDir: st
     const limit = url.searchParams.get("limit");
     rows = rows.slice(offset, limit ? offset + Number(limit) : undefined);
     const projected = rows.map((r) => project(r, url.searchParams.get("select")));
-    log({ method, path, table, known, query: url.search, returned: projected.length, unknown });
+    // `bytes`: tamaño del JSON SERIALIZADO que devuelve esta lectura (sin
+    // comprimir), con los datos sintéticos. No es el tamaño almacenado en la BD.
+    const bytes = Buffer.byteLength(JSON.stringify(projected));
+    log({ method, path, table, known, query: url.search, returned: projected.length, bytes, unknown });
     const accept = req.headers["accept"] ?? "";
     if (accept.includes("vnd.pgrst.object")) {
       if (projected.length !== 1) return send(res, 406, { code: "PGRST116", details: `Results contain ${projected.length} rows`, hint: null, message: "JSON object requested, multiple (or no) rows returned" });

@@ -1,7 +1,9 @@
 import "server-only";
+import { ADMIN_LIST_SELECT } from "../../properties/admin-list-columns";
 import { storedSlugFromShare } from "../../share-slug";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
+import type { AdminListRow } from "../adapters";
 import type { PropertyFilters, PropertyRow } from "../row-types";
 
 export type { PropertyFilters, PropertyRow };
@@ -39,6 +41,32 @@ export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
   const { data, error } = await query;
   if (error) throw error;
   return data;
+}
+
+/**
+ * Lista de Propiedades del admin (CRM-03, PR-A): mismas filas que
+ * `getProperties({ includeUnavailable: true, includeArchived, country }, limit)`,
+ * pero solo con las columnas que pinta la lista (`ADMIN_LIST_COLUMNS`) en vez de
+ * `*`. `getProperties` no cambia: el portal del cliente la sigue usando.
+ */
+export async function getAdminPropertyList(
+  { country, includeArchived }: { country: string; includeArchived: boolean },
+  limit: number,
+) {
+  const supabase = await createClient();
+  // `select` como string no literal: tres columnas no están en database.types.
+  const select: string = ADMIN_LIST_SELECT;
+  let query = supabase
+    .from("properties")
+    .select(select)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (!includeArchived) query = query.is("archived_at", null);
+  query = query.eq("country", country);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as AdminListRow[];
 }
 
 export async function getPropertyBySlug(slug: string) {

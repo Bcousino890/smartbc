@@ -521,12 +521,39 @@ export function adminGalleryFromRows(
   ).map((p) => ({ url: p.url, isCover: p.is_cover }));
 }
 
-export function propertyRowToAdminProperty(
-  row: PropertyRow & {
-    agencies?: { name: string; slug: string } | null;
-    property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
-  }
-): AdminProperty {
+/**
+ * Lo que lee `propertyRowToAdminProperty`: las columnas de `ADMIN_LIST_COLUMNS`
+ * (lib/properties/admin-list-columns.ts) más la agencia y las fotos. Una fila
+ * completa (`select *`) también vale.
+ */
+export type AdminListRow = Pick<
+  PropertyRow,
+  | "id"
+  | "slug"
+  | "external_id"
+  | "bc_reference"
+  | "title"
+  | "description"
+  | "features"
+  | "features_manual"
+  | "zone"
+  | "subzone"
+  | "operation"
+  | "operations"
+  | "stay"
+  | "status"
+  | "bedrooms"
+  | "bathrooms"
+  | "square_meters"
+  | "price"
+  | "created_at"
+  | "cover_photo_url"
+> & {
+  agencies?: { name: string; slug: string } | null;
+  property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
+};
+
+export function propertyRowToAdminProperty(row: AdminListRow): AdminProperty {
   // La galería solo sirve para contar y para la portada de respaldo: la lista
   // ya no la envía al navegador (CRM-02, E1).
   const gallery = adminGalleryFromRows(row.property_photos);

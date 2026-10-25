@@ -71,15 +71,19 @@ const simLines = (): string[] => {
 };
 const summarizeSim = (lines: string[]) => {
   const byTable: Record<string, number> = {};
+  // Bytes del JSON serializado que devolvió el simulador, por tabla (CRM-03,
+  // AC3). Sintético: no es tráfico real ni tamaño almacenado.
+  const bytesByTable: Record<string, number> = {};
   let simLatencyMs = 0;
   for (const l of lines) {
-    const e = JSON.parse(l) as { kind?: string; table?: string; path?: string; fn?: string; simLatencyMs?: number };
+    const e = JSON.parse(l) as { kind?: string; table?: string; path?: string; fn?: string; simLatencyMs?: number; bytes?: number };
     const key = e.kind === "auth" ? "auth:getUser" : e.kind === "rpc" ? `rpc:${e.fn}` : e.kind === "img" ? "img" : (e.table ?? e.path ?? "?");
     byTable[key] = (byTable[key] ?? 0) + 1;
+    if (typeof e.bytes === "number") bytesByTable[key] = (bytesByTable[key] ?? 0) + e.bytes;
     simLatencyMs = e.simLatencyMs ?? simLatencyMs;
   }
   const total = Object.entries(byTable).filter(([k]) => k !== "img").reduce((a, [, v]) => a + v, 0);
-  return { total, porTabla: byTable, ...(simLatencyMs ? { latenciaSimuladaMs: simLatencyMs } : {}) };
+  return { total, porTabla: byTable, bytesJsonPorTabla: bytesByTable, ...(simLatencyMs ? { latenciaSimuladaMs: simLatencyMs } : {}) };
 };
 
 type Net = {
