@@ -407,8 +407,13 @@ export type AdminProperty = {
   floor?: number | null;
   publishedLabel: string; // free-form date
   featured?: boolean;
+  // Portada EFECTIVA: la marcada en la propiedad o, si no hay, la primera foto
+  // de la galería ordenada y sin duplicados. La lista no recibe la galería
+  // (CRM-02, E1): el modal de fotos la pide al abrirse.
   coverPhotoUrl?: string | null;
-  photos?: { url: string; isCover: boolean }[];
+  // Nº de fotos de la galería, contado igual que la galería (ordenada por
+  // posición y sin URLs repetidas).
+  photoCount: number;
   // Ids de las etiquetas asignadas (catálogo en property_tags).
   tagIds?: string[];
 };

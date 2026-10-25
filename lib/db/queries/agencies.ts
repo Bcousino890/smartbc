@@ -8,6 +8,17 @@ import type {
 
 export type { AgencyPartnershipRow, AgencyRow, AgencyWithStats };
 
+/**
+ * Solo lo que necesitan los desplegables (nombre y slug), sin colaboraciones ni
+ * el resto de columnas: la lista de Propiedades no usa nada más (CRM-02, E1).
+ */
+export async function getAgencyOptions(): Promise<Array<{ slug: string; name: string }>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("agencies").select("slug, name").order("name");
+  if (error) throw error;
+  return (data ?? []) as Array<{ slug: string; name: string }>;
+}
+
 export async function getAgencies() {
   const supabase = await createClient();
 

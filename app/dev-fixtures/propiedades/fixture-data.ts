@@ -43,7 +43,7 @@ export function fixtureAdminProperties(): AdminProperty[] {
       floor: i % 6 === 5 ? null : i % 9,
       publishedLabel: `${(i % 28) + 1} oct 2026`,
       coverPhotoUrl: null,
-      photos: [],
+      photoCount: 0,
       tagIds: i % 4 === 0 ? ["tag-exclusiva"] : i % 5 === 0 ? ["tag-reformado"] : [],
     } satisfies AdminProperty;
   });
