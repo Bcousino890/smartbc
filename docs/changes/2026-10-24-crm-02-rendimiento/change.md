@@ -380,7 +380,7 @@ Alternativa B: medición con el código de E2 más una variante solo para medir,
 - **CI de `main`** en verde en el último merge, `94c19f46299d5e2ca97b2cf93e49078ee4ceea96` (run 40209174652). También en `000c3070` (#372, run 40207849153) y `d9c35b43` (#373, run 40207416142).
 - Fabricio hizo todos los merges. Ninguno incluye migraciones ni cambios de sesión o permisos.
 
-**QA de producción:** pendiente; ver la tabla «QA de producción» más abajo. Subir y borrar fotos nunca llegaron al almacenamiento real en las pruebas. El cambio de cuenta en la misma pestaña solo está cubierto por tests puros. Todas las cifras de tiempo de este expediente son locales o simuladas.
+**QA de producción:** la funcional la ha superado Fabricio (ver «QA de producción» más abajo): el modal de fotos contra el almacenamiento real y el cambio de cuenta en la misma pestaña. El rendimiento en producción **no se ha medido**: todas las cifras de tiempo de este expediente son locales o simuladas.
 
 **Alcance aprobado que quedó pendiente: columnas explícitas en la consulta de la lista**
 
@@ -409,17 +409,15 @@ Clasificación: **mediano**, no grande ni sensible.
   - en la ficha de una propiedad, paralelizar `getSharesForProperty` y las etiquetas, y leer solo los enlaces de etiquetas de esa propiedad.
   - Cada una se dimensiona al proponerla. No requieren por sí mismas un plan grande.
 
-### QA de producción (pendiente; lo hace Fabricio)
+### QA de producción
 
-Nada de lo siguiente está verificado. Las pruebas de este expediente usan datos sintéticos y un simulador, y no demuestran el rendimiento en producción ni el funcionamiento del almacenamiento real.
+Comprobación **funcional** hecha por Fabricio en producción. No es una medición de rendimiento: los tiempos de este expediente siguen siendo locales o simulados.
 
 | Comprobación | Resultado |
 |---|---|
-| Modal de fotos de la lista: abrir, subir, borrar, reordenar y cambiar la portada; el número de fotos y la portada de la fila se actualizan | pendiente |
-| Campana: cerrar sesión y entrar con otra cuenta en la misma pestaña no muestra avisos de la anterior | pendiente |
-| Tiempos reales de navegación (fragmento de consola de CRM-01) | pendiente; opcional |
-
-Los resultados se anotarán aquí cuando Fabricio los facilite.
+| Modal de fotos de la lista: abrir, subir, borrar, reordenar y cambiar la portada; el número de fotos y la portada de la fila se actualizan | **superada** (Fabricio, 2026-10-25) |
+| Campana: cerrar sesión y entrar con otra cuenta en la misma pestaña no muestra avisos de la anterior | **superada** (Fabricio, 2026-10-25) |
+| Tiempos reales de navegación (fragmento de consola de CRM-01) | **sin medir**: no hay cifras de producción |
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 
