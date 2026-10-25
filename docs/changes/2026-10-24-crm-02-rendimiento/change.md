@@ -5,7 +5,7 @@ Que la lista de Propiedades envíe menos datos, que cada clic dé respuesta visu
 - **Tamaño:** medio (aprobado por Fabricio el 2026-10-24, E0–E3). Cualquier cambio en identidad, autorización, vigencia de permisos, middleware de sesión o esquema de base de datos queda fuera y requiere su propio plan explícito como grande o sensible (D5 de CRM-01).
 - **Responsable:** Fabricio
 - **Rama:** una por PR (ver «Entregas»), cada una desde el `main` remoto vigente **que ya incluya el merge de #368**. Este documento vive en `fabri/crm-02-rendimiento-propiedades` hasta entonces.
-- **Estado:** plan aprobado (2026-10-24). `main` incluye #368 (merge `d31075fd`, comprobado con `git merge-base --is-ancestor`). E0 implementado (PR CRM-02a).
+- **Estado:** **fusionado** (2026-10-25). E0, E1, E2, E3 y la precarga por intención (D7) están en `main`. Ver «Cierre».
 
 ## Especificación
 
@@ -362,6 +362,34 @@ Alternativa B: medición con el código de E2 más una variante solo para medir,
   - avisos a los suscriptores.
 - **No demostrado en navegador:** el cambio de usuario dentro de la misma pestaña (iniciar sesión con otra cuenta sin recargar). El simulador no tiene inicio de sesión real. Queda cubierto por los tests puros y por el borrado al pulsar «Cerrar sesión».
 - **Contrato de navegación:** 33/33, 33/33 y 31/31 en las 18 pasadas.
+
+## Cierre
+
+| Entrega | PR | Merge en `main` |
+|---|---|---|
+| E0 · medición y línea base tras #368 | #369 | `9b7b9044` |
+| E2 · respuesta inmediata al pulsar el menú (D6) | #371 | `41886dae` |
+| Precarga del menú por intención (D7) | #373 | `d9c35b43` |
+| E3 · campana con datos por pestaña (D2) | #372 | `000c3070` |
+| E1 · lista de Propiedades ligera y galería bajo demanda | #370 | `94c19f46` |
+
+- Cada PR se fusionó con su CI en verde. Antes de abrirlo o de actualizarlo se rebasó sobre el `main` del momento.
+- Las combinaciones que no se habían medido juntas se comprobaron en local con el arnés antes de subirlas:
+  - E3 sobre E2: 33/33 y 31/31;
+  - E1 sobre todo lo anterior: 38/38 y 36/36, con 879 KB y 9 consultas en la lista.
+- La CI de `main` pasa en verde tras #373 y #372. La de `94c19f46` se lanzó tras el merge de #370.
+- Fabricio hizo todos los merges. Ninguno incluye migraciones ni cambios de sesión o permisos.
+
+**Pendiente de comprobar en producción** (no se pudo con el simulador):
+- **Modal de fotos de la lista:** abrir la galería, subir, borrar, reordenar y cambiar la portada, y que el número de fotos y la portada de la fila se actualicen después. Subir y borrar no llegaron nunca al almacenamiento real en las pruebas.
+- **Campana:** cerrar sesión y entrar con otra cuenta en la misma pestaña no debe enseñar avisos de la anterior. Está cubierto solo por tests puros.
+- **Tiempos reales:** todas las cifras de este expediente son locales o simuladas. Para tenerlos de producción, sirve el fragmento de consola de CRM-01 (`docs/changes/2026-10-24-crm-01-navegacion/change.md`).
+
+**Fuera de este expediente** (requieren su propio plan, grande o sensible, D5):
+- quitar la segunda llamada a `getUser()` del middleware;
+- reducir las lecturas repetidas de identidad y permisos por petición (12 consultas por petición a la campana; 29 en la ficha de un cliente);
+- agregar los recuentos de mensajes en SQL;
+- que la consulta de la lista deje de traer `*` con todas las fotos: E1 no reduce el trabajo de la base de datos.
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 
