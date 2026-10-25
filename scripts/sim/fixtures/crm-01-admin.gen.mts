@@ -199,6 +199,51 @@ const property_tag_links = properties.flatMap((p, i) =>
   i % 3 === 0 ? [{ property_id: p.id, tag_id: property_tags[i % property_tags.length].id }] : [],
 );
 
+// ── Datos de la ficha (CRM-03): más etiquetas, SmartLinks, aperturas y medios ─
+// Sin `rnd()`: con aritmética sobre el índice, para no mover la secuencia de
+// los datos que vienen después (clientes, mensajes…) ni las mediciones previas.
+// · Dos etiquetas de `cl` enlazadas a propiedades `es`: la ficha `es` no debe
+//   mostrarlas (se cruzan con el catálogo del país).
+const cl_tags = ["Chile A", "Chile B"].map((name, i) => ({ id: uuid("7", i + 1), name, color: "gray", country: "cl" }));
+property_tags.push(...cl_tags);
+properties.forEach((p, i) => {
+  if (i % 6 === 0) property_tag_links.push({ property_id: p.id, tag_id: property_tags[(i + 7) % TAG_NAMES.length].id });
+  if (i % 9 === 0) property_tag_links.push({ property_id: p.id, tag_id: cl_tags[i % 2].id });
+});
+const property_shares = properties.flatMap((p, i) =>
+  i % 2 === 0
+    ? Array.from({ length: 1 + (i % 3) }, (_, k) => ({
+        id: uuid("4", i * 4 + k + 1),
+        property_id: p.id,
+        token: `simtoken${i}x${k}`,
+        label: k === 0 ? null : `Enlace sintético ${k}`,
+        created_at: iso((i % 40) + k),
+        expires_at: k === 2 ? iso(-30) : null,
+      }))
+    : [],
+);
+const property_share_opens = property_shares.flatMap((sh, j) =>
+  Array.from({ length: j % 4 }, (_, k) => ({ share_id: sh.id, opened_at: iso(j % 7 + k / 24) })),
+);
+const property_media = properties.flatMap((p, i) =>
+  i % 2 === 0
+    ? (["video", "plan"] as const).map((type, k) => ({
+        id: uuid("6", i * 2 + k + 1),
+        property_id: p.id,
+        type,
+        url: `${SIM}/img/media-${i}-${type}`,
+        file_name: `${type === "video" ? "video" : "plano"}-sintetico-${i + 1}.${type === "video" ? "mp4" : "pdf"}`,
+        storage_path: `sim/${p.id}/${type}`,
+        source: "upload",
+        format: type === "video" ? "landscape" : null,
+        width: null,
+        height: null,
+        duration_seconds: type === "video" ? 30 : null,
+        poster_url: null,
+      }))
+    : [],
+);
+
 // ── Clientes, leads y mensajes (para Clientes, Solicitudes y contadores) ─────
 // Los clientes del CRM son perfiles con rol `client` (lib/db/queries/clients.ts).
 const clients = Array.from({ length: 300 }, (_, i) => ({
@@ -276,6 +321,9 @@ const data = {
   properties,
   property_tags,
   property_tag_links,
+  property_shares,
+  property_share_opens,
+  property_media,
   team_direct_conversations,
   team_conversation_reads: [],
   team_direct_messages,

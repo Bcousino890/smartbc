@@ -686,6 +686,28 @@ if (VARIANT === "movil") {
 
 await ctx.close();
 
+// CRM-03 (PR-C): el texto de varias fichas, para comparar la salida de dos
+// builds sobre los mismos datos (etiquetas, SmartLinks con aperturas y medios).
+// Los datos sintéticos enlazan etiquetas de `cl` a propiedades `es`: la ficha
+// `es` no debe mostrarlas.
+section("R13 · Ficha: etiquetas, SmartLinks, aperturas y medios (paridad)");
+const fichas: Record<string, string> = {};
+{
+  const c = await newContext(TOKEN);
+  const { page: p } = await newPage(c);
+  for (const n of [1, 2, 4, 11, 19, 37]) {
+    const slug = `sim-propiedad-${n}`;
+    await p.goto(`${BASE}${LIST}/${slug}`, { waitUntil: "domcontentloaded" });
+    await detailReady(p);
+    await p.waitForLoadState("networkidle").catch(() => {});
+    fichas[slug] = await p.locator("main").innerText();
+  }
+  check("ninguna ficha `es` muestra etiquetas de `cl`", Object.values(fichas).every((t) => !/Chile [AB]/.test(t)));
+  check("la ficha 1 muestra sus dos etiquetas del país", /Destacada/.test(fichas["sim-propiedad-1"]) && /Lujo/.test(fichas["sim-propiedad-1"]));
+  check("la ficha 1 muestra su vídeo y su plano", /video-sintetico-1\.mp4|plano-sintetico-1\.pdf/.test(fichas["sim-propiedad-1"]) || /vídeo|video/i.test(fichas["sim-propiedad-1"]));
+  await c.close();
+}
+
 section("Identidad (sin sesión, cuenta suspendida)");
 for (const [name, token, expect] of [
   ["sin sesión", null, /\/login/],
@@ -706,7 +728,7 @@ if (OUT) {
   writeFileSync(
     OUT,
     JSON.stringify(
-      { etiqueta: LABEL, variante: VARIANT, pasada: process.env.PASADA ?? null, base: BASE, fecha: new Date().toISOString(), nota: "Mediciones LOCALES contra el simulador; no son tiempos de producción.", comprobaciones: checks, mediciones: measurements, notificacionesPorRecorrido: notificationsBySection, externasAbortadas: [...new Set(blocked)] },
+      { etiqueta: LABEL, variante: VARIANT, pasada: process.env.PASADA ?? null, base: BASE, fecha: new Date().toISOString(), nota: "Mediciones LOCALES contra el simulador; no son tiempos de producción.", comprobaciones: checks, mediciones: measurements, notificacionesPorRecorrido: notificationsBySection, externasAbortadas: [...new Set(blocked)], fichas },
       null,
       2,
     ),
