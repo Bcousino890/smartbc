@@ -3,7 +3,8 @@
 //
 //   node --experimental-strip-types scripts/sim/fixtures/crm-01-admin.gen.mts <salida.json> [carpeta-imágenes]
 //
-// · Determinista (semilla fija): dos ejecuciones dan el mismo archivo, así las
+// · Determinista (semilla fija), salvo las fechas de visitas y avisos recientes
+//   (relativas a la hora de generación: la campana solo mira 7 días). Así las
 //   mediciones antes/después comparan lo mismo.
 // · Escala parecida a la real, sin datos reales: ~1.700 propiedades `es` (el
 //   recuento de producción del 2026-10-13 era 1.632), 8-15 fotos cada una,
@@ -225,15 +226,42 @@ const team_direct_conversations = Array.from({ length: 6 }, (_, i) => ({
   created_at: iso(30 - i),
   last_message_at: iso(i),
 }));
+// Mensajes con la forma que leen el layout (recuentos) y
+// /api/admin/notifications (`content`, `read_at`, remitente embebido).
+const teammates = team_direct_conversations.map((c, i) => ({ id: c.participant_b, full_name: `Compañera Sintética ${i + 1}` }));
 const team_direct_messages = team_direct_conversations.flatMap((c, i) =>
   Array.from({ length: 5 }, (_, m) => ({
     id: uuid("1", i * 10 + m + 1),
     conversation_id: c.id,
     sender_id: c.participant_b,
-    body: "Mensaje sintético",
+    content: `Mensaje sintético ${m + 1} de la conversación ${i + 1}, con texto suficiente para recortarse en la campana.`,
+    read_at: m < 2 ? iso(1) : null,
     created_at: iso(i + m / 10),
+    profiles: { full_name: teammates[i].full_name },
   })),
 );
+
+// Visitas pendientes recientes (la campana mira 7 días) y avisos de opiniones
+// de catálogos sin leer, para que /api/admin/notifications devuelva de todo.
+const visit_requests = Array.from({ length: 4 }, (_, i) => ({
+  id: uuid("2", i + 1),
+  client_id: clients[i].id,
+  property_id: properties[i].id,
+  status: i < 3 ? "pending" : "confirmed",
+  created_at: new Date(Date.now() - (i + 1) * 3600_000).toISOString(),
+  profiles: { full_name: clients[i].full_name },
+  properties: { title: properties[i].title, bc_reference: properties[i].bc_reference },
+}));
+const crm_notifications = Array.from({ length: 3 }, (_, i) => ({
+  id: uuid("3", i + 1),
+  user_id: USERS.owner.id,
+  type: i < 2 ? "catalog_feedback" : "captacion",
+  read: false,
+  title: `Opinión sintética ${i + 1}`,
+  body: "Al cliente sintético le ha gustado el catálogo.",
+  link: "/es/admin/clientes",
+  created_at: new Date(Date.now() - (i + 2) * 3600_000).toISOString(),
+}));
 
 const data = {
   auth: {
@@ -243,7 +271,7 @@ const data = {
       [TOKENS.suspended]: authUser(USERS.suspended),
     },
   },
-  profiles: [...profiles, ...clients],
+  profiles: [...profiles, ...clients, ...teammates.map((t) => ({ ...t, role: "advisor", email: `${t.id}@sim.invalid`, country: "es", countries: ["es"], suspended_at: null }))],
   agencies,
   properties,
   property_tags,
@@ -251,8 +279,8 @@ const data = {
   team_direct_conversations,
   team_conversation_reads: [],
   team_direct_messages,
-  visit_requests: [],
-  crm_notifications: [],
+  visit_requests,
+  crm_notifications,
   user_permission_overrides: [],
   profiles_country_roles: [],
   custom_roles: [],
