@@ -272,23 +272,39 @@ async function newPage(ctx: BrowserContext) {
 
 async function clickSidebar(page: Page, name: RegExp) {
   const nav = page.locator("aside").getByRole("link", { name }).first();
-  // En móvil la sidebar está fuera de pantalla (translate) hasta abrir el menú.
+  // En móvil la sidebar está fuera de pantalla (translate) hasta abrir el menú;
+  // tras navegar se cierra con una animación de 300 ms: si no está del todo
+  // dentro, se abre y se espera a que termine de entrar.
   const box = await nav.boundingBox().catch(() => null);
-  if (!box || box.x + box.width <= 0) {
+  if (!box || box.x < 0) {
+    await page.waitForTimeout(350);
     await page.getByRole("button", { name: "Abrir menú" }).click();
+    await page.waitForFunction(
+      (re) => {
+        const a = [...document.querySelectorAll("aside a")].find((x) => new RegExp(re).test(x.textContent?.trim() ?? ""));
+        return Boolean(a && a.getBoundingClientRect().x >= 0);
+      },
+      name.source,
+      { timeout: 10000 },
+    );
   }
   await page.locator("aside").getByRole("link", { name }).first().click();
 }
-// «Útil» = estamos en la ruta de destino Y se ve lo que el recorrido necesita
-// (no basta un enlace parecido de la pantalla anterior).
+// «Útil» = estamos en la ruta de destino, se ve lo que el recorrido necesita
+// (no basta un enlace parecido de la pantalla anterior) y no queda ningún
+// esqueleto de carga en pantalla (con un esqueleto, la URL puede cambiar antes
+// de que llegue el contenido).
+const noSkeleton = (page: Page) => page.locator("[data-crm-skeleton]").first().waitFor({ state: "detached", timeout: 60000 });
 const listReady = async (page: Page) => {
   await page.waitForURL((u) => u.pathname === LIST, { timeout: 60000 });
   await page.locator("label", { hasText: "Operación" }).locator("select").first().waitFor({ timeout: 60000 });
   await page.locator(`a[href^="${LIST}/sim-propiedad-"]`).first().waitFor({ timeout: 60000 });
+  await noSkeleton(page);
 };
 const detailReady = async (page: Page) => {
   await page.waitForURL((u) => u.pathname.startsWith(`${LIST}/sim-propiedad-`), { timeout: 60000 });
   await page.getByRole("link", { name: /Volver al listado/ }).waitFor({ timeout: 60000 });
+  await noSkeleton(page);
 };
 const selectValue = (page: Page, label: string) =>
   page.locator("label", { hasText: label }).locator("select").first().inputValue().catch(() => "(no visible)");
@@ -514,17 +530,17 @@ section("R5 · Sidebar → Clientes → ficha → Atrás");
 await page.goto(`${BASE}/${COUNTRY}/admin`, { waitUntil: "domcontentloaded" });
 await page.locator("aside").first().waitFor();
 await net.idle();
-await measure(page, net, "sidebar→clientes", () => clickSidebar(page, /^Clientes$/), () => page.waitForURL((u) => u.pathname === `/${COUNTRY}/admin/clientes`, { timeout: 60000 }).then(() => page.locator("h1").first().waitFor({ timeout: 60000 })));
+await measure(page, net, "sidebar→clientes", () => clickSidebar(page, /^Clientes$/), () => page.waitForURL((u) => u.pathname === `/${COUNTRY}/admin/clientes`, { timeout: 60000 }).then(() => page.locator("h1").first().waitFor({ timeout: 60000 })).then(() => noSkeleton(page)));
 {
   const link = page.locator(`a[href^="/${COUNTRY}/admin/clientes/"]`).first();
   if (await link.count()) {
-    await measure(page, net, "clientes→ficha", () => link.click(), () => page.waitForURL(/\/clientes\/[^/?]+/, { timeout: 60000 }));
-    await measure(page, net, "ficha→Atrás", () => page.goBack(), () => page.waitForURL(/\/clientes(\?|$)/, { timeout: 60000 }));
+    await measure(page, net, "clientes→ficha", () => link.click(), () => page.waitForURL(/\/clientes\/[^/?]+/, { timeout: 60000 }).then(() => noSkeleton(page)));
+    await measure(page, net, "ficha→Atrás", () => page.goBack(), () => page.waitForURL(/\/clientes(\?|$)/, { timeout: 60000 }).then(() => noSkeleton(page)));
   } else check("hay clientes que abrir en los datos sintéticos", false, "sin enlaces a fichas");
 }
 
 section("R6 · Sidebar → Solicitudes");
-await measure(page, net, "sidebar→solicitudes", () => clickSidebar(page, /^Solicitudes$/), () => page.waitForURL(/\/solicitudes/, { timeout: 60000 }).then(() => page.locator("h1").first().waitFor({ timeout: 60000 })));
+await measure(page, net, "sidebar→solicitudes", () => clickSidebar(page, /^Solicitudes$/), () => page.waitForURL(/\/solicitudes/, { timeout: 60000 }).then(() => page.locator("h1").first().waitFor({ timeout: 60000 })).then(() => noSkeleton(page)));
 
 section("R7 · Clics rápidos: gana el último destino");
 if (VARIANT === "movil") {

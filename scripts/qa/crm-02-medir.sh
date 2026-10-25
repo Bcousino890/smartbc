@@ -49,9 +49,6 @@ have=$(node -p "require('$NODE_MODULES_DIR/next/package.json').version")
 [ "$want" = "$have" ] || { echo "next $have en node_modules ≠ $want del lockfile" >&2; exit 1; }
 
 ENVV=(NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:$SIM_PORT NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon SUPABASE_SERVICE_ROLE_KEY=dummy-service NEXT_TELEMETRY_DISABLED=1)
-echo "· build"
-(cd "$COPY" && env "${ENVV[@]}" npx next build > "$OUT/build-$LABEL.log" 2>&1) || { echo "build fallido: $OUT/build-$LABEL.log" >&2; exit 1; }
-
 echo "· datos sintéticos"
 (cd "$COPY" && node --experimental-strip-types scripts/sim/fixtures/crm-01-admin.gen.mts "$OUT/fixture.json" "$OUT/img" 2>/dev/null)
 
@@ -66,6 +63,13 @@ start_app() {
   for _ in $(seq 1 60); do curl -s -o /dev/null "http://127.0.0.1:$APP_PORT/login" && return 0; sleep 0.5; done
   echo "el servidor no arrancó" >&2; exit 1
 }
+# El simulador va ANTES del build: `next build` genera páginas estáticas
+# (p. ej. /api/portal/properties) que lo consultan; sin él, la generación puede
+# agotar sus 60 s y abortar el build.
+start_sim
+echo "· build"
+(cd "$COPY" && env "${ENVV[@]}" npx next build > "$OUT/build-$LABEL.log" 2>&1) || { echo "build fallido: $OUT/build-$LABEL.log" >&2; exit 1; }
+
 run() {
   local variant=$1 pasada=$2 vv=$1
   [ "$variant" = "escritorio-lat40" ] && vv=escritorio
