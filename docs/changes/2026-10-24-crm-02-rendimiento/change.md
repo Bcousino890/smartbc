@@ -53,6 +53,8 @@ Lo que la tabla anterior dejaba sin medir (las consultas exactas de una precarga
   - Copias aisladas **sin ningún fichero `.env`** ni credenciales reales (exportación de git sin `.env*`). Los ficheros de entorno existentes **no se mueven**.
   - Autorizado: herramientas existentes, datos sintéticos, tests, mediciones, commits, push, PR y CI.
   - No autorizado: paquetes nuevos, acceso a producción, cambios de autenticación o permisos, SQL o esquema, migraciones y revisiones adicionales de Codex.
+- `D6 (2026-10-25)` · **Respuesta inmediata sin `loading.tsx`**: con una frontera de carga (`loading.tsx`, `Suspense`), React no revela el contenido antes de ~800 ms en cuanto ha enseñado un esqueleto (medido; ver «E2»), e incumplía AC6. Fabricio elige el **esqueleto superpuesto**: al pulsar el menú se enseña al instante el esqueleto de la sección encima del contenido, más la marca del enlace, sin `Suspense`. Solo cubre las navegaciones del menú; lista → ficha y «Volver» quedan como hoy.
+- `D7 (2026-10-25)` · **Precarga del menú (resuelve D3)**: con los números de E0 y E2 delante, Fabricio elige la **alternativa B, por intención**. Se precarga al pasar el puntero, con el foco de teclado o al tocar, navegando con el mismo toque. Va en un PR propio, CRM-02e, después de E2.
 - `D5` · **Entrega**:
   - PR pequeños y coherentes, con la CI en verde, incluidas las regresiones de identidad de #361 y los recorridos de navegación de #368.
   - Claude **se detiene antes de cada merge**, y también si algún criterio de aceptación no se puede cumplir.
@@ -211,6 +213,63 @@ Qué se ve:
 6. **Consultas estables.** Las consultas aisladas no varían entre las 18 pasadas: los criterios de consultas (AC2, AC9) se pueden comparar exactos.
 
 **Verificaciones de E0** (en `wt/crm-02`, rama `fabri/crm-02a-medicion`): `npx tsc --noEmit`, los `npm run test:*` de CI, `next build` en la copia aislada y las 18 pasadas, todo en verde. CI del PR: ver el PR.
+
+### E2 · Respuesta inmediata al pulsar el menú
+
+**Qué se probó y por qué cambió el diseño (D6).** La primera versión, la aprobada en D2 (`loading.tsx` general y uno por sección, más `useLinkStatus`), daba indicador en 17-49 ms. Pero el contenido útil no llegaba nunca antes de **~810-890 ms**, con o sin latencia: Propiedades pasaba de 309 a 889 ms y Solicitudes de 48 a 816 ms.
+- **Causa:** el servidor respondía en ~25 ms (medido con `curl`). El retraso estaba en el navegador: React, una vez enseñado el *fallback* de un `Suspense`, espera un mínimo antes de revelar el contenido (`FALLBACK_THROTTLE_MS`, 300 ms por frontera), y había fronteras anidadas.
+- **Variantes medidas** (una pasada, local; útil en escritorio):
+  - V1, solo la marca del menú: igual que la base (Solicitudes 69 ms), pero en móvil no se ve nada porque el menú se cierra al pulsar.
+  - V2, un único `loading.tsx` por sección: sigue en ~800 ms.
+  - V3, esqueleto superpuesto: igual que la base, con indicador en 26-64 ms.
+- Fabricio eligió V3 (D6).
+
+**Cambios** (lo que queda):
+- **`components/admin/nav-pending.tsx`**, dentro de cada `<Link>` de la sidebar. Mientras `useLinkStatus().pending`:
+  - el enlace muestra una marca giratoria (`data-crm-pending`);
+  - encima del área de contenido (portal en `<main>`, a la derecha de la sidebar) aparece el esqueleto de la sección de destino (`data-crm-skeleton`).
+  - En móvil, el menú se cierra al pulsar y lo que se ve es el esqueleto.
+- **`components/admin/route-skeletons.tsx`:** esqueletos solo con tokens (`cream`, `ink`, `gold`), así que funcionan en claro y oscuro. Llevan `aria-busy` y «Cargando…» para lectores de pantalla.
+- **Sin `loading.tsx` nuevos:** se quitaron los que se habían añadido.
+- **`particulares/loading.tsx`,** que ya existía, usa ahora el esqueleto genérico con tokens; antes llevaba `bg-white` y no seguía el modo oscuro.
+- **Acceso:** el esqueleto no lleva datos, y el acceso lo siguen decidiendo el middleware, el layout y cada página.
+
+**Resultado** (local; mediana de 3 pasadas en frío; frente a la línea base medida en la **misma sesión**, `medidas/e2/` y `medidas/base-misma-sesion/`)
+
+| Navegación | Base (útil) | E2 (útil) | E2 (primer indicador) |
+|---|---|---|---|
+| 40 ms · menú → Propiedades | 578 | 596 (+3 %) | **39** |
+| 40 ms · menú → Clientes | 589 | 571 | **32** |
+| 40 ms · menú → Solicitudes | 568 | 551 | **29** |
+| 40 ms · «Volver» (no pasa por el menú) | 513 | 523 (+2 %) | — |
+| Móvil · menú → Propiedades | 1.841 | 1.868 (+1 %) | 442 |
+| Móvil · menú → Clientes | 1.003 | 1.035 (+3 %) | 428 |
+| Móvil · menú → Solicitudes | 911 | 911 | 401 |
+| Escritorio · menú → Propiedades | 314 | 302 (−4 %) | 44 |
+| Escritorio · menú → Solicitudes | 60 | 66 (+6 ms, +10 %) | 26 |
+
+- **AC5:** primer indicador ≤ 100 ms con 40 ms simulados ✓ (29-39 ms).
+- **AC6:** el contenido útil no empeora más de un 10 % ✓, según la tabla.
+- En móvil el indicador llega a ~400-440 ms, porque la CPU simulada va 4× más lenta. Es la primera respuesta visible: antes no había ninguna hasta el contenido, a 900-1.850 ms.
+- Contrato de navegación: 31/31, 31/31 y 30/30 en todas las pasadas.
+- **Escritorio sin latencia:** la primera pasada de E2 coincidió con el Mac recién despertado (carga media 12) y dio cifras infladas: Propiedades 362 ms y «Volver» 277 ms, aunque «Volver» no toca el código de E2. Se repitió con la máquina en calma (`medidas/e2-escritorio-repetida/`) y es la que figura en la tabla. A esta escala (60-300 ms), el ruido entre pasadas es de ±10 %: «Volver» varía 229 → 249 ms sin cambio de código.
+
+### D3 · Precarga del menú: alternativas medidas (decidido: B, D7)
+
+Alternativa B: medición con el código de E2 más una variante solo para medir, en `exp/crm-02-precarga-intencion`. La sidebar con `prefetch={false}` precarga con intención: `onMouseEnter`, `onFocus` (teclado) y `onTouchStart`. La navegación ocurre en el mismo toque, sin pedir un segundo toque. Local; mediana de 3 pasadas; `medidas/precarga-intencion/`.
+
+| | A · automática (hoy) | B · por intención |
+|---|---|---|
+| Precargas al entrar en `/es/admin` (escritorio · móvil) | 21 · 17 | **9 · 9** |
+| Consultas de esas precargas (escritorio) | 63 | **27** |
+| Útil, menú → Propiedades (escritorio · 40 ms · móvil) | 314 · 578 · 1.841 | 286 · 562 · 1.840 |
+| Útil, menú → Clientes (escritorio · 40 ms · móvil) | 99 · 589 · 1.003 | 99 · 578 · 1.015 |
+| Útil, menú → Solicitudes (escritorio · 40 ms · móvil) | 60 · 568 · 911 | 67 · 541 · 906 |
+
+- **Por qué no se pierde nada:** sin fronteras de carga (D6), la precarga automática de estas rutas dinámicas solo hace el trabajo del middleware (3 consultas) y no adelanta la página.
+- **Las 9 que quedan con B** no son del menú: son de los enlaces de fichas visibles en las listas.
+- **Límite de la medición:** el arnés pasa el puntero justo antes del clic, así que no mide la ventaja de la precarga al pasar el ratón con más antelación, que con B sería la misma o mejor.
+- **Recomendación de Claude:** B. **Decisión de Fabricio (D7, 2026-10-25): B.** Se implementa en CRM-02e.
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 
