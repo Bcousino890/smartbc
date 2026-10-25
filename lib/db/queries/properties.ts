@@ -124,7 +124,11 @@ export async function getPropertyBySlugPublic(slug: string) {
 // Variante para el admin: trae la propiedad por slug incluso si está
 // archivada (necesario para la página de edición — el admin tiene que
 // poder ver y reactivar propiedades archivadas).
-export async function getPropertyBySlugForAdmin(slug: string) {
+/**
+ * Fila de la propiedad para el admin (sin medios). Lanza si la consulta falla;
+ * `null` si no existe. La ficha la pide en paralelo con otras lecturas.
+ */
+export async function getPropertyRowBySlugForAdmin(slug: string) {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -138,16 +142,29 @@ export async function getPropertyBySlugForAdmin(slug: string) {
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) return null;
+  return data ?? null;
+}
 
-  // Cargar videos y planos de property_media
+/** Vídeos y planos de una propiedad. Un error se ignora (lista vacía), como siempre. */
+export async function getPropertyMediaForAdmin(propertyId: string) {
+  const supabase = await createClient();
   const { data: media } = await (supabase as any)
     .from("property_media")
     .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
-    .eq("property_id", (data as any).id)
+    .eq("property_id", propertyId)
     .in("type", ["video", "plan"]);
+  return media ?? [];
+}
 
-  return { ...(data as object), property_media: media ?? [] };
+/** Propiedad + `property_media`. La usan la story y el PDF; la ficha usa las dos piezas por separado. */
+export async function getPropertyBySlugForAdmin(slug: string) {
+  const data = await getPropertyRowBySlugForAdmin(slug);
+  if (!data) return null;
+
+  // Cargar videos y planos de property_media
+  const media = await getPropertyMediaForAdmin((data as any).id);
+
+  return { ...(data as object), property_media: media };
 }
 
 export type ChilePropertyFilters = {

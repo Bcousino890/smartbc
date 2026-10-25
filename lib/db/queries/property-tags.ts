@@ -41,3 +41,18 @@ export async function getTagLinksByProperty(
   }
   return out;
 }
+
+/**
+ * Ids de etiqueta de UNA propiedad (una sola lectura, sin paginar). Sin
+ * cruzar con el país: eso lo hace `tagIdsInCatalog`. Un error devuelve [],
+ * igual que `getTagLinksByProperty`.
+ */
+export async function getTagIdsForProperty(propertyId: string): Promise<string[]> {
+  const supabase = (await createClient()) as any;
+  const { data, error } = await supabase
+    .from("property_tag_links")
+    .select("tag_id")
+    .eq("property_id", propertyId);
+  if (error || !data) return [];
+  return (data as { tag_id: string }[]).map((r) => r.tag_id);
+}

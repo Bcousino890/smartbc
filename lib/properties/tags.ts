@@ -97,6 +97,27 @@ export function canCreateTag(tags: PropertyTag[], query: string): boolean {
 }
 
 /** Filtro por etiquetas: sin selección pasa todo; con selección, basta una. */
+/**
+ * Etiquetas de una propiedad limitadas al catálogo dado (el del país de la
+ * ficha), en el orden en que llegaron y sin repetir. Es el mismo resultado que
+ * pedir los enlaces de todas las etiquetas del país y quedarse con los de esa
+ * propiedad.
+ */
+export function tagIdsInCatalog(
+  linkedIds: readonly string[],
+  catalog: readonly { id: string }[],
+): string[] {
+  const allowed = new Set(catalog.map((t) => t.id));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of linkedIds) {
+    if (!allowed.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 export function matchesTagFilter(
   propertyTagIds: string[] | undefined,
   selectedIds: string[],
