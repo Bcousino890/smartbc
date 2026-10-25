@@ -906,6 +906,7 @@ function PropertiesAdminList({
                 highlighted={highlightSlug === p.id}
                 returnSearch={returnSearch}
                 config={config}
+                galleryCountry={country}
                 tags={(p.tagIds ?? []).map((id) => tagById.get(id)).filter((t): t is PropertyTag => Boolean(t))}
               />
             ))}
@@ -928,6 +929,7 @@ function PropertyRow({
   highlighted = false,
   returnSearch = "",
   config,
+  galleryCountry,
   tags = [],
 }: {
   property: AdminProperty;
@@ -937,6 +939,7 @@ function PropertyRow({
   highlighted?: boolean;
   returnSearch?: string;
   config: ReturnType<typeof getCountryConfig>;
+  galleryCountry: Country;
   tags?: PropertyTag[];
 }) {
   const t = useT();
@@ -944,8 +947,10 @@ function PropertyRow({
   // Sin "al mes" cuando no hay precio ("Precio a consultar").
   const isRent = property.operation === "alquiler" && property.price > 0;
   const formatted = config.formatPrice(property.price, property.currency);
-  const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
-  const photoCount = property.photos?.length ?? 0;
+  // Portada efectiva y nº de fotos ya calculados en el servidor: la lista no
+  // recibe la galería (CRM-02, E1).
+  const cover = property.coverPhotoUrl ?? null;
+  const photoCount = property.photoCount;
   const editHref = withReturnContext(`${config.prefix}/propiedades/${property.id}`, returnSearch);
   // Referencia visible: SIEMPRE la BC. Las de portal y la PROP-… viven en la
   // ficha (Notas internas), no aquí.
@@ -1109,7 +1114,7 @@ function PropertyRow({
         onClose={() => setPhotosOpen(false)}
         slug={property.id}
         title={property.title}
-        initialPhotos={property.photos ?? []}
+        galleryCountry={galleryCountry}
       />
     </li>
   );

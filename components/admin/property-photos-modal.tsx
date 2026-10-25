@@ -9,7 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import Image from "next/image";
-import { useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   deletePropertyPhoto,
@@ -20,6 +20,7 @@ import { postUploadForm } from "@/lib/http/upload-form";
 import { Modal } from "@/components/ui/modal";
 import { PropertyPhotosFromWeb } from "@/components/admin/property-photos-from-web";
 import { useT } from "@/lib/i18n/provider";
+import { createGalleryTurns, galleryApiUrl } from "@/lib/properties/admin-gallery";
 import { cn } from "@/lib/utils";
 
 export type PropertyPhoto = { url: string; isCover: boolean };
@@ -31,17 +32,63 @@ export function PropertyPhotosModal({
   title,
   country,
   initialPhotos,
+  galleryCountry,
 }: {
   open: boolean;
   onClose: () => void;
   slug: string;
   title: string;
   country?: string;
-  initialPhotos: PropertyPhoto[];
+  /**
+   * Galería ya conocida (la ficha la trae). Si no se pasa, el modal la pide al
+   * abrirse a /api/admin/properties/[slug]/photos (lista del admin, CRM-02 E1).
+   */
+  initialPhotos?: PropertyPhoto[];
+  /** País de la lista, para pedir la galería (solo con carga bajo demanda). */
+  galleryCountry?: string;
 }) {
   const t = useT();
   const router = useRouter();
-  const [photos, setPhotos] = useState<PropertyPhoto[]>(initialPhotos);
+  const onDemand = initialPhotos === undefined;
+  // null = todavía no ha llegado la galería (solo con carga bajo demanda).
+  const [photoList, setPhotoList] = useState<PropertyPhoto[] | null>(initialPhotos ?? null);
+  const photos = photoList ?? [];
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(onDemand ? "loading" : "ready");
+  // Turnos: una respuesta tardía (modal cerrado, otra petición más nueva o
+  // ediciones hechas mientras tanto) nunca pisa la galería que se está viendo.
+  const turns = useRef(createGalleryTurns());
+  // Toda edición local pasa por aquí: marca la galería como editada.
+  const setPhotos: typeof setPhotoList = (next) => {
+    turns.current.edited();
+    setPhotoList(next);
+  };
+  const loadGallery = useCallback(() => {
+    if (!onDemand) return;
+    const stamp = turns.current.start(slug);
+    setLoadState("loading");
+    fetch(galleryApiUrl(slug, galleryCountry ?? country ?? "es"), { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return (await res.json()) as { photos: PropertyPhoto[] };
+      })
+      .then((data) => {
+        if (!turns.current.accepts(stamp, slug)) return;
+        setPhotoList(data.photos);
+        setLoadState("ready");
+      })
+      .catch(() => {
+        if (!turns.current.accepts(stamp, slug)) return;
+        setLoadState("error");
+      });
+  }, [onDemand, slug, galleryCountry, country]);
+  // Cada apertura pide la galería (las fotos pueden haber cambiado desde la
+  // ficha u otra pestaña); mientras llega, se enseña la última conocida si la
+  // hay. Al cerrar, lo que esté en vuelo deja de valer.
+  useEffect(() => {
+    if (open) loadGallery();
+    else turns.current.invalidate();
+  }, [open, loadGallery]);
+  const galleryUnavailable = photoList === null;
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +120,7 @@ export function PropertyPhotosModal({
           if (result.ok) {
             const isCover = !coverAssigned;
             coverAssigned = coverAssigned || isCover;
-            setPhotos((prev) => [...prev, { url: result.url, isCover }]);
+            setPhotos((prev) => [...(prev ?? []), { url: result.url, isCover }]);
           } else {
             failed.push(`${file.name}: ${result.error}`);
           }
@@ -104,7 +151,7 @@ export function PropertyPhotosModal({
       try {
         const result = await deletePropertyPhoto({ slug, photoUrl: url, country });
         if (result.ok) {
-          setPhotos((prev) => prev.filter((p) => p.url !== url));
+          setPhotos((prev) => (prev ?? []).filter((p) => p.url !== url));
           router.refresh();
         } else {
           setError(result.error);
@@ -143,7 +190,7 @@ export function PropertyPhotosModal({
   const reorderLocal = (from: number, to: number) => {
     if (from === to) return;
     setPhotos((prev) => {
-      const next = [...prev];
+      const next = [...(prev ?? [])];
       const [item] = next.splice(from, 1);
       next.splice(to, 0, item);
       orderRef.current = next;
@@ -192,13 +239,13 @@ export function PropertyPhotosModal({
             accept="image/*"
             multiple
             onChange={handleFileChange}
-            disabled={isPending}
+            disabled={isPending || galleryUnavailable}
             className="hidden"
           />
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            disabled={isPending}
+            disabled={isPending || galleryUnavailable}
             className={cn(
               "flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gold/30 bg-white/55 px-4 py-6 text-sm font-medium text-ink/70 transition",
               "hover:border-gold/55 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50",
@@ -220,7 +267,7 @@ export function PropertyPhotosModal({
           </p>
         </div>
 
-        <PropertyPhotosFromWeb slug={slug} onChanged={setPhotos} />
+        {!galleryUnavailable && <PropertyPhotosFromWeb slug={slug} onChanged={setPhotos} />}
 
         {error && (
           <p className="mt-3 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
@@ -228,8 +275,35 @@ export function PropertyPhotosModal({
           </p>
         )}
 
-        <div className="mt-6">
-          {photos.length === 0 ? (
+        <div className="mt-6" data-crm-gallery={loadState}>
+          {loadState === "error" && (
+            <div
+              role="alert"
+              className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
+            >
+              <span>
+                {galleryUnavailable
+                  ? "No se pudieron cargar las fotos."
+                  : "No se pudo actualizar la galería; se muestran las últimas fotos cargadas."}
+              </span>
+              <button
+                type="button"
+                onClick={loadGallery}
+                className="crm-button rounded-md border border-red-300 bg-white px-2.5 py-1 text-red-700 transition hover:bg-red-50"
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
+          {galleryUnavailable ? (
+            loadState === "loading" ? (
+              <div data-crm-skeleton aria-busy="true" aria-label="Cargando fotos" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="aspect-[4/3] animate-pulse rounded-xl border border-gold/15 bg-ink/5" />
+                ))}
+              </div>
+            ) : null
+          ) : photos.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center">
               <ImageIcon
                 size={28}
@@ -301,6 +375,7 @@ function PhotoCard({
   const isPrincipal = index === 0;
   return (
     <div
+      data-crm-gallery-item
       draggable={!isPending}
       onDragStart={onDragStart}
       onDragEnter={onDragEnter}

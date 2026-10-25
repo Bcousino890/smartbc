@@ -5,7 +5,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { propertyRowToAdminProperty } from "@/lib/db/adapters";
-import { getAgencies } from "@/lib/db/queries/agencies";
+import { getAgencyOptions } from "@/lib/db/queries/agencies";
 import { getProperties } from "@/lib/db/queries/properties";
 import { getPropertyTags, getTagLinksByProperty } from "@/lib/db/queries/property-tags";
 import { getCurrentProfile } from "@/lib/db/queries/session";
@@ -29,28 +29,26 @@ export default async function AdminPropiedadesPage({
   const { country } = await params;
   const sp = await searchParams;
   const showArchived = sp?.archivadas === "1" || sp?.archivadas === "true";
-  const [rows, agencyRows, currentProfile] = await Promise.all([
+  const [rows, agencyRows, currentProfile, tags] = await Promise.all([
     // Límite alto: el admin debe ver TODO el catálogo activo (cientos de pisos
     // de todas las agencias). Con un tope bajo, el total y el filtro de agencia
     // se quedaban cortos (faltaban agencias). Buscador/filtros operan en cliente.
     // country: filtra por país; sin esto se mezclaba con el catálogo del otro país.
     getProperties({ includeUnavailable: true, includeArchived: showArchived, country }, 2000),
-    getAgencies(),
+    getAgencyOptions(),
     getCurrentProfile(),
+    // El catálogo de etiquetas no depende de nada anterior: en paralelo.
+    getPropertyTags(country),
   ]);
   if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
-  const tags = await getPropertyTags(country);
   const links = await getTagLinksByProperty(tags.map((t) => t.id));
   const properties = rows.map((row) => ({
     ...propertyRowToAdminProperty(row),
     tagIds: links[(row as unknown as { id: string }).id] ?? [],
   }));
-  const agencies = ((agencyRows ?? []) as Array<{
-    slug: string;
-    name: string;
-  }>).map((a) => ({ slug: a.slug, name: a.name }));
+  const agencies = agencyRows.map((a) => ({ slug: a.slug, name: a.name }));
 
   const stats = {
     total: properties.length,

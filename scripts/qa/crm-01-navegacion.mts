@@ -576,6 +576,83 @@ section("R12 · Campana: una petición por pestaña y minuto, y al momento tras 
   page.off("request", onReq);
 }
 
+section("R11 · Galería bajo demanda: fallos, reintento, cierres, cambio de propiedad y ediciones");
+{
+  // Solo aplica cuando la lista pide la galería al abrir el modal (CRM-02 E1).
+  // Las respuestas de la ruta de la galería se retrasan o fallan con
+  // `page.route`: el servidor y los datos son los mismos.
+  const GALLERY = "**/api/admin/properties/*/photos*";
+  const modalTitle = page.getByText("Fotos de la propiedad", { exact: true });
+  const rowAt = (i: number) => page.locator('li[id^="propiedad-"]').nth(i);
+  const manage = (i: number) => rowAt(i).getByRole("button", { name: /Gestionar fotos/ });
+  const rowCount = async (i: number) => Number((await manage(i).textContent())?.match(/\d+/)?.[0] ?? NaN);
+  const rowSlug = async (i: number) => ((await rowAt(i).getAttribute("id")) ?? "").replace(/^propiedad-/, "");
+  const items = () => page.locator("[data-crm-gallery-item]");
+  // Las URLs sintéticas llevan `?p=<n.º de propiedad>-<foto>`: dicen de quién es cada foto.
+  const owners = async () =>
+    page.locator("[data-crm-gallery-item] img").evaluateAll((imgs) =>
+      [...new Set(imgs.map((i) => decodeURIComponent((i as HTMLImageElement).src).match(/p=(\d+)-/)?.[1] ?? "?"))],
+    );
+  const closeModal = async () => {
+    await page.keyboard.press("Escape");
+    await modalTitle.waitFor({ state: "hidden", timeout: 10000 });
+  };
+  const ready = () => page.locator('[data-crm-gallery="ready"]').waitFor({ timeout: 30000 });
+  const delayed = (ms: number, times = 1) =>
+    page.route(GALLERY, async (route) => {
+      await new Promise((r) => setTimeout(r, ms));
+      await route.continue().catch(() => undefined);
+    }, { times });
+
+  await page.goto(listUrl, { waitUntil: "domcontentloaded" });
+  await listReady(page);
+  await net.idle();
+  const n0 = (await rowSlug(0)).replace(/^sim-propiedad-/, "");
+  const n1 = (await rowSlug(1)).replace(/^sim-propiedad-/, "");
+
+  // 1 · Error y reintento.
+  await page.route(GALLERY, (route) => route.fulfill({ status: 500, body: "{}" }), { times: 1 });
+  await manage(0).click();
+  await page.getByRole("alert").filter({ hasText: /No se pudieron cargar las fotos/ }).waitFor({ timeout: 30000 });
+  check("si la galería falla se dice y no se enseña una galería vacía", (await items().count()) === 0);
+  await page.getByRole("button", { name: "Reintentar" }).click();
+  await ready();
+  check("«Reintentar» carga la galería correcta", (await items().count()) === (await rowCount(0)) && (await owners()).join() === n0, `fotos=${await items().count()} de=${(await owners()).join()}`);
+  await closeModal();
+
+  // 2 · Cerrar con la petición en vuelo y reabrir.
+  await delayed(1500);
+  await manage(0).click();
+  await closeModal();
+  await manage(0).click();
+  await ready();
+  await page.waitForTimeout(1800); // la respuesta retrasada llega ahora
+  check("cerrar y reabrir: la galería sigue siendo la suya y completa", (await items().count()) === (await rowCount(0)) && (await owners()).join() === n0, `fotos=${await items().count()} de=${(await owners()).join()}`);
+  await closeModal();
+
+  // 3 · Cambiar de propiedad con una respuesta tardía de la anterior.
+  await delayed(2000);
+  await manage(0).click();
+  await closeModal();
+  await manage(1).click();
+  await ready();
+  await page.waitForTimeout(2300);
+  check("otra propiedad: una respuesta tardía de la anterior no la pisa", (await owners()).join() === n1 && (await items().count()) === (await rowCount(1)), `de=${(await owners()).join()} fotos=${await items().count()}`);
+  await closeModal();
+
+  // 4 · Edición mientras llega una respuesta más vieja: gana la edición.
+  await delayed(2500);
+  await manage(1).click(); // enseña lo último conocido y pide de nuevo (retrasado)
+  await items().first().waitFor({ timeout: 30000 });
+  const secondBefore = await items().nth(1).locator("img").getAttribute("src");
+  await items().nth(1).hover();
+  await items().nth(1).getByRole("button", { name: /Hacer principal/ }).click({ force: true });
+  await page.waitForTimeout(3000); // la respuesta retrasada (orden antiguo) ya llegó
+  const firstAfter = await items().first().locator("img").getAttribute("src");
+  check("una edición hecha mientras llegaba la galería no se pierde", firstAfter === secondBefore, `primera=${firstAfter?.slice(-40)} esperada=${secondBefore?.slice(-40)}`);
+  await closeModal();
+}
+
 section("R5 · Sidebar → Clientes → ficha → Atrás");
 await page.goto(`${BASE}/${COUNTRY}/admin`, { waitUntil: "domcontentloaded" });
 await page.locator("aside").first().waitFor();

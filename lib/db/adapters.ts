@@ -508,17 +508,28 @@ export function propertyRowToClientProperty(
   };
 }
 
+/**
+ * Galería de la propiedad tal como la ve el admin: ordenada por posición y sin
+ * URLs repetidas. Es la MISMA regla para la lista (número de fotos y portada
+ * de respaldo) y para el modal de fotos (`/api/admin/properties/[slug]/photos`).
+ */
+export function adminGalleryFromRows(
+  rows: Array<{ url: string; is_cover: boolean; position: number }> | null | undefined,
+): Array<{ url: string; isCover: boolean }> {
+  return dedupePhotosByUrl(
+    (rows ?? []).slice().sort((a, b) => a.position - b.position),
+  ).map((p) => ({ url: p.url, isCover: p.is_cover }));
+}
+
 export function propertyRowToAdminProperty(
   row: PropertyRow & {
     agencies?: { name: string; slug: string } | null;
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   }
 ): AdminProperty {
-  const sortedPhotos = dedupePhotosByUrl(
-    row.property_photos
-      ?.slice()
-      .sort((a, b) => a.position - b.position) ?? [],
-  ).map((p) => ({ url: p.url, isCover: p.is_cover }));
+  // La galería solo sirve para contar y para la portada de respaldo: la lista
+  // ya no la envía al navegador (CRM-02, E1).
+  const gallery = adminGalleryFromRows(row.property_photos);
 
   return {
     id: row.slug,
@@ -551,7 +562,7 @@ export function propertyRowToAdminProperty(
     ),
     publishedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     featured: false,
-    coverPhotoUrl: row.cover_photo_url,
-    photos: sortedPhotos,
+    coverPhotoUrl: row.cover_photo_url ?? gallery[0]?.url ?? null,
+    photoCount: gallery.length,
   };
 }
