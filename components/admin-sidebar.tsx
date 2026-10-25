@@ -31,6 +31,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { AppearanceSelect } from "@/components/admin/appearance-select";
+import { NavPendingMark } from "@/components/admin/nav-pending";
 import { useT } from "@/lib/i18n/provider";
 import {
   canAccess,
@@ -251,6 +252,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                   >
                     <Icon size={17} strokeWidth={1.75} />
                     <span className="flex-1">{t(labelKey)}</span>
+                    <NavPendingMark href={href} />
                     {isCalendario && pendingVisits > 0 && (
                       <span className="crm-number flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-xs text-fixed-ink">
                         {pendingVisits}
