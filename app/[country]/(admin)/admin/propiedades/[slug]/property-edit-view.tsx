@@ -59,6 +59,7 @@ import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { sectorsForCommune } from "@/lib/mock-properties";
 import { useT } from "@/lib/i18n/provider";
 import { shareSlug } from "@/lib/share-slug";
+import { LinkPendingOverlay } from "@/components/admin/nav-pending";
 import { PORTAL_URL } from "@/lib/portal-url";
 import { cn } from "@/lib/utils";
 import { PropertyTagEditor } from "@/components/admin/property-tags/tag-editor";
@@ -657,6 +658,7 @@ export function PropertyEditView({
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
           <span>{t("adminProps.detail.back")}</span>
+          <LinkPendingOverlay skeleton="properties-list" />
         </Link>
         <span
           className={cn(

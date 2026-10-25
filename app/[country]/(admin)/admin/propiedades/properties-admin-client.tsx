@@ -58,6 +58,7 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import { canAccess } from "@/lib/permissions";
 import { type AdminPropertyFilters, matchesAdminPropertyFilters } from "@/lib/properties/admin-filter";
 import { buildListSearch, rowAnchorId, withReturnContext } from "@/lib/properties/admin-list-url";
+import { LinkPendingOverlay } from "@/components/admin/nav-pending";
 import { PORTAL_URL } from "@/lib/portal-url";
 import type { AdminProperty, AdminPropertyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -1029,6 +1030,7 @@ function PropertyRow({
           title={property.title}
         >
           {property.title}
+          {canEdit && <LinkPendingOverlay skeleton="property-detail" />}
         </Link>
         <p className="mt-1 truncate text-xs text-ink/60">
           {[property.subzone, property.zone].filter(Boolean).join(" · ")}
@@ -1091,6 +1093,7 @@ function PropertyRow({
           >
             <Pencil size={12} strokeWidth={1.75} className="text-gold" />
             <span>{t("adminProps.edit")}</span>
+            <LinkPendingOverlay skeleton="property-detail" />
           </Link>
         ) : (
           <span

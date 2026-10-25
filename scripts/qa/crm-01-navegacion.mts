@@ -724,6 +724,105 @@ const salidas: Record<string, string> = {};
   await c.close();
 }
 
+// CRM-03 (PR-B): el «cargando» de lista → ficha y de «Volver» en los casos
+// difíciles. Las respuestas se retienen o se hacen fallar con `page.route`, así
+// la espera no depende de la velocidad del equipo.
+section("R14 · «Cargando» de lista → ficha y «Volver»: cancelada, fallida, pestaña nueva, filtros");
+{
+  const c = await newContext(TOKEN);
+  const { page: p } = await newPage(c);
+  const skeleton = p.locator("[data-crm-skeleton]");
+  const rowSel = `a[href^="${LIST}/sim-propiedad-"]`;
+  const isDetail = (u: URL) => u.pathname.startsWith(`${LIST}/sim-propiedad-`);
+  const isList = (u: URL) => u.pathname === LIST;
+  const isRsc = (r: { headers(): Record<string, string> }) => Boolean(r.headers()["rsc"]);
+  const openList = async () => {
+    await p.goto(`${BASE}${LIST}?operacion=alquiler&distrito=Salamanca&pagina=2`, { waitUntil: "domcontentloaded" });
+    await listReady(p);
+  };
+  // Retiene las respuestas RSC que casen hasta llamar a `release()`.
+  const holdRsc = async (match: (u: URL) => boolean) => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const handler = async (route: import("playwright").Route) => {
+      if (isRsc(route.request())) await gate;
+      await route.continue().catch(() => {});
+    };
+    await p.route(match, handler);
+    return async () => {
+      release();
+      await p.unroute(match, handler);
+    };
+  };
+  const skeletonShows = () => skeleton.first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+
+  // a) Cancelada: la ficha tarda y, mientras, se pulsa otra sección.
+  await openList();
+  let release = await holdRsc(isDetail);
+  await p.locator(rowSel).first().click();
+  check("lista→ficha: aparece el esqueleto de la ficha mientras espera", await skeletonShows());
+  await clickSidebar(p, /^Clientes$/);
+  await p.waitForURL((u) => u.pathname.endsWith("/clientes"), { timeout: 60000 });
+  await noSkeleton(p);
+  await release();
+  await p.waitForTimeout(800);
+  check("cancelada: gana el último destino y no queda esqueleto", new URL(p.url()).pathname.endsWith("/clientes") && (await skeleton.count()) === 0, p.url());
+
+  // b) Fallida: la respuesta RSC de la ficha da 500 o se corta. Next recurre a
+  //    cargar el documento entero: la ficha llega y no queda nada colgado.
+  for (const [name, fail] of [
+    ["500", (r: import("playwright").Route) => r.fulfill({ status: 500, body: "" })],
+    ["corte de red", (r: import("playwright").Route) => r.abort("failed")],
+  ] as const) {
+    await openList();
+    const h = (route: import("playwright").Route) => (isRsc(route.request()) ? fail(route) : route.continue());
+    await p.route(isDetail, h);
+    await p.locator(rowSel).first().click();
+    const ok = await detailReady(p).then(() => true, () => false);
+    await p.unroute(isDetail, h);
+    check(`fallida (${name}): la ficha llega por carga completa y sin esqueleto`, ok && (await skeleton.count()) === 0, p.url());
+  }
+  //    Y si también falla el documento: se ve el error, no un esqueleto eterno.
+  await openList();
+  const all = (route: import("playwright").Route) => route.fulfill({ status: 500, contentType: "text/plain", body: "fallo simulado" });
+  await p.route(isDetail, all);
+  await p.locator(rowSel).first().click();
+  await p.waitForURL(isDetail, { timeout: 30000 }).catch(() => {});
+  await p.waitForLoadState("domcontentloaded").catch(() => {});
+  await p.waitForTimeout(500);
+  check("fallida del todo: se ve el error y ningún esqueleto", (await skeleton.count()) === 0 && (await p.content()).includes("fallo simulado"), p.url());
+  await p.unroute(isDetail, all);
+
+  // c) Cmd/Ctrl+clic: pestaña nueva; la actual no cambia ni muestra esqueleto.
+  await openList();
+  const [tab] = await Promise.all([c.waitForEvent("page"), p.locator(rowSel).first().click({ modifiers: ["ControlOrMeta"] })]);
+  await p.waitForTimeout(400);
+  check("Cmd/Ctrl+clic: la pestaña actual sigue en la lista, sin esqueleto", isList(new URL(p.url())) && (await skeleton.count()) === 0, p.url());
+  await detailReady(tab).catch(() => {});
+  check("Cmd/Ctrl+clic: la pestaña nueva abre la ficha con contexto", isDetail(new URL(tab.url())) && tab.url().includes("volver="), tab.url());
+  await tab.close();
+
+  // d) Con filtros y página 2: ida con esqueleto y «Volver» con esqueleto.
+  await openList();
+  const row = p.locator(rowSel).first();
+  const slug = ((await row.getAttribute("href")) ?? "").split("/").pop()!.split("?")[0];
+  await row.click();
+  await detailReady(p);
+  release = await holdRsc(isList);
+  await p.getByRole("link", { name: /Volver al listado/ }).click();
+  const listSkeleton = await skeletonShows();
+  await release();
+  await listReady(p);
+  const q = params(p.url());
+  check("«Volver»: aparece el esqueleto de la lista mientras espera", listSkeleton);
+  check(
+    "«Volver» con esqueleto conserva filtros, página y fila",
+    q.operacion === "alquiler" && q.distrito === "Salamanca" && q.pagina === "2" && (await p.locator(`#propiedad-${slug}`).isVisible().catch(() => false)),
+    new URL(p.url()).search,
+  );
+  await c.close();
+}
+
 section("Identidad (sin sesión, cuenta suspendida)");
 for (const [name, token, expect] of [
   ["sin sesión", null, /\/login/],
