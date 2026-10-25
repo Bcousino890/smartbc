@@ -527,6 +527,55 @@ section("R10 · Galería de fotos desde la lista (abrir, cerrar, reabrir, otra p
   await closeModal();
 }
 
+section("R12 · Campana: una petición por pestaña y minuto, y al momento tras marcar leída");
+{
+  // Cuenta TODAS las peticiones GET/POST a la campana de esta pestaña desde aquí.
+  const calls: string[] = [];
+  const onReq = (req: import("playwright").Request) => {
+    if (new URL(req.url()).pathname === "/api/admin/notifications") calls.push(`${req.method()} ${Date.now()}`);
+  };
+  page.on("request", onReq);
+  await page.goto(`${BASE}/${COUNTRY}/admin`, { waitUntil: "domcontentloaded" });
+  await page.locator("aside").first().waitFor();
+  await net.idle();
+  // El panel (/es/admin) no tiene campana: la primera petición sale al llegar
+  // a la primera página que la tiene. Desde ahí, otras 3 navegaciones en menos
+  // de un minuto no deben volver a pedir.
+  // R12 no mide tiempos: entre pasos se espera a que el cajón del menú
+  // termine de cerrarse (móvil, 300 ms) y a que la campana haya pedido.
+  const settle = () => page.waitForTimeout(VARIANT === "movil" ? 400 : 0);
+  await clickSidebar(page, /^Propiedades$/);
+  await listReady(page);
+  for (let i = 0; i < 100 && !calls.some((c) => c.startsWith("GET")); i++) await page.waitForTimeout(100);
+  await net.idle();
+  await settle();
+  const afterFirst = calls.filter((c) => c.startsWith("GET")).length;
+  for (const name of [/^Clientes$/, /^Solicitudes$/, /^Propiedades$/]) {
+    await clickSidebar(page, name);
+    await page.waitForLoadState("domcontentloaded");
+    await net.idle();
+    await settle();
+  }
+  const gets = calls.filter((c) => c.startsWith("GET")).length;
+  check("3 navegaciones más en menos de un minuto: la campana no vuelve a pedir", afterFirst >= 1 && gets === afterFirst, `peticiones GET: ${afterFirst} tras la 1.ª página con campana → ${gets} tras 3 navegaciones más`);
+  // Marcar leída: abrir la campana y pulsar un aviso de opinión de catálogo.
+  const bell = page.getByRole("button", { name: /Notificaciones|Notifications/ }).first();
+  if (VARIANT === "movil") {
+    console.log("  (marcar leída: solo en escritorio)");
+  } else if (await bell.count()) {
+    await bell.click();
+    const notice = page.getByRole("link", { name: /Opinión sintética/ }).first();
+    if (await notice.count()) {
+      const before = calls.length;
+      await notice.click();
+      await page.waitForTimeout(1500);
+      const after = calls.slice(before);
+      check("marcar leída: POST y nueva petición al momento", after.some((c) => c.startsWith("POST")) && after.some((c) => c.startsWith("GET")), after.map((c) => c.split(" ")[0]).join(","));
+    } else check("hay avisos de opinión en los datos sintéticos", false);
+  } else check("la cabecera tiene campana", false);
+  page.off("request", onReq);
+}
+
 section("R5 · Sidebar → Clientes → ficha → Atrás");
 await page.goto(`${BASE}/${COUNTRY}/admin`, { waitUntil: "domcontentloaded" });
 await page.locator("aside").first().waitFor();

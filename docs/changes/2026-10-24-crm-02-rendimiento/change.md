@@ -270,6 +270,49 @@ Alternativa B: medición con el código de E2 más una variante solo para medir,
 - **Las 9 que quedan con B** no son del menú: son de los enlaces de fichas visibles en las listas.
 - **Límite de la medición:** el arnés pasa el puntero justo antes del clic, así que no mide la ventaja de la precarga al pasar el ratón con más antelación, que con B sería la misma o mejor.
 - **Recomendación de Claude:** B. **Decisión de Fabricio (D7, 2026-10-25): B.** Se implementa en CRM-02e.
+### E3 · Campana de notificaciones (D2)
+
+**Cambios**
+- **`lib/notifications/bell-store.ts`** (puro, sin React). Es una copia por pestaña de los datos de la campana:
+  - reutiliza lo pedido hasta **60 s** (`isFresh`);
+  - `load(key, { force: true })` pide al momento: es la excepción tras marcar leída;
+  - varias campanas a la vez comparten **una** petición en vuelo;
+  - una respuesta más vieja que otra posterior no la pisa;
+  - datos y peticiones van separados por contexto `usuario|país`;
+  - al cambiar de usuario en la misma pestaña se borra todo lo del anterior;
+  - con 401/403 (sin sesión o sin acceso), o al pulsar «Cerrar sesión», se borra lo privado y se descarta lo que esté en vuelo.
+- **`components/admin/notifications-bell.tsx`:**
+  - usa ese almacén con la clave del usuario de la sesión, que ahora expone `CrmThemeProvider`, y el país de la URL;
+  - fuera del layout del admin, sin usuario conocido, funciona como siempre, sin compartir nada;
+  - al abrir un aviso de opinión lo quita de la copia local y, cuando el `POST` de marcar leído termina, pide de nuevo.
+- **`components/admin-sidebar.tsx`:** el formulario de «Cerrar sesión» borra la copia antes de enviarse.
+- **Sin cambios en `/api/admin/notifications`** ni en ninguna regla de sesión o permisos: la ruta sigue decidiendo qué ve cada usuario.
+
+**Resultado** (local; mediana; `medidas/e3/` frente a `medidas/base-misma-sesion/`)
+
+| | Base | E3 |
+|---|---|---|
+| Peticiones a la campana · R1 (lista → ficha → «Volver»…) | 3 | **2** |
+| Peticiones a la campana · R2 (Atrás/Adelante) | 3 | **1** |
+| Peticiones a la campana · R5 (Clientes) | 2 | **1** |
+| R12: 3 navegaciones del menú en < 1 min tras la primera página con campana | 1 por navegación | **0 nuevas** ✓ |
+| R12: marcar leída | — | `POST` y nueva petición al momento ✓ |
+| Consultas por cada petición a la campana | 12 | 12 (sin cambios en la ruta) |
+| Útil, menú → Propiedades (escritorio · 40 ms · móvil) | 314 · 578 · 1.841 | 307 · 613 · 1.876 |
+| Útil, «Volver» (escritorio · 40 ms · móvil) | 229 · 513 · 1.227 | 240 · 523 · 1.216 |
+
+- **AC8 ✓:** dentro de una misma pestaña, como mucho una petición por minuto, salvo tras marcar leída.
+- **Por qué el total por pasada solo baja de 15 a 12:** cada recorrido del arnés empieza con una carga completa de página (`page.goto`), que crea una pestaña nueva a efectos de memoria y pide una vez. En el uso normal (navegar por el menú dentro de la misma pestaña) el ahorro es el de R12: de una petición por navegación a una por minuto, 12 consultas cada vez.
+- **AC15 ✓:** `scripts/test-notifications-bell-store.mts` tiene 12 tests, encadenados en `npm run test:crm-appearance`, en CI. Cubren:
+  - plazo de 60 s y refresco forzado;
+  - petición compartida y respuestas desordenadas;
+  - aislamiento por país y por usuario, y respuesta tardía del usuario anterior;
+  - borrado al cerrar sesión con lo que esté en vuelo;
+  - 401/403;
+  - error de red, que conserva lo último sin marcarlo fresco;
+  - avisos a los suscriptores.
+- **No demostrado en navegador:** el cambio de usuario dentro de la misma pestaña (iniciar sesión con otra cuenta sin recargar). El simulador no tiene inicio de sesión real. Queda cubierto por los tests puros y por el borrado al pulsar «Cerrar sesión».
+- **Contrato de navegación:** 33/33, 33/33 y 31/31 en las 18 pasadas.
 
 ## Recuento de propiedades por país (solo lectura; lo ejecuta una persona autorizada)
 

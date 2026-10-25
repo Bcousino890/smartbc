@@ -2,9 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { Bell, CalendarClock, MessageSquare, Star } from "lucide-react";
 import { useT } from "@/lib/i18n/provider";
 import type { NotificationItem } from "@/app/api/admin/notifications/route";
+import { useCrmTheme } from "@/components/admin/crm-theme";
+import { bellContextKey, createBellStore, type BellResult } from "@/lib/notifications/bell-store";
+
+async function fetchBell(): Promise<BellResult<NotificationItem>> {
+  try {
+    const res = await fetch("/api/admin/notifications", { cache: "no-store" });
+    if (res.status === 401 || res.status === 403) return { status: "denied" };
+    if (!res.ok) return { status: "error" };
+    const data = await res.json();
+    return { status: "ok", items: Array.isArray(data) ? data : [] };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+// Una sola copia por pestaña (módulo del navegador), compartida por todas las
+// campanas que se monten al navegar (CRM-02, E3 · D2).
+const bellStore = createBellStore<NotificationItem>({ fetcher: fetchBell });
+
+/** Cierre de sesión: borra lo que la campana tenga en memoria. */
+export function clearNotificationsCache() {
+  bellStore.clear();
+}
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -36,15 +60,23 @@ const ICON_MAP: Record<NotificationItem["type"], React.ReactNode> = {
   ),
 };
 
-/** 0218 · al abrir un aviso de opinión se marca como leído (solo ese tipo). */
-function markRead(noticeId: string | undefined) {
+/**
+ * 0218 · al abrir un aviso de opinión se marca como leído (solo ese tipo).
+ * Excepción al plazo de 60 s (D2): en cuanto el servidor confirma, se vuelve a
+ * pedir la campana.
+ */
+function markRead(noticeId: string | undefined, key: string | null) {
   if (!noticeId) return;
   void fetch("/api/admin/notifications", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "mark_read", ids: [noticeId] }),
     keepalive: true,
-  }).catch(() => undefined);
+  })
+    .catch(() => undefined)
+    .finally(() => {
+      if (key) void bellStore.load(key, { force: true });
+    });
 }
 
 export function NotificationsBell() {
@@ -54,27 +86,52 @@ export function NotificationsBell() {
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/admin/notifications");
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      // silently fail — non-critical
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Contexto de los datos: usuario de la sesión + país de la URL. Sin usuario
+  // conocido (fuera del layout del admin) no se guarda nada entre montajes.
+  const userId = useCrmTheme()?.userId ?? null;
+  const params = useParams<{ country?: string }>();
+  const country = typeof params?.country === "string" ? params.country : "es";
+  const key = userId ? bellContextKey(userId, country) : null;
 
-  // Initial fetch + polling every 60 s
   useEffect(() => {
-    fetchNotifications();
-    const id = setInterval(fetchNotifications, 60_000);
-    return () => clearInterval(id);
-  }, []);
+    let alive = true;
+    if (!key) {
+      // Sin contexto: el comportamiento de siempre, sin compartir nada.
+      const run = () => {
+        setLoading(true);
+        void fetchBell()
+          .then((r) => {
+            if (alive && r.status === "ok") setNotifications(r.items);
+            if (alive && r.status === "denied") setNotifications([]);
+          })
+          .finally(() => alive && setLoading(false));
+      };
+      run();
+      const id = setInterval(run, 60_000);
+      return () => {
+        alive = false;
+        clearInterval(id);
+      };
+    }
+    bellStore.use(key);
+    setNotifications(bellStore.peek(key) ?? []);
+    const unsubscribe = bellStore.subscribe((changed) => {
+      if (alive && (changed === key || changed === "*")) setNotifications(bellStore.peek(key) ?? []);
+    });
+    const refresh = () => {
+      // Con datos frescos no pide nada: como mucho una petición por minuto.
+      if (bellStore.isFresh(key)) return;
+      setLoading(true);
+      void bellStore.load(key).finally(() => alive && setLoading(false));
+    };
+    refresh();
+    const id = setInterval(refresh, 60_000);
+    return () => {
+      alive = false;
+      unsubscribe();
+      clearInterval(id);
+    };
+  }, [key]);
 
   // Close on outside click
   useEffect(() => {
@@ -141,8 +198,9 @@ export function NotificationsBell() {
                       onClick={() => {
                         setOpen(false);
                         if (n.noticeId) {
-                          markRead(n.noticeId);
-                          setNotifications((all) => all.filter((x) => x.id !== n.id));
+                          if (key) bellStore.remove(key, (x) => x.id === n.id);
+                          else setNotifications((all) => all.filter((x) => x.id !== n.id));
+                          markRead(n.noticeId, key);
                         }
                       }}
                       className="flex items-start gap-3 px-4 py-3 transition hover:bg-gold/5"
