@@ -25,6 +25,8 @@ type Ctx = {
   setAppearance: (next: CrmAppearance) => void;
   /** false si el navegador no deja guardar: la elección vale solo para esta página. */
   persisted: boolean;
+  /** Usuario de la sesión del admin: clave para separar datos por usuario en el navegador. */
+  userId: string;
 };
 
 const CrmThemeContext = createContext<Ctx | null>(null);
@@ -104,7 +106,10 @@ export function CrmThemeProvider({ userId, children }: { userId: string; childre
     [userId],
   );
 
-  const value = useMemo(() => ({ appearance, theme, setAppearance, persisted }), [appearance, theme, setAppearance, persisted]);
+  const value = useMemo(
+    () => ({ appearance, theme, setAppearance, persisted, userId }),
+    [appearance, theme, setAppearance, persisted, userId],
+  );
   return <CrmThemeContext.Provider value={value}>{children}</CrmThemeContext.Provider>;
 }
 

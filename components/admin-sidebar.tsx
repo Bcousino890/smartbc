@@ -32,6 +32,7 @@ import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { AppearanceSelect } from "@/components/admin/appearance-select";
 import { NavPendingMark } from "@/components/admin/nav-pending";
+import { clearNotificationsCache } from "@/components/admin/notifications-bell";
 import { useT } from "@/lib/i18n/provider";
 import {
   canAccess,
@@ -300,7 +301,8 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
             </div>
           </div>
           <AppearanceSelect />
-          <form action={signOutAction} className="mt-3">
+          {/* Al cerrar sesión se borra lo privado que el navegador tenga en memoria (CRM-02, E3). */}
+          <form action={signOutAction} onSubmit={() => clearNotificationsCache()} className="mt-3">
             <button
               type="submit"
               className="crm-meta flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
