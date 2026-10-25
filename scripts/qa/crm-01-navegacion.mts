@@ -704,7 +704,8 @@ const fichas: Record<string, string> = {};
   }
   check("ninguna ficha `es` muestra etiquetas de `cl`", Object.values(fichas).every((t) => !/Chile [AB]/.test(t)));
   check("la ficha 1 muestra sus dos etiquetas del país", /Destacada/.test(fichas["sim-propiedad-1"]) && /Lujo/.test(fichas["sim-propiedad-1"]));
-  check("la ficha 1 muestra su vídeo y su plano", /video-sintetico-1\.mp4|plano-sintetico-1\.pdf/.test(fichas["sim-propiedad-1"]) || /vídeo|video/i.test(fichas["sim-propiedad-1"]));
+  check("la ficha 1 muestra su plano y su SmartLink", /plano-sintetico-1\.pdf/.test(fichas["sim-propiedad-1"]) && /simtoken0x0/.test(fichas["sim-propiedad-1"]));
+  check("una ficha sin enlaces ni medios no muestra los de otra", !/simtoken|plano-sintetico/.test(fichas["sim-propiedad-2"]));
   await c.close();
 }
 
