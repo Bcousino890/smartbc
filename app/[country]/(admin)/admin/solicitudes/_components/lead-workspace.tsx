@@ -190,6 +190,13 @@ export function LeadWorkspace({
                 propertyTitle={lead.propertyTitle}
                 leadId={lead.id}
               />
+              <ZintoStatus
+                lead={lead}
+                locale={config.locale}
+                canEdit={canEdit}
+                busy={busy}
+                onRun={run}
+              />
             </>
           ) : (
             <Pill tone="warning">{t("inbox.reason.missing_contact")}</Pill>
@@ -581,6 +588,23 @@ function ClientSection({
   const [saving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Al abrir una solicitud sin ficha se buscan coincidencias solas: el
+  // asesor llega ya a "vincular a este" o "crear cliente", sin tener que
+  // acordarse de pulsar el buscador. Solo lectura, así que es seguro.
+  const unlinked = !(lead.clientId && lead.linkedClient);
+  useEffect(() => {
+    setCandidates(null);
+    if (!canEdit || !unlinked) return;
+    let cancelled = false;
+    startLoad(async () => {
+      const r = await findClientCandidates(lead.id);
+      if (!cancelled) setCandidates(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lead.id, canEdit, unlinked]);
+
   // Ya convertido: no se vuelve a emparejar ni se ofrece crear otro.
   if (lead.clientId && lead.linkedClient) {
     return (
@@ -615,7 +639,7 @@ function ClientSection({
     <Panel
       title={t("inbox.client.title")}
       action={
-        canEdit && !candidates ? (
+        canEdit && (!candidates || !candidates.ok) ? (
           <Button
             size="sm"
             variant="ghost"
@@ -629,7 +653,9 @@ function ClientSection({
       }
     >
       {!candidates ? (
-        <p className="text-xs text-ink/45">{t("inbox.client.notLinked")}</p>
+        <p className="text-xs text-ink/45">
+          {loading ? t("inbox.searching") : t("inbox.client.notLinked")}
+        </p>
       ) : !candidates.ok ? (
         <p className="text-xs text-rose-600">{candidates.error}</p>
       ) : (
@@ -765,6 +791,80 @@ function CreateClientForm({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ─── Estado de WhatsApp por Zinto ────────────────────────────────────────────
+
+/**
+ * Dice de un vistazo si a esta persona ya se le escribió por Zinto. Abrir el
+ * chat no es escribir, así que se distingue: "chat abierto" (aviso) frente a
+ * "escrito" (hecho). Si se le escribió desde fuera del portal, un botón lo
+ * deja anotado en el historial.
+ */
+function ZintoStatus({
+  lead,
+  locale,
+  canEdit,
+  busy,
+  onRun,
+}: {
+  lead: LeadDetail;
+  locale: string;
+  canEdit: boolean;
+  busy: boolean;
+  onRun: (fn: () => Promise<{ ok: boolean; error?: string }>) => void;
+}) {
+  const t = useT();
+  const wa = lead.whatsapp;
+  const manual = lead.activity.find((a) => a.kind === "whatsapp");
+
+  if (wa.outbound > 0) {
+    const replied = wa.inbound > 0;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs">
+        <Pill tone={wa.awaitingReply ? "warning" : replied ? "positive" : "info"}>
+          {wa.awaitingReply
+            ? t("inbox.zinto.awaitingReply")
+            : replied
+              ? t("inbox.zinto.replied")
+              : t("inbox.zinto.sent")}
+        </Pill>
+        {wa.firstOutboundAt && (
+          <span className="text-ink/40">
+            <RelativeTime at={wa.firstOutboundAt} locale={locale} />
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  if (manual) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs">
+        <Pill tone="info">{t("inbox.zinto.sentManual")}</Pill>
+        <span className="text-ink/40">
+          <RelativeTime at={manual.createdAt} locale={locale} />
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      {wa.conversationId && <Pill tone="warning">{t("inbox.zinto.openedOnly")}</Pill>}
+      {canEdit && (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => onRun(() => logContact(lead.id, "whatsapp"))}
+        >
+          <Check size={11} strokeWidth={2} />
+          {t("inbox.zinto.markSent")}
+        </Button>
+      )}
+    </span>
   );
 }
 
