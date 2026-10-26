@@ -8,6 +8,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { shareSlug } from "@/lib/share-slug";
+import { sanitizeDescriptionForPdf } from "@/lib/pdf/sanitize-description";
 import {
   PropertyPdfDocument,
   type PropertyPdfData,
@@ -28,20 +29,41 @@ async function loadLogoDataUri(): Promise<string | null> {
 // @react-pdf/renderer no soporta bien webp; convertimos a JPEG (data URI)
 // antes de pasarlo al documento. Si el fetch o la conversión fallan,
 // devolvemos null y el PDF se genera sin foto principal.
-async function fetchPhotoAsDataUri(url: string): Promise<string | null> {
+async function fetchPhotoAsDataUri(
+  url: string,
+  opts: { width?: number; quality?: number } = {},
+): Promise<string | null> {
+  const { width = 1600, quality = 78 } = opts;
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    // Con tope: una foto colgada no puede agotar los 60 s de la ruta.
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return null;
     const input = Buffer.from(await res.arrayBuffer());
     const jpegBuffer = await sharp(input)
       .rotate()
-      .resize({ width: 1600, withoutEnlargement: true })
-      .jpeg({ quality: 78 })
+      .resize({ width, withoutEnlargement: true })
+      .jpeg({ quality })
       .toBuffer();
     return `data:image/jpeg;base64,${jpegBuffer.toString("base64")}`;
   } catch {
     return null;
   }
+}
+
+// Descarga en tandas: con 30+ fotos, lanzarlas todas a la vez dispara la
+// memoria (sharp) y la conexión con el origen. El orden se conserva.
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
 }
 
 export const runtime = "nodejs";
@@ -103,9 +125,9 @@ export async function GET(
       ? row.title_rent
       : row.title;
 
-  // Resolver portada y galería para el PDF. Bajamos en paralelo para no
-  // alargar mucho la generación. Limitamos la galería a 5 extra (6 con
-  // portada) para que el PDF no pese demasiado y entre en una página.
+  // Resolver portada y galería para el PDF. Entran TODAS las fotos (la galería
+  // se reparte en tantas páginas como hagan falta). Las de la galería van a
+  // 1200 px: se imprimen a media página y así el PDF no se dispara de peso.
   const allPhotos = (row.property_photos ?? [])
     .slice()
     .sort((a, b) => a.position - b.position);
@@ -116,12 +138,11 @@ export async function GET(
     null;
   const galleryUrls = allPhotos
     .map((p) => p.url)
-    .filter((u) => u !== coverUrl)
-    .slice(0, 5);
+    .filter((u) => u !== coverUrl);
 
   const [coverDataUri, galleryDataUris, logoDataUri] = await Promise.all([
     coverUrl ? fetchPhotoAsDataUri(coverUrl) : Promise.resolve(null),
-    Promise.all(galleryUrls.map(fetchPhotoAsDataUri)),
+    mapLimit(galleryUrls, 6, (u) => fetchPhotoAsDataUri(u, { width: 1200, quality: 72 })),
     loadLogoDataUri(),
   ]);
   const cover = coverDataUri;
@@ -148,7 +169,8 @@ export async function GET(
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters,
-    description: row.description,
+    // Sin rastro del propietario: ni teléfonos, ni "abstenerse agencias"…
+    description: sanitizeDescriptionForPdf(row.description) || null,
     features: row.features ?? [],
     coverPhotoUrl: cover,
     galleryPhotos,

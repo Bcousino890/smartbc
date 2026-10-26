@@ -22,6 +22,15 @@ const COLORS = {
   border: "#e6dccb",
 };
 
+/** Fotos por página de galería: 2 columnas × 3 filas de 215 pt caben en un A4. */
+const GALLERY_PER_PAGE = 6;
+
+function chunkPhotos(photos: string[], size: number): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < photos.length; i += size) out.push(photos.slice(i, i + size));
+  return out;
+}
+
 const styles = StyleSheet.create({
   page: {
     paddingTop: 28,
@@ -338,10 +347,13 @@ export function PropertyPdfDocument({
         </View>
       </Page>
 
-      {/* Segunda página: galería de fotos. Solo si hay más de una foto. */}
-      {data.galleryPhotos.length > 0 && (
-        <Page size="A4" style={styles.galleryPage}>
-          <Text style={styles.galleryHeader}>Galería · {data.title}</Text>
+      {/* Galería: todas las fotos, 6 por página (2 columnas × 3 filas). */}
+      {chunkPhotos(data.galleryPhotos, GALLERY_PER_PAGE).map((chunk, page, pages) => (
+        <Page key={page} size="A4" style={styles.galleryPage}>
+          <Text style={styles.galleryHeader}>
+            Galería · {data.title}
+            {pages.length > 1 ? ` (${page + 1}/${pages.length})` : ""}
+          </Text>
           <Text style={styles.galleryHeaderSub}>
             {data.zone}
             {data.city ? `, ${data.city}` : ""} ·{" "}
@@ -349,7 +361,7 @@ export function PropertyPdfDocument({
             {isRent && " /mes"}
           </Text>
           <View style={styles.galleryGrid}>
-            {data.galleryPhotos.map((src, i) => (
+            {chunk.map((src, i) => (
               // eslint-disable-next-line jsx-a11y/alt-text
               <Image key={i} src={src} style={styles.galleryItem} />
             ))}
@@ -369,7 +381,7 @@ export function PropertyPdfDocument({
             </Text>
           </View>
         </Page>
-      )}
+      ))}
     </Document>
   );
 }
