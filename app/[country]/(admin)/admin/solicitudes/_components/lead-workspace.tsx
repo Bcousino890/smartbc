@@ -265,7 +265,9 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
   const [showOriginal, setShowOriginal] = useState(false);
   const [pending, start] = useTransition();
 
-  if (!lead.message && lead.profileBullets.length === 0) return null;
+  if (!lead.message && lead.profileBullets.length === 0 && !lead.profilePresentation) {
+    return null;
+  }
 
   return (
     <Panel
@@ -306,6 +308,16 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
       )}
       {translated && !showOriginal && (
         <p className="mt-1.5 text-xs text-ink/35">{t("inbox.enquiry.machine")}</p>
+      )}
+      {/* La extensión separa la presentación del resto de viñetas del perfil;
+          `getLeadDetail` ya la bajaba pero aquí nunca se pintaba. */}
+      {lead.profilePresentation && (
+        <div className="mt-3 border-t border-ink/8 pt-3">
+          <p className="crm-label-sm text-ink/45">{t("inbox.enquiry.presentation")}</p>
+          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink/80">
+            {lead.profilePresentation}
+          </p>
+        </div>
       )}
       {lead.profileBullets.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-1.5 border-t border-ink/8 pt-3">
