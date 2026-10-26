@@ -53,6 +53,7 @@ import {
   type SmartLinkRow,
   SmartLinksPanel,
 } from "@/components/admin/smart-links-panel";
+import { CollabLinksPanel } from "@/components/admin/collab-links-panel";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { listReturnHref, withReturnContext } from "@/lib/properties/admin-list-url";
 import { propertyFeaturesForCountry } from "@/lib/property-features";
@@ -1466,6 +1467,14 @@ export function PropertyEditView({
           title={t("adminProps.smartLinks.title")}
         >
           <SmartLinksPanel slug={property.slug} initialLinks={shares} />
+        </Section>
+
+        {/* Enlace y PDF en blanco para empresas colaboradoras */}
+        <Section
+          icon={<Send size={15} strokeWidth={1.75} />}
+          title="Empresa colaboradora (sin marca)"
+        >
+          <CollabLinksPanel slug={property.slug} />
         </Section>
 
         {/* Fotos */}

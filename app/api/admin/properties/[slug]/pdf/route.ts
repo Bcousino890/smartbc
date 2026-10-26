@@ -9,6 +9,7 @@ import { createClient } from "@/lib/db/server";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { shareSlug } from "@/lib/share-slug";
 import { sanitizeDescriptionForPdf } from "@/lib/pdf/sanitize-description";
+import { collabTitle } from "@/lib/collab/white-label";
 import {
   PropertyPdfDocument,
   type PropertyPdfData,
@@ -83,6 +84,8 @@ export async function GET(
 
   const { slug } = await params;
   const opParam = new URL(req.url).searchParams.get("op");
+  // ?blanco=1: PDF para empresas colaboradoras, sin nada de BC.
+  const whiteLabel = new URL(req.url).searchParams.get("blanco") === "1";
   const row = (await getPropertyBySlugForAdmin(slug)) as
     | (Record<string, unknown> & {
         title: string;
@@ -92,6 +95,8 @@ export async function GET(
         rent_price: number | null;
         price: number;
         zone: string;
+        property_type?: string | null;
+        property_reference?: string | null;
         bedrooms: number;
         bathrooms: number;
         square_meters: number | null;
@@ -120,8 +125,10 @@ export async function GET(
     isDual && effectiveOperation === "rent" && row.rent_price != null
       ? Number(row.rent_price)
       : Number(row.price);
-  const effectiveTitle =
-    isDual && effectiveOperation === "rent" && row.title_rent
+  // En blanco el título se sintetiza: el real suele llevar la calle.
+  const effectiveTitle = whiteLabel
+    ? collabTitle(effectiveOperation, row.property_type, row.zone)
+    : isDual && effectiveOperation === "rent" && row.title_rent
       ? row.title_rent
       : row.title;
 
@@ -143,7 +150,7 @@ export async function GET(
   const [coverDataUri, galleryDataUris, logoDataUri] = await Promise.all([
     coverUrl ? fetchPhotoAsDataUri(coverUrl) : Promise.resolve(null),
     mapLimit(galleryUrls, 6, (u) => fetchPhotoAsDataUri(u, { width: 1200, quality: 72 })),
-    loadLogoDataUri(),
+    whiteLabel ? Promise.resolve(null) : loadLogoDataUri(),
   ]);
   const cover = coverDataUri;
   const galleryPhotos = galleryDataUris.filter(
@@ -175,7 +182,8 @@ export async function GET(
     coverPhotoUrl: cover,
     galleryPhotos,
     logoDataUri,
-    smartLink,
+    smartLink: whiteLabel ? "" : smartLink,
+    ...(whiteLabel ? { whiteLabel: { reference: row.property_reference ?? null } } : {}),
   };
 
   // renderToBuffer espera ReactElement<DocumentProps>. Nuestro componente
@@ -187,7 +195,7 @@ export async function GET(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const buffer = await renderToBuffer(element as any);
 
-  const safeName = effectiveTitle
+  const safeName = (whiteLabel && row.property_reference ? row.property_reference : effectiveTitle)
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, "-")

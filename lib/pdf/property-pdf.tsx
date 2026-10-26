@@ -7,6 +7,7 @@ import {
   View,
 } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
+import { COLLAB_COMPANY_LABEL } from "@/lib/collab/white-label";
 
 // Documento PDF de una propiedad. Diseñado para enviarse al cliente con
 // la marca BC, foto principal + datos clave + descripción + características
@@ -228,6 +229,9 @@ export type PropertyPdfData = {
   // Logo BC en data URI (PNG). Si null, fallback al texto "BENJAMÍN COUSIÑO".
   logoDataUri: string | null;
   smartLink: string;
+  // Variante "en blanco" para empresas colaboradoras: sin logo, teléfono,
+  // correo, nombre ni enlace de BC; solo "Empresa colaboradora" + referencia.
+  whiteLabel?: { reference: string | null };
 };
 
 const BC = {
@@ -247,15 +251,22 @@ export function PropertyPdfDocument({
   data: PropertyPdfData;
 }): ReactElement {
   const isRent = data.operation === "rent";
+  const wl = data.whiteLabel;
+  const refLine = wl?.reference ? `Ref. ${wl.reference}` : "";
   return (
     <Document
-      title={`${data.title} — Benjamín Cousiño Propiedades`}
-      author="Benjamín Cousiño Propiedades"
+      title={wl ? `${data.title}${refLine ? ` — ${refLine}` : ""}` : `${data.title} — Benjamín Cousiño Propiedades`}
+      author={wl ? COLLAB_COMPANY_LABEL : "Benjamín Cousiño Propiedades"}
     >
       <Page size="A4" style={styles.page}>
         {/* Header con la marca y la fecha */}
         <View style={styles.header}>
-          {data.logoDataUri ? (
+          {wl ? (
+            <View>
+              <Text style={styles.brand}>{COLLAB_COMPANY_LABEL.toUpperCase()}</Text>
+              {refLine ? <Text style={styles.brandSub}>{refLine.toUpperCase()}</Text> : null}
+            </View>
+          ) : data.logoDataUri ? (
             // eslint-disable-next-line jsx-a11y/alt-text
             <Image src={data.logoDataUri} style={styles.logo} />
           ) : (
@@ -266,7 +277,7 @@ export function PropertyPdfDocument({
           )}
           <View style={styles.meta}>
             <Text>{new Date().toLocaleDateString("es-ES")}</Text>
-            <Text style={{ marginTop: 2 }}>{BC.email}</Text>
+            {!wl && <Text style={{ marginTop: 2 }}>{BC.email}</Text>}
           </View>
         </View>
 
@@ -338,12 +349,21 @@ export function PropertyPdfDocument({
 
         {/* Footer / contacto */}
         <View style={styles.footer}>
-          <Text style={styles.footerTitle}>¿Te interesa esta propiedad?</Text>
-          <Text style={styles.footerLine}>Email: {BC.email}</Text>
-          <Text style={styles.footerLine}>Teléfono: {BC.phone}</Text>
-          <Text style={[styles.footerLine, { marginTop: 6, color: COLORS.gold }]}>
-            Más fotos y detalles: {data.smartLink}
-          </Text>
+          {wl ? (
+            <>
+              <Text style={styles.footerTitle}>{COLLAB_COMPANY_LABEL}</Text>
+              {refLine ? <Text style={styles.footerLine}>{refLine}</Text> : null}
+            </>
+          ) : (
+            <>
+              <Text style={styles.footerTitle}>¿Te interesa esta propiedad?</Text>
+              <Text style={styles.footerLine}>Email: {BC.email}</Text>
+              <Text style={styles.footerLine}>Teléfono: {BC.phone}</Text>
+              <Text style={[styles.footerLine, { marginTop: 6, color: COLORS.gold }]}>
+                Más fotos y detalles: {data.smartLink}
+              </Text>
+            </>
+          )}
         </View>
       </Page>
 
@@ -367,18 +387,21 @@ export function PropertyPdfDocument({
             ))}
           </View>
           <View style={styles.galleryFooter}>
-            <Text style={{ color: COLORS.cream, fontSize: 9 }}>
-              Benjamín Cousiño Propiedades · {BC.email} · {BC.phone}
-            </Text>
-            <Text
-              style={{
-                color: COLORS.gold,
-                fontSize: 8.5,
-                marginTop: 3,
-              }}
-            >
-              {data.smartLink}
-            </Text>
+            {wl ? (
+              <Text style={{ color: COLORS.cream, fontSize: 9 }}>
+                {COLLAB_COMPANY_LABEL}
+                {refLine ? ` · ${refLine}` : ""}
+              </Text>
+            ) : (
+              <>
+                <Text style={{ color: COLORS.cream, fontSize: 9 }}>
+                  Benjamín Cousiño Propiedades · {BC.email} · {BC.phone}
+                </Text>
+                <Text style={{ color: COLORS.gold, fontSize: 8.5, marginTop: 3 }}>
+                  {data.smartLink}
+                </Text>
+              </>
+            )}
           </View>
         </Page>
       ))}
