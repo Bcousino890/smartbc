@@ -24,11 +24,14 @@ const OWNER_TRACES = [
   /\b(?:agencias?|inmobiliarias?|intermediari[oa]s?|comerciales?|agents?|agencies|realtors?|brokers?)\b/i,
   /\babstenerse\b/i,
   /\bsin\s+comisi[oó]n(?:es)?\b/i,
+  /\bhonorarios\b/i,
   // Propietario / particular (sin tocar "baño particular", "garaje particular").
   /\b(?:propietari[oa]s?|due[ñn][oa]s?|owner|landlord)\b/i,
   /\b(?:soy|somos|es|de|trato|anuncio\s+de)\s+(?:un\s+)?particular(?:es)?\b/i,
   /\bparticular(?:es)?\s+(?:a|sin|no|alquila|vende|que)\b/i,
   /\bprivate\s+(?:owner|seller|landlord)\b/i,
+  // "Particular." / "Particular" solo, como frase o etiqueta entera.
+  /^\W*(?:anuncio\s+(?:de\s+)?)?particular(?:es)?\W*$/i,
   /\btrato\s+directo\b/i,
   // Presentaciones y vías de contacto.
   /\b(?:soy|me\s+llamo|mi\s+nombre\s+es|my\s+name\s+is|i\s+am)\b/i,
@@ -60,4 +63,13 @@ export function sanitizeDescriptionForPdf(description: string | null | undefined
     })
     .filter(Boolean);
   return cleaned.join("\n");
+}
+
+/**
+ * Lo mismo para la lista de características: cada elemento es una frase corta
+ * y se descarta entero si delata al propietario o invita a saltarse a la
+ * inmobiliaria ("Particular", "Sin agencias", "Trato directo"…).
+ */
+export function sanitizeFeaturesForPdf(features: string[] | null | undefined): string[] {
+  return (features ?? []).filter((f) => typeof f === "string" && f.trim() !== "" && !dropSentence(f));
 }

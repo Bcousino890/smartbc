@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "../admin";
 import { randomToken } from "@/lib/tokens";
 import { COLLAB_LINK_TTL_DAYS } from "@/lib/collab/white-label";
-import { sanitizeDescriptionForPdf } from "@/lib/pdf/sanitize-description";
+import { sanitizeDescriptionForPdf, sanitizeFeaturesForPdf } from "@/lib/pdf/sanitize-description";
 
 /**
  * Enlaces temporales "en blanco" de UNA propiedad para empresas colaboradoras
@@ -174,9 +174,9 @@ export async function getCollabByToken(
       bathrooms: p.bathrooms ?? null,
       squareMeters: p.square_meters ?? null,
       description: sanitizeDescriptionForPdf(p.description),
-      features: Array.isArray(p.features)
-        ? (p.features as string[]).filter((f) => typeof f === "string" && f.trim() && !DUPLICATE_FEATURE.test(f))
-        : [],
+      features: sanitizeFeaturesForPdf(Array.isArray(p.features) ? (p.features as string[]) : []).filter(
+        (f) => !DUPLICATE_FEATURE.test(f),
+      ),
       location:
         typeof p.latitude === "number" && typeof p.longitude === "number" &&
         Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180

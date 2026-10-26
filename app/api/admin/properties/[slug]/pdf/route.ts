@@ -8,7 +8,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { shareSlug } from "@/lib/share-slug";
-import { sanitizeDescriptionForPdf } from "@/lib/pdf/sanitize-description";
+import { sanitizeDescriptionForPdf, sanitizeFeaturesForPdf } from "@/lib/pdf/sanitize-description";
 import { collabTitle } from "@/lib/collab/white-label";
 import {
   PropertyPdfDocument,
@@ -178,7 +178,7 @@ export async function GET(
     squareMeters: row.square_meters,
     // Sin rastro del propietario: ni teléfonos, ni "abstenerse agencias"…
     description: sanitizeDescriptionForPdf(row.description) || null,
-    features: row.features ?? [],
+    features: sanitizeFeaturesForPdf(row.features),
     coverPhotoUrl: cover,
     galleryPhotos,
     logoDataUri,
