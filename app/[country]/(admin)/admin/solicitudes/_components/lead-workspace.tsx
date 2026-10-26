@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
   Check,
+  Copy,
   ExternalLink,
   Globe,
   Languages,
@@ -184,6 +185,7 @@ export function LeadWorkspace({
                 <Phone size={11} strokeWidth={2} className="text-gold" />
                 {lead.phone}
               </a>
+              <CopyPhoneButton phone={lead.phone} />
               <WhatsAppLeadButton
                 phone={lead.phone}
                 name={lead.name}
@@ -836,6 +838,50 @@ function CreateClientForm({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ─── Copiar teléfono ─────────────────────────────────────────────────────────
+
+/** Copia el número tal cual está; el aviso "Copiado" dura un instante. */
+function CopyPhoneButton({ phone }: { phone: string }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(phone);
+    } catch {
+      // Sin permiso de portapapeles (http, iframe…): vía antigua.
+      const ta = document.createElement("textarea");
+      ta.value = phone;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={t("inbox.phone.copy")}
+      title={copied ? t("inbox.phone.copied") : t("inbox.phone.copy")}
+      className={cn(
+        "inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-ink/15 bg-white text-ink/55 transition hover:border-gold/50 hover:text-ink",
+        copied && "border-emerald-300 text-emerald-700",
+      )}
+    >
+      {copied ? <Check size={12} strokeWidth={2} /> : <Copy size={12} strokeWidth={2} />}
+    </button>
   );
 }
 
