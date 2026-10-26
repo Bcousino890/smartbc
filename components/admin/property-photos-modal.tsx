@@ -22,31 +22,7 @@ import { PropertyPhotosFromWeb } from "@/components/admin/property-photos-from-w
 import { useT } from "@/lib/i18n/provider";
 import { createGalleryTurns, galleryApiUrl } from "@/lib/properties/admin-gallery";
 import { cn } from "@/lib/utils";
-
-/**
- * Hosts que `next.config.ts` deja pasar por el optimizador de imágenes.
- * Las propiedades creadas desde un particular guardan las fotos con la URL de
- * ORIGEN del portal (img4.idealista.com…): ese dominio no está en la lista, el
- * optimizador contesta 400 ("url parameter is not allowed") y toda la galería
- * salía rota. Lo que no es nuestro se carga directo, sin optimizar.
- */
-const OPTIMIZABLE_HOSTS = [
-  /\.supabase\.co$/,
-  /^portal\.bcousinoprop\.com$/,
-  /^crm\.bcousinoprop\.com$/,
-  /^storage\.googleapis\.com$/,
-  /^urbantechome\.com$/,
-];
-
-function isOptimizableSrc(url: string): boolean {
-  if (url.startsWith("/")) return true;
-  try {
-    const host = new URL(url).hostname;
-    return OPTIMIZABLE_HOSTS.some((re) => re.test(host));
-  } catch {
-    return false;
-  }
-}
+import { isOptimizableSrc } from "@/lib/images/optimizable-src";
 
 export type PropertyPhoto = { url: string; isCover: boolean };
 

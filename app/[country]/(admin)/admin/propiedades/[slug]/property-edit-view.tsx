@@ -53,6 +53,7 @@ import {
   type SmartLinkRow,
   SmartLinksPanel,
 } from "@/components/admin/smart-links-panel";
+import { isOptimizableSrc } from "@/lib/images/optimizable-src";
 import { CollabLinksPanel } from "@/components/admin/collab-links-panel";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { listReturnHref, withReturnContext } from "@/lib/properties/admin-list-url";
@@ -688,6 +689,7 @@ export function PropertyEditView({
             <Image
               src={cover}
               alt=""
+              unoptimized={!isOptimizableSrc(cover)}
               fill
               sizes="128px"
               className="object-cover"
