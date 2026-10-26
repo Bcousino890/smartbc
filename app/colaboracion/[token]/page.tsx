@@ -9,6 +9,7 @@ import {
 } from "@/lib/collab/white-label";
 import { ParticularHero } from "@/app/a/[token]/particular-hero";
 import { LanguageSelect } from "@/app/a/[token]/language-select";
+import { ParticularLocation } from "@/app/a/[token]/particular-location";
 
 // Enlace temporal EN BLANCO de una propiedad para una empresa colaboradora
 // (migración 0231). Sin logo, teléfono, correo ni nombre de BC: solo
@@ -147,6 +148,14 @@ export default async function CollabSharePage({
             </p>
           </section>
         )}
+
+        <ParticularLocation
+          location={
+            p.location
+              ? { point: { lat: p.location.lat, lng: p.location.lng, precision: "exact" }, estimate: null }
+              : null
+          }
+        />
 
         <footer className="mt-8 pb-4 text-center crm-meta text-ink/45">
           {COLLAB_COMPANY_LABEL}

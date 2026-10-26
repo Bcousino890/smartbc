@@ -94,7 +94,7 @@ export async function createPropertyFromParticular(
   const partRes = await supabase
     .from("particulares")
     .select(
-      "id, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, owner_name, phone, latitude, longitude",
+      "id, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, features, photos, owner_name, phone, latitude, longitude",
     )
     .eq("id", particularId)
     .maybeSingle();
@@ -109,6 +109,7 @@ export async function createPropertyFromParticular(
     bathrooms: number | null;
     square_meters: number | null;
     description: string | null;
+    features: string[] | null;
     photos: Array<{ url: string; alt?: string }> | null;
     owner_name: string | null;
     phone: string | null;
@@ -185,6 +186,9 @@ export async function createPropertyFromParticular(
       square_meters: part.square_meters,
       zone: part.zone ?? "Madrid",
       description: part.description,
+      // Antes no se copiaban: la propiedad nacía sin características aunque el
+      // anuncio las trajera (ascensor, calefacción, orientación…).
+      features: Array.isArray(part.features) ? part.features : [],
       owner_name: part.owner_name,
       owner_phone: part.phone,
       internal_notes: notes,

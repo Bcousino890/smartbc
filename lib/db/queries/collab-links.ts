@@ -107,9 +107,15 @@ export async function revokeCollabLink(linkId: string): Promise<void> {
 // Columnas públicas de la propiedad — LÍMITE DE PRIVACIDAD, no una lista de
 // conveniencia. El destinatario es de OTRA empresa: nunca añadir aquí slug,
 // title (lleva la calle), address*, owner*/contact*, agency_id, source_url,
-// bc_reference (lleva las iniciales de BC), coordenadas ni fotos con marca.
+// bc_reference (lleva las iniciales de BC) ni fotos con marca.
+// Las coordenadas SÍ se comparten (decisión del equipo, 2026-10-26): el enlace
+// enseña el pin exacto en el mapa.
 const PUBLIC_COLUMNS =
-  "id, property_reference, operation, price, zone, property_type, bedrooms, bathrooms, square_meters, description, features, cover_photo_url, archived_at, property_photos ( url, is_cover, position )";
+  "id, property_reference, operation, price, zone, property_type, bedrooms, bathrooms, square_meters, description, features, latitude, longitude, cover_photo_url, archived_at, property_photos ( url, is_cover, position )";
+
+// Las características que solo repiten un dato que ya sale en la cabecera
+// ("125 m² construidos", "3 habitaciones", "2 baños") sobran en la lista.
+const DUPLICATE_FEATURE = /^\s*\d+\s*(?:m²|m2|habitaci|dormitor|baño)/i;
 
 export type CollabProperty = {
   reference: string | null;
@@ -122,6 +128,7 @@ export type CollabProperty = {
   squareMeters: number | null;
   description: string;
   features: string[];
+  location: { lat: number; lng: number } | null;
   photos: string[];
 };
 
@@ -167,7 +174,14 @@ export async function getCollabByToken(
       bathrooms: p.bathrooms ?? null,
       squareMeters: p.square_meters ?? null,
       description: sanitizeDescriptionForPdf(p.description),
-      features: Array.isArray(p.features) ? (p.features as string[]) : [],
+      features: Array.isArray(p.features)
+        ? (p.features as string[]).filter((f) => typeof f === "string" && f.trim() && !DUPLICATE_FEATURE.test(f))
+        : [],
+      location:
+        typeof p.latitude === "number" && typeof p.longitude === "number" &&
+        Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180
+          ? { lat: p.latitude, lng: p.longitude }
+          : null,
       photos: ordered,
     },
   };
