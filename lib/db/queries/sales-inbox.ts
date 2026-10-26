@@ -658,7 +658,7 @@ export type LeadDetail = {
   property: LeadPropertyContext | null;
   linkedClient: LeadClientRef | null;
   /** Otros leads de la misma persona (mismo teléfono). */
-  duplicates: Array<{ id: string; createdAt: string; propertyTitle: string | null }>;
+  duplicates: Array<{ id: string; createdAt: string; propertyTitle: string | null; name: string | null }>;
   /** Foto de perfil del contacto en Idealista (`idealista_leads.avatar_url`,
    *  migración 0083; la expone la vista desde la 0159). NULL = sin foto. */
   avatarUrl: string | null;
@@ -874,7 +874,7 @@ async function getDuplicates(
     const tail = phoneDigits.slice(-9);
     const { data } = await db()
       .from(VIEW)
-      .select("id, created_at, property_title, phone_digits")
+      .select("id, created_at, property_title, phone_digits, name")
       .neq("id", leadId)
       .like("phone_digits", `%${tail}`)
       .order("created_at", { ascending: false })
@@ -883,6 +883,7 @@ async function getDuplicates(
       id: r.id,
       createdAt: r.created_at,
       propertyTitle: r.property_title ?? null,
+      name: r.name ?? null,
     }));
   } catch {
     return [];

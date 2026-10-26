@@ -151,6 +151,98 @@ export async function logContact(
   return { ok: true };
 }
 
+// ─── Unir solicitudes del mismo teléfono ─────────────────────────────────────
+
+export type MergeResult =
+  | { ok: true; survivorId: string; merged: number }
+  | { ok: false; error: string };
+
+/**
+ * Une en UNA todas las solicitudes con el mismo teléfono (últimos 9 dígitos).
+ *
+ * La fusión automática de la ingesta se frena cuando los nombres son
+ * distintos (pareja, oficina) y solo mira lo que entra en cada captura, así
+ * que lo anterior se quedaba duplicado. Aquí decide una persona: el botón es
+ * explícito, y por eso no se aplica la revisión por nombre.
+ *
+ * Misma mecánica que `autoMergeLeadsByPhone`: sobrevive la MÁS ANTIGUA, el
+ * historial y los chats de Zinto pasan a ella y a las demás se les marca
+ * `merged_into_id` (no se borra nada; separar es ponerlo a NULL).
+ */
+export async function mergeSamePhoneLeads(leadId: string): Promise<MergeResult> {
+  const gate = await checkPermission("solicitudes", "edit");
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
+
+  const { data: lead } = await db()
+    .from("idealista_leads")
+    .select("id, phone_digits")
+    .eq("id", leadId)
+    .maybeSingle();
+  const digits = String(lead?.phone_digits ?? "").replace(/\D/g, "");
+  if (digits.length < 9) return { ok: false, error: "La solicitud no tiene teléfono." };
+  const tail = digits.slice(-9);
+
+  const { data: rows, error } = await db()
+    .from("idealista_leads")
+    .select("id, phone_digits, created_at, client_id, converted_at, converted_by, property_title")
+    .like("phone_digits", `%${tail}`)
+    .is("merged_into_id", null)
+    .order("created_at", { ascending: true })
+    .limit(50);
+  if (error) return { ok: false, error: error.message };
+
+  // `like %tail` puede traer un número más largo que TERMINA igual.
+  const group = ((rows ?? []) as any[]).filter(
+    (r) => String(r.phone_digits ?? "").replace(/\D/g, "").slice(-9) === tail,
+  );
+  if (group.length < 2) return { ok: false, error: "No hay otra solicitud con este teléfono." };
+
+  // Solo se une lo que esta persona puede editar: no se esconde una solicitud
+  // ajena dentro de otra.
+  const allowed = new Set(await canActOnLeads(group.map((r) => r.id), "edit"));
+  if (group.some((r) => !allowed.has(r.id))) return { ok: false, error: NO_ACCESS };
+
+  const [survivor, ...rest] = group;
+  const ids = rest.map((r) => r.id);
+
+  // Historial primero: si se corta entre las dos escrituras quedan dos leads
+  // visibles con el historial ya junto, nunca uno escondido con el suyo colgando.
+  await db().from("lead_activity").update({ lead_id: survivor.id }).in("lead_id", ids);
+  await db().from("zinto_conversations").update({ lead_id: survivor.id }).in("lead_id", ids);
+
+  // Si la que sobrevive no está vinculada a un cliente y otra sí, no se pierde el vínculo.
+  const linked = rest.find((r) => r.client_id);
+  if (!survivor.client_id && linked) {
+    await db()
+      .from("idealista_leads")
+      .update({
+        client_id: linked.client_id,
+        converted_at: linked.converted_at,
+        converted_by: linked.converted_by,
+      })
+      .eq("id", survivor.id);
+  }
+
+  const { error: mergeError } = await db()
+    .from("idealista_leads")
+    .update({ merged_into_id: survivor.id, merged_at: new Date().toISOString() })
+    .in("id", ids);
+  if (mergeError) return { ok: false, error: mergeError.message };
+
+  // Los pisos por los que preguntaron las absorbidas dejan de verse en su
+  // propia fila: se anotan en el hilo para no perder esa información.
+  const titles = [...new Set(rest.map((r) => r.property_title).filter(Boolean))];
+  await log(survivor.id, "note", {
+    body: `Unida con ${ids.length} solicitud${ids.length === 1 ? "" : "es"} del mismo teléfono${
+      titles.length ? `: ${titles.join(" · ")}` : ""
+    }`,
+  });
+
+  refresh();
+  return { ok: true, survivorId: survivor.id, merged: ids.length };
+}
+
 // ─── Seguimiento ─────────────────────────────────────────────────────────────
 
 export async function setFollowUp(

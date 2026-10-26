@@ -535,7 +535,11 @@ export function InboxShell({
                 <ArrowLeft size={14} strokeWidth={1.9} />
                 {t("inbox.backToList")}
               </button>
+              {/* `key` por lead: sin él React reutiliza el panel al cambiar de
+                  solicitud y arrastra su estado local (el formulario de
+                  cliente con el teléfono anterior, la traducción, las notas). */}
               <LeadWorkspace
+                key={selectedLead.id}
                 lead={selectedLead}
                 staff={staff}
                 country={country}

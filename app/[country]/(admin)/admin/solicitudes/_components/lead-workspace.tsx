@@ -54,6 +54,7 @@ import {
   findClientCandidates,
   logContact,
   matchLeadProperty,
+  mergeSamePhoneLeads,
   searchPropertiesForLead,
   setFollowUp,
   setLeadDiscarded,
@@ -236,6 +237,38 @@ export function LeadWorkspace({
             <p className="mt-0.5 text-xs leading-relaxed text-amber-800/70">
               {t("inbox.duplicate.hint")}
             </p>
+            <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900/80">
+              {lead.duplicates.map((d) => (
+                <li key={d.id} className="truncate">
+                  {d.name?.trim() || t("inbox.row.noName")}
+                  {d.propertyTitle ? ` · ${d.propertyTitle}` : ""}
+                </li>
+              ))}
+            </ul>
+            {canEdit && (
+              <Button
+                size="sm"
+                className="mt-2"
+                disabled={busy}
+                onClick={() =>
+                  startBusy(async () => {
+                    setError(null);
+                    const r = await mergeSamePhoneLeads(lead.id);
+                    if (!r.ok) {
+                      setError(r.error);
+                      return;
+                    }
+                    // La unida puede ser esta misma: se abre la que sobrevive.
+                    const qs = new URLSearchParams(window.location.search);
+                    qs.set("lead", r.survivorId);
+                    router.replace(`?${qs.toString()}`, { scroll: false });
+                    router.refresh();
+                  })
+                }
+              >
+                {t("inbox.duplicate.merge", { count: lead.duplicates.length + 1 })}
+              </Button>
+            )}
           </div>
         )}
 
