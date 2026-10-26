@@ -6,6 +6,11 @@ Tres mejoras medianas sobre la lista y la ficha de Propiedades, en PR pequeños 
 - **Responsable:** Fabricio
 - **Rama:** una por PR, desde el `main` remoto vigente.
 - **Estado:** plan aprobado (2026-10-25). Base: `main` `a604f260` (incluye #375).
+  - **C** (ficha): fusionado en #376 (`main` `4e7985cd`, 2026-10-25). Resultado: más abajo.
+  - **B** (abrir y volver): fusionado en #377 (`main` `47c7437d`, 2026-10-26). Resultado: [resultado-b.md](resultado-b.md).
+  - **A** (columnas de la lista): PR #378 abierto, **bloqueado**. Espera a que la persona autorizada valide el esquema con la consulta del final y a que su CI esté en verde.
+  - Todas las mediciones son locales o simuladas. **Ni C ni B se han validado en producción**: no hay tiempos ni comprobación funcional de producción posteriores al despliegue.
+  - El control de acceso de D2 se trata aparte y **sigue sin resolver**. Ninguno de estos PR lo cambia ni lo cierra.
 
 ## Especificación
 
