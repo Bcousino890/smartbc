@@ -560,6 +560,10 @@ section("R12 · Campana: una petición por pestaña y minuto, y al momento tras 
     await net.idle();
     await settle();
   }
+  // La última vuelta es a Propiedades: se espera a que esté pintada (y sin
+  // esqueleto) antes de buscar la campana de su cabecera. Sin esto, 2 de 54
+  // pasadas en escritorio buscaban la campana antes de que llegara la página.
+  await listReady(page);
   const gets = calls.filter((c) => c.startsWith("GET")).length;
   check("3 navegaciones más en menos de un minuto: la campana no vuelve a pedir", afterFirst >= 1 && gets === afterFirst, `peticiones GET: ${afterFirst} tras la 1.ª página con campana → ${gets} tras 3 navegaciones más`);
   // Marcar leída: abrir la campana y pulsar un aviso de opinión de catálogo.
