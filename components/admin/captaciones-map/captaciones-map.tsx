@@ -26,7 +26,7 @@ const MADRID_CENTER: L.LatLngExpression = [40.4168, -3.7038];
 const LABEL_LIMIT = 400;
 const BOUNDS_DEBOUNCE_MS = 350;
 
-type Entry = { layer: L.Marker | L.CircleMarker; key: string };
+type Entry = { layer: L.Marker | L.CircleMarker; key: string; selected: boolean; tier: PinTier };
 
 /**
  * Mapa base de captaciones: Leaflet imperativo (sin react-leaflet, como
@@ -106,7 +106,7 @@ export default function CaptacionesMap(props: CaptacionesMapProps) {
     });
 
     const entries = entriesRef.current;
-    syncRef.current = () => sync(map, entries, propsRef.current);
+    syncRef.current = () => sync(map, entries, propsRef.current, propsRef);
     syncRef.current();
     propsRef.current.onMapReady(map);
     emitBounds();
@@ -133,8 +133,28 @@ export default function CaptacionesMap(props: CaptacionesMapProps) {
   );
 }
 
+/** Cambia el estado seleccionado sin recrear el marcador (conserva el foco de teclado). */
+function applySelection(e: Entry, selected: boolean, theme: "light" | "dark") {
+  if (e.layer instanceof L.Marker) {
+    e.layer.getElement()?.classList.toggle("cm-sel", selected);
+    e.layer.setZIndexOffset(selected ? 2000 : e.tier === "match" ? 1000 : 0);
+  } else {
+    e.layer.setRadius(selected ? 7 : 5);
+    e.layer.setStyle({
+      weight: selected ? 3 : 1.5,
+      color: selected ? "#c9a96e" : theme === "dark" ? "#15130f" : "#ffffff",
+    });
+    if (selected) e.layer.bringToFront();
+  }
+}
+
 /** Reconcilia los marcadores del mapa con las props (añade, actualiza y retira solo lo que difiere). */
-function sync(map: L.Map, entries: Map<string, Entry>, p: CaptacionesMapProps) {
+function sync(
+  map: L.Map,
+  entries: Map<string, Entry>,
+  p: CaptacionesMapProps,
+  latest: { current: CaptacionesMapProps },
+) {
   const bounds = map.getBounds();
   let visible = 0;
   for (const pin of p.pins) if (bounds.contains([pin.lat, pin.lng])) visible++;
@@ -146,9 +166,10 @@ function sync(map: L.Map, entries: Map<string, Entry>, p: CaptacionesMapProps) {
     const tier = p.tiers.get(pin.id) ?? "partial";
     const selected = p.selectedId === pin.id;
     const showLabel = !dense;
+    // La selección NO entra en la clave: cambiarla reconstruiría el marcador y
+    // el foco de teclado se perdería. Se aplica en sitio (ver más abajo).
     const key = [
       tier,
-      selected ? 1 : 0,
       p.theme,
       showLabel ? 1 : 0,
       pin.price,
@@ -159,7 +180,13 @@ function sync(map: L.Map, entries: Map<string, Entry>, p: CaptacionesMapProps) {
       pin.lng,
     ].join("|");
     const prev = entries.get(pin.id);
-    if (prev && prev.key === key) continue;
+    if (prev && prev.key === key) {
+      if (prev.selected !== selected) {
+        applySelection(prev, selected, p.theme);
+        prev.selected = selected;
+      }
+      continue;
+    }
     if (prev) prev.layer.remove();
 
     const label = pinAriaLabel(pin);
@@ -192,9 +219,10 @@ function sync(map: L.Map, entries: Map<string, Entry>, p: CaptacionesMapProps) {
         bubblingMouseEvents: false,
       });
     }
-    layer.on("click", () => p.onSelect(pin.id));
+    // Siempre el callback vigente: este cierre vive más que el render que lo creó.
+    layer.on("click", () => latest.current.onSelect(pin.id));
     layer.addTo(map);
-    entries.set(pin.id, { layer, key });
+    entries.set(pin.id, { layer, key, selected, tier });
   }
   for (const [id, e] of entries) {
     if (!seen.has(id)) {
@@ -215,10 +243,10 @@ const CSS = `
 .cm-root{position:relative;width:100%;height:100%;min-height:320px}
 .cm-map{position:absolute;inset:0;background:#efe9dd;font-family:inherit}
 .cm-theme-dark .cm-map{background:#1c1915}
-.cm-map .leaflet-tile-pane{filter:saturate(.5) sepia(.18) brightness(1.03) contrast(.92) hue-rotate(-5deg)}
-.cm-theme-dark .cm-map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)}
-.cm-veil{background:rgba(196,162,106,.07);mix-blend-mode:multiply}
-.cm-theme-dark .cm-veil{background:rgba(201,169,110,.10);mix-blend-mode:normal}
+.cm-map .leaflet-tile-pane{filter:saturate(.35) sepia(.22) brightness(1.06) contrast(.82) hue-rotate(-5deg)}
+.cm-theme-dark .cm-map .leaflet-tile-pane{filter:grayscale(.5) invert(1) hue-rotate(180deg) sepia(.3) saturate(.7) brightness(.8) contrast(.9)}
+.cm-veil{background:rgba(239,233,221,.30)}
+.cm-theme-dark .cm-veil{background:rgba(201,169,110,.10)}
 .cm-map .leaflet-control-attribution{font-size:10px}
 .cm-theme-dark .cm-map .leaflet-control-attribution{background:rgba(21,19,15,.7);color:#a39b8f}
 .cm-theme-dark .cm-map .leaflet-control-attribution a{color:#c9a96e}
