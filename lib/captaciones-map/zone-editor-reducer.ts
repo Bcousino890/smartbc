@@ -25,6 +25,7 @@ export type EditorAction =
   | { type: "setTool"; tool: EditorTool }
   | { type: "addDraftPoint"; point: ZonePolygonPoint }
   | { type: "cancelDraft" }
+  | { type: "undoLastPoint" }
   | { type: "closeDraft" }
   | { type: "moveVertex"; polygon: number; index: number; point: ZonePolygonPoint }
   | { type: "insertMidpoint"; polygon: number; index: number }
@@ -55,6 +56,11 @@ export function zoneEditorReducer(state: EditorState, action: EditorAction): Edi
       if (last && last[0] === action.point[0] && last[1] === action.point[1]) return state;
       return { ...state, draft: [...state.draft, action.point] };
     }
+
+    case "undoLastPoint":
+      // Quita solo el último vértice del borrador (Retroceso / «Deshacer punto»):
+      // así se arregla un cruce sin perder todo el trazado. Sin borrador, no-op.
+      return state.draft.length ? { ...state, draft: state.draft.slice(0, -1) } : state;
 
     case "cancelDraft":
       return state.draft.length ? { ...state, draft: [] } : state;

@@ -267,6 +267,23 @@ test("reductor: closeDraft con lazo se rechaza (estado igual)", () => {
   assert.equal(zoneEditorReducer(s, { type: "closeDraft" }), s);
 });
 
+test("reductor: undoLastPoint quita solo el último vértice del borrador", () => {
+  let s = st({ tool: "draw" });
+  for (const p of [[0, 0], [1, 1], [1, 0], [0, 1]] as ZonePolygon) {
+    s = zoneEditorReducer(s, { type: "addDraftPoint", point: p });
+  }
+  // El lazo (4 puntos) se arregla quitando el último: queda un triángulo válido.
+  const r = zoneEditorReducer(s, { type: "undoLastPoint" });
+  assert.deepEqual(r.draft, [[0, 0], [1, 1], [1, 0]]);
+  assert.equal(r.tool, "draw");
+  assert.notEqual(zoneEditorReducer(r, { type: "closeDraft" }), r);
+});
+
+test("reductor: undoLastPoint sin borrador no cambia el estado", () => {
+  const s = st({ tool: "draw" });
+  assert.equal(zoneEditorReducer(s, { type: "undoLastPoint" }), s);
+});
+
 test("reductor: moveVertex mantiene el nº de vértices y mueve el punto", () => {
   const s = st({ polygons: [sqRing] });
   const r = zoneEditorReducer(s, { type: "moveVertex", polygon: 0, index: 2, point: [-3.68, 40.42] });

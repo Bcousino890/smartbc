@@ -37,7 +37,7 @@ import { MapResultsList } from "./map-results-list";
 import { readStoredTheme, storeTheme, type MapTheme } from "./map-theme";
 import MapToolbar, { TOOL_HINTS } from "./map-toolbar";
 import { PinCard } from "./pin-card";
-import { useZoneEditor, type ZoneRejectReason } from "./use-zone-editor";
+import { CROSS_TITLE, useZoneEditor, type ZoneRejectReason } from "./use-zone-editor";
 
 // Leaflet toca `window` al importarse: el mapa solo se carga en el navegador.
 const CaptacionesMap = dynamic(() => import("./captaciones-map"), {
@@ -521,7 +521,9 @@ export function CaptacionesMapView({
   const selSuggestion = selectedPin ? suggestionById.get(selectedPin.id) : undefined;
   const selAi = selectedPin ? aiById.get(selectedPin.id) : undefined;
 
-  const hint = notice ?? TOOL_HINTS[editor.state.tool];
+  // Prioridad: aviso puntual (máx. zonas) > cruce en vivo (persistente) > ayuda de la herramienta.
+  const drawingInvalid = editor.state.tool === "draw" && editor.draftInvalid;
+  const hint = notice ?? (drawingInvalid ? CROSS_TITLE : TOOL_HINTS[editor.state.tool]);
   const fileHref = client ? `${prefix}/clientes/${client.id}?encargo=editar` : "#";
 
   return (
@@ -598,6 +600,13 @@ export function CaptacionesMapView({
                 onTool={editor.setTool}
                 onClear={clearZone}
                 hint={hint}
+                draft={{
+                  count: editor.state.draft.length,
+                  invalid: drawingInvalid,
+                  invalidText: CROSS_TITLE,
+                  onClose: editor.closeDraft,
+                  onUndo: editor.undoLastPoint,
+                }}
                 disabled={{ barrio: "Barrios: próximamente", iso: "Minutos a pie: próximamente" }}
               />
               {notice && <span className="cmv-sr" role="alert">{notice}</span>}

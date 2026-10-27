@@ -6,7 +6,7 @@ import type { EditorTool } from "@/lib/captaciones-map/zone-editor-reducer";
 
 /** Ayuda por herramienta (textos de la maqueta v4 aprobada). */
 export const TOOL_HINTS: Record<EditorTool, string> = {
-  draw: "Pulsa para marcar vértices. Doble clic para cerrar. Esc cancela.",
+  draw: "Pulsa para marcar vértices. Con 3 o más, cierra con doble clic, Enter o pulsando el primer punto. Esc cancela.",
   edit: "Arrastra un vértice. El punto dorado de cada lado añade otro. Doble clic en un vértice lo quita.",
   circle: "Pulsa el centro y arrastra para fijar el radio.",
   barrio: "Elige barrios del distrito: se suman a la zona.",
@@ -27,6 +27,8 @@ export interface MapToolbarProps {
   onTool(t: EditorTool): void;
   onClear(): void;
   hint: string;
+  /** Borrador en curso (solo con la herramienta Dibujar): activa los botones Cerrar/Deshacer. */
+  draft?: { count: number; invalid: boolean; invalidText: string; onClose(): void; onUndo(): void };
   /** Herramientas no disponibles → motivo (va en `title`). */
   disabled?: Partial<Record<EditorTool, string>>;
   /** Solo si la barra no cuelga de `.cm-root`/`.cm-theme-dark`. */
@@ -39,7 +41,7 @@ export interface MapToolbarProps {
  * `aria-label`. La ayuda va dentro de la misma tarjeta. Posición: la decide
  * quien la monta (arriba a la izquierda dentro del contenedor del mapa).
  */
-export default function MapToolbar({ tool, onTool, onClear, hint, disabled, theme }: MapToolbarProps) {
+export default function MapToolbar({ tool, onTool, onClear, hint, draft, disabled, theme }: MapToolbarProps) {
   return (
     <div className={`cm-toolbar ${theme === "dark" ? "cm-dark" : ""}`} role="toolbar" aria-label="Herramientas de zona">
       <div className="cm-tools">
@@ -67,7 +69,23 @@ export default function MapToolbar({ tool, onTool, onClear, hint, disabled, them
           <Trash2 width={16} height={16} aria-hidden="true" />
         </button>
       </div>
-      <p className="cm-hint" aria-live="polite">{hint}</p>
+      <p className={`cm-hint${draft?.invalid ? " cm-hint-warn" : ""}`} aria-live="polite">{hint}</p>
+      {tool === "draw" && draft && draft.count > 0 && (
+        <div className="cm-draft-actions">
+          <button
+            type="button"
+            className="cm-close"
+            onClick={draft.onClose}
+            disabled={draft.count < 3 || draft.invalid}
+            title={draft.invalid ? draft.invalidText : draft.count < 3 ? "Marca al menos 3 puntos" : "Cerrar zona (Enter)"}
+          >
+            Cerrar zona
+          </button>
+          <button type="button" onClick={draft.onUndo} title="Quitar el último punto (Retroceso)">
+            Deshacer punto
+          </button>
+        </div>
+      )}
       <style>{CSS}</style>
     </div>
   );
@@ -89,5 +107,10 @@ const CSS = `
 .cm-toolbar button:focus-visible{outline:2px solid #c9a96e;outline-offset:2px}
 .cm-toolbar hr{border:0;border-left:1px solid var(--tb-line);margin:4px 3px}
 .cm-toolbar .cm-hint{margin:4px 0 0;padding:8px 10px 6px;border-top:1px solid var(--tb-line);font-size:12px;line-height:1.4;color:var(--tb-muted)}
+.cm-toolbar .cm-hint.cm-hint-warn{color:#b3261e;font-weight:700}
+.cm-theme-dark .cm-toolbar .cm-hint.cm-hint-warn,.cm-toolbar.cm-dark .cm-hint.cm-hint-warn{color:#ff8a80}
+.cm-toolbar .cm-draft-actions{display:flex;gap:6px;padding:2px 6px 6px}
+.cm-toolbar .cm-draft-actions button{opacity:1;border:1px solid var(--tb-line);padding:6px 10px;font-size:12px}
+.cm-toolbar .cm-draft-actions button.cm-close:not(:disabled){background:var(--tb-on-bg);color:var(--tb-on-ink)}
 @media (prefers-reduced-motion:reduce){.cm-toolbar button{transition:none}}
 `;

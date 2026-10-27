@@ -12,7 +12,7 @@
  * interactivos, así que los pines siguen siendo pulsables; solo las asas
  * (vértices y puntos medios) tienen prioridad sobre ellos.
  */
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import L from "leaflet";
 import type { ZonePolygon, ZonePolygonPoint } from "@/lib/zone-polygon";
 import { isValidZoneRing } from "@/lib/geo/zone-geometry";
@@ -27,9 +27,15 @@ import {
 
 export type { EditorTool, EditorState };
 
+/** Texto compartido con la tarjeta de ayuda (misma frase en el título del primer vértice). */
+export const CROSS_TITLE = "El trazado se cruza: deshaz el último punto o empieza de nuevo";
+
 /** Por qué el editor no ha aceptado un gesto (para avisar en la interfaz). */
 export type ZoneRejectReason = "invalid" | "max";
 
+/** Radio (px) en que el 2.º clic de un doble clic se considera el mismo punto. */
+const DBLCLICK_PX = 8;
+const WARN = "#c0392b";
 const GOLD = "#c9a96e";
 const GOLD_STROKE = "#b8954f";
 
@@ -57,6 +63,16 @@ export function useZoneEditor(
   setTool: (t: EditorTool) => void;
   clear: () => void;
   setPolygons: (p: ZonePolygon[]) => void;
+  /** Cierra el borrador si es válido (≥3 puntos, sin cruces, < 5 zonas). */
+  closeDraft: () => void;
+  /** Quita el último vértice del borrador. */
+  undoLastPoint: () => void;
+  /**
+   * Borrador con ≥3 puntos que NO se puede cerrar (se cruza o es degenerado).
+   * Es estado derivado y persistente: la interfaz lo muestra mientras dure,
+   * no como un aviso que se apaga solo.
+   */
+  draftInvalid: boolean;
 } {
   const [state, dispatch] = useReducer(zoneEditorReducer, initial, initialEditorState);
   // Fuerza el redibujado al soltar un arrastre: si el reductor rechaza el
@@ -78,6 +94,26 @@ export function useZoneEditor(
 
   const setTool = useCallback((tool: EditorTool) => dispatch({ type: "setTool", tool }), []);
   const clear = useCallback(() => dispatch({ type: "clear" }), []);
+  /**
+   * Único camino para cerrar (doble clic, primer vértice, Enter y botón).
+   * Un cruce no avisa aquí: la tarjeta de ayuda ya lo explica en vivo y el
+   * botón está deshabilitado; solo el tope de zonas es un aviso puntual.
+   */
+  const closeDraft = useCallback(() => {
+    const s = stateRef.current;
+    if (s.draft.length < 3) return;
+    if (s.polygons.length >= MAX_POLYGONS) {
+      onRejectRef.current?.("max");
+      return;
+    }
+    if (!isValidZoneRing(s.draft)) return;
+    dispatch({ type: "closeDraft" });
+  }, []);
+  const undoLastPoint = useCallback(() => dispatch({ type: "undoLastPoint" }), []);
+  const draftInvalid = useMemo(
+    () => state.draft.length >= 3 && !isValidZoneRing(state.draft),
+    [state.draft],
+  );
   const setPolygons = useCallback(
     (polygons: ZonePolygon[]) => dispatch({ type: "setPolygons", polygons }),
     [],
@@ -104,15 +140,35 @@ export function useZoneEditor(
     handles.style.zIndex = "650";
   }, [map]);
 
-  // --- Esc cancela el borrador mientras el editor está activo (el círculo en curso se cancela al soltar fuera o cambiar de herramienta) ---
+  // --- Teclado del editor. Esc cancela el borrador (único dueño; el círculo en
+  // curso se cancela al soltar fuera o cambiar de herramienta). Enter cierra y
+  // Retroceso/Supr quitan el último punto, solo dibujando y sin escribir en un campo. ---
   useEffect(() => {
     if (!map) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dispatch({ type: "cancelDraft" });
+      if (e.key === "Escape") {
+        dispatch({ type: "cancelDraft" });
+        return;
+      }
+      if (stateRef.current.tool !== "draw" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      // Escribir en un input/área/select (p. ej. la barra de IA) no debe tocar el trazado;
+      // y Enter sobre un botón/enlace enfocado ya hace su propia acción.
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === "Enter") {
+        if (t && /^(BUTTON|A|SUMMARY)$/.test(t.tagName)) return;
+        if (stateRef.current.draft.length >= 3) {
+          e.preventDefault();
+          closeDraft();
+        }
+      } else if ((e.key === "Backspace" || e.key === "Delete") && stateRef.current.draft.length) {
+        e.preventDefault();
+        dispatch({ type: "undoLastPoint" });
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [map]);
+  }, [map, closeDraft]);
 
   // --- gestos según la herramienta ---
   useEffect(() => {
@@ -125,8 +181,16 @@ export function useZoneEditor(
       // Un doble clic cerraría el polígono Y haría zoom: el zoom se apaga mientras se dibuja.
       map.doubleClickZoom.disable();
       const onClick = (e: L.LeafletMouseEvent) => {
-        // El 2º clic de un doble clic no es un vértice nuevo.
-        if ((e.originalEvent as MouseEvent).detail >= 2) return;
+        // El 2º clic de un doble clic no es un vértice nuevo. Solo se descarta si
+        // además cae pegado al último vértice: quien coloca puntos deprisa también
+        // produce detail>=2 (clics a <500 ms) y no debe perderlos.
+        if ((e.originalEvent as MouseEvent).detail >= 2) {
+          const d = stateRef.current.draft;
+          const last = d[d.length - 1];
+          if (!last) return;
+          const a = map.latLngToContainerPoint(toLatLng(last));
+          if (a.distanceTo(e.containerPoint) < DBLCLICK_PX) return;
+        }
         // Ya hay el máximo de zonas: se avisa en el primer clic, no al cerrar.
         if (stateRef.current.polygons.length >= MAX_POLYGONS && stateRef.current.draft.length === 0) {
           onRejectRef.current?.("max");
@@ -134,15 +198,7 @@ export function useZoneEditor(
         }
         dispatch({ type: "addDraftPoint", point: [e.latlng.lng, e.latlng.lat] });
       };
-      const onDbl = () => {
-        const s = stateRef.current;
-        // Mismas condiciones que el reductor (closeDraft), solo para avisar.
-        if (s.draft.length >= 3) {
-          if (s.polygons.length >= MAX_POLYGONS) onRejectRef.current?.("max");
-          else if (!isValidZoneRing(s.draft)) onRejectRef.current?.("invalid");
-        }
-        dispatch({ type: "closeDraft" });
-      };
+      const onDbl = () => closeDraft();
       const onMove = (e: L.LeafletMouseEvent) => {
         cursorRef.current = e.latlng;
         const line = previewRef.current;
@@ -234,7 +290,7 @@ export function useZoneEditor(
     }
 
     return () => cleanups.forEach((fn) => fn());
-  }, [map, state.tool]);
+  }, [map, state.tool, closeDraft]);
 
   // --- pintado: polígonos, asas y borrador (se reconstruye en cada cambio de estado) ---
   useEffect(() => {
@@ -316,13 +372,22 @@ export function useZoneEditor(
       const pts: L.LatLngExpression[] = state.draft.map(toLatLng);
       const withCursor = state.tool === "draw" && cursorRef.current ? [...pts, cursorRef.current] : pts;
       previewRef.current = L.polyline(withCursor, {
-        pane: "cm-zones", interactive: false, color: GOLD, weight: 3, dashArray: "8 6",
+        pane: "cm-zones", interactive: false, color: draftInvalid ? WARN : GOLD, weight: 3, dashArray: "8 6",
       }).addTo(group);
-      state.draft.forEach((p) => {
-        L.marker(toLatLng(p), {
-          pane: "cm-zone-handles", interactive: false, keyboard: false,
-          icon: L.divIcon({ className: "cm-vtx cm-vtx-draft", html: "<i></i>", iconSize: [18, 18] }),
+      const drawing = state.tool === "draw";
+      state.draft.forEach((p, i) => {
+        // Con ≥3 puntos el primero es el botón de cerrar: interactivo, con zona de
+        // pulsación de 26 px (el anillo visible sigue siendo de 18) y resaltado.
+        const closable = drawing && i === 0 && state.draft.length >= 3;
+        const cls = `cm-vtx cm-vtx-draft${closable ? " cm-vtx-first" : ""}${draftInvalid ? " cm-vtx-bad" : ""}`;
+        const m = L.marker(toLatLng(p), {
+          pane: "cm-zone-handles", interactive: closable, keyboard: false,
+          title: closable ? (draftInvalid ? CROSS_TITLE : "Cerrar zona") : undefined,
+          icon: L.divIcon({ className: cls, html: "<i></i>", iconSize: closable ? [26, 26] : [18, 18] }),
         }).addTo(group);
+        // Un clic en el primer vértice cierra; el marcador no deja pasar el clic al mapa
+        // (bubblingMouseEvents por defecto en false), así que no añade un punto encima.
+        if (closable) m.on("click", () => closeDraft());
       });
     }
 
@@ -330,9 +395,9 @@ export function useZoneEditor(
       previewRef.current = null;
       group.remove();
     };
-  }, [map, state.polygons, state.draft, state.tool, bump, redraw]);
+  }, [map, state.polygons, state.draft, state.tool, bump, redraw, draftInvalid, closeDraft]);
 
-  return { state, setTool, clear, setPolygons };
+  return { state, setTool, clear, setPolygons, closeDraft, undoLastPoint, draftInvalid };
 }
 
 // Estilos de las asas del editor: se inyectan una sola vez (el hook no tiene JSX).
@@ -354,6 +419,18 @@ const ZONE_CSS = `
 .cm-vtx:hover i{transform:scale(1.2)}
 .cm-vtx.leaflet-drag-target i,.cm-mid.leaflet-drag-target i{cursor:grabbing}
 .cm-vtx-draft i{cursor:crosshair}
+/* Primer vértice = botón "Cerrar zona": zona de pulsación de 26 px, relleno dorado y halo */
+.cm-vtx-first{display:flex;align-items:center;justify-content:center}
+.cm-vtx-first i{width:18px;height:18px;background:#c9a96e;border-color:#0a0a0a;cursor:pointer!important;
+  box-shadow:0 0 0 4px rgba(201,169,110,.45),0 1px 4px rgba(40,30,10,.35)}
+.cm-vtx-first:hover i{transform:scale(1.25)}
+.cm-vtx-bad i{border-color:#c0392b}
+.cm-vtx-first.cm-vtx-bad i{background:#fff;cursor:not-allowed!important;box-shadow:0 0 0 4px rgba(192,57,43,.35)}
+/* Dibujando o trazando un radio, los pines NO capturan el clic: pasa al mapa
+   (si no, un clic sobre un pin selecciona el anuncio y no añade vértice). Los pines
+   con precio son DivIcon (.cm-pin); los puntos de fuera de zona viven en un canvas. */
+.leaflet-container.cm-tool-draw .leaflet-marker-icon.cm-pin,.leaflet-container.cm-tool-circle .leaflet-marker-icon.cm-pin{pointer-events:none}
+.leaflet-container.cm-tool-draw .leaflet-overlay-pane canvas,.leaflet-container.cm-tool-circle .leaflet-overlay-pane canvas{pointer-events:none}
 /* punto medio dorado (maqueta v4: .mid) */
 .cm-mid i{display:block;width:10px;height:10px;margin:2px;box-sizing:border-box;border-radius:50%;background:#c9a96e;
   border:1.5px solid #fff;opacity:.85;cursor:copy;transition:transform .12s,opacity .12s}
