@@ -82,3 +82,37 @@ export async function getParticularesMapPins(
 
   return { pins, truncated, withoutLocation: head.count ?? 0 };
 }
+
+const IDS_CHUNK = 100;
+
+/**
+ * Relee pines por id (para captar en lote sin fiarse de lo que mande el
+ * cliente). Mismas columnas y mismos filtros de "anuncio vivo" que el mapa:
+ * un id retirado, duplicado, dado de baja o fraudulento simplemente no
+ * aparece. Trozos de 100 ids para no pasarse de longitud de URL. Lanza si la
+ * BD falla.
+ */
+export async function getParticularesMapPinsByIds(ids: string[]): Promise<MapPin[]> {
+  const unique = [...new Set(ids)].filter((i) => typeof i === "string" && i.length > 0);
+  if (unique.length === 0) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const out: MapPin[] = [];
+  for (let i = 0; i < unique.length; i += IDS_CHUNK) {
+    const chunk = unique.slice(i, i + IDS_CHUNK);
+    const res = await supabase
+      .from("particulares")
+      .select(COLUMNS)
+      .in("id", chunk)
+      .eq("is_active", true)
+      .is("duplicate_of", null)
+      .is("taken_down_at", null)
+      .is("fraud_status", null);
+    if (res.error) throw new Error(`particulares por ids: ${res.error.message}`);
+    for (const r of res.data ?? []) {
+      const pin = rowToMapPin(r);
+      if (pin) out.push(pin);
+    }
+  }
+  return out;
+}
