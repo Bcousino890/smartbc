@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Loader2, Phone, RefreshCw, LayoutGrid, List, SlidersHorizontal, Wrench, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Phone, RefreshCw, LayoutGrid, List, Map as MapIcon, SlidersHorizontal, Wrench, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/ui/toast";
@@ -20,6 +21,21 @@ import { BAR_BUTTON, FOCUS_RING, SelectField, Segmented } from "./_lista/control
 import { FiltersPanel } from "./_lista/filters-panel";
 import { buildChips, countPanelFilters } from "./_lista/filters-model";
 import { fmtNum } from "./_lista/format";
+import { decodeZonePolygons, encodeZonePolygons, type ZonePolygon } from "@/lib/zone-polygon";
+
+// Vista Mapa: Leaflet toca `window` al importarse, así que solo se carga en
+// el navegador y solo cuando alguien elige «Mapa» (no pesa en cuadrícula/lista).
+const CaptacionesMapView = dynamic(
+  () => import("@/components/admin/captaciones-map/captaciones-map-view").then((m) => m.CaptacionesMapView),
+  {
+    ssr: false,
+    loading: () => (
+      <p role="status" className="mt-6 flex items-center gap-2 text-sm text-ink/70">
+        <Loader2 size={14} className="animate-spin" aria-hidden /> Cargando mapa…
+      </p>
+    ),
+  },
+);
 
 type RefreshState = "idle" | "loading" | "done" | "error";
 
@@ -77,7 +93,14 @@ export function ParticularesClient({
   const [verifying, setVerifying] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [layout, setLayout] = useState<CardLayout>("grid");
+  // La vista vive en la URL (`vista=list|map`) para que recargar o compartir
+  // el enlace abra la misma; cuadrícula es el valor por defecto.
+  const view = f.view;
+  const isMap = view === "map";
+  const layout: CardLayout = view === "list" ? "list" : "grid";
+  // Zona inicial del mapa: la de la URL al montar (después el mapa es su dueño
+  // y la devuelve a la URL por onZoneChange).
+  const [mapInitialPolygons] = useState<ZonePolygon[]>(() => decodeZonePolygons(f.drawnZone));
   const [now, setNow] = useState<number | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   const closeFilters = useCallback(() => setFiltersOpen(false), []);
@@ -155,6 +178,17 @@ export function ParticularesClient({
     },
     [],
   );
+  // Desde el mapa: misma ficha (con teléfono, WhatsApp y acciones) por id.
+  const openParticularById = useCallback((id: string) => {
+    openedFromList.current = true;
+    window.history.pushState(null, "", fichaHrefRef.current(id));
+  }, []);
+  const onMapZoneChange = useCallback(
+    (p: ZonePolygon[]) => f.setDrawnZone(p.length ? encodeZonePolygons(p) : ""),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [f.setDrawnZone],
+  );
+
   function closeParticular() {
     if (openedFromList.current) {
       openedFromList.current = false;
@@ -309,6 +343,7 @@ export function ParticularesClient({
       <section className="mt-5">
         {/* Barra de filtros */}
         <div className="flex flex-wrap items-center gap-2">
+          {!isMap && (
           <label className="flex h-10 min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-ink/15 bg-white px-3 text-sm focus-within:border-ink/40">
             <span className="sr-only">Buscar</span>
             <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink/50"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -320,18 +355,31 @@ export function ParticularesClient({
               className="w-full bg-transparent text-ink placeholder:text-ink/50 focus:outline-none"
             />
           </label>
+          )}
           <Segmented
             ariaLabel="Operación"
             value={opValue}
             onChange={(v) => setOperation(v === "all" ? "" : (v as "sale" | "rent"))}
             options={[{ value: "all", label: "Todos" }, { value: "sale", label: "Venta" }, { value: "rent", label: "Alquiler" }]}
           />
+          {isMap ? (
+            // El mapa solo distingue particulares / todos (el endpoint no filtra por agencia).
+            <Segmented
+              ariaLabel="Tipo de anunciante"
+              value={advertiser === "particular" ? "particular" : "all"}
+              onChange={(v) => setAdvertiser(v)}
+              options={[{ value: "particular", label: "Particular" }, { value: "all", label: "Todos" }]}
+            />
+          ) : (
           <Segmented
             ariaLabel="Tipo de anunciante"
             value={advertiser}
             onChange={(v) => setAdvertiser(v)}
             options={[{ value: "particular", label: "Particular" }, { value: "professional", label: "Agencia" }, { value: "all", label: "Todos" }]}
           />
+          )}
+          {!isMap && (
+          <>
           <ZoneFilter groups={zoneGroups} value={zone} onChange={setZone} />
           <button
             type="button"
@@ -346,7 +394,10 @@ export function ParticularesClient({
             Más filtros
             {panelCount > 0 && <span className="rounded-full bg-ink px-1.5 text-xs font-semibold text-cream-50">{panelCount}</span>}
           </button>
+          </>
+          )}
           <div className="ml-auto flex items-center gap-2">
+            {!isMap && (
             <SelectField ariaLabel="Ordenar" value={sort} onChange={(v) => setSort(v as typeof sort)} className="w-[190px]">
               <option value="">Más recientes</option>
               <option value="oldest">Más antiguos</option>
@@ -355,14 +406,16 @@ export function ParticularesClient({
               <option value="area_desc">m²: mayor a menor</option>
               <option value="area_asc">m²: menor a mayor</option>
             </SelectField>
+            )}
             <Segmented
               ariaLabel="Vista"
               iconOnly
-              value={layout}
-              onChange={(v) => setLayout(v)}
+              value={view}
+              onChange={(v) => f.setView(v)}
               options={[
                 { value: "grid", label: "Cuadrícula", icon: <LayoutGrid size={16} /> },
                 { value: "list", label: "Lista", icon: <List size={16} /> },
+                { value: "map", label: "Mapa", icon: <MapIcon size={16} /> },
               ]}
             />
             <div ref={toolsRef} className="relative">
@@ -384,6 +437,18 @@ export function ParticularesClient({
           </div>
         </div>
 
+        {isMap ? (
+          <CaptacionesMapView
+            initialPolygons={mapInitialPolygons}
+            filters={{
+              operation: operation === "" ? undefined : operation,
+              advertiser: advertiser === "particular" ? "particular" : "all",
+            }}
+            onZoneChange={onMapZoneChange}
+            onOpenFicha={openParticularById}
+          />
+        ) : (
+        <>
         {portal === "" && Object.keys(portalCounts).length > 1 && (
           <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Portal">
             {Object.entries(portalCounts).map(([p, n]) => (
@@ -501,6 +566,8 @@ export function ParticularesClient({
               )}
             </nav>
           </>
+        )}
+        </>
         )}
       </section>
     </>

@@ -20,6 +20,9 @@ export type LiftFilter = "" | "yes" | "no";
 /** Estados separados por coma (cualquiera): nuevo, usado, muy_bueno, bueno, reformar, reformado. */
 export type ConditionFilter = string;
 export type RentalKindFilter = "" | "larga" | "temporada";
+/** Vista del listado: cuadrícula (por defecto, no viaja en la URL), lista o mapa. */
+export type ViewMode = "grid" | "list" | "map";
+const VIEW_VALUES = new Set(["grid", "list", "map"]);
 
 const OPERATION_VALUES = new Set(["rent", "sale"]);
 const PHONE_VALUES = new Set(["no_phone", "with_phone"]);
@@ -42,6 +45,7 @@ function readEnum<T extends string>(
 // "" o false tampoco se escribe.
 const URL_DEFAULTS: Partial<Record<keyof FilterValues, string>> = {
   advertiser: DEFAULT_ADVERTISER,
+  view: "grid",
 };
 
 // Nombre de cada filtro en la URL (cortos, para que el link compartido no
@@ -123,6 +127,8 @@ type FilterValues = {
   excludeAgencies: string;
   /** Búsqueda de texto: true = respeta Activos/Retirados y el anunciante (por defecto mira en todos los estados). */
   searchScoped: boolean;
+  /** Vista elegida (no es un filtro: el servidor la ignora). */
+  view: ViewMode;
 };
 
 /** Separador de claves de agencia en la URL (las claves no llevan «|» ni «,»). */
@@ -175,6 +181,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   agencies: "agencia",
   excludeAgencies: "sinAgencia",
   searchScoped: "soloFiltros",
+  view: "vista",
 };
 
 const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
@@ -286,6 +293,9 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
   const [agencies, setAgenciesRaw] = useState(() => searchParams.get(PARAM_KEYS.agencies) ?? "");
   const [excludeAgencies, setExcludeAgencies] = useState(() => searchParams.get(PARAM_KEYS.excludeAgencies) ?? "");
   const [searchScoped, setSearchScoped] = useState(() => searchParams.get(PARAM_KEYS.searchScoped) === "1");
+  const [view, setView] = useState<ViewMode>(
+    () => readEnum<ViewMode>(searchParams.get(PARAM_KEYS.view), VIEW_VALUES) || "grid",
+  );
   // Nombre a mostrar de cada clave de agencia (no viaja en la URL: lo da el servidor al cargar y el autocompletado al elegir).
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>(initialAgencyNames);
   const rememberAgency = useCallback((key: string, name: string) => setAgencyNames((p) => (p[key] === name ? p : { ...p, [key]: name })), []);
@@ -361,6 +371,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     agencies,
     excludeAgencies,
     searchScoped,
+    view,
   };
 
   const prevValuesRef = useRef(values);
@@ -374,6 +385,9 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     prevValuesRef.current = values;
     if (changedKeys.length === 0) return;
 
+    // Un cambio debounced aún sin enviar (p. ej. texto tecleado hace 100 ms)
+    // obliga a navegar de verdad aunque ahora solo cambie la vista.
+    const hadPending = timerRef.current !== null;
     if (timerRef.current) clearTimeout(timerRef.current);
 
     function flush() {
@@ -393,6 +407,17 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
       cur.delete("page");
       cur.delete("ficha");
       if (!hadExtras && cur.toString() === qs) return;
+      // Solo cambió la vista (cuadrícula/lista/mapa): el servidor no la usa,
+      // así que no hace falta pedirle la página otra vez. replaceState nativo
+      // (Next lo integra con useSearchParams) solo actualiza la URL.
+      if (!hadPending && changedKeys.every((k) => k === "view")) {
+        const keep = new URLSearchParams(searchParamsRef.current.toString());
+        if (values.view === URL_DEFAULTS.view) keep.delete(PARAM_KEYS.view);
+        else keep.set(PARAM_KEYS.view, values.view);
+        const s = keep.toString();
+        window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
+        return;
+      }
       // Una sola navegación en transición: la lista anterior sigue visible y
       // una navegación nueva sustituye a la que aún no ha terminado.
       startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
@@ -452,6 +477,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     agencies,
     excludeAgencies,
     searchScoped,
+    view,
   ]);
 
   useEffect(() => {
@@ -603,6 +629,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setExcludeAgencies,
     searchScoped,
     setSearchScoped,
+    view,
+    setView,
     agencyNames,
     rememberAgency,
   };
