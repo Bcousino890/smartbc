@@ -90,6 +90,9 @@ export async function POST(req: Request) {
     // El rol lo fija el servidor: siempre cliente.
     const profileUpdate: Record<string, string | null> = { role: "client", email };
     if (phone) profileUpdate.phone = phone;
+    // Quién lo creó, y a quién queda asignado si es un asesor/agente (cartera propia).
+    profileUpdate.created_by = actor.id;
+    if (!["owner", "admin", "agent_admin"].includes(actor.role)) profileUpdate.assigned_advisor_id = actor.id;
     await supabase.from("profiles").update(profileUpdate).eq("id", userId);
 
     await logPermissionEvent({

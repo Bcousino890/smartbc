@@ -71,10 +71,14 @@ const CARTERA_LIBRE_ROLES = ["owner", "admin", "agent_admin"];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function assignToCreator(db: any, clientId: string, creator: { userId?: string | null; role: string }) {
-  if (!creator.userId || CARTERA_LIBRE_ROLES.includes(creator.role)) return;
+  if (!creator.userId) return;
   const { error } = await db
     .from("profiles")
-    .update({ assigned_advisor_id: creator.userId })
+    .update(
+      CARTERA_LIBRE_ROLES.includes(creator.role)
+        ? { created_by: creator.userId }
+        : { created_by: creator.userId, assigned_advisor_id: creator.userId },
+    )
     .eq("id", clientId)
     .eq("role", "client");
   // El cliente ya existe: si esto falla no se deshace nada; se asigna desde la ficha.
