@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { filterAndSortPins, formatAreaKm2, formatEuro, formatListingPrice, formatPinMeta, funnelRows } from "../lib/captaciones-map/panels.ts";
 import type { MapPin } from "../lib/captaciones-map/pins.ts";
+import { formatThousandsEs } from "../lib/captaciones-map/pin-label.ts";
 
 const pin = (id: string, o: Partial<MapPin> = {}): MapPin => ({
   id, lat: 0, lng: 0, price: 1000, operation: "rent", bedrooms: 2, squareMeters: 60, title: "T", address: "Calle A",
@@ -34,4 +35,14 @@ assert.deepEqual(filterAndSortPins(pins, scores, "all").map((p) => p.id), ["b", 
 assert.deepEqual(filterAndSortPins(pins, scores, "new").map((p) => p.id), ["c", "a"]);
 assert.deepEqual(filterAndSortPins(pins, new Map(), "all").map((p) => p.id), ["a", "b", "c"]);
 assert.deepEqual(filterAndSortPins(pins, new Map(), "match").map((p) => p.id), []);
+// Formateadores a prueba de NaN/Infinity (un precio corrupto no pinta "NaN").
+assert.equal(formatEuro(Number.NaN), "—");
+assert.equal(formatEuro(Number.POSITIVE_INFINITY), "—");
+assert.equal(formatThousandsEs(Number.NaN), "—");
+assert.equal(formatThousandsEs(1350), "1.350");
+const bad = funnelRows({ ...f, inZone: Number.NaN, priceOk: Number.NaN, matches: 3 }, true);
+assert.deepEqual(bad.map((r) => [r.value, r.pct]), [[0, 0], [0, 0], [3, 0]]);
+const bad2 = funnelRows({ ...f, inZone: 10, priceOk: Number.NaN, matches: Number.POSITIVE_INFINITY }, true);
+assert.deepEqual(bad2.map((r) => r.pct), [100, 0, 0]);
+assert.ok(bad2.every((r) => Number.isFinite(r.value) && Number.isFinite(r.pct)));
 console.log("test-captaciones-panels: OK");

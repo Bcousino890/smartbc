@@ -15,6 +15,8 @@ export function formatAreaKm2(km2: number | null): string {
 
 /** "1.619 €" (punto de miles incluso con 4 cifras: Intl es-ES lo omitiría). */
 export function formatEuro(n: number): string {
+  // Sin cifra válida se enseña un guion, nunca "— €" ni "NaN €".
+  if (!Number.isFinite(n)) return "—";
   return `${formatThousandsEs(n)} €`;
 }
 
@@ -44,12 +46,15 @@ export type FunnelRow = { key: "inZone" | "priceOk" | "matches"; label: string; 
  * sin cliente solo tiene sentido «En la zona» (no hay precio/encaje que medir).
  */
 export function funnelRows(funnel: Funnel, hasClient: boolean): FunnelRow[] {
-  const base = funnel.inZone;
-  const pct = (v: number) => (base > 0 ? Math.min(100, Math.round((v / base) * 100)) : 0);
-  const rows: FunnelRow[] = [{ key: "inZone", label: "En la zona", value: funnel.inZone, pct: base > 0 ? 100 : 0 }];
+  // Un recuento no finito (dato corrupto) cuenta como 0: una barra con
+  // width:NaN% desaparece sin avisar y la cifra diría "NaN".
+  const safe = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
+  const base = safe(funnel.inZone);
+  const pct = (v: number) => (base > 0 ? Math.min(100, Math.round((safe(v) / base) * 100)) : 0);
+  const rows: FunnelRow[] = [{ key: "inZone", label: "En la zona", value: base, pct: base > 0 ? 100 : 0 }];
   if (hasClient) {
-    rows.push({ key: "priceOk", label: "Precio y tipo", value: funnel.priceOk, pct: pct(funnel.priceOk) });
-    rows.push({ key: "matches", label: "Encajan 80 %+", value: funnel.matches, pct: pct(funnel.matches) });
+    rows.push({ key: "priceOk", label: "Precio y tipo", value: safe(funnel.priceOk), pct: pct(funnel.priceOk) });
+    rows.push({ key: "matches", label: "Encajan 80 %+", value: safe(funnel.matches), pct: pct(funnel.matches) });
   }
   return rows;
 }

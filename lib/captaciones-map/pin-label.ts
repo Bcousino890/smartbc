@@ -7,6 +7,8 @@
 
 /** Miles con punto, siempre (también 1.350), sin depender de la locale del runtime. */
 export function formatThousandsEs(n: number): string {
+  // NaN/Infinity (un precio corrupto) no deben pintar "NaN" en la interfaz.
+  if (!Number.isFinite(n)) return "—";
   const rounded = Math.round(n);
   const sign = rounded < 0 ? "-" : "";
   return sign + String(Math.abs(rounded)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");

@@ -5,7 +5,7 @@
  *   PATH=/opt/node22-standalone/bin:$PATH node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-capture.mts
  */
 import assert from "node:assert/strict";
-import { toPortalLinkInputs } from "../lib/captaciones-map/capture.ts";
+import { normalizeUuid, toPortalLinkInputs, validateClientAndPinIds, zoneSaveRejected } from "../lib/captaciones-map/capture.ts";
 import type { MapPin } from "../lib/captaciones-map/pins.ts";
 
 let failed = 0;
@@ -89,6 +89,49 @@ test("mapea todos los campos", () => {
     imageUrl: "https://img/x.jpg",
     notes: "Captado desde el mapa",
   });
+});
+
+const U1 = "0b1e5f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
+const U2 = "AABBCCDD-1111-4222-8333-444455556666";
+
+test("normalizeUuid: acepta mayúsculas y normaliza a minúsculas", () => {
+  assert.equal(normalizeUuid(U2), U2.toLowerCase());
+  assert.equal(normalizeUuid(` ${U1} `), U1);
+  assert.equal(normalizeUuid("r1"), null);
+  assert.equal(normalizeUuid(42), null);
+  assert.equal(normalizeUuid("0b1e5f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5"), null);
+});
+
+test("validateClientAndPinIds: cliente no uuid -> error en español", () => {
+  const r = validateClientAndPinIds("abc", [U1], 300);
+  assert.deepEqual(r, { ok: false, error: "Cliente no válido." });
+});
+
+test("validateClientAndPinIds: lista vacía o no lista", () => {
+  assert.equal(validateClientAndPinIds(U1, [], 300).ok, false);
+  assert.equal(validateClientAndPinIds(U1, "x", 300).ok, false);
+});
+
+test("validateClientAndPinIds: un id malo invalida el envío", () => {
+  const r = validateClientAndPinIds(U1, [U1, "1; drop table"], 300);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.error, /identificador no válido/);
+});
+
+test("validateClientAndPinIds: normaliza y deduplica", () => {
+  const r = validateClientAndPinIds(U2, [U2, U2.toLowerCase(), U1], 300);
+  assert.deepEqual(r, { ok: true, clientId: U2.toLowerCase(), ids: [U2.toLowerCase(), U1] });
+});
+
+test("validateClientAndPinIds: tope tras deduplicar", () => {
+  assert.equal(validateClientAndPinIds(U1, [U1, U2], 1).ok, false);
+  assert.equal(validateClientAndPinIds(U1, [U1, U1], 1).ok, true);
+});
+
+test("zoneSaveRejected: polígonos que no sobreviven a la limpieza no borran la zona", () => {
+  assert.equal(zoneSaveRejected(2, 0), true);
+  assert.equal(zoneSaveRejected(0, 0), false);
+  assert.equal(zoneSaveRejected(2, 1), false);
 });
 
 if (failed) process.exit(1);

@@ -16,14 +16,21 @@ import { assertPermission, checkPermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { getParticularesMapPinsByIds } from "@/lib/db/queries/particulares-map";
-import { toPortalLinkInputs } from "@/lib/captaciones-map/capture";
+import {
+  normalizeUuid,
+  toPortalLinkInputs,
+  validateClientAndPinIds,
+  zoneSaveRejected,
+} from "@/lib/captaciones-map/capture";
+import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
+import { parsePortalUrl } from "@/lib/portal-links/portals";
 import { cleanPolygons } from "@/lib/clients/brief";
 import type { ZonePolygon } from "@/lib/zone-polygon";
 import { addPortalLinks } from "../clientes/portal-links-actions";
 
 const MAX_PINS = 300;
-// Los ids de particulares son uuid; acotar la longitud evita basura enorme.
-const MAX_ID_LEN = 64;
+/** Trozos para `.in()`: con 300 claves largas la URL de PostgREST se pasaría de ~8 KB. */
+const KEYS_CHUNK = 50;
 
 /**
  * Capta en lote: añade los anuncios elegidos a la ficha del cliente.
@@ -43,19 +50,12 @@ export async function captureForClient(
 ): Promise<
   { ok: true; inserted: number; skipped: number } | { ok: false; error: string }
 > {
-  if (typeof clientId !== "string" || clientId.length === 0 || clientId.length > MAX_ID_LEN) {
-    return { ok: false, error: "Cliente no válido." };
-  }
-  if (!Array.isArray(pinIds) || pinIds.length === 0) {
-    return { ok: false, error: "No hay anuncios que captar." };
-  }
-  if (!pinIds.every((i) => typeof i === "string" && i.length > 0 && i.length <= MAX_ID_LEN)) {
-    return { ok: false, error: "Anuncios no válidos." };
-  }
-  const ids = [...new Set(pinIds)];
-  if (ids.length > MAX_PINS) {
-    return { ok: false, error: `Máximo ${MAX_PINS} anuncios por envío.` };
-  }
+  // Cliente y anuncios son uuid: se validan (y pasan a minúsculas) antes de
+  // tocar la base, para dar un error claro en vez de uno de Postgres.
+  const check = validateClientAndPinIds(clientId, pinIds, MAX_PINS);
+  if (!check.ok) return { ok: false, error: check.error };
+  clientId = check.clientId;
+  const ids = check.ids;
 
   const perm = await checkPermission("particulares", "view");
   if (!perm.ok) return { ok: false, error: perm.error };
@@ -73,8 +73,14 @@ export async function captureForClient(
   // Solo puntuaciones numéricas finitas, acotadas, y solo de ids pedidos.
   const scoreMap = new Map<string, number>();
   if (scores && typeof scores === "object") {
+    // Las claves llegan como las mandó el navegador: se normalizan igual que los ids.
+    const byNorm = new Map<string, unknown>();
+    for (const [k, v] of Object.entries(scores)) {
+      const nk = normalizeUuid(k);
+      if (nk) byNorm.set(nk, v);
+    }
     for (const id of ids) {
-      const v = scores[id];
+      const v = byNorm.get(id);
       if (typeof v === "number" && Number.isFinite(v)) {
         scoreMap.set(id, Math.min(100, Math.max(0, v)));
       }
@@ -104,9 +110,10 @@ export async function saveClientZone(
   clientId: string,
   polygons: ZonePolygon[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (typeof clientId !== "string" || clientId.length === 0 || clientId.length > MAX_ID_LEN) {
-    return { ok: false, error: "Cliente no válido." };
-  }
+  const cid = normalizeUuid(clientId);
+  if (!cid) return { ok: false, error: "Cliente no válido." };
+  clientId = cid;
+  if (!Array.isArray(polygons)) return { ok: false, error: "Zona no válida" };
   try {
     await assertPermission("clientes", "edit");
   } catch (e) {
@@ -117,6 +124,11 @@ export async function saveClientZone(
   }
 
   const cleaned = cleanPolygons(polygons);
+  // Llegaron polígonos pero ninguno es válido: guardar [] borraría la zona que
+  // el cliente ya tenía. Solo una lista vacía de entrada significa "quitarla".
+  if (zoneSaveRejected(polygons.length, cleaned.length)) {
+    return { ok: false, error: "Zona no válida" };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
@@ -139,4 +151,63 @@ export async function saveClientZone(
     revalidatePath(`/${c}/admin/clientes`);
   }
   return { ok: true };
+}
+
+/**
+ * ¿Cuáles de estos anuncios del mapa ya están en la ficha del cliente?
+ *
+ * Mismo criterio que la extensión («✓ En ficha»): la clave es
+ * `parsePortalUrl().urlKey`, la MISMA normalización que deduplica al insertar.
+ * Solo responde por los ids preguntados y solo con su id (un booleano por
+ * anuncio): nunca devuelve la lista de enlaces del cliente ni sus notas.
+ *
+ * Gates: `particulares.view` (como el mapa) y el de los enlaces del cliente
+ * (`viewing_collections` + alcance sobre ese cliente), igual que su ficha.
+ */
+export async function getCapturedPinIds(
+  clientId: string,
+  pinIds: string[],
+): Promise<{ ok: true; captured: string[] } | { ok: false; error: string }> {
+  const check = validateClientAndPinIds(clientId, pinIds, MAX_PINS);
+  if (!check.ok) return { ok: false, error: check.error };
+
+  const perm = await checkPermission("particulares", "view");
+  if (!perm.ok) return { ok: false, error: perm.error };
+  const perm2 = await checkPermission("viewing_collections", "view");
+  if (!perm2.ok) return { ok: false, error: perm2.error };
+  if (!(await canAccessClientLinks(check.clientId, "view"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
+  }
+
+  let pins;
+  try {
+    pins = await getParticularesMapPinsByIds(check.ids);
+  } catch {
+    return { ok: false, error: "No se pudieron leer los anuncios." };
+  }
+  // url_key → ids de anuncio (dos anuncios pueden compartir clave: mismo enlace).
+  const idsByKey = new Map<string, string[]>();
+  for (const p of pins) {
+    const key = p.sourceUrl ? parsePortalUrl(p.sourceUrl)?.urlKey : null;
+    if (!key) continue;
+    idsByKey.set(key, [...(idsByKey.get(key) ?? []), p.id]);
+  }
+  if (idsByKey.size === 0) return { ok: true, captured: [] };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+  const keys = [...idsByKey.keys()];
+  const captured: string[] = [];
+  for (let i = 0; i < keys.length; i += KEYS_CHUNK) {
+    const { data, error } = await db
+      .from("client_portal_links")
+      .select("url_key")
+      .eq("client_id", check.clientId)
+      .in("url_key", keys.slice(i, i + KEYS_CHUNK));
+    if (error) return { ok: false, error: "No se pudo comprobar qué anuncios ya están captados." };
+    for (const row of (data ?? []) as Array<{ url_key: string }>) {
+      captured.push(...(idsByKey.get(row.url_key) ?? []));
+    }
+  }
+  return { ok: true, captured: [...new Set(captured)] };
 }
