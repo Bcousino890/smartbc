@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 import { getClientDescription } from "@/lib/services/properties/client-description";
+import { crmParticularIdFromUrl, propertyFromCrmParticular } from "./from-crm-particular";
 
 // ============================================================================
 // Crear la ficha de un anuncio de portal, sin nadie delante (2026-10-08).
@@ -147,6 +148,23 @@ export async function importPortalLink(
     .eq("slug", PORTAL_IMPORT_AGENCY_SLUG)
     .maybeSingle();
   if (!agency) return fail(`No existe la agencia "${PORTAL_IMPORT_AGENCY_SLUG}".`);
+
+  // Una captación de nuestro propio CRM no se lee del portal: se convierte en
+  // propiedad con sus datos, igual que el botón «Crear propiedad».
+  const crmParticularId = crmParticularIdFromUrl(link.url);
+  if (crmParticularId) {
+    const made = await propertyFromCrmParticular(crmParticularId);
+    if (!made.ok) return fail(made.error);
+    const attachedCrm = await attachPropertyToLink({
+      linkId,
+      clientId: link.client_id,
+      propertyId: made.propertyId,
+      userId: userId ?? link.added_by ?? null,
+      note: "Ficha creada desde la captación del CRM y añadida a la selección del cliente.",
+    });
+    if (!attachedCrm.ok) return fail(attachedCrm.error);
+    return { linkId, ok: true, detail: "ficha creada desde la captación del CRM" };
+  }
 
   // Import dinámico: trae scrapers pesados que no hace falta cargar antes.
   const { extractFromUrl } = await import("@/lib/sync/import-by-link");
