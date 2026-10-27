@@ -633,6 +633,7 @@ function FeaturePicker({
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const SUGGESTED = 14;
+const PAGE_SIZE = 24;
 const SUBS_SHOWN = 12;
 
 /**
@@ -655,6 +656,8 @@ function ZonePicker({
 }) {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [listQuery, setListQuery] = useState("");
+  const [pages, setPages] = useState(1);
   const [openSubs, setOpenSubs] = useState<Record<string, boolean>>({});
   const catalog = useZoneCatalog(country);
   const SUBS: Record<string, string[]> = catalog.subzones;
@@ -662,7 +665,14 @@ function ZonePicker({
 
   const isOn = (z: string) => zones.some((x) => fold(x) === fold(z));
   const suggestions = all.filter((z) => !isOn(z));
-  const shown = showAll ? suggestions : suggestions.slice(0, SUGGESTED);
+  // "Ver todas": A–Z, con su propio filtro y de 24 en 24 para no tener 300 chips de golpe.
+  const lq = fold(listQuery.trim());
+  const listed = showAll
+    ? suggestions
+        .filter((z) => !lq || fold(z).includes(lq))
+        .sort((a, b) => a.localeCompare(b, "es"))
+    : [];
+  const shown = showAll ? listed.slice(0, pages * PAGE_SIZE) : suggestions.slice(0, SUGGESTED);
 
   // Resultados del buscador: zonas y barrios del catálogo que contienen el texto.
   const q = fold(query.trim());
@@ -778,8 +788,19 @@ function ZonePicker({
       {suggestions.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[11px] font-medium uppercase tracking-wider text-ink/45">
-            {zones.length ? "Añadir más" : "Zonas habituales"}
+            {showAll ? `Todas las zonas · ${listed.length} (A–Z)` : zones.length ? "Añadir más" : "Zonas habituales"}
           </p>
+          {showAll && (
+            <input
+              value={listQuery}
+              onChange={(e) => {
+                setListQuery(e.target.value);
+                setPages(1);
+              }}
+              placeholder="Filtrar esta lista…"
+              className="h-8 w-full rounded-md border border-ink/10 bg-white px-2.5 text-xs text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+            />
+          )}
           <div className="flex flex-wrap gap-1.5">
             {shown.map((z) => (
               <button
@@ -792,10 +813,24 @@ function ZonePicker({
                 {z}
               </button>
             ))}
+            {showAll && listed.length === 0 && <span className="text-xs text-ink/45">Ninguna zona coincide.</span>}
+            {showAll && listed.length > shown.length && (
+              <button
+                type="button"
+                onClick={() => setPages((p) => p + 1)}
+                className="rounded-full px-2.5 py-1 text-xs font-medium text-gold-dark transition hover:bg-gold/10"
+              >
+                Mostrar {Math.min(PAGE_SIZE, listed.length - shown.length)} más · quedan {listed.length - shown.length}
+              </button>
+            )}
             {suggestions.length > SUGGESTED && (
               <button
                 type="button"
-                onClick={() => setShowAll((v) => !v)}
+                onClick={() => {
+                  setShowAll((v) => !v);
+                  setPages(1);
+                  setListQuery("");
+                }}
                 className="rounded-full px-2.5 py-1 text-xs font-medium text-gold-dark transition hover:bg-gold/10"
               >
                 {showAll ? "Ver menos" : `Ver todas (${suggestions.length})`}
