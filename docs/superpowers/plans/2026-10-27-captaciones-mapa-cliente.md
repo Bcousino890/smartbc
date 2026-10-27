@@ -65,7 +65,7 @@
   - `removeVertex(ring: ZonePolygon, index: number): ZonePolygon` (no baja de 3 vértices: devuelve el mismo anillo)
 
 - [ ] **Step 1: Escribir las pruebas que fallan** en `scripts/test-captaciones-map.mts`, con `node:assert/strict`:
-  - un cuadrado de 0,01° de lado en Madrid (`[-3.70,40.40]…`) da `polygonAreaKm2` entre 0,80 y 0,90;
+  - un cuadrado de 0,01° de lado en Madrid (`[-3.70,40.40]…`) da `polygonAreaKm2` entre 0,92 y 0,97 (≈0,848 km × 1,113 km a 40,4° N);
   - `circleToPolygon([-3.7038,40.4168], 1000)` da un anillo cuya área está entre 3,0 y 3,3 km² y cuyos vértices distan 1000 m ±1 % del centro;
   - `isValidZoneRing` es `false` para 2 puntos, para tres puntos alineados y para un lazo (bowtie) y `true` para un triángulo normal;
   - `removeVertex` sobre un triángulo devuelve el mismo triángulo;
@@ -106,12 +106,13 @@
 
 **Files:**
 - Create: `lib/db/queries/particulares-map.ts`, `app/api/admin/particulares/map/route.ts`
+- Modify: `lib/captaciones-map/pins.ts` (añadir `rowToMapPin`, puro, porque la consulta importa `server-only` y no se puede probar con el cargador de scripts)
 - Test: `scripts/test-captaciones-map.mts` (parte pura)
 
 **Interfaces:**
 - Consumes: `isPointInAnyPolygon`, `decodeZonePolygons` de `lib/zone-polygon.ts`; `polygonBounds` (Task 1); `MapPin` (Task 2); `createAdminClient`; `fetchAllRows` y el patrón de `getParticularesIdsInPolygons` en `lib/db/queries/particulares.ts`; `requirePermission` de `@/lib/auth/guard`.
 - Produces:
-  - `rowToMapPin(row: Record<string, unknown>): MapPin | null` (puro; `null` si faltan coordenadas o precio)
+  - `rowToMapPin(row: Record<string, unknown>): MapPin | null` (en `lib/captaciones-map/pins.ts`; puro; `null` si faltan coordenadas o precio)
   - `getParticularesMapPins(args: { bbox: { minLng: number; minLat: number; maxLng: number; maxLat: number }; polygons: ZonePolygon[]; operation?: "rent" | "sale"; advertiser?: "particular" | "all"; showRetired?: boolean }): Promise<{ pins: MapPin[]; truncated: boolean; withoutLocation: number }>`
   - `GET /api/admin/particulares/map?bbox=minLng,minLat,maxLng,maxLat&zonePoly=<json>&operation=rent|sale&advertiser=particular|all` → `{ ok: true, pins: MapPin[], truncated: boolean, withoutLocation: number }`. 400 si `bbox` es inválido; 403 sin `particulares.view`.
 
@@ -132,7 +133,7 @@
 **Interfaces:**
 - Consumes: `MapPin`, `PinTier` (Task 2); `ZonePolygon`.
 - Produces:
-  - `CaptacionesMap(props: { pins: MapPin[]; tiers: Map<string, PinTier>; scores: Map<string, number>; polygons: ZonePolygon[]; selectedId: string | null; onSelect: (id: string | null) => void; onBoundsChange: (bbox: { minLng: number; minLat: number; maxLng: number; maxLat: number }) => void; theme: "light" | "dark"; editor: React.ReactNode })` (cargado con `dynamic(..., { ssr: false })`, como `zone-draw-map.tsx`)
+  - `CaptacionesMap(props: { pins: MapPin[]; tiers: Map<string, PinTier>; scores: Map<string, number>; selectedId: string | null; onSelect: (id: string | null) => void; onBoundsChange: (bbox: { minLng: number; minLat: number; maxLng: number; maxLat: number }) => void; onMapReady: (map: L.Map) => void; theme: "light" | "dark" })`. No pinta polígonos: de eso se encarga el editor de la Task 5, que recibe la instancia por `onMapReady`. (cargado con `dynamic(..., { ssr: false })`, como `zone-draw-map.tsx`)
   - `buildPinIcon(pin: MapPin, tier: PinTier, theme: "light" | "dark", selected: boolean): L.DivIcon | null` (`null` para `out`, que se pinta como `circleMarker` de canvas)
   - `readStoredTheme(): "light" | "dark"` y `storeTheme(t)` con `localStorage` dentro de `try/catch`.
 
@@ -219,7 +220,7 @@
 - Produces:
   - `ClientPicker(props: { value: PickedClient | null; onChange(c: PickedClient | null): void })` con `type PickedClient = { id: string; name: string }`; búsqueda con debounce de 250 ms; opción «Quitar cliente».
   - La respuesta de `suggested-particulares` añade `brief: { operation: "rent" | "sale" | null; maxPrice: number | null; minBedrooms: number | null; polygons: ZonePolygon[]; summary: string }` (resumen tipo «Alquiler · hasta 1.400 € · 2 hab.»). Es aditivo: los consumidores actuales no se rompen.
-  - `buildScoreMap(suggestions: SuggestedParticular[]): Map<string, number>` (puro, en `lib/captaciones-map/pins.ts`).
+  - `buildScoreMap(suggestions: SuggestedParticular[]): Map<string, number>` (puro, en `lib/captaciones-map/pins.ts`; importar el tipo con `import type`, el módulo de origen es `server-only`).
 
 - [ ] **Step 1: Prueba que falla** de `buildScoreMap`: dos sugerencias devuelven un mapa id→`matchScore`; lista vacía devuelve mapa vacío.
 - [ ] **Step 2: Implementar** `buildScoreMap`; ejecutar la prueba.
@@ -233,14 +234,14 @@
 ### Task 9: Captar en lote y guardar la zona en el encargo
 
 **Files:**
-- Create: `app/[country]/(admin)/admin/captaciones/captacion-actions.ts`
-- Modify: `components/admin/captaciones-map/captaciones-map-view.tsx`, `pin-card.tsx`
+- Create: `app/[country]/(admin)/admin/captaciones/captacion-actions.ts` (`"use server"`: solo exporta funciones async), `lib/captaciones-map/capture.ts` (puro, con `toPortalLinkInputs`)
+- Modify: `lib/db/queries/particulares-map.ts` (añadir `getParticularesMapPinsByIds(ids: string[]): Promise<MapPin[]>`), `components/admin/captaciones-map/captaciones-map-view.tsx`, `pin-card.tsx`
 - Test: `scripts/test-captaciones-map.mts`
 
 **Interfaces:**
 - Consumes: `addPortalLinks(clientId, links, options)` de `app/[country]/(admin)/admin/clientes/portal-links-actions.ts`; `cleanPolygons` de `lib/clients/brief.ts`; el patrón de guardado de `client_preferences` de `clientes/[id]/actions.ts`.
 - Produces:
-  - `toPortalLinkInputs(pins: MapPin[], scores: Map<string, number>): PortalLinkInput[]` (puro; omite pines sin `sourceUrl`; `notes` = «Captado desde el mapa ({score}% de encaje)»; respeta el orden por puntuación descendente).
+  - `toPortalLinkInputs(pins: MapPin[], scores: Map<string, number>): PortalLinkInput[]` (en `lib/captaciones-map/capture.ts`, puro; `import type { PortalLinkInput }`; omite pines sin `sourceUrl`; `notes` = «Captado desde el mapa ({score}% de encaje)»; respeta el orden por puntuación descendente).
   - `captureForClient(clientId: string, pinIds: string[]): Promise<{ ok: true; inserted: number; skipped: number } | { ok: false; error: string }>` (acción de servidor: vuelve a leer los pines por id en el servidor, no confía en datos del cliente, y limita a 300).
   - `saveClientZone(clientId: string, polygons: ZonePolygon[]): Promise<{ ok: true } | { ok: false; error: string }>` (aplica `cleanPolygons`; exige `clientes` editar con el mismo gate que el guardado de encargo; actualiza solo `search_polygons`).
 
@@ -283,7 +284,7 @@
 - Modify: `use-zone-editor.ts`, `map-toolbar.tsx`
 
 **Interfaces:**
-- Consumes: acción `addPolygons` del reductor (Task 5).
+- Consumes: acción `setPolygons` del reductor (Task 5), pasando `[...state.polygons, ring]` (el tope de 5 polígonos lo aplica el propio reductor).
 - Produces: `loadBarrios(): Promise<{ id: string; name: string; district: string; ring: ZonePolygon }[]>` con caché en memoria; herramienta «Barrios» que pinta los barrios con borde fino, resalta al pasar el cursor y añade el barrio pulsado como un polígono más.
 
 - [ ] **Step 1: Pausa**: no empezar hasta que el dueño confirme la fuente de los datos (datos abiertos del Ayuntamiento de Madrid, CC-BY). Si no se confirma, la herramienta queda deshabilitada con el motivo «Próximamente» y esta tarea se cierra sin código.
