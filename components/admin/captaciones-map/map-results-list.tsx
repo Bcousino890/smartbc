@@ -140,7 +140,7 @@ const STYLES = `
 .cmp-list{display:flex;flex-direction:column;overflow:hidden;min-height:0;background:#fff;border:1px solid #e8e0d0;border-radius:14px;color:#0a0a0a}
 .cmp-num{font-variant-numeric:tabular-nums}
 .cmp-list-hd{padding:14px 16px;border-bottom:1px solid #e8e0d0}
-.cmp-list-hd h2{margin:0 0 8px;font:400 17px var(--crm-font-display,Optima,Candara,"Segoe UI",Lato,sans-serif);display:flex;justify-content:space-between;align-items:center}
+.cmp-list-hd h2{margin:0 0 8px;font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
 .cmp-live{font:700 11px Lato,sans-serif;color:#0f6b4f;background:#e6f5ef;padding:3px 9px;border-radius:99px;display:flex;gap:6px;align-items:center}
 .cmp-live i{width:6px;height:6px;border-radius:50%;background:#12a672;animation:cmp-pulse 1.6s infinite}
 .cmp-seg{display:inline-flex;border:1px solid #e8e0d0;border-radius:10px;padding:3px;background:#fff}

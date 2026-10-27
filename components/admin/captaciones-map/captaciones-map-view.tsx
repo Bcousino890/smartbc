@@ -528,7 +528,7 @@ export function CaptacionesMapView({
     <section className="cmv font-crm-sans" aria-label="Mapa de captación">
       <header className="cmv-top">
         <div className="cmv-title">
-          <h2>Mapa de captación</h2>
+          <h2 className="crm-section-title">Mapa de captación</h2>
           <p>
             {clientLabel && !notSpain
               ? `Dibuja la zona de ${clientLabel} y capta lo que encaja`
@@ -776,7 +776,7 @@ const CSS = `
 .cmv{--cmv-line:#e8e0d0;--cmv-muted:#7d766c;margin-top:16px;color:#0a0a0a}
 .cmv-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
 .cmv-title{flex:1;min-width:220px}
-.cmv-title h2{margin:0;font:500 22px/1.15 var(--crm-font-display,Optima,Candara,"Segoe UI",Lato,sans-serif)}
+.cmv-title h2{margin:0;line-height:1.15}
 .cmv-title p{margin:3px 0 0;font-size:13px;color:var(--cmv-muted)}
 .cmv-top .cpk-pill{background:#fff;border-color:var(--cmv-line);box-shadow:none}
 .cmv-banner{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:9px 14px;border-radius:12px;font-size:13px;

@@ -49,17 +49,17 @@ export function FunnelPanel({ funnel, areaKm2, clientName, captured, theme = "li
       )}
       <div className="cmp-fun-big">
         <div>
-          <b className="cmp-num">{funnel.newIn24h}</b>
+          <b className="cmp-num crm-number">{funnel.newIn24h}</b>
           <small>nuevos en 24 h</small>
         </div>
         {hasClient && captured !== null && (
           <div>
-            <b className="cmp-num">{captured}</b>
+            <b className="cmp-num crm-number">{captured}</b>
             <small>ya captados</small>
           </div>
         )}
         <div>
-          <b className="cmp-num">{funnel.avgPrice !== null ? formatEuro(funnel.avgPrice) : "—"}</b>
+          <b className="cmp-num crm-number">{funnel.avgPrice !== null ? formatEuro(funnel.avgPrice) : "—"}</b>
           <small>precio medio</small>
         </div>
       </div>
@@ -88,7 +88,7 @@ const STYLES = `
 .cmp-fun-row b{text-align:right;font:700 14px Lato,sans-serif}
 .cmp-fun-note{margin:8px 0 0;font-size:11.5px;color:var(--gm)}
 .cmp-fun-big{display:flex;gap:18px;margin-top:12px;padding-top:12px;border-top:1px solid var(--gl)}
-.cmp-fun-big b{display:block;font:600 26px/1 var(--crm-font-display,Optima,Candara,"Segoe UI",Lato,sans-serif)}
+.cmp-fun-big b{display:block;font-size:26px;line-height:1}
 .cmp-fun-big small{font-size:11.5px;color:var(--gm)}
 @media (prefers-reduced-motion:reduce){.cmp-fun-track i{transition:none}}
 `;
