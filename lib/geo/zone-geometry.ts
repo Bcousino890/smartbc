@@ -1,6 +1,8 @@
 /**
  * Geometría pura de las zonas dibujadas en el mapa de captaciones.
- * Puntos [lng, lat] (orden GeoJSON), anillos abiertos (sin repetir el primero).
+ * Puntos [lng, lat] (orden GeoJSON). Los anillos son ABIERTOS: NO se repite el
+ * primer punto al final (el cierre es implícito); GeoJSON/PostGIS lo exigen
+ * repetido, así que quien exporte debe añadirlo.
  * Sin dependencias: proyección equirrectangular local, de sobra para zonas
  * del tamaño de una ciudad.
  */
@@ -103,11 +105,14 @@ function segmentsIntersect(a: P, b: P, c: P, d: P): boolean {
   return false;
 }
 
-/** ≥3 vértices distintos, área > 0 y sin autointersección (O(n²)). */
+/** Por debajo de ~0,001 m² el anillo es una línea con ruido de coma flotante. */
+const MIN_AREA_KM2 = 1e-9;
+
+/** ≥3 vértices distintos, área no degenerada y sin autointersección (O(n²)). */
 export function isValidZoneRing(ring: ZonePolygon): boolean {
   const distinct = new Set(ring.map((p) => `${p[0]},${p[1]}`));
   if (ring.length < 3 || distinct.size !== ring.length) return false;
-  if (polygonAreaKm2(ring) <= 0) return false;
+  if (polygonAreaKm2(ring) <= MIN_AREA_KM2) return false;
   const n = ring.length;
   for (let i = 0; i < n; i++) {
     const a = ring[i];
@@ -123,6 +128,8 @@ export function isValidZoneRing(ring: ZonePolygon): boolean {
 
 /** Inserta el punto medio entre `index` e `index+1` (cíclico). */
 export function insertMidpoint(ring: ZonePolygon, index: number): ZonePolygon {
+  // Índice fuera de rango: copia sin cambios (como removeVertex), nunca excepción.
+  if (!Number.isInteger(index) || index < 0 || index >= ring.length) return [...ring];
   const a = ring[index];
   const b = ring[(index + 1) % ring.length];
   const mid: P = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];

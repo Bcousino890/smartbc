@@ -17,6 +17,12 @@ import {
 import { classifyPin, computeFunnel, capPins, rowToMapPin, type MapPin } from "../lib/captaciones-map/pins.ts";
 import { formatPinPrice, formatThousandsEs, pinAriaLabel } from "../lib/captaciones-map/pin-label.ts";
 import type { ZonePolygon } from "../lib/zone-polygon.ts";
+import {
+  MAX_POLYGONS,
+  initialEditorState,
+  zoneEditorReducer,
+  type EditorState,
+} from "../lib/captaciones-map/zone-editor-reducer.ts";
 
 let failed = 0;
 function test(name: string, fn: () => void) {
@@ -81,6 +87,23 @@ test("insertMidpoint", () => {
   const last = insertMidpoint(tri, 2); // entre el último y el primero
   assert.equal(last.length, 4);
   assert.deepEqual(last[3], [(-3.7 + -3.7) / 2, (40.41 + 40.4) / 2]);
+});
+
+test("isValidZoneRing: casi colineales se rechazan (épsilon de área)", () => {
+  assert.equal(isValidZoneRing([[-3.7, 40.4], [-3.69, 40.41000000001], [-3.68, 40.42]]), false);
+});
+
+test("isValidZoneRing: polígono cóncavo válido se acepta", () => {
+  const concave: ZonePolygon = [[0, 0], [0.02, 0], [0.02, 0.02], [0.01, 0.005], [0, 0.02]];
+  assert.equal(isValidZoneRing(concave), true);
+});
+
+test("insertMidpoint fuera de rango devuelve el anillo igual (copia)", () => {
+  for (const i of [-1, 3, 99]) {
+    const r = insertMidpoint(tri, i);
+    assert.deepEqual(r, tri);
+    assert.notEqual(r, tri);
+  }
 });
 
 test("polygonBounds", () => {
@@ -212,6 +235,91 @@ test("pinAriaLabel: precio · dormitorios · calle", () => {
   const base = { price: 1350, operation: "rent" as const, bedrooms: 2, address: "Calle A 3", title: "T" };
   assert.equal(pinAriaLabel(base), "1.350€ · 2 dorm. · Calle A 3");
   assert.equal(pinAriaLabel({ ...base, bedrooms: null, address: null }), "1.350€ · T");
+});
+
+// ---- Reductor del editor de zonas ----
+const sqRing: ZonePolygon = [[-3.7, 40.4], [-3.69, 40.4], [-3.69, 40.41], [-3.7, 40.41]];
+const st = (over: Partial<EditorState> = {}): EditorState => ({ ...initialEditorState([]), ...over });
+
+test("reductor: closeDraft con 2 puntos no añade nada", () => {
+  let s = st({ tool: "draw" });
+  s = zoneEditorReducer(s, { type: "addDraftPoint", point: [0, 0] });
+  s = zoneEditorReducer(s, { type: "addDraftPoint", point: [1, 1] });
+  const r = zoneEditorReducer(s, { type: "closeDraft" });
+  assert.equal(r.polygons.length, 0);
+  assert.equal(r.tool, "draw");
+});
+
+test("reductor: closeDraft con anillo válido lo añade, vacía el borrador y pasa a edit", () => {
+  let s = st({ tool: "draw" });
+  for (const p of sqRing) s = zoneEditorReducer(s, { type: "addDraftPoint", point: p });
+  const r = zoneEditorReducer(s, { type: "closeDraft" });
+  assert.deepEqual(r.polygons, [sqRing]);
+  assert.deepEqual(r.draft, []);
+  assert.equal(r.tool, "edit");
+});
+
+test("reductor: closeDraft con lazo se rechaza (estado igual)", () => {
+  let s = st({ tool: "draw" });
+  for (const p of [[0, 0], [1, 1], [1, 0], [0, 1]] as ZonePolygon) {
+    s = zoneEditorReducer(s, { type: "addDraftPoint", point: p });
+  }
+  assert.equal(zoneEditorReducer(s, { type: "closeDraft" }), s);
+});
+
+test("reductor: moveVertex mantiene el nº de vértices y mueve el punto", () => {
+  const s = st({ polygons: [sqRing] });
+  const r = zoneEditorReducer(s, { type: "moveVertex", polygon: 0, index: 2, point: [-3.68, 40.42] });
+  assert.equal(r.polygons[0].length, 4);
+  assert.deepEqual(r.polygons[0][2], [-3.68, 40.42]);
+  assert.deepEqual(s.polygons[0][2], [-3.69, 40.41]); // no muta
+});
+
+test("reductor: moveVertex que crearía un lazo se rechaza", () => {
+  const s = st({ polygons: [sqRing] });
+  assert.equal(zoneEditorReducer(s, { type: "moveVertex", polygon: 0, index: 2, point: [-3.7, 40.405] }), s);
+});
+
+test("reductor: insertMidpoint y removeVertex (nunca baja de 3)", () => {
+  let s = st({ polygons: [tri] });
+  s = zoneEditorReducer(s, { type: "insertMidpoint", polygon: 0, index: 0 });
+  assert.equal(s.polygons[0].length, 4);
+  s = zoneEditorReducer(s, { type: "removeVertex", polygon: 0, index: 1 });
+  assert.equal(s.polygons[0].length, 3);
+  const r = zoneEditorReducer(s, { type: "removeVertex", polygon: 0, index: 0 });
+  assert.equal(r.polygons[0].length, 3);
+});
+
+test("reductor: addCircle añade un anillo válido de 48 vértices; radio mínimo 50 m", () => {
+  const r = zoneEditorReducer(st({ tool: "circle" }), { type: "addCircle", center: [-3.7038, 40.4168], radiusM: 500 });
+  assert.equal(r.polygons.length, 1);
+  assert.equal(r.polygons[0].length, 48);
+  assert.equal(isValidZoneRing(r.polygons[0]), true);
+  const small = zoneEditorReducer(st({ tool: "circle" }), { type: "addCircle", center: [-3.7038, 40.4168], radiusM: 10 });
+  assert.equal(small.polygons.length, 0);
+});
+
+test("reductor: clear vacía polígonos y borrador", () => {
+  const r = zoneEditorReducer(st({ polygons: [tri], draft: [[0, 0]] }), { type: "clear" });
+  assert.deepEqual(r.polygons, []);
+  assert.deepEqual(r.draft, []);
+});
+
+test("reductor: máximo 5 polígonos (el sexto se ignora)", () => {
+  assert.equal(MAX_POLYGONS, 5);
+  let s = st({ tool: "circle" });
+  for (let i = 0; i < 6; i++) {
+    s = zoneEditorReducer(s, { type: "addCircle", center: [-3.7 + i * 0.05, 40.4], radiusM: 300 });
+  }
+  assert.equal(s.polygons.length, 5);
+  const set = zoneEditorReducer(st(), { type: "setPolygons", polygons: Array.from({ length: 7 }, () => tri) });
+  assert.equal(set.polygons.length, 5);
+});
+
+test("reductor: setTool cancela el borrador", () => {
+  const r = zoneEditorReducer(st({ tool: "draw", draft: [[0, 0], [1, 1]] }), { type: "setTool", tool: "edit" });
+  assert.equal(r.tool, "edit");
+  assert.deepEqual(r.draft, []);
 });
 
 if (failed) process.exit(1);
