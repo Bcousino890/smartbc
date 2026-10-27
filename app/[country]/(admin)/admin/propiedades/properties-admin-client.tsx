@@ -719,7 +719,10 @@ function PropertiesAdminList({
         <FilterSelect
           label="Operación"
           value={operationFilter}
-          onChange={(v) => setOperationFilter(v as typeof operationFilter)}
+          onChange={(v) => {
+            setOperationFilter(v as typeof operationFilter);
+            if (v !== "alquiler") setStayFilter(""); // la estancia solo aplica al alquiler
+          }}
           options={OPERATION_OPTIONS}
         />
         <FilterSelect
@@ -736,6 +739,18 @@ function PropertiesAdminList({
             setSubzoneFilter(""); // al cambiar de distrito, reiniciar subzona
           }}
         />
+        {operationFilter === "alquiler" && (
+          <FilterSelect
+            label="Estancia"
+            value={stayFilter}
+            onChange={(v) => setStayFilter(v as typeof stayFilter)}
+            options={[
+              { value: "", label: "Toda" },
+              { value: "larga", label: "Larga" },
+              { value: "corta", label: "Corta" },
+            ]}
+          />
+        )}
         <FilterSelect
           label="Agencia"
           value={agencyFilter}
@@ -772,12 +787,6 @@ function PropertiesAdminList({
               ]}
             />
           )}
-          <FilterSelect
-            label="Estancia"
-            value={stayFilter}
-            onChange={(v) => setStayFilter(v as typeof stayFilter)}
-            options={STAY_OPTIONS}
-          />
           <FilterSelect
             label="Dormitorios"
             value={bedroomsFilter}
