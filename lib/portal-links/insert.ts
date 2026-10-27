@@ -208,5 +208,29 @@ export async function insertPortalLinks(params: {
 
   const insertedIds = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
   const inserted = insertedIds.length;
+
+  // Un enlace que ya existía se ignora arriba, pero si entonces llega con foto y
+  // el guardado no la tiene (se añadió sin extensión), se la ponemos. Solo si
+  // está vacía: nunca pisa una imagen que ya esté.
+  const withImage = rows.filter((r) => typeof r.image_url === "string" && r.image_url);
+  if (withImage.length && withImage.length > inserted) {
+    const isNew = new Set(insertedIds);
+    const { data: existing } = await db()
+      .from("client_portal_links")
+      .select("id, url_key")
+      .eq("client_id", params.clientId)
+      .in("url_key", withImage.map((r) => r.url_key as string));
+    const byKey = new Map(((existing ?? []) as Array<{ id: string; url_key: string }>).map((e) => [e.url_key, e.id]));
+    for (const r of withImage) {
+      const id = byKey.get(r.url_key as string);
+      if (!id || isNew.has(id)) continue;
+      await db()
+        .from("client_portal_links")
+        .update({ image_url: r.image_url })
+        .eq("id", id)
+        .is("image_url", null);
+    }
+  }
+
   return { inserted, insertedIds, skipped: rows.length - inserted, invalid };
 }
