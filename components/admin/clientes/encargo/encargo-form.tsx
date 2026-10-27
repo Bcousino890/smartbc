@@ -18,6 +18,7 @@
 // ============================================================================
 
 import { useState } from "react";
+import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import { AreaPicker } from "./area-picker";
 import { AlertTriangle, Check, Plus, Star, X } from "lucide-react";
 import {
@@ -43,7 +44,6 @@ import {
   type BriefProfile,
   type Option,
 } from "@/lib/clients/brief";
-import { MADRID_ZONES, MADRID_ZONES_WITH_SUBZONES } from "@/lib/mock-properties";
 import { Labeled, Select, TextArea, TextInput } from "@/components/admin/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -650,7 +650,12 @@ function ZonePicker({
   onChange: (zones: string[], subzones: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const known: readonly string[] = country === "es" ? MADRID_ZONES : [];
+  const catalog = useZoneCatalog(country);
+  const SUBS: Record<string, string[]> = catalog.subzones;
+  const all: readonly string[] = catalog.zones;
+  // Chips: las más usadas (y las ya marcadas); el resto, por el buscador.
+  const known: readonly string[] = [...new Set([...all.slice(0, 40), ...zones.filter((z) => all.includes(z))])];
+  const rest = all.filter((z) => !known.includes(z));
   const extra = zones.filter((z) => !known.includes(z));
 
   const toggleZone = (zone: string) => {
@@ -658,8 +663,8 @@ function ZonePicker({
       const next = zones.filter((z) => z !== zone);
       // Un barrio se va con su zona, salvo que también cuelgue de otra que
       // sigue marcada (Plaza Mayor está en Centro y en Justicia).
-      const keep = new Set(next.flatMap((z) => MADRID_ZONES_WITH_SUBZONES[z] ?? []));
-      const own = new Set(MADRID_ZONES_WITH_SUBZONES[zone] ?? []);
+      const keep = new Set(next.flatMap((z) => SUBS[z] ?? []));
+      const own = new Set(SUBS[zone] ?? []);
       onChange(next, subzones.filter((s) => !own.has(s) || keep.has(s)));
     } else {
       onChange([...zones, zone], subzones);
@@ -702,11 +707,11 @@ function ZonePicker({
         </div>
       )}
 
-      {zones.some((z) => (MADRID_ZONES_WITH_SUBZONES[z] ?? []).length > 0) && (
+      {zones.some((z) => (SUBS[z] ?? []).length > 0) && (
         <div className="space-y-2 rounded-md border border-ink/8 bg-cream-50/60 p-3">
           <p className="text-xs text-ink/50">Barrios (opcional — sin marcar, vale toda la zona)</p>
           {zones.map((z) => {
-            const subs = MADRID_ZONES_WITH_SUBZONES[z] ?? [];
+            const subs = SUBS[z] ?? [];
             if (!subs.length) return null;
             return (
               <div key={z} className="flex flex-wrap items-center gap-1.5">
@@ -738,13 +743,13 @@ function ZonePicker({
         </div>
       )}
 
-      {(extra.length > 0 || subzones.some((s) => !zones.some((z) => (MADRID_ZONES_WITH_SUBZONES[z] ?? []).includes(s)))) && (
+      {(extra.length > 0 || subzones.some((s) => !zones.some((z) => (SUBS[z] ?? []).includes(s)))) && (
         <div className="flex flex-wrap gap-1.5">
           {extra.map((z) => (
             <RemovableChip key={`z-${z}`} label={z} onRemove={() => onChange(zones.filter((x) => x !== z), subzones)} />
           ))}
           {subzones
-            .filter((s) => !zones.some((z) => (MADRID_ZONES_WITH_SUBZONES[z] ?? []).includes(s)))
+            .filter((s) => !zones.some((z) => (SUBS[z] ?? []).includes(s)))
             .map((s) => (
               <RemovableChip
                 key={`s-${s}`}
@@ -758,6 +763,7 @@ function ZonePicker({
       <div className="flex gap-2">
         <TextInput
           value={draft}
+          list="encargo-zone-options"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -775,6 +781,11 @@ function ZonePicker({
         >
           <Plus size={12} /> Añadir
         </button>
+        <datalist id="encargo-zone-options">
+          {rest.map((z) => (
+            <option key={z} value={z} />
+          ))}
+        </datalist>
       </div>
     </div>
   );

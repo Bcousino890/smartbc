@@ -9,6 +9,7 @@ import {
 } from "@/app/(admin)/admin/propiedades/actions";
 import { postUploadForm } from "@/lib/http/upload-form";
 import { Modal } from "@/components/ui/modal";
+import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO, sectorsForCommune } from "@/lib/mock-properties";
 import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { useT } from "@/lib/i18n/provider";
@@ -59,6 +60,7 @@ export function NewPropertyModal({
   const [agencySlug, setAgencySlug] = useState<string>(agencies[0]?.slug ?? "");
   const [operation, setOperation] = useState<Operation>("alquiler");
   const [stayType, setStayType] = useState<StayType>("larga");
+  const zoneCatalog = useZoneCatalog("es");
   const [zone, setZone] = useState<string>(MADRID_ZONES[0] ?? "");
   const [price, setPrice] = useState<number>(0);
   const [bedrooms, setBedrooms] = useState<number>(2);
@@ -471,7 +473,7 @@ export function NewPropertyModal({
                 onChange={(e) => setZone(e.target.value)}
                 className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
-                {MADRID_ZONES.map((z) => (
+                {(zoneCatalog.zones.includes(zone) ? zoneCatalog.zones : [zone, ...zoneCatalog.zones]).map((z) => (
                   <option key={z} value={z}>{z}</option>
                 ))}
               </select>

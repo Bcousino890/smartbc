@@ -22,7 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { PageFooter } from "@/components/ui/page-footer";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
-import { MADRID_ZONES } from "@/lib/mock-properties";
+import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import type { ClientProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -388,6 +388,7 @@ function EditPreferencesModal({
   const [budgetMin, setBudgetMin] = useState(p.budgetMin ?? 0);
   const [budgetMax, setBudgetMax] = useState(p.budgetMax ?? 0);
   const [zones, setZones] = useState<string[]>(p.preferredZones);
+  const zoneCatalog = useZoneCatalog("es");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -478,7 +479,7 @@ function EditPreferencesModal({
             {t("perfil.preferences.zones")}
           </legend>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {MADRID_ZONES.map((zone) => {
+            {[...new Set([...zoneCatalog.zones.slice(0, 40), ...zones])].map((zone) => {
               const active = zones.includes(zone);
               return (
                 <button

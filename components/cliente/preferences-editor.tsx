@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Edit2, Save, RotateCcw, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { MADRID_ZONES } from "@/lib/mock-properties";
+import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import type { Operation, StayType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +36,7 @@ export function PreferencesEditor({
 }: PreferencesEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [preferences, setPreferences] = useState(initialPreferences);
+  const zoneCatalog = useZoneCatalog("es");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -166,7 +167,7 @@ export function PreferencesEditor({
               className={selectCls}
             >
               <option value="">Seleccionar...</option>
-              {MADRID_ZONES.map((zone) => (
+              {(preferences.preferredZone && !zoneCatalog.zones.includes(preferences.preferredZone) ? [preferences.preferredZone, ...zoneCatalog.zones] : zoneCatalog.zones).map((zone) => (
                 <option key={zone} value={zone}>
                   {zone}
                 </option>

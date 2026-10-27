@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireStaff } from "@/lib/db/auth-helpers";
+import { requireSession, requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { assertPermission } from "@/lib/auth/guard";
@@ -15,6 +15,7 @@ import {
   type BriefProfile,
 } from "@/lib/clients/brief";
 import { setClientProfileTag } from "@/lib/clients/profile-tag";
+import { loadZoneCatalog, type ZoneCatalog } from "@/lib/clients/zone-catalog";
 
 export type SaveClientPreferencesResult =
   | { ok: true }
@@ -350,4 +351,14 @@ export async function saveClientPreferencesChile(
 
   revalidatePath("/cl/admin/clientes");
   return { ok: true };
+}
+
+/** Zonas y barrios reales del CRM (propiedades + captaciones) para el encargo. */
+export async function getZoneCatalog(country: "es" | "cl"): Promise<ZoneCatalog | null> {
+  const supabase = await createClient();
+  // Solo nombres de zona: lo ven también los clientes en su portal, así que
+  // basta una sesión (no hace falta ser personal).
+  const auth = await requireSession(supabase);
+  if (!auth.ok) return null;
+  return loadZoneCatalog(country === "cl" ? "cl" : "es");
 }
