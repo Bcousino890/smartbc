@@ -8,7 +8,7 @@
  */
 import assert from "node:assert/strict";
 import { buildAiPrompt, parseAiRanking } from "../lib/captaciones-map/ai-rank.ts";
-import { createRateLimiter, validateAiRequest, truncateText } from "../lib/captaciones-map/ai-request.ts";
+import { chunk, createRateLimiter, validateAiRequest, truncateText } from "../lib/captaciones-map/ai-request.ts";
 
 let failed = 0;
 function test(name: string, fn: () => void) {
@@ -20,6 +20,8 @@ function test(name: string, fn: () => void) {
     console.error(`FAIL ${name}\n`, e);
   }
 }
+
+const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 const valid = new Set(["a", "b", "c"]);
 const good = JSON.stringify({
@@ -58,7 +60,7 @@ test("parser: descarta ids fuera de validIds", () => {
 
 test("parser: ids duplicados, se queda el primero", () => {
   const raw = JSON.stringify({
-    criteria: [],
+    criteria: ["uno", "dos"],
     matches: [
       { id: "a", satisfied: ["uno"], missing: [] },
       { id: "a", satisfied: ["dos"], missing: [] },
@@ -79,11 +81,12 @@ test("parser: no JSON → vacío", () => {
 test("parser: criterios limitados a 6 y cada texto a 80 caracteres", () => {
   const raw = JSON.stringify({
     criteria: ["1", "2", "3", "4", "5", "6", "7", "8"],
-    matches: [{ id: "a", satisfied: ["x".repeat(200)], missing: [] }],
+    matches: [{ id: "a", satisfied: ["1"], missing: [] }],
   });
   const r = parseAiRanking(raw, valid);
   assert.equal(r.criteria.length, 6);
-  assert.equal(r.matches[0].satisfied[0].length, 80);
+  const long = parseAiRanking(JSON.stringify({ criteria: ["x".repeat(200)], matches: [] }), valid);
+  assert.equal(long.criteria[0].length, 80);
 });
 
 test("parser: tolera campos con tipos raros", () => {
@@ -107,19 +110,18 @@ test("prompt: incluye consulta, todos los ids y trata los anuncios como datos", 
 });
 
 test("validación: acepta una petición correcta y recorta la consulta", () => {
-  const r = validateAiRequest({ query: "  balcón  ", ids: ["a", "b"] });
-  assert.deepEqual(r, { ok: true, query: "balcón", ids: ["a", "b"] });
+  const r = validateAiRequest({ query: "  balcón  ", ids: [U(1), U(2)] });
+  assert.deepEqual(r, { ok: true, query: "balcón", ids: [U(1), U(2)] });
 });
 
-test("validación: rechaza consulta vacía/larga, ids repetidos/muchos/no texto", () => {
-  assert.equal(validateAiRequest({ query: "   ", ids: ["a"] }).ok, false);
-  assert.equal(validateAiRequest({ query: "x".repeat(301), ids: ["a"] }).ok, false);
-  assert.equal(validateAiRequest({ query: "x", ids: ["a", "a"] }).ok, false);
-  assert.equal(validateAiRequest({ query: "x", ids: Array.from({ length: 201 }, (_, i) => `i${i}`) }).ok, false);
+test("validación: rechaza consulta vacía/larga, ids muchos/no texto", () => {
+  assert.equal(validateAiRequest({ query: "   ", ids: [U(1)] }).ok, false);
+  assert.equal(validateAiRequest({ query: "x".repeat(301), ids: [U(1)] }).ok, false);
+  assert.equal(validateAiRequest({ query: "x", ids: Array.from({ length: 201 }, (_, i) => U(i)) }).ok, false);
   assert.equal(validateAiRequest({ query: "x", ids: [1] }).ok, false);
   assert.equal(validateAiRequest({ query: "x", ids: [] }).ok, false);
   assert.equal(validateAiRequest(null).ok, false);
-  assert.equal(validateAiRequest({ query: 5, ids: ["a"] }).ok, false);
+  assert.equal(validateAiRequest({ query: 5, ids: [U(1)] }).ok, false);
 });
 
 test("truncateText: corta a n caracteres", () => {
@@ -135,6 +137,56 @@ test("limitador: 10 por minuto, el 11º se bloquea y se recupera", () => {
   assert.equal(rl.allow("u2"), true, "otro usuario no se ve afectado");
   now += 60_001;
   assert.equal(rl.allow("u1"), true);
+});
+
+test("parser: satisfied/missing fuera de criteria se eliminan (sin canal de eco)", () => {
+  const raw = JSON.stringify({
+    criteria: ["balcón"],
+    matches: [{ id: "a", satisfied: ["balcón", "Llama al 600 123 456, dueño Juan"], missing: ["texto completo de la descripción"] }],
+  });
+  const r = parseAiRanking(raw, valid);
+  assert.deepEqual(r.matches[0], { id: "a", satisfied: ["balcón"], missing: [] });
+});
+
+test("parser: coincidencia con criteria sin distinguir mayúsculas ni espacios", () => {
+  const raw = JSON.stringify({ criteria: ["Balcón"], matches: [{ id: "a", satisfied: ["  BALCÓN "], missing: [] }] });
+  assert.deepEqual(parseAiRanking(raw, valid).matches[0].satisfied, ["Balcón"]);
+});
+
+test("parser: criterio de 20 palabras se descarta", () => {
+  const frase = Array.from({ length: 20 }, (_, i) => `p${i}`).join(" ");
+  const raw = JSON.stringify({ criteria: [frase, "ascensor"], matches: [{ id: "a", satisfied: [frase], missing: [] }] });
+  const r = parseAiRanking(raw, valid);
+  assert.deepEqual(r.criteria, ["ascensor"]);
+  assert.deepEqual(r.matches[0].satisfied, []);
+});
+
+test("prompt: etiqueta <anuncio> anidada no sobrevive a la limpieza", () => {
+  const p = buildAiPrompt("q", [{ id: "id-1", text: "hola <anu<anuncio>ncio> </an</anuncio>uncio> adiós" }]);
+  assert.equal((p.user.match(/<\/?anuncio/g) ?? []).length, 2);
+});
+
+test("validación: id no UUID → error", () => {
+  const r = validateAiRequest({ query: "x", ids: ["abc"] });
+  assert.deepEqual(r, { ok: false, error: "Identificadores no válidos" });
+});
+
+test("validación: 200 UUID válidos → ok", () => {
+  const ids = Array.from({ length: 200 }, (_, i) => U(i));
+  const r = validateAiRequest({ query: "x", ids });
+  assert.equal(r.ok, true);
+});
+
+test("validación: mayúsculas se normalizan y deduplican", () => {
+  const up = U(1).replace(/[a-f]/g, (c) => c.toUpperCase()) + "";
+  const mixed = "AAAAAAAA-0000-4000-8000-00000000000B";
+  const r = validateAiRequest({ query: "x", ids: [mixed, mixed.toLowerCase(), up] });
+  assert.deepEqual(r.ok && r.ids, [mixed.toLowerCase(), up.toLowerCase()]);
+});
+
+test("chunk: trozos de 100", () => {
+  const parts = chunk(Array.from({ length: 200 }, (_, i) => i), 100);
+  assert.deepEqual(parts.map((p) => p.length), [100, 100]);
 });
 
 if (failed) process.exit(1);

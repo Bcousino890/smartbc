@@ -59,7 +59,8 @@ export default function AiBar({ disabled, ids, onResult }: AiBarProps) {
       }
       const data = (await res.json()) as Partial<AiBarResult> & { ok?: boolean };
       const result: AiBarResult = {
-        criteria: Array.isArray(data.criteria) ? data.criteria : [],
+        // Sin repetidos: cada criterio es la `key` de su etiqueta.
+        criteria: Array.isArray(data.criteria) ? [...new Set(data.criteria)] : [],
         matches: Array.isArray(data.matches) ? data.matches : [],
       };
       setCriteria(result.criteria);

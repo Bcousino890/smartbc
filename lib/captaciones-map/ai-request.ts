@@ -7,6 +7,8 @@
 export const MAX_QUERY_LEN = 300;
 export const MAX_IDS = 200;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type AiRequestResult =
   | { ok: true; query: string; ids: string[] }
   | { ok: false; error: string };
@@ -20,11 +22,13 @@ export function validateAiRequest(body: unknown): AiRequestResult {
   if (q.length > MAX_QUERY_LEN) return { ok: false, error: `Máximo ${MAX_QUERY_LEN} caracteres` };
   if (!Array.isArray(ids) || ids.length === 0) return { ok: false, error: "No hay anuncios que analizar" };
   if (ids.length > MAX_IDS) return { ok: false, error: `Máximo ${MAX_IDS} anuncios` };
-  if (!ids.every((i) => typeof i === "string" && i.length > 0 && i.length <= 64)) {
+  // Solo UUID: un id que no lo sea haría fallar el `.in()` de Postgres y
+  // acabaría como un 502 engañoso. Se normaliza a minúsculas y se deduplica.
+  if (!ids.every((i) => typeof i === "string" && UUID_RE.test(i))) {
     return { ok: false, error: "Identificadores no válidos" };
   }
-  if (new Set(ids).size !== ids.length) return { ok: false, error: "Identificadores repetidos" };
-  return { ok: true, query: q, ids: ids as string[] };
+  const norm = [...new Set((ids as string[]).map((i) => i.toLowerCase()))];
+  return { ok: true, query: q, ids: norm };
 }
 
 export function truncateText(s: string, n: number): string {
@@ -56,4 +60,11 @@ export function createRateLimiter(opts: { max: number; windowMs: number; now?: (
       return true;
     },
   };
+}
+
+/** Trozos de `n` elementos (para no pasar de ~8 KB de URL en nginx con 200 ids). */
+export function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
 }

@@ -9,6 +9,7 @@ export type AiRanking = { criteria: string[]; matches: AiMatch[] };
 /** Tope de criterios y de longitud por texto: la UI los pinta como etiquetas. */
 export const MAX_CRITERIA = 6;
 export const MAX_TEXT_LEN = 80;
+export const MAX_CRITERION_WORDS = 6;
 
 /**
  * Prompt en español. Los textos de los anuncios los escribe un tercero
@@ -35,7 +36,16 @@ export function buildAiPrompt(
 
   // Un anuncio malicioso podría cerrar el bloque a mano y "salirse" de los
   // datos; quitamos cualquier etiqueta <anuncio> que traiga el propio texto.
-  const clean = (t: string) => t.replace(/<\/?\s*anuncio[^>]*>/gi, "");
+  // Iterar hasta estabilizar: "<anu<anuncio>ncio>" se recompone al quitar una pasada.
+  const clean = (t: string) => {
+    let prev: string;
+    let cur = t;
+    do {
+      prev = cur;
+      cur = cur.replace(/<\/?\s*anuncio[^>]*>/gi, "");
+    } while (cur !== prev);
+    return cur;
+  };
   const blocks = candidates.map(
     (c) => `<anuncio id="${c.id}">\n${clean(c.text)}\n</anuncio>`,
   );
@@ -53,13 +63,14 @@ export function buildAiPrompt(
 const EMPTY: AiRanking = { criteria: [], matches: [] };
 
 /** Lista de textos limpia: solo strings no vacíos, recortados a MAX_TEXT_LEN. */
-function cleanStrings(v: unknown, cap: number): string[] {
+function cleanStrings(v: unknown, cap: number, maxWords = Infinity): string[] {
   if (!Array.isArray(v)) return [];
   const out: string[] = [];
   for (const x of v) {
     if (typeof x !== "string") continue;
     const s = x.trim().slice(0, MAX_TEXT_LEN);
-    if (s) out.push(s);
+    // Un criterio largo es una frase copiada del anuncio, no un criterio.
+    if (s && s.split(/\s+/).length <= maxWords) out.push(s);
     if (out.length >= cap) break;
   }
   return out;
@@ -115,7 +126,19 @@ export function parseAiRanking(raw: string, validIds: Set<string>): AiRanking {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { ...EMPTY };
   const o = obj as { criteria?: unknown; matches?: unknown };
 
-  const criteria = cleanStrings(o.criteria, MAX_CRITERIA);
+  const criteria = cleanStrings(o.criteria, MAX_CRITERIA, MAX_CRITERION_WORDS);
+  // Canal de eco: `satisfied`/`missing` solo pueden repetir criterios ya
+  // aceptados. Si no, un anuncio inyectado podría pedir al modelo que vuelque
+  // su descripción (teléfonos incluidos) en esos campos y llegaría al navegador.
+  const allowed = new Map(criteria.map((c) => [c.toLowerCase(), c]));
+  const onlyCriteria = (v: unknown): string[] => {
+    const out: string[] = [];
+    for (const s of cleanStrings(v, MAX_CRITERIA)) {
+      const c = allowed.get(s.toLowerCase());
+      if (c && !out.includes(c)) out.push(c);
+    }
+    return out;
+  };
   const matches: AiMatch[] = [];
   const seen = new Set<string>();
   if (Array.isArray(o.matches)) {
@@ -124,7 +147,7 @@ export function parseAiRanking(raw: string, validIds: Set<string>): AiRanking {
       const { id, satisfied, missing } = m as Record<string, unknown>;
       if (typeof id !== "string" || !validIds.has(id) || seen.has(id)) continue;
       seen.add(id);
-      matches.push({ id, satisfied: cleanStrings(satisfied, MAX_CRITERIA), missing: cleanStrings(missing, MAX_CRITERIA) });
+      matches.push({ id, satisfied: onlyCriteria(satisfied), missing: onlyCriteria(missing) });
     }
   }
   return { criteria, matches };

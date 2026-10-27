@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { AINotConfiguredError, aiComplete } from "@/lib/services/ai/chat";
 import { buildAiPrompt, parseAiRanking } from "@/lib/captaciones-map/ai-rank";
-import { createRateLimiter, truncateText, validateAiRequest } from "@/lib/captaciones-map/ai-request";
+import { chunk, createRateLimiter, truncateText, validateAiRequest } from "@/lib/captaciones-map/ai-request";
 
 export const dynamic = "force-dynamic";
 
@@ -55,15 +55,20 @@ export async function POST(req: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = createAdminClient() as any;
-    const { data, error } = await db
-      .from("particulares")
-      .select("id, title, address, attrs, description")
-      .in("id", parsed.ids)
-      .eq("is_active", true)
-      .is("duplicate_of", null);
-    if (error) throw new Error(`map-ai: ${error.message}`);
+    // Trozos de 100 ids: con 200 UUID en un solo `.in()` la URL se acerca al límite de nginx.
+    const data: unknown[] = [];
+    for (const part of chunk(parsed.ids, 100)) {
+      const { data: d, error } = await db
+        .from("particulares")
+        .select("id, title, address, attrs, description")
+        .in("id", part)
+        .eq("is_active", true)
+        .is("duplicate_of", null);
+      if (error) throw new Error(`map-ai: ${error.message}`);
+      data.push(...(d ?? []));
+    }
 
-    const rows = (data ?? []) as {
+    const rows = data as {
       id: string;
       title: string | null;
       address: string | null;
