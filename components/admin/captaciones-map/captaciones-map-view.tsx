@@ -292,6 +292,14 @@ export function CaptacionesMapView({
 
   // ── IA ──
   const [ai, setAi] = useState<AiBarResult>({ criteria: [], matches: [] });
+  // Cambiar `aiEpoch` remonta la barra de IA: equivale a «Quitar» (vacía
+  // texto y criterios) y además aborta una petición en vuelo, cuyo resultado
+  // se habría calculado sobre otros anuncios u otro cliente.
+  const [aiEpoch, setAiEpoch] = useState(0);
+  const resetAi = useCallback(() => {
+    setAi({ criteria: [], matches: [] });
+    setAiEpoch((e) => e + 1);
+  }, []);
   const aiById = useMemo(() => new Map(ai.matches.map((m) => [m.id, m])), [ai]);
   const aiIdSet = useMemo(() => new Set(ai.matches.map((m) => m.id)), [ai]);
 
@@ -316,6 +324,16 @@ export function CaptacionesMapView({
   const aiIds = useMemo(() => rankedInZone.slice(0, AI_MAX_IDS).map((p) => p.id), [rankedInZone]);
   const inZoneRef = useRef(inZoneIds);
   inZoneRef.current = inZoneIds;
+  // Si cambia el conjunto de anuncios en zona (zona editada, filtros), los ids
+  // que se mandaron a la IA ya no son estos: fuera criterios, ✦ IA y +12.
+  // Clave ordenada: no depende del orden por puntuación (que el propio +12 altera).
+  const inZoneKey = useMemo(() => [...inZoneIds].sort().join(","), [inZoneIds]);
+  const prevInZoneKey = useRef(inZoneKey);
+  useEffect(() => {
+    if (prevInZoneKey.current === inZoneKey) return;
+    prevInZoneKey.current = inZoneKey;
+    resetAi();
+  }, [inZoneKey, resetAi]);
   const onAiResult = useCallback((r: AiBarResult) => {
     // La zona pudo cambiar mientras la IA pensaba: solo valen los anuncios que
     // siguen en ella (si no, se marcarían pines que ya no se ven).
@@ -328,11 +346,19 @@ export function CaptacionesMapView({
   const capturedReq = useRef(0);
   const checkIds = useMemo(() => rankedInZone.slice(0, MAX_CAPTURE).map((p) => p.id), [rankedInZone]);
   const checkKey = checkIds.join(",");
+  const clientIdRef = useRef<string | null>(null);
+  clientIdRef.current = client?.id ?? null;
+  const firstClientRun = useRef(true);
   useEffect(() => {
-    // Cambiar de cliente empieza de cero: lo captado era para el anterior.
+    if (firstClientRun.current) firstClientRun.current = false;
+    else resetAi();
+    // Cambiar de cliente empieza de cero: lo captado era para el anterior, y la
+    // búsqueda con IA se hizo con sus puntuaciones.
     setCaptured(new Set());
     setCaptureMsg(null);
     setConfirming(null);
+    setConfirmZone(false);
+    setZoneMsg(null);
   }, [client]);
   useEffect(() => {
     if (!client || !canActForClient || checkIds.length === 0) return;
@@ -400,6 +426,7 @@ export function CaptacionesMapView({
 
   // ── Captar y guardar zona ──
   const [confirming, setConfirming] = useState<string[] | null>(null);
+  const [confirmZone, setConfirmZone] = useState(false);
   const [busy, setBusy] = useState<"batch" | "single" | "zone" | null>(null);
   const [captureMsg, setCaptureMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [zoneMsg, setZoneMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -416,6 +443,10 @@ export function CaptacionesMapView({
 
   async function runCapture(ids: string[], kind: "batch" | "single") {
     if (!client) return;
+    // La respuesta solo vale para el cliente con el que se pidió: si entretanto
+    // se eligió otro, no se marcan sus pines ni se enseña el resultado.
+    const forClient = client.id;
+    const stale = () => clientIdRef.current !== forClient;
     setBusy(kind);
     setCaptureMsg(null);
     try {
@@ -424,7 +455,8 @@ export function CaptacionesMapView({
         const s = scores.get(id);
         if (s !== undefined) rec[id] = s;
       }
-      const r = await actions.captureForClient(client.id, ids, rec);
+      const r = await actions.captureForClient(forClient, ids, rec);
+      if (stale()) return;
       if (r.ok) {
         // Insertados y «ya estaban» quedan en la ficha: todos cuentan como captados.
         const withUrl = ids.filter((id) => pins.find((p) => p.id === id)?.sourceUrl);
@@ -434,6 +466,7 @@ export function CaptacionesMapView({
         setCaptureMsg({ kind: "error", text: r.error });
       }
     } catch {
+      if (stale()) return;
       setCaptureMsg({ kind: "error", text: "No se pudo captar. Revisa la conexión e inténtalo de nuevo." });
     } finally {
       setBusy(null);
@@ -443,15 +476,19 @@ export function CaptacionesMapView({
 
   async function runSaveZone() {
     if (!client) return;
+    const forClient = client.id;
     setBusy("zone");
     setZoneMsg(null);
     try {
-      const r = await actions.saveClientZone(client.id, polygons);
+      const r = await actions.saveClientZone(forClient, polygons);
+      if (clientIdRef.current !== forClient) return;
       setZoneMsg(r.ok ? { kind: "ok", text: "Zona guardada" } : { kind: "error", text: r.error });
     } catch {
+      if (clientIdRef.current !== forClient) return;
       setZoneMsg({ kind: "error", text: "No se pudo guardar la zona. Inténtalo de nuevo." });
     } finally {
       setBusy(null);
+      setConfirmZone(false);
       if (zoneMsgTimer.current) clearTimeout(zoneMsgTimer.current);
       zoneMsgTimer.current = setTimeout(() => setZoneMsg(null), NOTICE_MS);
     }
@@ -585,7 +622,7 @@ export function CaptacionesMapView({
               )}
             </div>
             <div className="cmv-ai">
-              <AiBar disabled={polygons.length === 0 || aiIds.length === 0} ids={aiIds} onResult={onAiResult} />
+              <AiBar key={aiEpoch} disabled={polygons.length === 0 || aiIds.length === 0} ids={aiIds} onResult={onAiResult} />
             </div>
             <div className="cmv-glass cmv-theme">
               <button
@@ -628,7 +665,8 @@ export function CaptacionesMapView({
               captured={captured.has(selectedPin.id)}
               ai={!!selAi}
               onCapture={() => void runCapture([selectedPin.id], "single")}
-              capturing={busy === "single"}
+              // Una sola captación a la vez: con otra en curso el botón queda ocupado.
+              capturing={busy !== null}
               onOpen={onOpenFicha ? () => onOpenFicha(selectedPin.id) : undefined}
               onClose={() => setSelectedId(null)}
               theme={theme}
@@ -689,17 +727,35 @@ export function CaptacionesMapView({
                 {captureMsg.text}
               </p>
             )}
+            {confirmZone && client ? (
+              // Guardar SUSTITUYE la zona del encargo: se pide confirmación como al captar.
+              <div className="cmv-confirm" role="group" aria-label="Confirmar guardar zona">
+                <p>Se sustituirá la zona del encargo de {client.name}.</p>
+                <div>
+                  <button type="button" className="cmv-btn cmv-btn-dark" onClick={() => void runSaveZone()} disabled={busy !== null} aria-busy={busy === "zone" || undefined}>
+                    {busy === "zone" && <Loader2 size={13} className="cmv-spin" aria-hidden />}
+                    Confirmar
+                  </button>
+                  <button type="button" className="cmv-btn cmv-btn-line" onClick={() => setConfirmZone(false)} disabled={busy === "zone"}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
             <button
               type="button"
               className="cmv-btn cmv-btn-line"
               disabled={!!saveReason || busy !== null}
               title={saveReason}
-              onClick={() => void runSaveZone()}
-              aria-busy={busy === "zone" || undefined}
+              onClick={() => {
+                setZoneMsg(null);
+                setConfirmZone(true);
+              }}
             >
-              {busy === "zone" ? <Loader2 size={13} className="cmv-spin" aria-hidden /> : zoneMsg?.kind === "ok" ? <Check size={14} aria-hidden /> : null}
+              {zoneMsg?.kind === "ok" && <Check size={14} aria-hidden />}
               {zoneMsg?.kind === "ok" ? zoneMsg.text : `Guardar zona en el encargo de ${clientLabel ?? "un cliente"}`}
             </button>
+            )}
             {zoneMsg?.kind === "error" && <p className="cmv-msg cmv-msg-err" role="alert">{zoneMsg.text}</p>}
             {zoneMsg?.kind === "ok" && <span className="cmv-sr" role="status">{zoneMsg.text}</span>}
           </div>
@@ -741,6 +797,12 @@ const CSS = `
 .cmv-left{display:flex;flex-direction:column;gap:8px;max-width:300px}
 .cmv-ai{flex:1;min-width:0}
 .cmv-ai .cm-ai-wrap{min-width:0}
+/* Los huecos entre etiquetas de criterio dejaban ver trozos de rótulos del
+   mapa (parecía una etiqueta «c» recortada): la fila lleva su propio fondo
+   de cristal desenfocado, así el hueco ya no deja leer el mapa. */
+.cmv-ai .cm-ai-chips{width:max-content;max-width:100%;box-sizing:border-box;padding:4px;border-radius:18px;
+  background:rgba(255,255,255,.5);backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3)}
+.cmv-dark .cmv-ai .cm-ai-chips{background:rgba(24,22,19,.5)}
 .cmv-theme{padding:4px;flex:none}
 .cmv-theme button{border:0;background:none;padding:8px 9px;border-radius:10px;cursor:pointer;color:inherit;display:grid;place-items:center}
 .cmv-theme button:hover{background:rgba(201,169,110,.18)}
