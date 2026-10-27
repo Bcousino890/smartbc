@@ -98,9 +98,11 @@ export function ParticularesClient({
   const view = f.view;
   const isMap = view === "map";
   const layout: CardLayout = view === "list" ? "list" : "grid";
-  // Zona inicial del mapa: la de la URL al montar (después el mapa es su dueño
-  // y la devuelve a la URL por onZoneChange).
-  const [mapInitialPolygons] = useState<ZonePolygon[]>(() => decodeZonePolygons(f.drawnZone));
+  // Zona del mapa: la vigente en los filtros (la dibujada en el mapa o en el
+  // modal «Ubicación en el mapa»). La vista solo la lee al montarse, así que
+  // seguirla aquí no pisa lo que se dibuja; sirve para que Mapa → Cuadrícula →
+  // Mapa (que remonta la vista) abra con la zona actual y no con la de la carga.
+  const mapInitialPolygons = useMemo<ZonePolygon[]>(() => decodeZonePolygons(f.drawnZone), [f.drawnZone]);
   const [now, setNow] = useState<number | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   const closeFilters = useCallback(() => setFiltersOpen(false), []);
