@@ -1,10 +1,11 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { isPointInAnyPolygon, type ZonePolygon } from "@/lib/zone-polygon";
-import { rowToMapPin, type MapPin } from "@/lib/captaciones-map/pins";
+import { capPins, rowToMapPin, type MapPin } from "@/lib/captaciones-map/pins";
 
 const MAX_PINS = 2000;
 const BATCH = 1000;
+const SCAN_CAP = 20000;
 
 const COLUMNS =
   "id, latitude, longitude, price, operation, bedrooms, square_meters, title, address, zone, cover_url, portal, source_url, detected_at, advertiser_type, price_drop_pct";
@@ -37,12 +38,18 @@ export async function getParticularesMapPins(
     return q;
   };
 
-  // Pedimos MAX_PINS + 1 filas para detectar truncado; paginamos de 1000 en 1000.
+  // Pedimos hasta MAX_PINS + 1 pines YA recortados para detectar truncado.
+  // Sin polígonos basta con 2001 filas; con polígonos se sigue paginando
+  // (más nuevos primero) hasta reunir 2001 pines dentro o agotar filas, con
+  // un techo de escaneo para no recorrer toda la tabla.
+  // Nota: no hay índice sobre particulares.detected_at (supabase/migrations);
+  // el orden cuesta un sort sobre el bbox filtrado, aceptable con ~22 000 activos.
   const limit = MAX_PINS + 1;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = [];
-  for (let from = 0; rows.length < limit; from += BATCH) {
-    const to = Math.min(from + BATCH, limit) - 1;
+  const scanCap = polygons.length > 0 ? SCAN_CAP : limit;
+  const collected: MapPin[] = [];
+  let scanned = 0;
+  while (collected.length < limit && scanned < scanCap) {
+    const size = Math.min(BATCH, scanCap - scanned);
     const res = await applyCommon(supabase.from("particulares").select(COLUMNS))
       .is("duplicate_of", null)
       .is("taken_down_at", null)
@@ -52,24 +59,21 @@ export async function getParticularesMapPins(
       .lte("latitude", bbox.maxLat)
       .gte("longitude", bbox.minLng)
       .lte("longitude", bbox.maxLng)
+      .order("detected_at", { ascending: false })
       .order("id", { ascending: true })
-      .range(from, to);
+      .range(scanned, scanned + size - 1);
     if (res.error) throw new Error(`particulares map: ${res.error.message}`);
     const batch = res.data ?? [];
-    rows.push(...batch);
-    if (batch.length < to - from + 1) break;
+    scanned += batch.length;
+    for (const r of batch) {
+      const pin = rowToMapPin(r);
+      if (!pin) continue;
+      if (polygons.length > 0 && !isPointInAnyPolygon([pin.lng, pin.lat], polygons)) continue;
+      collected.push(pin);
+    }
+    if (batch.length < size) break;
   }
-
-  const pins: MapPin[] = [];
-  for (const r of rows) {
-    const pin = rowToMapPin(r);
-    if (!pin) continue;
-    if (polygons.length > 0 && !isPointInAnyPolygon([pin.lng, pin.lat], polygons)) continue;
-    pins.push(pin);
-  }
-  // Truncado = había más filas que el tope (antes del recorte por polígono).
-  const truncated = rows.length > MAX_PINS;
-  if (pins.length > MAX_PINS) pins.length = MAX_PINS;
+  const { pins, truncated } = capPins(collected, MAX_PINS);
 
   const head = await applyCommon(
     supabase.from("particulares").select("id", { count: "exact", head: true }),

@@ -14,7 +14,7 @@ import {
   polygonsAreaKm2,
   removeVertex,
 } from "../lib/geo/zone-geometry.ts";
-import { classifyPin, computeFunnel, rowToMapPin, type MapPin } from "../lib/captaciones-map/pins.ts";
+import { classifyPin, computeFunnel, capPins, rowToMapPin, type MapPin } from "../lib/captaciones-map/pins.ts";
 import type { ZonePolygon } from "../lib/zone-polygon.ts";
 
 let failed = 0;
@@ -188,6 +188,14 @@ test("rowToMapPin: título de respaldo y numéricos como cadena", () => {
   assert.equal(p.price, 950);
   assert.equal(p.lat, 40.5);
   assert.equal(p.priceDropPct, 5);
+});
+
+test("capPins: bajo el tope no trunca; sobre el tope recorta y marca", () => {
+  const pins = [mkPin("a", 1), mkPin("b", 2), mkPin("c", 3)];
+  assert.deepEqual(capPins(pins, 3), { pins, truncated: false });
+  const r = capPins(pins, 2);
+  assert.equal(r.truncated, true);
+  assert.deepEqual(r.pins.map((p) => p.id), ["a", "b"]);
 });
 
 if (failed) process.exit(1);

@@ -131,3 +131,9 @@ export function rowToMapPin(row: Record<string, unknown>): MapPin | null {
     priceDropPct: num(row.price_drop_pct),
   };
 }
+
+/** Aplica el tope de pines y marca si había más (pura; se prueba con node). */
+export function capPins(pins: MapPin[], max: number): { pins: MapPin[]; truncated: boolean } {
+  if (pins.length <= max) return { pins, truncated: false };
+  return { pins: pins.slice(0, max), truncated: true };
+}
