@@ -4,6 +4,7 @@ import { briefFromRow, briefSuggestMissing } from "@/lib/clients/brief";
 import { evaluateMatch, exclusionLabel, fold, zoneLikePattern } from "@/lib/clients/brief-match";
 import { MADRID_DISTRICTS, normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import type { ExcludedSummary } from "@/lib/db/queries/suggested-properties";
+import { toMapBrief, type MapBrief } from "@/lib/captaciones-map/brief-summary";
 
 /** Anuncio de portal (tabla `particulares`) que encaja con el encargo de un cliente. */
 export type SuggestedParticular = {
@@ -27,9 +28,10 @@ export type SuggestedParticular = {
 };
 
 export type SuggestedParticularesResult =
-  | { ok: true; suggestions: SuggestedParticular[]; total: number; excluded: ExcludedSummary }
+  // `brief` es ADITIVO (lo usa el mapa de captaciones): los consumidores previos lo ignoran.
+  | { ok: true; suggestions: SuggestedParticular[]; total: number; excluded: ExcludedSummary; brief: MapBrief }
   | { ok: false; reason: "no_preferences" }
-  | { ok: false; reason: "insufficient_brief"; missing: string[] }
+  | { ok: false; reason: "insufficient_brief"; missing: string[]; brief: MapBrief }
   | { ok: false; reason: "error"; message: string };
 
 const COLUMNS =
@@ -98,7 +100,9 @@ export async function getSuggestedParticulares(
   const brief = briefFromRow(prefs);
   const op = brief.operation;
   const missing = briefSuggestMissing(brief);
-  if (missing.length) return { ok: false, reason: "insufficient_brief", missing };
+  // Resumen del encargo ya calculado: se devuelve sin consulta nueva.
+  const mapBrief = toMapBrief(brief);
+  if (missing.length) return { ok: false, reason: "insufficient_brief", missing, brief: mapBrief };
   const ceiling = brief.maxPrice !== null ? brief.maxPrice * (1 + (brief.maxPriceFlexPct ?? 0) / 100) : null;
 
   let query = supabase
@@ -209,5 +213,6 @@ export async function getSuggestedParticulares(
     excluded: [...excludedCounts.entries()]
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),
+    brief: mapBrief,
   };
 }

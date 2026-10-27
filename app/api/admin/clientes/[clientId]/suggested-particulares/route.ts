@@ -42,14 +42,14 @@ export async function GET(
 
     if (!result.ok) {
       if (result.reason === "insufficient_brief") {
-        return NextResponse.json({ ok: true, suggestions: [], total: 0, excluded: [], reason: "insufficient_brief", missing: result.missing });
+        return NextResponse.json({ ok: true, suggestions: [], total: 0, excluded: [], reason: "insufficient_brief", missing: result.missing, brief: result.brief });
       }
       if (result.reason === "no_preferences") {
         return NextResponse.json({ ok: true, suggestions: [], excluded: [], reason: "no_preferences" });
       }
       return NextResponse.json({ error: result.message, reason: "error" }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, suggestions: result.suggestions, total: result.total, excluded: result.excluded });
+    return NextResponse.json({ ok: true, suggestions: result.suggestions, total: result.total, excluded: result.excluded, brief: result.brief });
   } catch (error) {
     console.error("Error in suggested particulares endpoint:", error);
     return NextResponse.json(
