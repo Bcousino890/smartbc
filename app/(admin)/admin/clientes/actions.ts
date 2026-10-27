@@ -63,6 +63,28 @@ export type CreateClientInput = {
   }>;
 };
 
+// Roles que gestionan a todos los clientes: no se les asigna el cliente que dan
+// de alta (eligen asesor en la ficha). Cualquier otro miembro del equipo es un
+// asesor con cartera propia (`resolveViewScope`): si el cliente que crea no
+// queda a su nombre, desaparece de su propio listado.
+const CARTERA_LIBRE_ROLES = ["owner", "admin", "agent_admin"];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assignToCreator(db: any, clientId: string, creator: { userId?: string | null; role: string }) {
+  if (!creator.userId) return;
+  const { error } = await db
+    .from("profiles")
+    .update(
+      CARTERA_LIBRE_ROLES.includes(creator.role)
+        ? { created_by: creator.userId }
+        : { created_by: creator.userId, assigned_advisor_id: creator.userId },
+    )
+    .eq("id", clientId)
+    .eq("role", "client");
+  // El cliente ya existe: si esto falla no se deshace nada; se asigna desde la ficha.
+  if (error) console.error("[assignToCreator]", error.message);
+}
+
 export type CreateClientResult =
   | { ok: true; clientId: string }
   | { ok: false; error: string };
@@ -97,6 +119,7 @@ export async function createNewClient(
   }
 
   const clientId = inviteResult.userId;
+  await assignToCreator(adminClient as any, clientId, auth); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   if (input.phone) {
     const { error: phoneError } = await (adminClient as any)
@@ -248,6 +271,7 @@ export async function createClientWithBrief(
     .update({ phone: phone ?? null, country: input.country })
     .eq("id", clientId);
   if (profileError) return { ok: false, error: profileError.message };
+  await assignToCreator(db, clientId, auth);
 
   const { error: prefsError } = await db.from("client_preferences").insert({
     client_id: clientId,

@@ -181,7 +181,7 @@ function PropertiesAdminList({
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(
-    () => Boolean(param("estancia") || param("dormitorios") || param("banos") || param("planta") || param("precioMin") || param("precioMax") || param("m2Min") || param("m2Max") || param("zona")),
+    () => Boolean(param("dormitorios") || param("banos") || param("planta") || param("precioMin") || param("precioMax") || param("m2Min") || param("m2Max") || param("zona")),
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
@@ -595,7 +595,6 @@ function PropertiesAdminList({
   // Cuántos filtros "avanzados" hay activos (para el contador del botón).
   const advancedCount = [
     subzoneFilter,
-    stayFilter,
     bedroomsFilter,
     bathroomsFilter,
     floorFilter,
@@ -719,7 +718,10 @@ function PropertiesAdminList({
         <FilterSelect
           label="Operación"
           value={operationFilter}
-          onChange={(v) => setOperationFilter(v as typeof operationFilter)}
+          onChange={(v) => {
+            setOperationFilter(v as typeof operationFilter);
+            if (v !== "alquiler") setStayFilter(""); // la estancia solo aplica al alquiler
+          }}
           options={OPERATION_OPTIONS}
         />
         <FilterSelect
@@ -736,6 +738,18 @@ function PropertiesAdminList({
             setSubzoneFilter(""); // al cambiar de distrito, reiniciar subzona
           }}
         />
+        {operationFilter === "alquiler" && (
+          <FilterSelect
+            label="Estancia"
+            value={stayFilter}
+            onChange={(v) => setStayFilter(v as typeof stayFilter)}
+            options={[
+              { value: "", label: "Toda" },
+              { value: "larga", label: "Larga" },
+              { value: "corta", label: "Corta" },
+            ]}
+          />
+        )}
         <FilterSelect
           label="Agencia"
           value={agencyFilter}
@@ -772,12 +786,6 @@ function PropertiesAdminList({
               ]}
             />
           )}
-          <FilterSelect
-            label="Estancia"
-            value={stayFilter}
-            onChange={(v) => setStayFilter(v as typeof stayFilter)}
-            options={STAY_OPTIONS}
-          />
           <FilterSelect
             label="Dormitorios"
             value={bedroomsFilter}

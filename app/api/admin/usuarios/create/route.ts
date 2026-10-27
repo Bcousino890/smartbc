@@ -325,7 +325,10 @@ async function handleCreate(req: Request, progress: Progress): Promise<Response>
   }
 
   if (role === "client") {
-    profileUpdate.assigned_advisor_id = assignedAdvisorId || null;
+    // Sin asesor elegido, el cliente que da de alta un asesor/agente queda a su nombre:
+    // con cartera propia, si no, no lo vería en su propio listado.
+    profileUpdate.assigned_advisor_id = assignedAdvisorId || (isAdvisorOrAgent ? currentProfile.id : null);
+    profileUpdate.created_by = currentProfile.id;
   }
 
   // El teléfono también para staff: el formulario lo pide a todos y es lo que

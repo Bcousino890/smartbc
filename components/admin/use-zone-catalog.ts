@@ -13,8 +13,17 @@ import type { ZoneCatalog } from "@/lib/clients/zone-catalog";
 export function useZoneCatalog(country: "es" | "cl"): ZoneCatalog {
   const base: ZoneCatalog =
     country === "es"
-      ? { zones: [...MADRID_ZONES], subzones: MADRID_ZONES_WITH_SUBZONES }
-      : { zones: [], subzones: {} };
+      ? {
+          zones: [...MADRID_ZONES],
+          subzones: MADRID_ZONES_WITH_SUBZONES,
+          groups: MADRID_ZONES.map((name) => ({
+            name,
+            total: 0,
+            isMadrid: true,
+            subs: (MADRID_ZONES_WITH_SUBZONES[name] ?? []).map((sb) => ({ name: sb, total: 0 })),
+          })),
+        }
+      : { zones: [], subzones: {}, groups: [] };
   const [catalog, setCatalog] = useState<ZoneCatalog | null>(null);
   useEffect(() => {
     let alive = true;

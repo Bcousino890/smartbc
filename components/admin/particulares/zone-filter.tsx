@@ -30,6 +30,18 @@ interface ZoneFilterProps {
   /** "" | varias entradas "d:<distrito>" / "z:<zona>" separadas por "|". */
   value: string;
   onChange: (value: string) => void;
+  /** Lo que cuenta cada número ("anuncios" en particulares, "fichas" en el encargo). */
+  unit?: string;
+  /** false = sin «sin teléfono» ni su atajo (fuera de particulares no aplica). */
+  phone?: boolean;
+  /** false = sin números (cuando no hay recuentos que mostrar). */
+  counts?: boolean;
+  /** Texto del botón cuando no hay nada elegido. */
+  emptyLabel?: string;
+  /** El botón ocupa todo el ancho (dentro de un formulario). */
+  block?: boolean;
+  /** Texto del botón cuando hay selección (por defecto «N zonas»); el formulario lo cuenta a su manera. */
+  summary?: string;
 }
 
 type Row =
@@ -50,7 +62,17 @@ type Row =
  *
  * Mantiene el formato de valor "d:"/"z:" unidos por "|" que consume page.tsx.
  */
-export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
+export function ZoneFilter({
+  groups,
+  value,
+  onChange,
+  unit = "anuncios",
+  phone = true,
+  counts = true,
+  emptyLabel = "Zona: todas",
+  block = false,
+  summary,
+}: ZoneFilterProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
@@ -65,7 +87,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   const selected = useMemo(() => new Set(parseValue(value)), [value]);
   const searching = query.trim().length > 0;
 
-  const sorted = useMemo(() => sortByTotal(groups, (g) => g.district), [groups]);
+  const sorted = useMemo(() => counts ? sortByTotal(groups, (g) => g.district) : [...groups].sort((a, b) => a.district.localeCompare(b.district, "es")), [groups, counts]);
   const visible = useMemo(() => filterGroups(sorted, query, onlyMissing), [sorted, query, onlyMissing]);
   const madrid = useMemo(() => visible.filter(groupIsMadrid), [visible]);
   const munis = useMemo(() => visible.filter((g) => !groupIsMadrid(g)), [visible]);
@@ -112,10 +134,11 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   const totalSelected = selected.size;
   const label = useMemo(() => {
     const items = parseValue(value);
-    if (items.length === 0) return "Zona: todas";
+    if (items.length === 0) return emptyLabel;
+    if (summary) return summary;
     if (items.length === 1) return chipLabel(items[0]);
     return `${items.length} zonas`;
-  }, [value]);
+  }, [value, emptyLabel, summary]);
 
   function commit(next: Set<string>) {
     onChange(serialize(next));
@@ -215,7 +238,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
         <div className="sticky top-0 z-10 flex items-center gap-3 bg-cream-50 px-3 pb-1.5 pt-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-ink/55">{title}</span>
           <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
-          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} anuncios</span>
+          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} {total === 1 ? unit.slice(0, -1) : unit}</span>
         </div>
         <div className="px-1.5">
           {list.map((g) => {
@@ -268,7 +291,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                     <span className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-ink">
                       <Highlight text={flat ? g.district : `Todo ${g.district}`} query={query} />
                     </span>
-                    <Counts total={g.total} missing={g.missingPhone} />
+                    {counts && <Counts total={g.total} missing={phone ? g.missingPhone : 0} />}
                   </button>
                 </div>
                 {openG && (
@@ -299,7 +322,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                             <span className="min-w-0 flex-1 break-words text-sm leading-snug text-ink/80">
                               <Highlight text={r.zone.name} query={query} />
                             </span>
-                            <Counts total={r.zone.total} missing={r.zone.missingPhone} small />
+                            {counts && <Counts total={r.zone.total} missing={phone ? r.zone.missingPhone : 0} small />}
                           </button>
                         </div>
                       );
@@ -326,7 +349,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
         aria-haspopup="listbox"
         aria-expanded={open}
         title={nSel > 1 ? chipKeys.map(chipLabel).join(", ") : undefined}
-        className={`inline-flex h-10 max-w-[260px] shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium text-ink transition hover:border-ink/30 hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+        className={`inline-flex h-10 ${block ? "w-full" : "max-w-[260px] shrink-0"} items-center gap-2 rounded-xl border px-3.5 text-sm font-medium text-ink transition hover:border-ink/30 hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
           nSel > 0 ? "border-gold-dark bg-gold/20" : "border-ink/15 bg-white"
         }`}
       >
@@ -335,20 +358,25 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
         <ChevronDown
           size={14}
           strokeWidth={1.75}
-          className={`ml-0.5 shrink-0 text-ink/45 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink/45 transition-transform duration-200 ${block ? "ml-auto" : "ml-0.5"} ${open ? "rotate-180" : ""}`}
         />
       </button>
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-ink/40 sm:hidden" onClick={() => setOpen(false)} aria-hidden />
+          <div className={`fixed inset-0 bg-ink/40 ${block ? "z-[90]" : "z-40 sm:hidden"}`} onClick={() => setOpen(false)} aria-hidden />
           <div
             role="dialog"
             aria-label="Filtrar por zona"
             onKeyDown={(e) => {
               if (e.key === "Escape" && e.target !== inputRef.current) closeAndFocus();
             }}
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-t-2xl border border-ink/10 bg-cream-50 shadow-[0_-12px_40px_-12px_rgba(10,10,10,0.35)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+8px)] sm:z-30 sm:max-h-none sm:w-[27rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl sm:shadow-[0_24px_60px_-20px_rgba(40,28,10,0.45)]"
+            className={
+              block
+                ? // Dentro de un formulario/modal se centra en pantalla: así no lo recorta el modal que lo contiene.
+                  "fixed inset-x-3 bottom-3 top-auto z-[100] flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-2xl border border-ink/10 bg-cream-50 shadow-[0_24px_60px_-20px_rgba(40,28,10,0.55)] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2"
+                : "fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-t-2xl border border-ink/10 bg-cream-50 shadow-[0_-12px_40px_-12px_rgba(10,10,10,0.35)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+8px)] sm:z-30 sm:max-h-none sm:w-[27rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl sm:shadow-[0_24px_60px_-20px_rgba(40,28,10,0.45)]"
+            }
           >
             <span aria-hidden className="mx-auto mt-2 h-1 w-10 rounded-full bg-ink/15 sm:hidden" />
             <header className="flex items-start justify-between gap-3 px-4 pb-3 pt-3 sm:pt-4">
@@ -402,23 +430,27 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
               </div>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <Shortcut
-                  icon={<TrendingUp size={12} />}
-                  onClick={() => commit(new Set(topKeys(sorted, 5)))}
-                  label="Top 5 con más anuncios"
-                />
-                <Shortcut
-                  icon={<Phone size={12} />}
-                  pressed={onlyMissing}
-                  onClick={() => setOnlyMissing((v) => !v)}
-                  label="Solo sin teléfono"
-                />
+                {counts && (
+                  <Shortcut
+                    icon={<TrendingUp size={12} />}
+                    onClick={() => commit(new Set(topKeys(sorted, 5)))}
+                    label={`Top 5 con más ${unit}`}
+                  />
+                )}
+                {phone && (
+                  <Shortcut
+                    icon={<Phone size={12} />}
+                    pressed={onlyMissing}
+                    onClick={() => setOnlyMissing((v) => !v)}
+                    label="Solo sin teléfono"
+                  />
+                )}
               </div>
             </div>
 
             {nSel > 0 && (
               <div className="mx-4 mt-3 rounded-xl border border-gold/30 bg-gold/10 px-2.5 py-2">
-                <ul className="flex max-h-[4.5rem] flex-wrap gap-1.5 overflow-y-auto" aria-label="Zonas seleccionadas">
+                <ul className="flex max-h-[5.25rem] flex-wrap gap-1.5 overflow-y-auto" aria-label="Zonas seleccionadas">
                   {chipKeys.map((k) => (
                     <li key={k} className="max-w-full">
                       <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-ink/10 bg-white py-0.5 pl-2.5 pr-1 text-xs font-medium text-ink shadow-sm">
@@ -444,7 +476,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
               role="listbox"
               aria-multiselectable
               aria-label="Zonas"
-              className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-ink/10 sm:max-h-[22rem]"
+              className={`mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-ink/10 ${block ? "sm:max-h-[26rem]" : "sm:max-h-[22rem]"}`}
             >
               {rows.length === 0 && (
                 <div className="flex flex-col items-center px-6 py-10 text-center">
