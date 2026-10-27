@@ -360,14 +360,19 @@ export function ZoneFilter({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-ink/40 sm:hidden" onClick={() => setOpen(false)} aria-hidden />
+          <div className={`fixed inset-0 bg-ink/40 ${block ? "z-[90]" : "z-40 sm:hidden"}`} onClick={() => setOpen(false)} aria-hidden />
           <div
             role="dialog"
             aria-label="Filtrar por zona"
             onKeyDown={(e) => {
               if (e.key === "Escape" && e.target !== inputRef.current) closeAndFocus();
             }}
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-t-2xl border border-ink/10 bg-cream-50 shadow-[0_-12px_40px_-12px_rgba(10,10,10,0.35)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+8px)] sm:z-30 sm:max-h-none sm:w-[27rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl sm:shadow-[0_24px_60px_-20px_rgba(40,28,10,0.45)]"
+            className={
+              block
+                ? // Dentro de un formulario/modal se centra en pantalla: así no lo recorta el modal que lo contiene.
+                  "fixed inset-x-3 bottom-3 top-auto z-[100] flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-2xl border border-ink/10 bg-cream-50 shadow-[0_24px_60px_-20px_rgba(40,28,10,0.55)] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2"
+                : "fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] animate-[zfIn_.2s_ease-out] flex-col overflow-hidden rounded-t-2xl border border-ink/10 bg-cream-50 shadow-[0_-12px_40px_-12px_rgba(10,10,10,0.35)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+8px)] sm:z-30 sm:max-h-none sm:w-[27rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl sm:shadow-[0_24px_60px_-20px_rgba(40,28,10,0.45)]"
+            }
           >
             <span aria-hidden className="mx-auto mt-2 h-1 w-10 rounded-full bg-ink/15 sm:hidden" />
             <header className="flex items-start justify-between gap-3 px-4 pb-3 pt-3 sm:pt-4">
@@ -467,7 +472,7 @@ export function ZoneFilter({
               role="listbox"
               aria-multiselectable
               aria-label="Zonas"
-              className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-ink/10 sm:max-h-[22rem]"
+              className={`mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-ink/10 ${block ? "sm:max-h-[26rem]" : "sm:max-h-[22rem]"}`}
             >
               {rows.length === 0 && (
                 <div className="flex flex-col items-center px-6 py-10 text-center">
