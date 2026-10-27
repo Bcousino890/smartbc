@@ -58,6 +58,16 @@
     "test:import-operation": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-import-operation.mts",
     "test:client-brief": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-client-brief.mts",
     "test:captaciones-map": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-map.mts",
+
+    "test:captaciones-panels": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-panels.mts",
+
+    "test:captaciones-capture": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-capture.mts",
+
+    "test:captaciones-ai": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-ai.mts",
+
+    "test:captaciones-scores": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-scores.mts",
+
+    "test:captaciones": "npm run test:captaciones-map && npm run test:captaciones-panels && npm run test:captaciones-capture && npm run test:captaciones-ai && npm run test:captaciones-scores",
     "test:lead-merge": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-lead-merge.mts",
     "test:sales-inbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-sales-inbox.mts",
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
