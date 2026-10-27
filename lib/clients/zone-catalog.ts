@@ -23,6 +23,42 @@ const cache = new Map<string, { at: number; value: ZoneCatalog }>();
 
 type Row = { zone: string | null; subzone: string | null };
 
+/** Ruido del scraper: "venta en Estrella en Estrella", "Guindalera, 9", "Zona Centro"… */
+const NOISE = /^(venta|alquiler|piso|casa|chalet|local|zona)\b|\ben\b|,|\d/i;
+
+/** "Centro (Alcobendas)" → zona "Alcobendas", barrio "Centro". */
+function splitParen(raw: string): { zone: string; sub: string | null } {
+  const m = raw.match(/^(.+?)\s*\((.+)\)$/);
+  if (!m) return { zone: raw, sub: null };
+  const [, a, b] = m;
+  return { zone: b.trim(), sub: fold(a) === fold(b) ? null : a.trim() };
+}
+
+/**
+ * Una sola ubicación canónica por ficha: un barrio conocido de Madrid cuelga
+ * de su distrito (Goya → Salamanca › Goya), los paréntesis pasan a municipio
+ * y el ruido se descarta.
+ */
+function tidy(zoneRaw: string, subRaw: string | null): { zone: string; sub: string | null } | null {
+  const z0 = splitParen(zoneRaw.trim());
+  let zone = z0.zone;
+  let sub = subRaw?.trim() || z0.sub;
+  if (NOISE.test(zone)) return null;
+  const nz = normalizeZone(zone);
+  if (nz.district !== OTHER_ZONE_LABEL) {
+    if (nz.barrio) sub = sub ?? nz.barrio;
+    zone = nz.district;
+  }
+  if (sub) {
+    const ns = normalizeZone(sub);
+    if (ns.barrio) sub = ns.barrio;
+    // Variantes compuestas ("Chueca-Justicia") y ruido no se ofrecen como barrio.
+    else if (NOISE.test(sub) || /[-–]/.test(sub)) sub = null;
+    if (sub && fold(sub) === fold(zone)) sub = null;
+  }
+  return { zone, sub };
+}
+
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 async function readAll(table: "properties" | "captaciones", country: string): Promise<Row[]> {
@@ -62,14 +98,11 @@ async function readParticulares(): Promise<(Row & { n: number })[]> {
     if (res.error || !Array.isArray(res.data)) break;
     for (const r of res.data) {
       if (!r.is_active || !r.zone) continue;
-      const nz = normalizeZone(r.zone);
       const muni = (r.municipality as string | null)?.trim() || null;
-      // "Madrid"/"Madrid Capital" no es una zona útil: una zona de la capital
-      // que no es distrito ni barrio conocido va como zona por sí sola.
+      // "Madrid"/"Madrid Capital" no es una zona útil: la zona va por sí sola.
       const generic = !muni || /^madrid( capital)?$/i.test(muni);
-      const parent = nz.district !== OTHER_ZONE_LABEL ? nz.district : generic ? String(r.zone).trim() : muni;
-      if (!parent) continue;
-      out.push({ zone: parent, subzone: parent === r.zone ? null : r.zone, n: Number(r.total) });
+      const z = String(r.zone).trim();
+      out.push({ zone: generic ? z : muni, subzone: generic ? null : z, n: Number(r.total) });
     }
     if (res.data.length < 1000) break;
   }
@@ -91,13 +124,15 @@ export async function loadZoneCatalog(country: "es" | "cl"): Promise<ZoneCatalog
   const count = new Map<string, number>();
   const subs = new Map<string, Map<string, string>>();
   for (const r of rows) {
-    const zone = r.zone?.trim();
-    if (!zone) continue;
+    if (!r.zone?.trim()) continue;
+    const t = tidy(r.zone, r.subzone);
+    if (!t) continue;
+    const zone = t.zone;
     const zk = fold(zone);
     if (!canon.has(zk)) canon.set(zk, zone);
     count.set(zk, (count.get(zk) ?? 0) + (r.n ?? 1));
-    const sub = r.subzone?.trim();
-    if (sub && fold(sub) !== zk) {
+    const sub = t.sub;
+    if (sub) {
       const m = subs.get(zk) ?? new Map<string, string>();
       if (!m.has(fold(sub))) m.set(fold(sub), sub);
       subs.set(zk, m);

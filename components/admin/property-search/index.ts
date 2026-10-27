@@ -6,3 +6,4 @@ export { MoreFiltersToggle } from "./more-filters-toggle";
 export { ActiveChips, type FilterChip } from "./active-chips";
 export { TagFilterMenu } from "@/components/admin/property-tags/tag-menus";
 export * from "./options";
+export { ZoneFilterMenu } from "./zone-filter-menu";

@@ -35,6 +35,7 @@ import {
   bedroomsChipLabel,
   type FilterChip,
   FilterSelect,
+  ZoneFilterMenu,
   FLOOR_OPTIONS,
   MoreFiltersToggle,
   OPERATION_OPTIONS,
@@ -192,6 +193,11 @@ function PropertiesAdminList({
       Array.from(new Set(properties.map((p) => p.zone))).filter(Boolean).sort(),
     [properties],
   );
+  const zoneCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of properties) if (p.zone) m.set(p.zone, (m.get(p.zone) ?? 0) + 1);
+    return [...m].map(([name, count]) => ({ name, count }));
+  }, [properties]);
   // Subzonas disponibles dentro del distrito seleccionado.
   const subzoneOptions = useMemo(
     () =>
@@ -722,17 +728,13 @@ function PropertiesAdminList({
           onChange={(v) => setStatusFilter(v as typeof statusFilter)}
           options={ADMIN_STATUS_OPTIONS}
         />
-        <FilterSelect
-          label="Distrito"
+        <ZoneFilterMenu
+          zones={zoneCounts}
           value={zoneFilter}
           onChange={(v) => {
             setZoneFilter(v);
             setSubzoneFilter(""); // al cambiar de distrito, reiniciar subzona
           }}
-          options={[
-            { value: "", label: "Todos" },
-            ...zoneOptions.map((z) => ({ value: z, label: z })),
-          ]}
         />
         <FilterSelect
           label="Agencia"

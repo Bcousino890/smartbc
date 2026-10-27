@@ -18,6 +18,7 @@
 
 import { ATICO_FLOOR, floorLabel, resolveFloor } from "../floor";
 import { isPointInAnyPolygon } from "../zone-polygon";
+import { MADRID_DISTRICTS, normalizeZone } from "../madrid-zones";
 import {
   FEATURES,
   FEATURE_LABEL,
@@ -283,7 +284,13 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
   // La zona dibujada en el mapa manda sobre los nombres cuando la propiedad
   // tiene ubicación. Sin coordenadas no se descarta por el dibujo (no saberlo
   // no es decir que no): se compara por nombre y se avisa.
-  const wanted = [...brief.zones, ...brief.subzones].map(fold);
+  // Un distrito de Madrid vale por todos sus barrios: las fichas guardan "Goya"
+  // como zona o como subzona, y quien marcó "Salamanca" también quiere Goya.
+  const wanted = [
+    ...brief.zones,
+    ...brief.subzones,
+    ...brief.zones.flatMap((z) => MADRID_DISTRICTS[normalizeZone(z).district] ?? []),
+  ].map(fold);
   const polygons = brief.polygons ?? [];
   const lat = p.latitude === null || p.latitude === undefined ? NaN : Number(p.latitude);
   const lng = p.longitude === null || p.longitude === undefined ? NaN : Number(p.longitude);
