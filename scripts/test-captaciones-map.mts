@@ -14,7 +14,7 @@ import {
   polygonsAreaKm2,
   removeVertex,
 } from "../lib/geo/zone-geometry.ts";
-import { classifyPin, computeFunnel, type MapPin } from "../lib/captaciones-map/pins.ts";
+import { classifyPin, computeFunnel, rowToMapPin, type MapPin } from "../lib/captaciones-map/pins.ts";
 import type { ZonePolygon } from "../lib/zone-polygon.ts";
 
 let failed = 0;
@@ -147,6 +147,47 @@ test("computeFunnel sin cliente: priceOk = inZone, matches 0", () => {
   assert.equal(f.priceOk, 2);
   assert.equal(f.matches, 0);
   assert.equal(f.avgPrice, 800);
+});
+
+const baseRow = () => ({
+  id: "x1", latitude: 40.4, longitude: -3.7, price: 1200, operation: "rent",
+  bedrooms: 2, square_meters: 70, title: "Piso", address: "Calle A", zone: "Centro",
+  cover_url: null, portal: "idealista", source_url: "https://x", detected_at: new Date().toISOString(),
+  advertiser_type: "professional", price_drop_pct: null,
+  phone: "600", owner_name: "Ana", description: "texto",
+});
+
+test("rowToMapPin: fila completa, isNew e isAgency, sin datos de contacto", () => {
+  const p = rowToMapPin(baseRow());
+  assert.ok(p);
+  assert.equal(p.isNew, true);
+  assert.equal(p.isAgency, true);
+  assert.equal(p.lat, 40.4);
+  for (const k of Object.keys(p)) assert.ok(!["phone", "owner_name", "description"].includes(k));
+});
+
+test("rowToMapPin: antiguo y particular", () => {
+  const p = rowToMapPin({ ...baseRow(), detected_at: "2020-01-01T00:00:00Z", advertiser_type: "particular" });
+  assert.ok(p);
+  assert.equal(p.isNew, false);
+  assert.equal(p.isAgency, false);
+});
+
+test("rowToMapPin: sin coordenadas, precio 0 o no finito -> null", () => {
+  assert.equal(rowToMapPin({ ...baseRow(), latitude: null }), null);
+  assert.equal(rowToMapPin({ ...baseRow(), longitude: "abc" }), null);
+  assert.equal(rowToMapPin({ ...baseRow(), price: 0 }), null);
+  assert.equal(rowToMapPin({ ...baseRow(), price: NaN }), null);
+  assert.equal(rowToMapPin({ ...baseRow(), price: null }), null);
+});
+
+test("rowToMapPin: título de respaldo y numéricos como cadena", () => {
+  const p = rowToMapPin({ ...baseRow(), title: null, price: "950", latitude: "40.5", price_drop_pct: "5" });
+  assert.ok(p);
+  assert.equal(p.title, "Calle A, Centro");
+  assert.equal(p.price, 950);
+  assert.equal(p.lat, 40.5);
+  assert.equal(p.priceDropPct, 5);
 });
 
 if (failed) process.exit(1);

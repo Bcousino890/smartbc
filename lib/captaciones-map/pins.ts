@@ -83,3 +83,51 @@ export function computeFunnel(
     withoutLocation: opts.withoutLocation,
   };
 }
+
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function str(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v : null;
+}
+
+/**
+ * Convierte una fila de `particulares` en pin. Devuelve null si faltan
+ * coordenadas finitas o un precio finito > 0 (un NaN envenenaría el precio
+ * medio del embudo). Nunca copia teléfono, propietario ni descripción.
+ */
+export function rowToMapPin(row: Record<string, unknown>): MapPin | null {
+  const lat = num(row.latitude);
+  const lng = num(row.longitude);
+  const price = num(row.price);
+  if (lat === null || lng === null || price === null || price <= 0) return null;
+  if (typeof row.id !== "string" && typeof row.id !== "number") return null;
+
+  const address = str(row.address);
+  const zone = str(row.zone);
+  const title = str(row.title) ?? ([address, zone].filter(Boolean).join(", ") || "Anuncio");
+  const detected = typeof row.detected_at === "string" ? Date.parse(row.detected_at) : NaN;
+  const isNew = Number.isFinite(detected) && Date.now() - detected < 24 * 3600 * 1000;
+
+  return {
+    id: String(row.id),
+    lat,
+    lng,
+    price,
+    operation: row.operation === "sale" ? "sale" : "rent",
+    bedrooms: num(row.bedrooms),
+    squareMeters: num(row.square_meters),
+    title,
+    address,
+    zone,
+    coverUrl: str(row.cover_url),
+    portal: str(row.portal),
+    sourceUrl: str(row.source_url),
+    isNew,
+    isAgency: row.advertiser_type === "professional",
+    priceDropPct: num(row.price_drop_pct),
+  };
+}
