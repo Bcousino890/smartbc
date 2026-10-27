@@ -285,6 +285,12 @@ function applyParticularesSort(query: any, sort: ParticularesSort | undefined, s
 const okAgencyKey = (k: string) => k.length > 0 && k.length <= 120 && !/["\\]/.test(k);
 /** Valor dentro de `not.in.(…)`: entre comillas porque puede llevar comas, paréntesis o espacios. */
 const quoteKey = (k: string) => `"${k}"`;
+/**
+ * Anuncios de la propia agencia (Benjamín Cousiño Propiedades) fuera del listado:
+ * no son captaciones de particulares. `owner_name` guarda el nombre del anunciante.
+ * El NULL (particulares) se deja pasar a propósito, como en `agency_key`.
+ */
+const EXCLUYE_PROPIAS = "owner_name.is.null,owner_name.not.ilike.*cousi*";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyParticularesFilters(
@@ -474,6 +480,7 @@ export async function getParticularesPage(opts?: {
       // Búsqueda de texto: mira en TODOS los estados (activos primero, luego retirados).
       if (!anyState) query = query.eq("is_active", !showRetired);
       query = applyParticularesFilters(query, opts.filters ?? {}, cols.includes("address"), cols.includes("duplicate_of"));
+      query = query.or(EXCLUYE_PROPIAS);
       if (anyState) query = query.order("is_active", { ascending: false });
       query = applyParticularesSort(query, opts.filters?.sort, showRetired && !anyState);
       // try/catch, no solo `res.error`: un `.in("id", idsInZone)` con miles
@@ -519,7 +526,7 @@ export async function getParticularesPage(opts?: {
     // de filas por request de PostgREST).
     const hideDup = cols.includes("duplicate_of");
     const actives = await fetchAllRows((from, to) => {
-      const q = supabase.from("particulares").select(cols).eq("is_active", true);
+      const q = supabase.from("particulares").select(cols).eq("is_active", true).or(EXCLUYE_PROPIAS);
       return (hideDup ? q.is("duplicate_of", null) : q)
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -535,7 +542,7 @@ export async function getParticularesPage(opts?: {
     // RETIRADOS (mismas columnas): también todos, sin límite, para que el
     // tab "Retirados" del cliente muestre todo lo que hay en la BD.
     const retired = await fetchAllRows((from, to) => {
-      const q = supabase.from("particulares").select(cols).eq("is_active", false);
+      const q = supabase.from("particulares").select(cols).eq("is_active", false).or(EXCLUYE_PROPIAS);
       return (hideDup ? q.is("duplicate_of", null) : q)
         .order("taken_down_at", { ascending: false, nullsFirst: false })
         .range(from, to);
@@ -719,7 +726,7 @@ async function computeParticularesStats(): Promise<ParticularesStats> {
       if (v.advertiser) q = q.eq("advertiser_type", "particular");
       if (v.links) q = q.is("duplicate_of", null);
       // Los anuncios fuera de zona (ya no se rastrean) no cuentan en la cabecera.
-      q = q.or(NOT_FUERA_DE_ZONA);
+      q = q.or(NOT_FUERA_DE_ZONA).or(EXCLUYE_PROPIAS);
       return build(q);
     };
     last = await Promise.all([
@@ -901,6 +908,7 @@ const getZoneCountRows = unstable_cache(
       fetchAllRows((from, to) => {
         let q = supabase.from("particulares").select("zone, is_active, phone, portal, municipality:scraper_extra->>municipality");
         if (!includeOutOfZone) q = q.or(NOT_FUERA_DE_ZONA);
+        q = q.or(EXCLUYE_PROPIAS);
         if (withAdvertiser && advertiser === "unknown") {
           q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
         } else if (withAdvertiser && advertiser) {
@@ -953,6 +961,7 @@ export async function getParticularesIdsInPolygons(
         .from("particulares")
         .select("id, latitude, longitude")
         .eq("is_active", !showRetired)
+        .or(EXCLUYE_PROPIAS)
         .not("latitude", "is", null)
         .not("longitude", "is", null)
         .range(from, to),
