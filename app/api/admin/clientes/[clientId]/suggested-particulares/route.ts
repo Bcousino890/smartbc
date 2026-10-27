@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * teléfono del propietario y no son para cualquier rol.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ clientId: string }> },
 ) {
   try {
@@ -38,7 +38,12 @@ export async function GET(
       return NextResponse.json({ ok: true, suggestions: [], total: 0, excluded: [], reason: "not_available" });
     }
 
-    const result = await getSuggestedParticulares(clientId);
+    // La ficha del cliente enseña las 12 mejores (por defecto). El mapa de
+    // captaciones necesita la puntuación de TODOS los candidatos de la zona
+    // para pintar los pines: pide `?limit=` (con tope en el techo de candidatos).
+    const rawLimit = Number(req.nextUrl.searchParams.get("limit"));
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 1000) : undefined;
+    const result = await getSuggestedParticulares(clientId, limit ? { limit } : undefined);
 
     if (!result.ok) {
       if (result.reason === "insufficient_brief") {
