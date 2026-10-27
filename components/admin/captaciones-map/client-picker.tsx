@@ -43,15 +43,17 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState<ClientRow[]>([]);
   const [status, setStatus] = useState<Status>("idle");
-  const [active, setActive] = useState(0);
+  // -1 = ninguna opción resaltada: así Enter no actúa por sorpresa (ni quita el cliente).
+  const [active, setActive] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Opciones navegables: «Quitar cliente» primero (si hay uno elegido) y luego los resultados.
+  // Opciones navegables: primero los resultados y «Quitar cliente» al final, para que
+  // Enter tras teclear caiga en el primer resultado y no en quitar el cliente.
   const options: { id: string; kind: "clear" | "client"; row?: ClientRow }[] = [
-    ...(value ? [{ id: CLEAR_ID, kind: "clear" as const }] : []),
     ...rows.map((row) => ({ id: row.id, kind: "client" as const, row })),
+    ...(value ? [{ id: CLEAR_ID, kind: "clear" as const }] : []),
   ];
   const optId = (i: number) => `${uid}-opt-${i}`;
 
@@ -65,7 +67,11 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
   useEffect(() => {
     if (!open) return;
     const ctrl = new AbortController();
+    // Las filas de la consulta anterior ya no valen: se vacían y se quita el resaltado
+    // para que Enter/clic no elijan una fila obsoleta durante el debounce y la carga.
     setStatus("loading");
+    setRows([]);
+    setActive(-1);
     const t = window.setTimeout(async () => {
       try {
         const res = await fetch(`/api/admin/clientes/search?q=${encodeURIComponent(query.trim())}`, {
@@ -74,7 +80,7 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
         if (!res.ok) throw new Error(String(res.status));
         const json = (await res.json()) as { data?: ClientRow[] };
         setRows(Array.isArray(json.data) ? json.data : []);
-        setActive(0);
+        setActive(Array.isArray(json.data) && json.data.length ? 0 : -1);
         setStatus("ok");
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
@@ -105,6 +111,8 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
   const choose = (i: number) => {
     const o = options[i];
     if (!o) return;
+    // Solo se elige con la lista al día; «Quitar cliente» sí se puede pulsar siempre.
+    if (o.kind === "client" && status !== "ok") return;
     if (o.kind === "clear") onChange(null);
     else if (o.row) onChange({ id: o.row.id, name: displayName(o.row) });
     close(true);
@@ -114,12 +122,18 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
     if (e.key === "ArrowDown") {
       e.preventDefault();
       if (options.length) setActive((a) => (a + 1) % options.length);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      if (options.length) setActive(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      if (options.length) setActive(options.length - 1);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (options.length) setActive((a) => (a - 1 + options.length) % options.length);
+      if (options.length) setActive((a) => (a < 0 ? options.length - 1 : (a - 1 + options.length) % options.length));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      choose(active);
+      if (active >= 0 && status !== "loading") choose(active);
     } else if (e.key === "Escape") {
       e.preventDefault();
       close(true);
@@ -133,6 +147,10 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
     <div
       ref={rootRef}
       className={`cpk ${theme === "dark" ? "cpk-dark" : ""} ${className ?? ""}`}
+      // Tab (o clic fuera con foco) que saca el foco del selector cierra el desplegable.
+      onBlur={(e) => {
+        if (open && !rootRef.current?.contains(e.relatedTarget as Node | null)) close(false);
+      }}
     >
       <button
         ref={triggerRef}
@@ -162,7 +180,7 @@ export default function ClientPicker({ value, onChange, subtitle, className, the
               aria-expanded="true"
               aria-controls={listId}
               aria-autocomplete="list"
-              aria-activedescendant={options.length ? optId(active) : undefined}
+              aria-activedescendant={active >= 0 && options[active] ? optId(active) : undefined}
               aria-label="Buscar cliente por nombre o email"
               placeholder="Buscar por nombre o email"
               autoComplete="off"
