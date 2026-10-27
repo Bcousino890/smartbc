@@ -15,7 +15,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import L from "leaflet";
 import type { ZonePolygon, ZonePolygonPoint } from "@/lib/zone-polygon";
+import { isValidZoneRing } from "@/lib/geo/zone-geometry";
 import {
+  MAX_POLYGONS,
   MIN_RADIUS_M,
   initialEditorState,
   zoneEditorReducer,
@@ -24,6 +26,9 @@ import {
 } from "@/lib/captaciones-map/zone-editor-reducer";
 
 export type { EditorTool, EditorState };
+
+/** Por qué el editor no ha aceptado un gesto (para avisar en la interfaz). */
+export type ZoneRejectReason = "invalid" | "max";
 
 const GOLD = "#c9a96e";
 const GOLD_STROKE = "#b8954f";
@@ -40,6 +45,13 @@ export function useZoneEditor(
   map: L.Map | null,
   initial: ZonePolygon[],
   onChange: (p: ZonePolygon[]) => void,
+  /**
+   * Opcional (no cambia el contrato de quien ya lo usa): avisa cuando un gesto
+   * se descarta en silencio — cerrar una zona que se cruza consigo misma o
+   * pasar de MAX_POLYGONS —, porque el reductor devuelve el mismo estado y
+   * desde fuera no se nota nada.
+   */
+  opts?: { onReject?: (reason: ZoneRejectReason) => void },
 ): {
   state: EditorState;
   setTool: (t: EditorTool) => void;
@@ -57,6 +69,8 @@ export function useZoneEditor(
   // Siempre el callback vigente: los cierres de Leaflet viven más que el render.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onRejectRef = useRef(opts?.onReject);
+  onRejectRef.current = opts?.onReject;
 
   // Cursor del ratón en modo dibujo (para que la vista previa sobreviva a un redibujado).
   const cursorRef = useRef<L.LatLng | null>(null);
@@ -113,9 +127,22 @@ export function useZoneEditor(
       const onClick = (e: L.LeafletMouseEvent) => {
         // El 2º clic de un doble clic no es un vértice nuevo.
         if ((e.originalEvent as MouseEvent).detail >= 2) return;
+        // Ya hay el máximo de zonas: se avisa en el primer clic, no al cerrar.
+        if (stateRef.current.polygons.length >= MAX_POLYGONS && stateRef.current.draft.length === 0) {
+          onRejectRef.current?.("max");
+          return;
+        }
         dispatch({ type: "addDraftPoint", point: [e.latlng.lng, e.latlng.lat] });
       };
-      const onDbl = () => dispatch({ type: "closeDraft" });
+      const onDbl = () => {
+        const s = stateRef.current;
+        // Mismas condiciones que el reductor (closeDraft), solo para avisar.
+        if (s.draft.length >= 3) {
+          if (s.polygons.length >= MAX_POLYGONS) onRejectRef.current?.("max");
+          else if (!isValidZoneRing(s.draft)) onRejectRef.current?.("invalid");
+        }
+        dispatch({ type: "closeDraft" });
+      };
       const onMove = (e: L.LeafletMouseEvent) => {
         cursorRef.current = e.latlng;
         const line = previewRef.current;
@@ -172,6 +199,10 @@ export function useZoneEditor(
         if (ev.button !== 0 || gesture) return;
         const t = ev.target as HTMLElement;
         if (t.closest(".leaflet-marker-icon, .leaflet-control, .cm-toolbar")) return;
+        if (stateRef.current.polygons.length >= MAX_POLYGONS) {
+          onRejectRef.current?.("max");
+          return;
+        }
         map.dragging.disable();
         const center = map.mouseEventToLatLng(ev);
         const circle = L.circle(center, {

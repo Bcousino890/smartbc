@@ -59,8 +59,23 @@ export default function CaptacionesMap(props: CaptacionesMapProps) {
       zoomAnimation: !reduceMotion,
       markerZoomAnimation: !reduceMotion,
       fadeAnimation: !reduceMotion,
+      // El zoom por defecto (arriba a la izquierda) quedaba debajo de la barra
+      // de herramientas: se recoloca abajo a la derecha.
+      zoomControl: false,
     });
     mapRef.current = map;
+    L.control.zoom({ position: "bottomright", zoomInTitle: "Acercar", zoomOutTitle: "Alejar" }).addTo(map);
+
+    // Abrir/cerrar paneles o pasar a móvil cambia el tamaño del contenedor sin
+    // que Leaflet se entere: quedarían teselas grises y clics desplazados.
+    let resizeRaf = 0;
+    const ro = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => {
+          cancelAnimationFrame(resizeRaf);
+          resizeRaf = requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+        })
+      : null;
+    ro?.observe(el);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
@@ -112,6 +127,8 @@ export default function CaptacionesMap(props: CaptacionesMapProps) {
     emitBounds();
 
     return () => {
+      ro?.disconnect();
+      cancelAnimationFrame(resizeRaf);
       if (timer) clearTimeout(timer);
       syncRef.current = () => {};
       entries.clear();
@@ -248,6 +265,11 @@ const CSS = `
 .cm-veil{background:rgba(239,233,221,.30)}
 .cm-theme-dark .cm-veil{background:rgba(201,169,110,.10)}
 .cm-map .leaflet-control-attribution{font-size:10px}
+.cm-map .leaflet-control-zoom{border:1px solid rgba(255,255,255,.7);border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(40,30,10,.16)}
+.cm-map .leaflet-control-zoom a{background:rgba(255,255,255,.86);color:#0a0a0a;border-bottom-color:#e8e0d0}
+.cm-map .leaflet-control-zoom a:focus-visible{outline:2px solid #c9a96e;outline-offset:-2px}
+.cm-theme-dark .cm-map .leaflet-control-zoom{border-color:rgba(255,255,255,.09)}
+.cm-theme-dark .cm-map .leaflet-control-zoom a{background:rgba(24,22,19,.82);color:#f3eee6;border-bottom-color:rgba(255,255,255,.09)}
 .cm-theme-dark .cm-map .leaflet-control-attribution{background:rgba(21,19,15,.7);color:#a39b8f}
 .cm-theme-dark .cm-map .leaflet-control-attribution a{color:#c9a96e}
 
