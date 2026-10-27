@@ -14,6 +14,7 @@ import {
   polygonsAreaKm2,
   removeVertex,
 } from "../lib/geo/zone-geometry.ts";
+import { classifyPin, computeFunnel, type MapPin } from "../lib/captaciones-map/pins.ts";
 import type { ZonePolygon } from "../lib/zone-polygon.ts";
 
 let failed = 0;
@@ -89,6 +90,63 @@ test("polygonBounds", () => {
     maxLng: -3.69,
     maxLat: 40.41,
   });
+});
+
+test("classifyPin", () => {
+  assert.equal(classifyPin({ inZone: false, score: 95 }), "out");
+  assert.equal(classifyPin({ inZone: true, score: 80 }), "match");
+  assert.equal(classifyPin({ inZone: true, score: 79 }), "partial");
+  assert.equal(classifyPin({ inZone: true, score: 60 }), "partial");
+  assert.equal(classifyPin({ inZone: true, score: 59 }), "nomatch");
+  assert.equal(classifyPin({ inZone: true, score: null }), "partial");
+});
+
+function mkPin(id: string, price: number, over: Partial<MapPin> = {}): MapPin {
+  return {
+    id, lat: 40.4, lng: -3.7, price, operation: "rent", bedrooms: null,
+    squareMeters: null, title: id, address: null, zone: null, coverUrl: null,
+    portal: null, sourceUrl: null, isNew: false, isAgency: false,
+    priceDropPct: null, ...over,
+  };
+}
+
+test("computeFunnel con cliente", () => {
+  const pins = [
+    mkPin("a", 800, { isNew: true }),
+    mkPin("b", 1000),
+    mkPin("c", 1500),
+    mkPin("d", 500),
+    mkPin("e", 600, { isNew: true }),
+  ];
+  const f = computeFunnel(
+    pins,
+    new Set(["a", "b", "c"]),
+    new Map([["a", 90], ["b", 70]]),
+    { maxPrice: 1000, operation: "rent", withoutLocation: 4 },
+  );
+  assert.deepEqual(f, {
+    inZone: 3, priceOk: 2, matches: 1, newIn24h: 1, avgPrice: 1100, withoutLocation: 4,
+  });
+});
+
+test("computeFunnel sin zona", () => {
+  const f = computeFunnel([mkPin("a", 800)], new Set(), new Map(), {
+    maxPrice: 1000, operation: "rent", withoutLocation: 0,
+  });
+  assert.deepEqual(f, {
+    inZone: 0, priceOk: 0, matches: 0, newIn24h: 0, avgPrice: null, withoutLocation: 0,
+  });
+});
+
+test("computeFunnel sin cliente: priceOk = inZone, matches 0", () => {
+  const pins = [mkPin("a", 800), mkPin("b", 5000, { operation: "sale" })];
+  const f = computeFunnel(pins, new Set(["a", "b"]), new Map(), {
+    maxPrice: null, operation: null, withoutLocation: 0,
+  });
+  assert.equal(f.inZone, 2);
+  assert.equal(f.priceOk, 2);
+  assert.equal(f.matches, 0);
+  assert.equal(f.avgPrice, 800);
 });
 
 if (failed) process.exit(1);
