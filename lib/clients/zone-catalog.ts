@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/db/admin";
-import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
+import { MADRID_DISTRICT_NAMES, normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 
 /**
  * Catálogo de zonas del CRM para el encargo del cliente: las zonas y barrios
@@ -14,6 +14,16 @@ export type ZoneCatalog = {
   zones: string[];
   /** Barrios (subzona) que aparecen bajo cada zona. */
   subzones: Record<string, string[]>;
+  /** Para el selector en árbol: zona → barrios, con nº de fichas. */
+  groups: ZoneCatalogGroup[];
+};
+
+export type ZoneCatalogGroup = {
+  name: string;
+  total: number;
+  /** true = distrito de Madrid capital; false = municipio u otra zona. */
+  isMadrid: boolean;
+  subs: { name: string; total: number }[];
 };
 
 const PAGE = 1000;
@@ -123,6 +133,7 @@ export async function loadZoneCatalog(country: "es" | "cl"): Promise<ZoneCatalog
   const canon = new Map<string, string>();
   const count = new Map<string, number>();
   const subs = new Map<string, Map<string, string>>();
+  const subCount = new Map<string, number>();
   for (const r of rows) {
     if (!r.zone?.trim()) continue;
     const t = tidy(r.zone, r.subzone);
@@ -136,11 +147,20 @@ export async function loadZoneCatalog(country: "es" | "cl"): Promise<ZoneCatalog
       const m = subs.get(zk) ?? new Map<string, string>();
       if (!m.has(fold(sub))) m.set(fold(sub), sub);
       subs.set(zk, m);
+      subCount.set(`${zk}|${fold(sub)}`, (subCount.get(`${zk}|${fold(sub)}`) ?? 0) + (r.n ?? 1));
     }
   }
 
   const keys = [...canon.keys()].sort((a, b) => (count.get(b)! - count.get(a)!) || a.localeCompare(b));
+  const groups: ZoneCatalogGroup[] = keys.map((k) => {
+    const name = canon.get(k)!;
+    const list = [...(subs.get(k)?.entries() ?? [])]
+      .map(([fk, sname]) => ({ name: sname, total: subCount.get(`${k}|${fk}`) ?? 0 }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "es"));
+    return { name, total: count.get(k)!, isMadrid: MADRID_DISTRICT_NAMES.some((d) => fold(d) === k), subs: list };
+  });
   const value: ZoneCatalog = {
+    groups,
     zones: keys.map((k) => canon.get(k)!),
     subzones: Object.fromEntries(
       keys.filter((k) => subs.has(k)).map((k) => [canon.get(k)!, [...subs.get(k)!.values()].sort((a, b) => a.localeCompare(b, "es"))]),

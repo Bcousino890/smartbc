@@ -17,10 +17,11 @@
 // Controlado: el estado vive en el diálogo que lo usa.
 // ============================================================================
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { ZoneFilter, type ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import { AreaPicker } from "./area-picker";
-import { AlertTriangle, Check, ChevronDown, Plus, Search, Star, X } from "lucide-react";
+import { AlertTriangle, Check, Plus, Star, X } from "lucide-react";
 import {
   briefGaps,
   briefSuggestMissing,
@@ -632,16 +633,14 @@ function FeaturePicker({
 }
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-const SUGGESTED = 14;
-const PAGE_SIZE = 24;
-const SUBS_SHOWN = 12;
 
 /**
  * Zonas y barrios, de las ubicaciones reales del CRM (propiedades, captaciones
- * y particulares). Arriba, un buscador; debajo lo elegido (siempre a la vista,
- * una sola vez) y las zonas más habituales; al marcar una zona, sus barrios en
- * una tarjeta plegable. El match busca cada nombre en la zona Y en el barrio de
- * la ficha.
+ * y particulares), con el mismo selector en árbol que el filtro de
+ * particulares: distrito con casilla, barrios desplegables, buscador y
+ * recuento de fichas. Una zona marcada sin barrios vale por toda la zona; con
+ * barrios, solo esos. El match busca cada nombre en la zona Y en el barrio de
+ * la ficha. Lo que no está en el catálogo se añade como texto libre.
  */
 function ZonePicker({
   country,
@@ -654,253 +653,132 @@ function ZonePicker({
   subzones: string[];
   onChange: (zones: string[], subzones: string[]) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [showAll, setShowAll] = useState(false);
-  const [listQuery, setListQuery] = useState("");
-  const [pages, setPages] = useState(1);
-  const [openSubs, setOpenSubs] = useState<Record<string, boolean>>({});
+  const [free, setFree] = useState("");
   const catalog = useZoneCatalog(country);
-  const SUBS: Record<string, string[]> = catalog.subzones;
-  const all: readonly string[] = catalog.zones;
+  const hasCounts = catalog.groups.some((g) => g.total > 0);
 
-  const isOn = (z: string) => zones.some((x) => fold(x) === fold(z));
-  const suggestions = all.filter((z) => !isOn(z));
-  // "Ver todas": A–Z, con su propio filtro y de 24 en 24 para no tener 300 chips de golpe.
-  const lq = fold(listQuery.trim());
-  const listed = showAll
-    ? suggestions
-        .filter((z) => !lq || fold(z).includes(lq))
-        .sort((a, b) => a.localeCompare(b, "es"))
-    : [];
-  const shown = showAll ? listed.slice(0, pages * PAGE_SIZE) : suggestions.slice(0, SUGGESTED);
+  const groups: ZoneFilterGroup[] = useMemo(
+    () =>
+      catalog.groups.map((g) => ({
+        district: g.name,
+        total: g.total,
+        missingPhone: 0,
+        isMadrid: g.isMadrid,
+        zones: g.subs.map((sb) => ({ name: sb.name, total: sb.total, missingPhone: 0 })),
+      })),
+    [catalog],
+  );
+  const byName = useMemo(() => new Map(groups.map((g) => [fold(g.district), g])), [groups]);
 
-  // Resultados del buscador: zonas y barrios del catálogo que contienen el texto.
-  const q = fold(query.trim());
-  const results: { name: string; zone: string | null; hint: string | null }[] = [];
-  if (q) {
-    for (const z of all) {
-      if (fold(z).includes(q) && !isOn(z)) results.push({ name: z, zone: z, hint: null });
+  // Brief → valor del árbol ("d:zona" = toda la zona; "z:barrio" = solo ese barrio).
+  const value = useMemo(() => {
+    const out: string[] = [];
+    for (const z of zones) {
+      const g = byName.get(fold(z));
+      if (!g) continue;
+      const picked = g.zones.filter((e) => subzones.some((s) => fold(s) === fold(e.name)));
+      if (picked.length === 0) out.push(`d:${g.district}`);
+      else for (const e of picked) out.push(`z:${e.name}`);
     }
-    for (const [z, subs] of Object.entries(SUBS)) {
-      for (const sb of subs) {
-        if (fold(sb).includes(q) && !subzones.includes(sb)) results.push({ name: sb, zone: z, hint: z });
+    return out.join("|");
+  }, [zones, subzones, byName]);
+
+  // Valor del árbol → brief. Lo que el árbol no conoce (texto libre) se conserva.
+  const onTree = (next: string) => {
+    const keys = next.split("|").filter(Boolean);
+    const nextZones: string[] = zones.filter((z) => !byName.has(fold(z)));
+    const nextSubs: string[] = subzones.filter(
+      (s) => !groups.some((g) => g.zones.some((e) => fold(e.name) === fold(s))),
+    );
+    for (const k of keys) {
+      if (k.startsWith("d:")) {
+        const name = k.slice(2);
+        if (!nextZones.includes(name)) nextZones.push(name);
+      } else {
+        const name = k.slice(2);
+        for (const g of groups.filter((x) => x.zones.some((e) => e.name === name))) {
+          if (!nextZones.includes(g.district)) nextZones.push(g.district);
+        }
+        if (!nextSubs.includes(name)) nextSubs.push(name);
       }
     }
-  }
-  const visible = results.slice(0, 8);
-
-  const toggleZone = (zone: string) => {
-    if (isOn(zone)) {
-      const next = zones.filter((z) => fold(z) !== fold(zone));
-      // Un barrio se va con su zona, salvo que también cuelgue de otra que sigue marcada.
-      const keep = new Set(next.flatMap((z) => SUBS[z] ?? []));
-      const own = new Set(SUBS[zone] ?? []);
-      onChange(next, subzones.filter((s) => !own.has(s) || keep.has(s)));
-    } else {
-      onChange([...zones, zone], subzones);
-    }
+    onChange(nextZones, nextSubs);
   };
 
-  const pick = (r: { name: string; zone: string | null }) => {
-    if (r.zone && r.zone !== r.name) {
-      // Es un barrio: se marca su zona y el barrio.
-      onChange(isOn(r.zone) ? zones : [...zones, r.zone], [...subzones, r.name]);
-    } else if (!isOn(r.name)) {
-      onChange([...zones, r.name], subzones);
-    }
-    setQuery("");
+  const removeZone = (zone: string) => {
+    const g = byName.get(fold(zone));
+    const own = new Set((g?.zones ?? []).map((e) => fold(e.name)));
+    onChange(
+      zones.filter((z) => fold(z) !== fold(zone)),
+      subzones.filter((s) => !own.has(fold(s))),
+    );
   };
 
   const addFree = () => {
-    const names = query
+    const names = free
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean)
-      .filter((x) => !isOn(x));
+      .filter((x) => !zones.some((z) => fold(z) === fold(x)));
     if (names.length) onChange([...zones, ...names], subzones);
-    setQuery("");
+    setFree("");
   };
 
-  const orphanSubs = subzones.filter((sb) => !zones.some((z) => (SUBS[z] ?? []).includes(sb)));
-  const withSubs = zones.filter((z) => (SUBS[z] ?? []).length > 0);
+  const orphanSubs = subzones.filter((sb) => !groups.some((g) => g.zones.some((e) => fold(e.name) === fold(sb))));
 
   return (
-    <div className="space-y-4">
-      {/* Buscador */}
-      <div className="relative">
-        <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink/35" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+    <div className="space-y-3">
+      <ZoneFilter
+        groups={groups}
+        value={value}
+        onChange={onTree}
+        unit="fichas"
+        phone={false}
+        counts={hasCounts}
+        emptyLabel="Elegir zonas y barrios…"
+        block
+      />
+
+      {(zones.length > 0 || orphanSubs.length > 0) && (
+        <div className="flex flex-wrap gap-1.5">
+          {zones.map((z) => {
+            const g = byName.get(fold(z));
+            const subs = (g?.zones ?? []).filter((e) => subzones.some((s) => fold(s) === fold(e.name)));
+            return (
+              <RemovableChip
+                key={`z-${z}`}
+                label={subs.length ? `${g!.district} · ${subs.map((e) => e.name).join(", ")}` : z}
+                onRemove={() => removeZone(z)}
+              />
+            );
+          })}
+          {orphanSubs.map((sb) => (
+            <RemovableChip key={`s-${sb}`} label={sb} onRemove={() => onChange(zones, subzones.filter((x) => x !== sb))} />
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <TextInput
+          value={free}
+          onChange={(e) => setFree(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              if (visible[0]) pick(visible[0]);
-              else addFree();
+              addFree();
             }
-            if (e.key === "Escape") setQuery("");
           }}
-          placeholder={country === "es" ? "Buscar zona o barrio: Goya, Pozuelo, La Moraleja…" : "Buscar zona…"}
-          className="h-10 w-full rounded-lg border border-ink/12 bg-white ps-9 pe-3 text-sm text-ink placeholder:text-ink/35 focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/15"
+          placeholder="¿Una zona que no está en la lista? Escríbela y pulsa Añadir"
         />
-        {q && (
-          <div className="absolute inset-x-0 top-[calc(100%+4px)] z-20 overflow-hidden rounded-lg border border-ink/12 bg-white shadow-lg">
-            {visible.map((r) => (
-              <button
-                key={`${r.zone}-${r.name}`}
-                type="button"
-                onClick={() => pick(r)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-start text-sm text-ink/80 transition hover:bg-cream-100"
-              >
-                <span>{r.name}</span>
-                <span className="text-xs text-ink/40">{r.hint ? `barrio de ${r.hint}` : "zona"}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={addFree}
-              className="flex w-full items-center gap-2 border-t border-ink/8 px-3 py-2 text-start text-xs text-ink/55 transition hover:bg-cream-100"
-            >
-              <Plus size={12} /> Añadir «{query.trim()}» tal cual
-            </button>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={addFree}
+          disabled={!free.trim()}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-ink/15 bg-white px-3 text-xs text-ink/70 transition hover:border-gold/50 hover:text-ink disabled:opacity-40"
+        >
+          <Plus size={12} /> Añadir
+        </button>
       </div>
-
-      {/* Elegidas */}
-      {(zones.length > 0 || orphanSubs.length > 0) && (
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-ink/45">
-            Elegidas · {zones.length + orphanSubs.length}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {zones.map((z) => (
-              <RemovableChip key={`z-${z}`} label={z} onRemove={() => toggleZone(z)} />
-            ))}
-            {orphanSubs.map((sb) => (
-              <RemovableChip key={`s-${sb}`} label={sb} onRemove={() => onChange(zones, subzones.filter((x) => x !== sb))} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Habituales */}
-      {suggestions.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-ink/45">
-            {showAll ? `Todas las zonas · ${listed.length} (A–Z)` : zones.length ? "Añadir más" : "Zonas habituales"}
-          </p>
-          {showAll && (
-            <input
-              value={listQuery}
-              onChange={(e) => {
-                setListQuery(e.target.value);
-                setPages(1);
-              }}
-              placeholder="Filtrar esta lista…"
-              className="h-8 w-full rounded-md border border-ink/10 bg-white px-2.5 text-xs text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-            />
-          )}
-          <div className="flex flex-wrap gap-1.5">
-            {shown.map((z) => (
-              <button
-                key={z}
-                type="button"
-                onClick={() => toggleZone(z)}
-                className="inline-flex items-center gap-1 rounded-full border border-ink/12 bg-white px-2.5 py-1 text-xs text-ink/65 transition hover:border-ink/35 hover:text-ink"
-              >
-                <Plus size={10} className="text-ink/35" />
-                {z}
-              </button>
-            ))}
-            {showAll && listed.length === 0 && <span className="text-xs text-ink/45">Ninguna zona coincide.</span>}
-            {showAll && listed.length > shown.length && (
-              <button
-                type="button"
-                onClick={() => setPages((p) => p + 1)}
-                className="rounded-full px-2.5 py-1 text-xs font-medium text-gold-dark transition hover:bg-gold/10"
-              >
-                Mostrar {Math.min(PAGE_SIZE, listed.length - shown.length)} más · quedan {listed.length - shown.length}
-              </button>
-            )}
-            {suggestions.length > SUGGESTED && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAll((v) => !v);
-                  setPages(1);
-                  setListQuery("");
-                }}
-                className="rounded-full px-2.5 py-1 text-xs font-medium text-gold-dark transition hover:bg-gold/10"
-              >
-                {showAll ? "Ver menos" : `Ver todas (${suggestions.length})`}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Barrios */}
-      {withSubs.length > 0 && (
-        <div className="divide-y divide-ink/8 overflow-hidden rounded-lg border border-ink/10 bg-cream-50/60">
-          <p className="px-3 py-2 text-xs text-ink/50">Barrios (opcional — sin marcar, vale toda la zona)</p>
-          {withSubs.map((z) => {
-            const subs = SUBS[z] ?? [];
-            const picked = subs.filter((sb) => subzones.includes(sb)).length;
-            const open = openSubs[z] ?? withSubs.length === 1;
-            const list = open ? subs : subs.slice(0, SUBS_SHOWN);
-            return (
-              <div key={z} className="px-3 py-2.5">
-                <button
-                  type="button"
-                  onClick={() => setOpenSubs((o) => ({ ...o, [z]: !open }))}
-                  className="flex w-full items-center justify-between gap-2 text-start"
-                >
-                  <span className="text-sm font-medium text-ink/80">
-                    {z}
-                    <span className="ms-2 text-xs font-normal text-ink/40">
-                      {picked > 0 ? `${picked} de ${subs.length}` : `${subs.length} barrios`}
-                    </span>
-                  </span>
-                  {subs.length > SUBS_SHOWN && (
-                    <ChevronDown size={14} className={cn("text-ink/40 transition", open && "rotate-180")} />
-                  )}
-                </button>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {list.map((sb) => {
-                    const active = subzones.includes(sb);
-                    return (
-                      <button
-                        key={sb}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => onChange(zones, active ? subzones.filter((x) => x !== sb) : [...subzones, sb])}
-                        className={cn(
-                          "rounded-full border px-2.5 py-0.5 text-xs transition",
-                          active
-                            ? "border-gold/60 bg-gold/20 text-ink"
-                            : "border-ink/10 bg-white text-ink/55 hover:border-ink/25 hover:text-ink/80",
-                        )}
-                      >
-                        {sb}
-                      </button>
-                    );
-                  })}
-                  {!open && subs.length > SUBS_SHOWN && (
-                    <button
-                      type="button"
-                      onClick={() => setOpenSubs((o) => ({ ...o, [z]: true }))}
-                      className="rounded-full px-2 py-0.5 text-xs font-medium text-gold-dark hover:bg-gold/10"
-                    >
-                      +{subs.length - SUBS_SHOWN} más
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

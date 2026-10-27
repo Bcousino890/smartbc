@@ -30,6 +30,16 @@ interface ZoneFilterProps {
   /** "" | varias entradas "d:<distrito>" / "z:<zona>" separadas por "|". */
   value: string;
   onChange: (value: string) => void;
+  /** Lo que cuenta cada número ("anuncios" en particulares, "fichas" en el encargo). */
+  unit?: string;
+  /** false = sin «sin teléfono» ni su atajo (fuera de particulares no aplica). */
+  phone?: boolean;
+  /** false = sin números (cuando no hay recuentos que mostrar). */
+  counts?: boolean;
+  /** Texto del botón cuando no hay nada elegido. */
+  emptyLabel?: string;
+  /** El botón ocupa todo el ancho (dentro de un formulario). */
+  block?: boolean;
 }
 
 type Row =
@@ -50,7 +60,16 @@ type Row =
  *
  * Mantiene el formato de valor "d:"/"z:" unidos por "|" que consume page.tsx.
  */
-export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
+export function ZoneFilter({
+  groups,
+  value,
+  onChange,
+  unit = "anuncios",
+  phone = true,
+  counts = true,
+  emptyLabel = "Zona: todas",
+  block = false,
+}: ZoneFilterProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
@@ -65,7 +84,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   const selected = useMemo(() => new Set(parseValue(value)), [value]);
   const searching = query.trim().length > 0;
 
-  const sorted = useMemo(() => sortByTotal(groups, (g) => g.district), [groups]);
+  const sorted = useMemo(() => counts ? sortByTotal(groups, (g) => g.district) : [...groups].sort((a, b) => a.district.localeCompare(b.district, "es")), [groups, counts]);
   const visible = useMemo(() => filterGroups(sorted, query, onlyMissing), [sorted, query, onlyMissing]);
   const madrid = useMemo(() => visible.filter(groupIsMadrid), [visible]);
   const munis = useMemo(() => visible.filter((g) => !groupIsMadrid(g)), [visible]);
@@ -112,10 +131,10 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   const totalSelected = selected.size;
   const label = useMemo(() => {
     const items = parseValue(value);
-    if (items.length === 0) return "Zona: todas";
+    if (items.length === 0) return emptyLabel;
     if (items.length === 1) return chipLabel(items[0]);
     return `${items.length} zonas`;
-  }, [value]);
+  }, [value, emptyLabel]);
 
   function commit(next: Set<string>) {
     onChange(serialize(next));
@@ -215,7 +234,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
         <div className="sticky top-0 z-10 flex items-center gap-3 bg-cream-50 px-3 pb-1.5 pt-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-ink/55">{title}</span>
           <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
-          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} anuncios</span>
+          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} {unit}</span>
         </div>
         <div className="px-1.5">
           {list.map((g) => {
@@ -268,7 +287,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                     <span className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-ink">
                       <Highlight text={flat ? g.district : `Todo ${g.district}`} query={query} />
                     </span>
-                    <Counts total={g.total} missing={g.missingPhone} />
+                    {counts && <Counts total={g.total} missing={phone ? g.missingPhone : 0} />}
                   </button>
                 </div>
                 {openG && (
@@ -299,7 +318,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                             <span className="min-w-0 flex-1 break-words text-sm leading-snug text-ink/80">
                               <Highlight text={r.zone.name} query={query} />
                             </span>
-                            <Counts total={r.zone.total} missing={r.zone.missingPhone} small />
+                            {counts && <Counts total={r.zone.total} missing={phone ? r.zone.missingPhone : 0} small />}
                           </button>
                         </div>
                       );
@@ -326,7 +345,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
         aria-haspopup="listbox"
         aria-expanded={open}
         title={nSel > 1 ? chipKeys.map(chipLabel).join(", ") : undefined}
-        className={`inline-flex h-10 max-w-[260px] shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium text-ink transition hover:border-ink/30 hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+        className={`inline-flex h-10 ${block ? "w-full" : "max-w-[260px] shrink-0"} items-center gap-2 rounded-xl border px-3.5 text-sm font-medium text-ink transition hover:border-ink/30 hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
           nSel > 0 ? "border-gold-dark bg-gold/20" : "border-ink/15 bg-white"
         }`}
       >
@@ -402,17 +421,21 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
               </div>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <Shortcut
-                  icon={<TrendingUp size={12} />}
-                  onClick={() => commit(new Set(topKeys(sorted, 5)))}
-                  label="Top 5 con más anuncios"
-                />
-                <Shortcut
-                  icon={<Phone size={12} />}
-                  pressed={onlyMissing}
-                  onClick={() => setOnlyMissing((v) => !v)}
-                  label="Solo sin teléfono"
-                />
+                {counts && (
+                  <Shortcut
+                    icon={<TrendingUp size={12} />}
+                    onClick={() => commit(new Set(topKeys(sorted, 5)))}
+                    label={`Top 5 con más ${unit}`}
+                  />
+                )}
+                {phone && (
+                  <Shortcut
+                    icon={<Phone size={12} />}
+                    pressed={onlyMissing}
+                    onClick={() => setOnlyMissing((v) => !v)}
+                    label="Solo sin teléfono"
+                  />
+                )}
               </div>
             </div>
 
