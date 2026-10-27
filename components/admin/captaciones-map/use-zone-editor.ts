@@ -12,7 +12,7 @@
  * interactivos, así que los pines siguen siendo pulsables; solo las asas
  * (vértices y puntos medios) tienen prioridad sobre ellos.
  */
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import L from "leaflet";
 import type { ZonePolygon, ZonePolygonPoint } from "@/lib/zone-polygon";
 import {
@@ -47,6 +47,11 @@ export function useZoneEditor(
   setPolygons: (p: ZonePolygon[]) => void;
 } {
   const [state, dispatch] = useReducer(zoneEditorReducer, initial, initialEditorState);
+  // Fuerza el redibujado al soltar un arrastre: si el reductor rechaza el
+  // movimiento (lazo) devuelve el mismo estado, React no re-renderiza y las
+  // capas se quedarían en la posición inválida.
+  const [bump, setBump] = useState(0);
+  const redraw = useCallback(() => setBump((b) => b + 1), []);
   const stateRef = useRef(state);
   stateRef.current = state;
   // Siempre el callback vigente: los cierres de Leaflet viven más que el render.
@@ -85,7 +90,7 @@ export function useZoneEditor(
     handles.style.zIndex = "650";
   }, [map]);
 
-  // --- Esc cancela el borrador (o un círculo a medias) mientras el editor está activo ---
+  // --- Esc cancela el borrador mientras el editor está activo (el círculo en curso se cancela al soltar fuera o cambiar de herramienta) ---
   useEffect(() => {
     if (!map) return;
     const onKey = (e: KeyboardEvent) => {
@@ -251,6 +256,7 @@ export function useZoneEditor(
           const ll = mid.getLatLng();
           dispatch({ type: "insertMidpoint", polygon: pi, index: i });
           dispatch({ type: "moveVertex", polygon: pi, index: i + 1, point: [ll.lng, ll.lat] });
+          redraw();
         });
         // Un clic sin arrastre inserta el vértice justo en el punto medio.
         mid.on("click", () => dispatch({ type: "insertMidpoint", polygon: pi, index: i }));
@@ -269,6 +275,7 @@ export function useZoneEditor(
         v.on("dragend", () => {
           const ll = v.getLatLng();
           dispatch({ type: "moveVertex", polygon: pi, index: i, point: [ll.lng, ll.lat] });
+          redraw();
         });
         v.on("dblclick", () => dispatch({ type: "removeVertex", polygon: pi, index: i }));
       });
@@ -292,7 +299,7 @@ export function useZoneEditor(
       previewRef.current = null;
       group.remove();
     };
-  }, [map, state.polygons, state.draft, state.tool]);
+  }, [map, state.polygons, state.draft, state.tool, bump, redraw]);
 
   return { state, setTool, clear, setPolygons };
 }
