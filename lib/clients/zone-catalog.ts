@@ -50,6 +50,12 @@ function splitParen(raw: string): { zone: string; sub: string | null } {
  * y el ruido se descarta.
  */
 function tidy(zoneRaw: string, subRaw: string | null): { zone: string; sub: string | null } | null {
+  // "Salamanca Barrio Goya" → Goya (el barrio manda; si no se reconoce, el distrito).
+  const bm = zoneRaw.trim().match(/^(.+?)\s+barrio\s+(?:de\s+)?(.+)$/i);
+  if (bm) {
+    const hit = normalizeZone(bm[2]).district !== OTHER_ZONE_LABEL ? bm[2] : normalizeZone(bm[1]).district !== OTHER_ZONE_LABEL ? bm[1] : null;
+    if (hit) zoneRaw = hit;
+  }
   const z0 = splitParen(zoneRaw.trim());
   let zone = z0.zone;
   let sub = subRaw?.trim() || z0.sub;
@@ -152,7 +158,10 @@ export async function loadZoneCatalog(country: "es" | "cl"): Promise<ZoneCatalog
   }
 
   const keys = [...canon.keys()].sort((a, b) => (count.get(b)! - count.get(a)!) || a.localeCompare(b));
-  const groups: ZoneCatalogGroup[] = keys.map((k) => {
+  const groups: ZoneCatalogGroup[] = keys
+    // Una zona con una sola ficha y sin barrios que no es de Madrid capital es casi siempre una grafía suelta.
+    .filter((k) => (count.get(k) ?? 0) > 1 || subs.has(k) || MADRID_DISTRICT_NAMES.some((d) => fold(d) === k))
+    .map((k) => {
     const name = canon.get(k)!;
     const list = [...(subs.get(k)?.entries() ?? [])]
       .map(([fk, sname]) => ({ name: sname, total: subCount.get(`${k}|${fk}`) ?? 0 }))

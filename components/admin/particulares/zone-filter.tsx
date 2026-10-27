@@ -40,6 +40,8 @@ interface ZoneFilterProps {
   emptyLabel?: string;
   /** El botón ocupa todo el ancho (dentro de un formulario). */
   block?: boolean;
+  /** Texto del botón cuando hay selección (por defecto «N zonas»); el formulario lo cuenta a su manera. */
+  summary?: string;
 }
 
 type Row =
@@ -69,6 +71,7 @@ export function ZoneFilter({
   counts = true,
   emptyLabel = "Zona: todas",
   block = false,
+  summary,
 }: ZoneFilterProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -132,9 +135,10 @@ export function ZoneFilter({
   const label = useMemo(() => {
     const items = parseValue(value);
     if (items.length === 0) return emptyLabel;
+    if (summary) return summary;
     if (items.length === 1) return chipLabel(items[0]);
     return `${items.length} zonas`;
-  }, [value, emptyLabel]);
+  }, [value, emptyLabel, summary]);
 
   function commit(next: Set<string>) {
     onChange(serialize(next));
@@ -234,7 +238,7 @@ export function ZoneFilter({
         <div className="sticky top-0 z-10 flex items-center gap-3 bg-cream-50 px-3 pb-1.5 pt-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-ink/55">{title}</span>
           <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
-          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} {unit}</span>
+          <span className="text-xs tabular-nums text-ink/40">{total.toLocaleString("es-ES")} {total === 1 ? unit.slice(0, -1) : unit}</span>
         </div>
         <div className="px-1.5">
           {list.map((g) => {
@@ -354,7 +358,7 @@ export function ZoneFilter({
         <ChevronDown
           size={14}
           strokeWidth={1.75}
-          className={`ml-0.5 shrink-0 text-ink/45 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink/45 transition-transform duration-200 ${block ? "ml-auto" : "ml-0.5"} ${open ? "rotate-180" : ""}`}
         />
       </button>
 

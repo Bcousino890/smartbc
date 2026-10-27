@@ -654,6 +654,7 @@ function ZonePicker({
   onChange: (zones: string[], subzones: string[]) => void;
 }) {
   const [free, setFree] = useState("");
+  const [freeOpen, setFreeOpen] = useState(false);
   const catalog = useZoneCatalog(country);
   const hasCounts = catalog.groups.some((g) => g.total > 0);
 
@@ -722,6 +723,7 @@ function ZonePicker({
       .filter((x) => !zones.some((z) => fold(z) === fold(x)));
     if (names.length) onChange([...zones, ...names], subzones);
     setFree("");
+    setFreeOpen(false);
   };
 
   const orphanSubs = subzones.filter((sb) => !groups.some((g) => g.zones.some((e) => fold(e.name) === fold(sb))));
@@ -736,6 +738,7 @@ function ZonePicker({
         phone={false}
         counts={hasCounts}
         emptyLabel="Elegir zonas y barrios…"
+        summary={`${zones.length} ${zones.length === 1 ? "zona" : "zonas"}${subzones.length ? ` · ${subzones.length} ${subzones.length === 1 ? "barrio" : "barrios"}` : ""}`}
         block
       />
 
@@ -758,27 +761,39 @@ function ZonePicker({
         </div>
       )}
 
-      <div className="flex gap-2">
-        <TextInput
-          value={free}
-          onChange={(e) => setFree(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addFree();
-            }
-          }}
-          placeholder="¿Una zona que no está en la lista? Escríbela y pulsa Añadir"
-        />
+      {freeOpen ? (
+        <div className="flex gap-2">
+          <TextInput
+            autoFocus
+            value={free}
+            onChange={(e) => setFree(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addFree();
+              }
+              if (e.key === "Escape") setFreeOpen(false);
+            }}
+            placeholder="Nombre de la zona (varias, separadas por comas)"
+          />
+          <button
+            type="button"
+            onClick={addFree}
+            disabled={!free.trim()}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-ink/15 bg-white px-3 text-xs text-ink/70 transition hover:border-gold/50 hover:text-ink disabled:opacity-40"
+          >
+            <Plus size={12} /> Añadir
+          </button>
+        </div>
+      ) : (
         <button
           type="button"
-          onClick={addFree}
-          disabled={!free.trim()}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-ink/15 bg-white px-3 text-xs text-ink/70 transition hover:border-gold/50 hover:text-ink disabled:opacity-40"
+          onClick={() => setFreeOpen(true)}
+          className="text-xs text-ink/50 underline-offset-2 transition hover:text-ink hover:underline"
         >
-          <Plus size={12} /> Añadir
+          ¿No está en la lista? Añadir una zona a mano
         </button>
-      </div>
+      )}
     </div>
   );
 }
