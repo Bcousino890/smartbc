@@ -450,7 +450,7 @@ export function ZoneFilter({
 
             {nSel > 0 && (
               <div className="mx-4 mt-3 rounded-xl border border-gold/30 bg-gold/10 px-2.5 py-2">
-                <ul className="flex max-h-[4.5rem] flex-wrap gap-1.5 overflow-y-auto" aria-label="Zonas seleccionadas">
+                <ul className="flex max-h-[5.25rem] flex-wrap gap-1.5 overflow-y-auto" aria-label="Zonas seleccionadas">
                   {chipKeys.map((k) => (
                     <li key={k} className="max-w-full">
                       <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-ink/10 bg-white py-0.5 pl-2.5 pr-1 text-xs font-medium text-ink shadow-sm">
