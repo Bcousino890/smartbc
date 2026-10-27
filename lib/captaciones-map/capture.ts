@@ -104,3 +104,17 @@ export function validateClientAndPinIds(
 export function zoneSaveRejected(inputCount: number, cleanedCount: number): boolean {
   return inputCount > 0 && cleanedCount === 0;
 }
+
+/**
+ * Los anuncios de particulares son solo de España: captar o guardar zona para
+ * un cliente de otro país no tiene sentido. Se decide con el perfil LEÍDO DE
+ * LA BASE (nunca con lo que mande el navegador), con la misma regla que la
+ * ruta de sugerencias: rol `client` y país vacío o «es».
+ */
+export function clientCountryError(
+  profile: { role?: unknown; country?: unknown } | null | undefined,
+): string | null {
+  if (!profile || profile.role !== "client") return "Cliente no válido.";
+  if (profile.country && profile.country !== "es") return "Este cliente no es de España";
+  return null;
+}

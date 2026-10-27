@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { getParticularesMapPinsByIds } from "@/lib/db/queries/particulares-map";
 import {
+  clientCountryError,
   normalizeUuid,
   toPortalLinkInputs,
   validateClientAndPinIds,
@@ -31,6 +32,21 @@ import { addPortalLinks } from "../clientes/portal-links-actions";
 const MAX_PINS = 300;
 /** Trozos para `.in()`: con 300 claves largas la URL de PostgREST se pasaría de ~8 KB. */
 const KEYS_CHUNK = 50;
+
+/**
+ * ¿Es un cliente de España? Lee rol y país del perfil en la base (nunca del
+ * navegador). Va DESPUÉS de los gates de permiso y alcance, para no decir
+ * nada de un cliente al que el usuario no tiene acceso, y ANTES de escribir.
+ * No se exporta: un fichero "use server" solo puede exportar funciones async
+ * que sean acciones, y esta no debe poder llamarse desde el navegador.
+ */
+async function spanishClientError(clientId: string): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+  const { data, error } = await db.from("profiles").select("role, country").eq("id", clientId).maybeSingle();
+  if (error) return "No se pudo comprobar el cliente. Inténtalo de nuevo.";
+  return clientCountryError(data);
+}
 
 /**
  * Capta en lote: añade los anuncios elegidos a la ficha del cliente.
@@ -59,6 +75,16 @@ export async function captureForClient(
 
   const perm = await checkPermission("particulares", "view");
   if (!perm.ok) return { ok: false, error: perm.error };
+  // Mismo gate que addPortalLinks (permiso + alcance sobre el cliente), aquí
+  // ANTES de mirar su país: sin acceso no se revela nada del cliente.
+  const linksPerm = await checkPermission("viewing_collections", "create");
+  if (!linksPerm.ok) return { ok: false, error: linksPerm.error };
+  // addPortalLinks usa "view" para create (create no tiene alcance propio).
+  if (!(await canAccessClientLinks(clientId, "view"))) {
+    return { ok: false, error: "No tienes acceso a este cliente." };
+  }
+  const countryErr = await spanishClientError(clientId);
+  if (countryErr) return { ok: false, error: countryErr };
 
   let pins;
   try {
@@ -122,6 +148,8 @@ export async function saveClientZone(
   if (!(await canActOnClient(clientId, "clientes", "edit"))) {
     return { ok: false, error: "No tienes acceso a este cliente." };
   }
+  const countryErr = await spanishClientError(clientId);
+  if (countryErr) return { ok: false, error: countryErr };
 
   const cleaned = cleanPolygons(polygons);
   // Llegaron polígonos pero ninguno es válido: guardar [] borraría la zona que

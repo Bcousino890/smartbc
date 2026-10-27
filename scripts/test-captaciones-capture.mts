@@ -5,7 +5,7 @@
  *   PATH=/opt/node22-standalone/bin:$PATH node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-capture.mts
  */
 import assert from "node:assert/strict";
-import { normalizeUuid, toPortalLinkInputs, validateClientAndPinIds, zoneSaveRejected } from "../lib/captaciones-map/capture.ts";
+import { clientCountryError, normalizeUuid, toPortalLinkInputs, validateClientAndPinIds, zoneSaveRejected } from "../lib/captaciones-map/capture.ts";
 import type { MapPin } from "../lib/captaciones-map/pins.ts";
 
 let failed = 0;
@@ -132,6 +132,14 @@ test("zoneSaveRejected: polígonos que no sobreviven a la limpieza no borran la 
   assert.equal(zoneSaveRejected(2, 0), true);
   assert.equal(zoneSaveRejected(0, 0), false);
   assert.equal(zoneSaveRejected(2, 1), false);
+});
+
+test("clientCountryError: solo clientes de España (o sin país)", () => {
+  assert.equal(clientCountryError({ role: "client", country: "es" }), null);
+  assert.equal(clientCountryError({ role: "client", country: null }), null);
+  assert.equal(clientCountryError({ role: "client", country: "cl" }), "Este cliente no es de España");
+  assert.equal(clientCountryError({ role: "advisor", country: "es" }), "Cliente no válido.");
+  assert.equal(clientCountryError(null), "Cliente no válido.");
 });
 
 if (failed) process.exit(1);
