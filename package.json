@@ -57,6 +57,7 @@
     "test:command-center": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-client-command-center.mts",
     "test:import-operation": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-import-operation.mts",
     "test:client-brief": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-client-brief.mts",
+    "test:captaciones-map": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-captaciones-map.mts",
     "test:lead-merge": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-lead-merge.mts",
     "test:sales-inbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-sales-inbox.mts",
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
