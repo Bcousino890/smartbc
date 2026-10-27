@@ -15,6 +15,7 @@ import {
   removeVertex,
 } from "../lib/geo/zone-geometry.ts";
 import { classifyPin, computeFunnel, capPins, rowToMapPin, type MapPin } from "../lib/captaciones-map/pins.ts";
+import { formatPinPrice, formatThousandsEs, pinAriaLabel } from "../lib/captaciones-map/pin-label.ts";
 import type { ZonePolygon } from "../lib/zone-polygon.ts";
 
 let failed = 0;
@@ -196,6 +197,21 @@ test("capPins: bajo el tope no trunca; sobre el tope recorta y marca", () => {
   const r = capPins(pins, 2);
   assert.equal(r.truncated, true);
   assert.deepEqual(r.pins.map((p) => p.id), ["a", "b"]);
+});
+
+test("formatPinPrice: alquiler con punto de miles (también 4 cifras) y venta en k", () => {
+  assert.equal(formatThousandsEs(1350), "1.350");
+  assert.equal(formatPinPrice(1350, "rent"), "1.350€");
+  assert.equal(formatPinPrice(950, "rent"), "950€");
+  assert.equal(formatPinPrice(12500, "rent"), "12.500€");
+  assert.equal(formatPinPrice(915000, "sale"), "915k€");
+  assert.equal(formatPinPrice(1250000, "sale"), "1.3M€");
+});
+
+test("pinAriaLabel: precio · dormitorios · calle", () => {
+  const base = { price: 1350, operation: "rent" as const, bedrooms: 2, address: "Calle A 3", title: "T" };
+  assert.equal(pinAriaLabel(base), "1.350€ · 2 dorm. · Calle A 3");
+  assert.equal(pinAriaLabel({ ...base, bedrooms: null, address: null }), "1.350€ · T");
 });
 
 if (failed) process.exit(1);
