@@ -166,6 +166,12 @@ test("prompt: etiqueta <anuncio> anidada no sobrevive a la limpieza", () => {
   assert.equal((p.user.match(/<\/?anuncio/g) ?? []).length, 2);
 });
 
+test("prompt: exige copiar los criterios literalmente en satisfied/missing", () => {
+  const p = buildAiPrompt("q", [{ id: "id-1", text: "t" }]);
+  assert.match(p.system, /LITERALMENTE las cadenas exactas de "criteria"/);
+  assert.match(p.system, /descartada/);
+});
+
 test("validación: id no UUID → error", () => {
   const r = validateAiRequest({ query: "x", ids: ["abc"] });
   assert.deepEqual(r, { ok: false, error: "Identificadores no válidos" });
@@ -178,7 +184,8 @@ test("validación: 200 UUID válidos → ok", () => {
 });
 
 test("validación: mayúsculas se normalizan y deduplican", () => {
-  const up = U(1).replace(/[a-f]/g, (c) => c.toUpperCase()) + "";
+  const up = "ABCDEF01-2345-4ABC-8DEF-0123456789AB";
+  assert.match(up, /[A-F]/);
   const mixed = "AAAAAAAA-0000-4000-8000-00000000000B";
   const r = validateAiRequest({ query: "x", ids: [mixed, mixed.toLowerCase(), up] });
   assert.deepEqual(r.ok && r.ids, [mixed.toLowerCase(), up.toLowerCase()]);
