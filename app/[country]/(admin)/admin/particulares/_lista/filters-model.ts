@@ -292,7 +292,6 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   if (f.bedrooms) n++;
   if (f.areaMin || f.areaMax) n++;
   if (f.plotMin || f.plotMax) n++;
-  if (f.rentalKind) n++;
   if (f.exactLocation) n++;
   if (f.floorMin || f.floorMax) n++;
   if (f.furnished) n++;
