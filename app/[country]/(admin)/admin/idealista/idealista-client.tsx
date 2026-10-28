@@ -1124,7 +1124,7 @@ export function IdealistaClient({
                       )}
                       {publishResults[listing.id]?.local && (
                         <span
-                          className="max-w-[32rem] truncate rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+                          className="max-w-full truncate rounded-full bg-amber-100 sm:max-w-[32rem] px-2 py-0.5 text-xs font-medium text-amber-700"
                           title={publishResults[listing.id].local}
                         >
                           ⚠ Local (Idealista sí lo hizo): {publishResults[listing.id].local}

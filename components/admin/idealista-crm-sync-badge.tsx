@@ -107,7 +107,10 @@ export function IdealistaCrmSyncBadge({
       break;
     case "failed":
       tone = "bg-red-100 text-red-600";
-      label = `CRM: falló${state.lastError ? ` — ${state.lastError}` : ""}`;
+      label =
+        state.lastErrorCode === "tag_missing"
+          ? "CRM: falta la etiqueta «RESERVADO» de este país — no se ha creado nada; créala y reintenta"
+          : `CRM: falló${state.lastError ? ` — ${state.lastError}` : ""}`;
       actions.push(
         <button key="retry" className={button} disabled={busy} onClick={() => act({ action: "retry" })}>
           <RefreshCw size={11} /> Reintentar
@@ -204,8 +207,8 @@ export function IdealistaCrmSyncBadge({
   }
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5" data-crm-sync-status={state.status}>
-      <span className={`${base} ${tone} max-w-[32rem] truncate`} title={typeof label === "string" ? label : undefined}>
+    <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5" data-crm-sync-status={state.status}>
+      <span className={`${base} ${tone} min-w-0 max-w-full whitespace-normal break-words rounded-xl sm:max-w-[40rem]`} title={typeof label === "string" ? label : undefined}>
         {busy ? <Loader2 size={11} className="animate-spin" /> : null}
         {label}
       </span>
