@@ -270,9 +270,13 @@ CREATE TRIGGER trg_idealista_listings_delete_guard
   BEFORE DELETE ON idealista_listings
   FOR EACH ROW EXECUTE FUNCTION idealista_listings_delete_guard();
 
-CREATE OR REPLACE FUNCTION properties_delete_guard()
-RETURNS trigger
+-- ¿Tiene esta propiedad algún anuncio vivo o desconocido? (enlace explícito o
+-- asociación de la sincronización de 0233, si existe). La usa el trigger y la
+-- aplicación ANTES de cualquier efecto secundario del borrado.
+CREATE OR REPLACE FUNCTION idealista_property_ad_live(p_property uuid)
+RETURNS boolean
 LANGUAGE plpgsql
+STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
@@ -280,18 +284,27 @@ DECLARE
   v_live boolean;
 BEGIN
   SELECT bool_or(idealista_listing_ad_live(il.id)) INTO v_live
-    FROM idealista_listings il WHERE il.property_id = OLD.id;
+    FROM idealista_listings il WHERE il.property_id = p_property;
   IF coalesce(v_live, false) THEN
-    RAISE EXCEPTION 'idealista_ad_live' USING ERRCODE = 'P0001',
-      DETAIL = 'Esta propiedad tiene un anuncio de Idealista activo o en estado desconocido: no se puede borrar. Archívala.';
+    RETURN true;
   END IF;
   IF to_regclass('public.idealista_crm_sync') IS NOT NULL THEN
     EXECUTE 'SELECT bool_or(idealista_listing_ad_live(s.listing_id)) FROM idealista_crm_sync s WHERE s.property_id = $1'
-      INTO v_live USING OLD.id;
-    IF coalesce(v_live, false) THEN
-      RAISE EXCEPTION 'idealista_ad_live' USING ERRCODE = 'P0001',
-        DETAIL = 'Esta propiedad está asociada a un anuncio de Idealista activo o en estado desconocido: no se puede borrar. Archívala.';
-    END IF;
+      INTO v_live USING p_property;
+  END IF;
+  RETURN coalesce(v_live, false);
+END $$;
+
+CREATE OR REPLACE FUNCTION properties_delete_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF idealista_property_ad_live(OLD.id) THEN
+    RAISE EXCEPTION 'idealista_ad_live' USING ERRCODE = 'P0001',
+      DETAIL = 'Esta propiedad tiene (o está asociada a) un anuncio de Idealista activo o en estado desconocido: no se puede borrar. Archívala.';
   END IF;
   RETURN OLD;
 END $$;
@@ -302,5 +315,7 @@ CREATE TRIGGER trg_properties_delete_guard
 
 REVOKE ALL ON FUNCTION idealista_listing_ad_live(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION idealista_listing_ad_live(uuid) TO service_role;
+REVOKE ALL ON FUNCTION idealista_property_ad_live(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION idealista_property_ad_live(uuid) TO service_role;
 
 COMMIT;

@@ -103,10 +103,10 @@ export async function getPropertyBySlugPublic(slug: string) {
     try {
       const { data: media, error } = await (supabase as any)
         .from("property_media")
-        .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
+        .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url, position")
         .eq("property_id", row.id)
         .in("type", ["video", "plan"]);
-      return { ...row, property_media: error ? [] : (media ?? []) };
+      return { ...row, property_media: error ? [] : sortMediaByPosition(media ?? []) };
     } catch {
       return { ...row, property_media: [] };
     }
@@ -145,15 +145,34 @@ export async function getPropertyRowBySlugForAdmin(slug: string) {
   return data ?? null;
 }
 
+/**
+ * Orden de vídeos y planos: los que tienen `position` (0232: los que refleja la
+ * sincronización con Idealista) primero y en su orden; el resto detrás, tal
+ * como venían. Sin `position` en ninguna fila, el orden no cambia.
+ */
+export function sortMediaByPosition<T extends { position?: number | null }>(rows: T[]): T[] {
+  return rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => {
+      const pa = a.row.position ?? null;
+      const pb = b.row.position ?? null;
+      if (pa !== null && pb !== null) return pa - pb || a.i - b.i;
+      if (pa !== null) return -1;
+      if (pb !== null) return 1;
+      return a.i - b.i;
+    })
+    .map(({ row }) => row);
+}
+
 /** Vídeos y planos de una propiedad. Un error se ignora (lista vacía), como siempre. */
 export async function getPropertyMediaForAdmin(propertyId: string) {
   const supabase = await createClient();
   const { data: media } = await (supabase as any)
     .from("property_media")
-    .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
+    .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url, position")
     .eq("property_id", propertyId)
     .in("type", ["video", "plan"]);
-  return media ?? [];
+  return sortMediaByPosition(media ?? []);
 }
 
 /** Propiedad + `property_media`. La usan la story y el PDF; la ficha usa las dos piezas por separado. */

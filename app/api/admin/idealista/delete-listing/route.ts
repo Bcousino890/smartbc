@@ -49,6 +49,18 @@ export async function POST(req: Request) {
     }
 
     const { error } = await db.from("idealista_listings").delete().eq("id", id);
+    if (error && /idealista_ad_live/.test(error.message)) {
+      // D11 (0232): la ficha controla un anuncio vivo o desconocido en
+      // Idealista. No se borra: se archiva SOLO en el panel, como las publicadas.
+      const { error: archiveError } = await db
+        .from("idealista_listings")
+        .update({ idealista_state: "archived", archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (archiveError) return Response.json({ error: archiveError.message }, { status: 500 });
+      revalidatePath("/es/admin/idealista");
+      revalidatePath("/cl/admin/idealista");
+      return Response.json({ ok: true, archived: true, reason: "idealista_ad_live" });
+    }
     if (error) {
       console.error("Delete idealista listing error:", error);
       return Response.json({ error: error.message }, { status: 500 });

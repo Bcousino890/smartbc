@@ -300,7 +300,7 @@ export async function addShortlistProperty(
   // país del shortlist. Se comprueba en servidor: el id llega del navegador.
   const { data: prop } = await db()
     .from("properties")
-    .select("id, status, archived_at, country")
+    .select("id, status, archived_at, country, reference_only")
     .eq("id", propertyId)
     .maybeSingle();
 
@@ -308,6 +308,7 @@ export async function addShortlistProperty(
     !prop ||
     prop.archived_at ||
     prop.status !== "available" ||
+    prop.reference_only === true ||
     (prop.country && prop.country !== gate.country)
   ) {
     return { ok: false, error: "Esa residencia no está disponible." };
@@ -412,6 +413,7 @@ export async function searchShortlistProperties(
     .eq("country", shortlist.country)
     .eq("status", "available")
     .is("archived_at", null)
+    .not("reference_only", "is", true) // fichas de referencia de Idealista: solo SmartLink (0232)
     .or(`title.ilike.${like},bc_reference.ilike.${like},zone.ilike.${like}`)
     .limit(8);
 

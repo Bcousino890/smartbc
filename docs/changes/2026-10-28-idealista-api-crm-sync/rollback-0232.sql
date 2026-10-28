@@ -40,6 +40,7 @@ DROP TRIGGER IF EXISTS trg_properties_delete_guard ON properties;
 DROP TRIGGER IF EXISTS trg_idealista_listings_delete_guard ON idealista_listings;
 DROP TRIGGER IF EXISTS trg_properties_reference_only_guard ON properties;
 DROP FUNCTION IF EXISTS properties_delete_guard();
+DROP FUNCTION IF EXISTS idealista_property_ad_live(uuid);
 DROP FUNCTION IF EXISTS idealista_listings_delete_guard();
 DROP FUNCTION IF EXISTS idealista_listing_ad_live(uuid);
 DROP FUNCTION IF EXISTS properties_reference_only_guard();
