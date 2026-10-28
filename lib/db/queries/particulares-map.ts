@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "../admin";
 import { isPointInAnyPolygon, type ZonePolygon } from "@/lib/zone-polygon";
 import { capPins, rowToMapPin, type MapPin } from "@/lib/captaciones-map/pins";
+import { applyParticularesFilters, EXCLUYE_PROPIAS, type ParticularesFilters } from "./particulares";
 
 const MAX_PINS = 2000;
 const BATCH = 1000;
@@ -16,6 +17,12 @@ export type ParticularesMapArgs = {
   operation?: "rent" | "sale";
   advertiser?: "particular" | "all";
   showRetired?: boolean;
+  /**
+   * Los MISMOS filtros que la lista (lib/particulares/filters-from-params.ts): precio, dormitorios, zona,
+   * bajadas, búsqueda… Si viene, manda sobre `operation`/`advertiser` (ya van dentro). La zona dibujada no
+   * entra aquí: el mapa la recorta exacta en Node con `polygons`.
+   */
+  filters?: Omit<ParticularesFilters, "idsInZone">;
 };
 
 /**
@@ -28,11 +35,17 @@ export async function getParticularesMapPins(
 ): Promise<{ pins: MapPin[]; truncated: boolean; withoutLocation: number }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
-  const { bbox, polygons, operation, advertiser, showRetired } = args;
+  const { bbox, polygons, operation, advertiser, showRetired, filters } = args;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const applyCommon = (q: any) => {
     q = q.eq("is_active", !showRetired);
+    if (filters) {
+      // `hasLinks=false`: el mapa ya pide solo los principales (`duplicate_of is null`) y filtra la operación
+      // por la propia fila (el pin enseña SU precio, no el de una copia enlazada).
+      q = applyParticularesFilters(q, filters, true, false).or(EXCLUYE_PROPIAS);
+      return q;
+    }
     if (operation) q = q.eq("operation", operation);
     if (advertiser === "particular") q = q.eq("advertiser_type", "particular");
     return q;

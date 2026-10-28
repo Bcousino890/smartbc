@@ -75,6 +75,57 @@ function zoneSearchNames(names: string[]): string[] {
   return [...out];
 }
 
+/** Una fila de `particulares` contra el encargo: el mismo cruce para la lista y para un anuncio suelto. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function evaluateParticularRow(brief: ReturnType<typeof briefFromRow>, r: any) {
+  // `has_lift` es un booleano tri-estado: se traduce al texto que entiende el detector.
+  const features: string[] = [...(Array.isArray(r.attrs) ? r.attrs : [])];
+  if (r.has_lift === true) features.push("Ascensor");
+  if (r.has_lift === false) features.push("Sin ascensor");
+  if (r.condition) features.push(String(r.condition));
+  return evaluateMatch(brief, {
+    zone: r.zone ?? null,
+    subzone: null,
+    zoneAliases: placeAliases(r.zone ?? null, { municipality: r.municipality, district: r.portal_district }),
+    latitude: r.latitude,
+    longitude: r.longitude,
+    bedrooms: r.bedrooms ?? null,
+    bathrooms: r.bathrooms ?? null,
+    square_meters: r.square_meters ?? null,
+    price: r.price ?? 0,
+    operation: r.operation === "sale" ? "sale" : "rent",
+    title: r.title ?? null,
+    features,
+    floor_override: r.floor_num != null ? String(r.floor_num) : (r.floor ?? null),
+    photoCount: r.cover_url ? 3 : 0,
+  });
+}
+
+export type ParticularFit =
+  | { ok: true; fits: true; score: number; reasons: string[]; warnings: string[] }
+  | { ok: true; fits: false; why: string }
+  | { ok: false; reason: "no_preferences" | "not_found" | "error" };
+
+/**
+ * Cómo encaja UN anuncio con el encargo de un cliente, sin el prefiltrado por
+ * SQL de la lista (presupuesto, operación, zona): así se puede decir POR QUÉ no
+ * encaja («Fuera de presupuesto», «Otra operación»…) en vez de un 0 mudo.
+ */
+export async function evaluateParticularForClient(clientId: string, particularId: string): Promise<ParticularFit> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const [{ data: prefs, error: pe }, { data: row, error: re }] = await Promise.all([
+    supabase.from("client_preferences").select("*").eq("client_id", clientId).maybeSingle(),
+    supabase.from("particulares").select(COLUMNS).eq("id", particularId).maybeSingle(),
+  ]);
+  if (pe || re) return { ok: false, reason: "error" };
+  if (!prefs) return { ok: false, reason: "no_preferences" };
+  if (!row) return { ok: false, reason: "not_found" };
+  const outcome = evaluateParticularRow(briefFromRow(prefs), row);
+  if (outcome.excluded) return { ok: true, fits: false, why: exclusionLabel(outcome.reason) };
+  return { ok: true, fits: true, score: outcome.score, reasons: outcome.reasons, warnings: outcome.warnings };
+}
+
 /**
  * Anuncios de portales activos que encajan con el encargo. Mismo cruce
  * (`evaluateMatch`) que el catálogo propio, con dos matices propios de lo
@@ -158,27 +209,7 @@ export async function getSuggestedParticulares(
       excludedCounts.set("Posible fraude", (excludedCounts.get("Posible fraude") ?? 0) + 1);
       continue;
     }
-    // `has_lift` es un booleano tri-estado: se traduce al texto que entiende el detector.
-    const features: string[] = [...(Array.isArray(r.attrs) ? r.attrs : [])];
-    if (r.has_lift === true) features.push("Ascensor");
-    if (r.has_lift === false) features.push("Sin ascensor");
-    if (r.condition) features.push(String(r.condition));
-    const outcome = evaluateMatch(brief, {
-      zone: r.zone ?? null,
-      subzone: null,
-      zoneAliases: placeAliases(r.zone ?? null, { municipality: r.municipality, district: r.portal_district }),
-      latitude: r.latitude,
-      longitude: r.longitude,
-      bedrooms: r.bedrooms ?? null,
-      bathrooms: r.bathrooms ?? null,
-      square_meters: r.square_meters ?? null,
-      price: r.price ?? 0,
-      operation: r.operation === "sale" ? "sale" : "rent",
-      title: r.title ?? null,
-      features,
-      floor_override: r.floor_num != null ? String(r.floor_num) : (r.floor ?? null),
-      photoCount: r.cover_url ? 3 : 0,
-    });
+    const outcome = evaluateParticularRow(brief, r);
     if (outcome.excluded) {
       const label = exclusionLabel(outcome.reason);
       excludedCounts.set(label, (excludedCounts.get(label) ?? 0) + 1);

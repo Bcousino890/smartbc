@@ -290,10 +290,10 @@ const quoteKey = (k: string) => `"${k}"`;
  * no son captaciones de particulares. `owner_name` guarda el nombre del anunciante.
  * El NULL (particulares) se deja pasar a propósito, como en `agency_key`.
  */
-const EXCLUYE_PROPIAS = "owner_name.is.null,owner_name.not.ilike.*cousi*";
+export const EXCLUYE_PROPIAS = "owner_name.is.null,owner_name.not.ilike.*cousi*";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyParticularesFilters(
+export function applyParticularesFilters(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: any,
   f: ParticularesFilters,

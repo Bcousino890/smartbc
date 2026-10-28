@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { parsePortalUrl } from "./portals";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,6 +26,28 @@ export function crmParticularIdFromUrl(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * ¿Este enlace de un portal (Idealista, Fotocasa…) es de un anuncio que YA tenemos en Captaciones?
+ * Si sí, la ficha se monta con los datos de nuestra base y no hace falta volver a leer el portal
+ * (que es lo caro: proxy residencial, Relay, anti-bot…). Devuelve el id de la captación, o null.
+ *
+ * Se compara por la MISMA clave que deduplica los enlaces (`parsePortalUrl().urlKey`): con
+ * referencia en la ruta (Idealista, Fotocasa…) basta con buscar esa referencia en `source_url`.
+ */
+export async function particularIdForPortalUrl(rawUrl: string): Promise<string | null> {
+  const parsed = parsePortalUrl(rawUrl);
+  if (!parsed) return null;
+  const db = createAdminClient() as any;
+  let q = db.from("particulares").select("id, source_url").is("duplicate_of", null).limit(10);
+  q = parsed.externalRef ? q.ilike("source_url", `%${parsed.externalRef.replace(/[%_]/g, "")}%`) : q.eq("source_url", parsed.url);
+  const { data } = await q;
+  for (const row of (data ?? []) as Array<{ id: string; source_url: string | null }>) {
+    const key = row.source_url ? parsePortalUrl(row.source_url)?.urlKey : null;
+    if (key && key === parsed.urlKey) return row.id;
+  }
+  return null;
 }
 
 function normalizeSlug(raw: string): string {

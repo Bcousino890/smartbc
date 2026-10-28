@@ -73,6 +73,11 @@ export interface CaptacionesMapViewProps {
    */
   client?: PickedClient | null;
   onClientChange?: (c: PickedClient | null) => void;
+  /**
+   * Filtros de la lista tal como viajan en la URL (precio, dormitorios, zona, bajadas, búsqueda…), sin vista,
+   * cliente, zona dibujada ni página: el mapa los manda al servidor para enseñar lo mismo que la lista.
+   */
+  filterQuery?: string;
 }
 
 type ClientState =
@@ -107,6 +112,7 @@ export function CaptacionesMapView({
   onZoneChange,
   client: controlledClient,
   onClientChange,
+  filterQuery = "",
   onOpenFicha,
   actions = DEFAULT_ACTIONS,
 }: CaptacionesMapViewProps) {
@@ -209,9 +215,13 @@ export function CaptacionesMapView({
     // Cada cambio cancela la petición anterior: una respuesta lenta de una
     // zona vieja no puede pisar la de la zona actual.
     const ctrl = new AbortController();
-    const qs = new URLSearchParams({ bbox: bboxParam, advertiser: filters.advertiser });
+    const qs = new URLSearchParams(filterQuery);
+    qs.set("bbox", bboxParam);
+    // Sin `filterQuery` (uso suelto del mapa) siguen mandándose los dos filtros de siempre.
+    if (!qs.has("advertiser")) qs.set("advertiser", filters.advertiser);
     if (zoneParam) qs.set("zonePoly", zoneParam);
-    if (filters.operation) qs.set("operation", filters.operation);
+    else qs.delete("zonePoly");
+    if (filters.operation && !qs.has("operation")) qs.set("operation", filters.operation);
     setLoading(true);
     fetch(`/api/admin/particulares/map?${qs.toString()}`, { signal: ctrl.signal })
       .then(async (res) => {
@@ -232,7 +242,7 @@ export function CaptacionesMapView({
         setLoading(false);
       });
     return () => ctrl.abort();
-  }, [bboxParam, zoneParam, filters.operation, filters.advertiser, reloadTick]);
+  }, [bboxParam, zoneParam, filters.operation, filters.advertiser, filterQuery, reloadTick]);
 
   const pins = data.pins;
   const inZoneIds = useMemo(() => {
@@ -284,7 +294,7 @@ export function CaptacionesMapView({
     return () => ctrl.abort();
     // `map` no es dependencia: cambiar de mapa no debe volver a pedir el encargo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client]);
+  }, [client?.id]);
 
   const brief = clientState.status === "ok" || clientState.status === "insufficient" ? clientState.brief : null;
   const hasScores = clientState.status === "ok";
@@ -369,7 +379,7 @@ export function CaptacionesMapView({
     setConfirming(null);
     setConfirmZone(false);
     setZoneMsg(null);
-  }, [client]);
+  }, [client?.id]);
   useEffect(() => {
     if (!client || !canActForClient || checkIds.length === 0) return;
     const req = ++capturedReq.current;
@@ -547,6 +557,7 @@ export function CaptacionesMapView({
               : "Dibuja una zona, elige un cliente y capta lo que encaja"}
           </p>
         </div>
+        {controlledClient === undefined && (
         <ClientPicker
           value={client}
           onChange={(c) => {
@@ -561,6 +572,7 @@ export function CaptacionesMapView({
                 : brief?.summary || (clientState.status === "ok" ? "Encargo sin resumen" : undefined)
           }
         />
+        )}
       </header>
 
       {client && notSpain && (

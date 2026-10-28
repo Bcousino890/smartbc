@@ -125,6 +125,11 @@ type CardProps = {
   /** Encaje 0-100 con el encargo del cliente elegido; undefined = sin cliente o sin dato. */
   score?: number;
   onCopyPhone: (phone: string, id: string) => void;
+  /** Casilla para elegir varios anuncios y captarlos para un cliente. Sin `onToggleSelect` no se pinta. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  /** Dónde está ya este anuncio respecto a la ficha del cliente elegido. */
+  flow?: "pending" | "property" | "book";
 };
 
 const KIND_ICON_TONE: Record<SourceKind, string> = {
@@ -135,7 +140,13 @@ const KIND_ICON_TONE: Record<SourceKind, string> = {
   agencia_web_propia: "text-teal-700",
 };
 
-function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone, score }: CardProps) {
+const FLOW_BADGE = {
+  pending: { text: "En su lista", title: "Está en la lista para llamar de este cliente; su ficha propia se crea sola.", tone: "bg-white/95 text-ink" },
+  property: { text: "Ficha creada", title: "Ya es ficha nuestra y está en la selección del cliente.", tone: "bg-teal-700 text-white" },
+  book: { text: "En su book", title: "Está en el book de este cliente.", tone: "bg-emerald-700 text-white" },
+} as const;
+
+function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone, score, selected, onToggleSelect, flow }: CardProps) {
   const retired = !row.is_active;
   const cover = row.cover_url ?? row.photos?.[0]?.url ?? null;
   const op = opLabel(row);
@@ -244,8 +255,32 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
           </div>
 
           {/* Nuevo / Bajó de precio: lo que más pesa para captar, siempre sobre la foto. */}
-          {(fresh || drop != null || score != null) && (
+          {onToggleSelect && (
+            <label
+              title={selected ? "Quitar de la selección" : "Seleccionar para captar"}
+              className={cn(
+                "absolute bottom-2 right-2 z-[2] flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border shadow-sm transition",
+                selected ? "border-ink bg-ink text-cream-50" : "border-white/80 bg-white/90 text-transparent hover:text-ink/40",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={!!selected}
+                onChange={() => onToggleSelect(row.id)}
+                aria-label={`Seleccionar anuncio ${listingTitle({ title: row.title, address: row.address, zone: zoneLabel(row.zone), operation: row.operation })}`}
+                className="sr-only"
+              />
+              <Check size={16} strokeWidth={3} aria-hidden="true" />
+            </label>
+          )}
+
+          {(fresh || drop != null || score != null || flow) && (
             <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap items-center gap-1">
+              {flow && (
+                <span title={FLOW_BADGE[flow].title} className={cn("rounded-md px-2 py-1 text-xs font-bold leading-none shadow-sm", FLOW_BADGE[flow].tone)}>
+                  {FLOW_BADGE[flow].text}
+                </span>
+              )}
               {score != null && (
                 <span
                   title="Encaje con el encargo del cliente elegido"

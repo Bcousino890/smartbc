@@ -129,6 +129,8 @@ type FilterValues = {
   searchScoped: boolean;
   /** Vista elegida (no es un filtro: el servidor la ignora). */
   view: ViewMode;
+  /** Cliente para el que se capta (no es un filtro: el servidor lo ignora). Viaja en la URL para poder enlazar desde su ficha. */
+  clientId: string;
 };
 
 /** Separador de claves de agencia en la URL (las claves no llevan «|» ni «,»). */
@@ -182,6 +184,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   excludeAgencies: "sinAgencia",
   searchScoped: "soloFiltros",
   view: "vista",
+  clientId: "cliente",
 };
 
 const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
@@ -296,6 +299,10 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
   const [view, setView] = useState<ViewMode>(
     () => readEnum<ViewMode>(searchParams.get(PARAM_KEYS.view), VIEW_VALUES) || "grid",
   );
+  const [clientId, setClientId] = useState(() => {
+    const v = searchParams.get(PARAM_KEYS.clientId) ?? "";
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v.toLowerCase() : "";
+  });
   // Nombre a mostrar de cada clave de agencia (no viaja en la URL: lo da el servidor al cargar y el autocompletado al elegir).
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>(initialAgencyNames);
   const rememberAgency = useCallback((key: string, name: string) => setAgencyNames((p) => (p[key] === name ? p : { ...p, [key]: name })), []);
@@ -372,6 +379,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     excludeAgencies,
     searchScoped,
     view,
+    clientId,
   };
 
   const prevValuesRef = useRef(values);
@@ -410,10 +418,12 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
       // Solo cambió la vista (cuadrícula/lista/mapa): el servidor no la usa,
       // así que no hace falta pedirle la página otra vez. replaceState nativo
       // (Next lo integra con useSearchParams) solo actualiza la URL.
-      if (!hadPending && changedKeys.every((k) => k === "view")) {
+      if (!hadPending && changedKeys.every((k) => k === "view" || k === "clientId")) {
         const keep = new URLSearchParams(searchParamsRef.current.toString());
         if (values.view === URL_DEFAULTS.view) keep.delete(PARAM_KEYS.view);
         else keep.set(PARAM_KEYS.view, values.view);
+        if (values.clientId) keep.set(PARAM_KEYS.clientId, values.clientId);
+        else keep.delete(PARAM_KEYS.clientId);
         const s = keep.toString();
         window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
         return;
@@ -478,6 +488,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     excludeAgencies,
     searchScoped,
     view,
+    clientId,
   ]);
 
   useEffect(() => {
@@ -631,6 +642,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setSearchScoped,
     view,
     setView,
+    clientId,
+    setClientId,
     agencyNames,
     rememberAgency,
   };

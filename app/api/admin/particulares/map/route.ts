@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/guard";
 import { decodeZonePolygons } from "@/lib/zone-polygon";
 import { getParticularesMapPins } from "@/lib/db/queries/particulares-map";
+import { getParticularesZoneCounts } from "@/lib/db/queries/particulares";
+import { parseParticularesParams, resolveZoneNames } from "@/lib/particulares/filters-from-params";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +33,23 @@ export async function GET(req: NextRequest) {
     if (!bbox) {
       return NextResponse.json({ error: "bbox inválido (minLng,minLat,maxLng,maxLat)" }, { status: 400 });
     }
-    const op = sp.get("operation");
-    const operation = op === "rent" || op === "sale" ? op : undefined;
-    const advertiser = sp.get("advertiser") === "all" ? "all" : "particular";
     const polygons = decodeZonePolygons(sp.get("zonePoly"));
 
-    const result = await getParticularesMapPins({ bbox, polygons, operation, advertiser });
+    // Los filtros de la lista (precio, dormitorios, zona, bajadas, búsqueda…) viajan aquí con los mismos nombres
+    // que en la URL de la página y se leen con la misma función: el mapa enseña lo que enseñaría la lista.
+    const parsed = parseParticularesParams(Object.fromEntries(sp.entries()), gate.profile.id);
+    let zoneNames: string[] | undefined;
+    if (parsed.zoneSelections.length) {
+      const zc = await getParticularesZoneCounts(parsed.showRetired, parsed.advertiserFilter, parsed.showOutOfZone);
+      zoneNames = resolveZoneNames(parsed.zoneSelections, zc.zoneGroups);
+    }
+
+    const result = await getParticularesMapPins({
+      bbox,
+      polygons,
+      showRetired: parsed.showRetired,
+      filters: { ...parsed.filters, zoneNames },
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("Error in particulares map endpoint:", error);

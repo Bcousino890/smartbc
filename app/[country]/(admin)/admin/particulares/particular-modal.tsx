@@ -27,6 +27,8 @@ import { buildPhotoSources } from "./_ficha/photo-sources";
 import { useGroupLinks } from "./_ficha/use-group-links";
 import { HistoryTab } from "./_ficha/history-tab";
 import { SourcesTab } from "./_ficha/sources-tab";
+import { ClientFitCard } from "./_ficha/client-fit-card";
+import type { PickedClient } from "@/components/admin/captaciones-map/client-picker";
 import { consumeTabIntent } from "./_ficha/tab-intent";
 import { formatEuros, formatPct, formatZone, groupThousands, mapPrecision, portalName, pricePerM2, priceVariation, relativeTime, whatsappUrl, zoneForMap } from "./_ficha/format";
 import type { ParticularChangeRow, ParticularRow, StaffOption } from "./particulares-types";
@@ -751,6 +753,7 @@ export function ParticularModal({
   onActiveChanged,
   canCreateProperty = true,
   staffOptions = [],
+  clientFlow,
 }: {
   row: ParticularRow;
   onClose: () => void;
@@ -759,6 +762,13 @@ export function ParticularModal({
   onActiveChanged?: (active: boolean, takenDownAt: string | null) => void;
   canCreateProperty?: boolean;
   staffOptions?: StaffOption[];
+  /** Cliente para el que se capta (lo gobierna la página de Captaciones): activa la tarjeta «Para el encargo de…». */
+  clientFlow?: {
+    client: PickedClient | null;
+    onClientChange: (c: PickedClient | null) => void;
+    prefix: string;
+    onChanged?: () => void;
+  };
 }) {
   const router = useRouter();
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -991,6 +1001,16 @@ export function ParticularModal({
   </div>
   );
 
+  const clientCard = clientFlow && currentRow.is_active ? (
+    <ClientFitCard
+      particularId={currentRow.id}
+      client={clientFlow.client}
+      onClientChange={clientFlow.onClientChange}
+      prefix={clientFlow.prefix}
+      onChanged={clientFlow.onChanged}
+    />
+  ) : null;
+
   const contactCard = (
     <div className="rounded-xl border border-ink/10 bg-white p-4">
       <p className="mb-3 text-sm font-semibold text-ink">
@@ -1193,7 +1213,10 @@ export function ParticularModal({
                     .map((m) => <PropertyPhotosFromWeb key={m.id} slug={m.property.slug as string} onChanged={() => undefined} />)}
 
                 {/* Precio y dirección: en móvil bajo la foto; en escritorio, en la columna derecha */}
-                <div className="lg:hidden">{priceBlock}</div>
+                <div className="space-y-4 lg:hidden">
+                  {priceBlock}
+                  {clientCard}
+                </div>
 
                 {facts.length > 0 && (
                   <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
@@ -1334,6 +1357,7 @@ export function ParticularModal({
                   </div>
                 )}
                 <div className="hidden lg:block">{priceBlock}</div>
+                {clientCard && <div className="hidden lg:block">{clientCard}</div>}
                 {contactCard}
                 {assignCard}
                 {actions}

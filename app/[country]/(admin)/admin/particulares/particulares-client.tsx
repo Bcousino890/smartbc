@@ -18,8 +18,12 @@ export type { ParticularChangeRow, ParticularRow, StaffOption } from "./particul
 import { ParticularModal } from "./particular-modal";
 import { ParticularCard, type CardLayout } from "./_lista/particular-card";
 import { BAR_BUTTON, FOCUS_RING, SelectField, Segmented } from "./_lista/controls";
-import ClientPicker, { type PickedClient } from "@/components/admin/captaciones-map/client-picker";
+import { type PickedClient } from "@/components/admin/captaciones-map/client-picker";
 import { useClientScores } from "./use-client-scores";
+import { useClientContext, useFlowStates } from "./use-client-context";
+import { captureParticularesForClient } from "./client-flow-actions";
+import { ClientBar } from "./_lista/client-bar";
+import { SelectionBar } from "./_lista/selection-bar";
 import { FiltersPanel } from "./_lista/filters-panel";
 import { buildChips, countPanelFilters } from "./_lista/filters-model";
 import { fmtNum } from "./_lista/format";
@@ -94,8 +98,26 @@ export function ParticularesClient({
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Cliente elegido para puntuar los anuncios: vale para Mapa, Cuadrícula y Lista.
-  const [pickedClient, setPickedClient] = useState<PickedClient | null>(null);
+  // Cliente para el que se capta: vale para Mapa, Cuadrícula y Lista y viaja en la URL (?cliente=…),
+  // así la ficha del cliente puede abrir Captaciones ya con él elegido.
+  const clientCtx = useClientContext(f.clientId);
+  // useMemo: el mapa vuelve a pedir el encargo cada vez que cambia la IDENTIDAD de este objeto.
+  const pickedName = clientCtx.context?.name ?? "Cliente";
+  const pickedClient = useMemo<PickedClient | null>(
+    () => (f.clientId ? { id: f.clientId, name: pickedName } : null),
+    [f.clientId, pickedName],
+  );
+  // Anuncios elegidos en la lista para captarlos de golpe (persisten al cambiar de página).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [capturing, setCapturing] = useState(false);
+  const setPickedClient = useCallback(
+    (c: PickedClient | null) => {
+      f.setClientId(c?.id ?? "");
+      setSelectedIds(new Set());
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [f.setClientId],
+  );
   const [toolsOpen, setToolsOpen] = useState(false);
   // La vista vive en la URL (`vista=list|map`) para que recargar o compartir
   // el enlace abra la misma; cuadrícula es el valor por defecto.
@@ -114,7 +136,14 @@ export function ParticularesClient({
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
+  const countryPrefix = `/${pathname.split("/")[1] || "es"}`;
   const searchParams = useSearchParams();
+  // Los filtros de la lista, tal cual están en la URL, para que el mapa enseñe lo mismo (sin vista, cliente, zona dibujada ni página).
+  const mapFilterQuery = useMemo(() => {
+    const p = new URLSearchParams(searchParams.toString());
+    for (const k of ["vista", "cliente", "zonePoly", "page", "ficha"]) p.delete(k);
+    return p.toString();
+  }, [searchParams]);
   const [pageNavPending, startPageNav] = useTransition();
 
   useEffect(() => setNow(Date.now()), [rows]);
@@ -219,6 +248,61 @@ export function ParticularesClient({
     });
   }, [pageRows, gestion]);
   const hasClientOnlyFilter = gestion === "contacted" || gestion === "unmanaged";
+
+  // Dónde está cada anuncio visible respecto a la ficha del cliente (en su lista / ficha creada / en su book).
+  const visibleIds = useMemo(() => visibleRows.map((r) => r.id), [visibleRows]);
+  const flow = useFlowStates(isMap ? "" : f.clientId, visibleIds);
+  const bookedCount = Object.values(flow.states).filter((s) => s === "book").length;
+  const refreshClientCtx = clientCtx.refresh;
+  useEffect(() => {
+    // Una ficha nueva entró en el book: se actualizan las cifras del cliente (lista, book).
+    if (bookedCount > 0) refreshClientCtx();
+  }, [bookedCount, refreshClientCtx]);
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const allOnPageSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const togglePage = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+
+  async function handleCaptureSelected() {
+    if (!pickedClient || selectedIds.size === 0) return;
+    setCapturing(true);
+    const ids = [...selectedIds];
+    const scores: Record<string, number> = {};
+    for (const id of ids) {
+      const sc = clientScores.scores.get(id);
+      if (sc !== undefined) scores[id] = sc;
+    }
+    try {
+      const res = await captureParticularesForClient(pickedClient.id, ids, scores);
+      if (res.ok) {
+        const first = pickedClient.name.trim().split(/\s+/)[0] ?? pickedClient.name;
+        toast(
+          `${res.inserted} ${res.inserted === 1 ? "anuncio captado" : "anuncios captados"} para ${first}${res.skipped ? ` · ${res.skipped} ya estaban en su lista` : ""}. Su ficha se crea sola y entra en su book.`,
+          "success",
+        );
+        setSelectedIds(new Set());
+        flow.refresh();
+        refreshClientCtx();
+      } else toast(res.error, "error");
+    } catch {
+      toast("No se pudo captar. Inténtalo de nuevo.", "error");
+    } finally {
+      setCapturing(false);
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / ANUNCIOS_POR_PAGINA));
   const currentPage = Math.min(Math.max(1, page), totalPages);
@@ -334,6 +418,19 @@ export function ParticularesClient({
           onActiveChanged={(active, takenDownAt) => patchRow(selected.id, { is_active: active, taken_down_at: takenDownAt })}
           staffOptions={staffOptions}
           canCreateProperty={!currentRole || canAccess(currentRole, "properties", "create")}
+          clientFlow={{ client: pickedClient, onClientChange: setPickedClient, prefix: countryPrefix, onChanged: () => { flow.refresh(); clientCtx.refresh(); } }}
+        />
+      )}
+
+      {!isMap && (
+        <SelectionBar
+          count={selectedIds.size}
+          clientName={pickedClient ? pickedClient.name : null}
+          capturing={capturing}
+          allOnPageSelected={allOnPageSelected}
+          onCapture={handleCaptureSelected}
+          onClear={() => setSelectedIds(new Set())}
+          onTogglePage={togglePage}
         />
       )}
 
@@ -350,7 +447,6 @@ export function ParticularesClient({
       <section className="mt-5">
         {/* Barra de filtros */}
         <div className="flex flex-wrap items-center gap-2">
-          {!isMap && (
           <label className="flex h-10 min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-ink/15 bg-white px-3 text-sm focus-within:border-ink/40">
             <span className="sr-only">Buscar</span>
             <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="text-ink/50"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -362,30 +458,18 @@ export function ParticularesClient({
               className="w-full bg-transparent text-ink placeholder:text-ink/50 focus:outline-none"
             />
           </label>
-          )}
           <Segmented
             ariaLabel="Operación"
             value={opValue}
             onChange={(v) => setOperation(v === "all" ? "" : (v as "sale" | "rent"))}
             options={[{ value: "all", label: "Todos" }, { value: "sale", label: "Venta" }, { value: "rent", label: "Alquiler" }]}
           />
-          {isMap ? (
-            // El mapa solo distingue particulares / todos (el endpoint no filtra por agencia).
-            <Segmented
-              ariaLabel="Tipo de anunciante"
-              value={advertiser === "particular" ? "particular" : "all"}
-              onChange={(v) => setAdvertiser(v)}
-              options={[{ value: "particular", label: "Particular" }, { value: "all", label: "Todos" }]}
-            />
-          ) : (
           <Segmented
             ariaLabel="Tipo de anunciante"
             value={advertiser}
             onChange={(v) => setAdvertiser(v)}
             options={[{ value: "particular", label: "Particular" }, { value: "professional", label: "Agencia" }, { value: "all", label: "Todos" }]}
           />
-          )}
-          {!isMap && (
           <>
           <ZoneFilter groups={zoneGroups} value={zone} onChange={setZone} />
           <button
@@ -402,7 +486,6 @@ export function ParticularesClient({
             {panelCount > 0 && <span className="rounded-full bg-ink px-1.5 text-xs font-semibold text-cream-50">{panelCount}</span>}
           </button>
           </>
-          )}
           <div className="ml-auto flex items-center gap-2">
             {!isMap && (
             <SelectField ariaLabel="Ordenar" value={sort} onChange={(v) => setSort(v as typeof sort)} className="w-[190px]">
@@ -425,9 +508,6 @@ export function ParticularesClient({
                 { value: "map", label: "Mapa", icon: <MapIcon size={16} /> },
               ]}
             />
-            {!isMap && (
-              <ClientPicker value={pickedClient} onChange={setPickedClient} subtitle={clientScores.subtitle} theme="light" />
-            )}
             <div ref={toolsRef} className="relative">
               <button type="button" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen((v) => !v)} className={cn(BAR_BUTTON, FOCUS_RING)}>
                 {verifying || refreshState === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Wrench size={15} aria-hidden />}
@@ -447,6 +527,16 @@ export function ParticularesClient({
           </div>
         </div>
 
+        <ClientBar
+          prefix={countryPrefix}
+          value={pickedClient}
+          onChange={setPickedClient}
+          context={clientCtx.context}
+          loading={clientCtx.loading}
+          error={clientCtx.error}
+          fallbackSubtitle={clientScores.subtitle}
+        />
+
         {isMap ? (
           <CaptacionesMapView
             initialPolygons={mapInitialPolygons}
@@ -457,6 +547,7 @@ export function ParticularesClient({
             onZoneChange={onMapZoneChange}
             client={pickedClient}
             onClientChange={setPickedClient}
+            filterQuery={mapFilterQuery}
             onOpenFicha={openParticularById}
           />
         ) : (
@@ -560,6 +651,9 @@ export function ParticularesClient({
                   copied={copiedPhoneId === r.id}
                   onCopyPhone={handleCopyPhone}
                   score={clientScores.hasScores ? (clientScores.scores.get(r.id) ?? 0) : undefined}
+                  selected={selectedIds.has(r.id)}
+                  onToggleSelect={toggleSelected}
+                  flow={flow.states[r.id] && flow.states[r.id] !== "none" ? (flow.states[r.id] as "pending" | "property" | "book") : undefined}
                 />
               ))}
             </div>

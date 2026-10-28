@@ -1498,3 +1498,35 @@ cliente cambia su foto después).
 - ⚠️ **Fotos limpias que «nunca se ejecutaban» (2026-10-17):** `autoReplaceWebPhotos` iba DETRÁS de la lectura de webs (25 s) y comprobaba `left() > 15 s`; con ~45 s ya gastados nunca llegaba (`timings.web_photos: 0`, sin `webPhotos` en la respuesta). Ahora va ANTES de leer webs y el presupuesto por defecto es 80 s. La respuesta trae `webPhotos.skipped` (colaboradora, sin_web_verificada, ya_limpias, restaurada_a_mano), `skipped_detail` (web_no_leida, web_ilegible, web_bloqueada, no_mobilia, no_verificada, web_sin_fotos, anuncio_sin_web…) y `notes` (tope por pasada, presupuesto agotado); y `skipped.web_photos` / `skipped.webs_read` si se saltó por tiempo.
 - **Fotos Mobilia para TODAS las propiedades del CRM (confirmado por el dueño, 2026-10-17):** las colaboradoras (Level, Housingo…) ya traen fotos limpias, así que el reemplazo automático las SALTA por defecto (motivo `colaboradora`); `PARTICULARES_PHOTOS_INCLUDE_COLLAB=1` las incluye (solo cambiaría orden/portada/nº de fotos). Además cubre propiedades cuyo propio `source_url` es una ficha Mobilia (se leen con el job y se verifican contra la propia propiedad: referencia o precio + m² + hab.; hoy hay 0). Origen: los scrapers de Level y Housingo ya piden `-original.jpg` (`extractMobiliaPhotos`) y `downloadAndWatermark` fuerza `-original` en cualquier URL Mobilia (ahora con respaldo a la normal si la original da 404); `diff-engine` nunca toca las fotos de una propiedad ya existente, así que `photos_source='web_clean'` se respeta. Lote por pasada: 6 (`AUTO_PHOTOS_PER_RUN`), con presupuesto de tiempo; backfill `POST /api/cron/particulares/web-photos?limit=20`.
 - Matching: mismo `wu:` (URL) o `wk:` (dominio + referencia) = regla X4, «cierto». Test: `npm run test:particulares-agency` (incluye `test-particulares-agency-web.mts`, fixture real en `scripts/fixtures/`).
+
+## Captaciones ↔ cliente ↔ book: un solo flujo, en los dos sentidos (2026-10-28)
+`/es/admin/captaciones` (= `particulares-page.tsx`) trabaja **para un cliente**. Se elige arriba (`ClientBar`) y viaja en la
+URL (`?cliente=<uuid>`, parámetro `clientId` del hook de filtros), así la ficha del cliente puede abrir Captaciones ya con él
+(`suggested-particulares-block.tsx`: «Ver en el mapa» / «Abrir en Captaciones»). Vale para Cuadrícula, Lista y Mapa.
+
+```
+Captaciones (lista / mapa / ficha del anuncio)
+  → «Captar para X y añadir a su book»   captureParticularesForClient()   (client-flow-actions.ts)
+  → enlace en la lista para llamar de X   client_portal_links
+  → ficha propia (en segundo plano)       lib/portal-links/auto-import.ts
+  → selección de X → borrador de su book  lib/viewing-collections/auto-book.ts
+  ← cifras y estado vuelven a Captaciones getClientContext() / getParticularesFlowStates()
+```
+- **Encargo visible sin salir:** `ClientBar` resume el encargo y «Ver encargo» enseña el detalle (`describeBrief()`,
+  `lib/captaciones-map/brief-view.ts`) con «Editar encargo» (`?encargo=editar`), enlaces a su lista, su book y su ficha.
+- **Ficha del anuncio:** tarjeta «Para el encargo de X» (`_ficha/client-fit-card.tsx`): puntuación y motivos, o POR QUÉ no
+  encaja («Fuera de presupuesto», «Fuera de zona»…) — `evaluateParticularForClient()` evalúa UN anuncio sin el prefiltrado por
+  SQL de la lista — y el estado: en su lista → ficha creada → en su book.
+- **Lista:** casilla en cada tarjeta (`SelectionBar` flotante) para captar varios de golpe; etiqueta «Encaja N» y «En su lista /
+  Ficha creada / En su book». Mientras haya anuncios «pending» se vuelve a mirar cada 6 s (la ficha se crea en segundo plano).
+- ⚠️ **Captar NO exige coordenadas** (`captureParticularesForClient` lee de `particulares`; el captar del mapa usa pines y los
+  anuncios sin ubicación no tienen). Ambos acaban en el mismo `addPortalLinks`.
+- ⚠️ **La ficha de un anuncio que YA tenemos en Captaciones se crea con NUESTROS datos, sin volver a leer el portal**
+  (`particularIdForPortalUrl()` en `from-crm-particular.ts`, usado por `importPortalLink`): ya no depende de que haya saldo en
+  Evomi/Relay ni arriesga un bloqueo anti-bot. Vale también para la extensión y los enlaces pegados.
+- ⚠️ **El mapa aplica los MISMOS filtros que la lista** (precio, dormitorios, zona, bajadas, búsqueda, anunciante…):
+  `lib/particulares/filters-from-params.ts` lee la URL para la página Y para `/api/admin/particulares/map`
+  (`applyParticularesFilters`, exportada). Si añades un filtro, va en `parseParticularesParams` y sale en las dos vistas.
+  Excepciones: «gestión» (contactados / sin gestionar) se remata en el cliente sobre la página ya traída; y la zona dibujada la
+  recorta el mapa en Node (`polygons`).
+- Prueba: `npm run test:captaciones-filters`.

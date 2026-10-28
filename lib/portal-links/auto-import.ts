@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 import { getClientDescription } from "@/lib/services/properties/client-description";
-import { crmParticularIdFromUrl, propertyFromCrmParticular } from "./from-crm-particular";
+import { crmParticularIdFromUrl, particularIdForPortalUrl, propertyFromCrmParticular } from "./from-crm-particular";
 
 // ============================================================================
 // Crear la ficha de un anuncio de portal, sin nadie delante (2026-10-08).
@@ -151,7 +151,9 @@ export async function importPortalLink(
 
   // Una captación de nuestro propio CRM no se lee del portal: se convierte en
   // propiedad con sus datos, igual que el botón «Crear propiedad».
-  const crmParticularId = crmParticularIdFromUrl(link.url);
+  // Lo mismo si el enlace es el del PORTAL de un anuncio que ya tenemos en Captaciones: se usan nuestros datos
+  // y no se gasta proxy ni se arriesga un bloqueo anti-bot (ni depende de que haya saldo en Evomi/Relay).
+  const crmParticularId = crmParticularIdFromUrl(link.url) ?? (await particularIdForPortalUrl(link.url));
   if (crmParticularId) {
     const made = await propertyFromCrmParticular(crmParticularId);
     if (!made.ok) return fail(made.error);

@@ -9,7 +9,7 @@ import {
   getStaffOptionsCached,
   type ParticularesFilters,
 } from "@/lib/db/queries/particulares";
-import { decodeZonePolygons } from "@/lib/zone-polygon";
+import { one, parseParticularesParams, resolveZoneNames, type SP } from "@/lib/particulares/filters-from-params";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
@@ -18,29 +18,6 @@ import { getIdealistaScraperConfig } from "@/lib/api/v1/idealista/config";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
 export const dynamic = "force-dynamic";
-
-type SP = Record<string, string | string[] | undefined>;
-const pipeList = (v: string | undefined): string[] => [...new Set((v ?? "").split("|").map((x) => x.trim()).filter(Boolean))].slice(0, 20);
-const one = (v: string | string[] | undefined): string | undefined =>
-  Array.isArray(v) ? v[0] : v;
-
-// Réplica MÍNIMA de los enums de use-particulares-filters.ts: ese hook es
-// "use client" y esta página es un Server Component, así que no se puede
-// importar directo de ahí. Si cambias un valor allí, cámbialo también aquí.
-const csv = (v: string | undefined): string[] | undefined => {
-  const a = (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-  return a.length ? a : undefined;
-};
-
-function pick<T extends string>(v: string | undefined, allowed: readonly T[]): T | "" {
-  return v && (allowed as readonly string[]).includes(v) ? (v as T) : "";
-}
-
-function numOrUndef(v: string | undefined): number | undefined {
-  if (!v) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-}
 
 export default async function AdminParticularesPage({
   params,
@@ -64,39 +41,9 @@ export default async function AdminParticularesPage({
   if (one(sp.scrapers) || one(sp.scraper)) {
     redirect(`${getCountryConfig(country).prefix}/sindicacion?tab=portales`);
   }
-  const showRetired = one(sp.retired) === "1";
-  // Anuncios fuera de zona (ya no se rastrean): ocultos salvo `?fuera_zona=1`.
-  const showOutOfZone = one(sp.fuera_zona) === "1";
-  const zoneParam = one(sp.zone) ?? "";
-  // Zona dibujada a mano en el mapa (alternativa al desplegable de arriba —
-  // ver el comentario de mutua exclusión en use-particulares-filters.ts).
-  // Un JSON corrupto o manipulado a mano decodifica a [] sin romper la
-  // página, simplemente sin filtro de zona dibujada.
-  const drawnPolygons = decodeZonePolygons(one(sp.zonePoly));
-  const page = Math.max(1, Number(one(sp.page)) || 1);
-
-  // Anunciante: sin parámetro, la lista enseña SOLO particulares (es la
-  // herramienta de captación; las agencias eran ≈78 % de lo que se veía y
-  // tapaban lo que interesa). "all" es el valor EXPLÍCITO para verlo todo;
-  // "professional" = agencias, "unknown" = sin clasificar. Ver el mismo
-  // criterio en use-particulares-filters.ts (ahí vive el default en cliente).
-  const advertiserParam = pick(one(sp.advertiser), ["all", "particular", "professional", "unknown"] as const);
-  const advertiserScope = advertiserParam || "particular";
-  // Agencias (claves normalizadas separadas por «|», ver 0185).
-  const agencyKeys = pipeList(one(sp.agencia));
-  const excludeAgencyKeys = pipeList(one(sp.sinAgencia));
-  // Búsqueda de texto: mira en TODOS los estados (activos y retirados) y en todos
-  // los anunciantes, salvo que el usuario pida «volver a filtrar» (`soloFiltros=1`).
-  // Un anunciante elegido a propósito (en la URL) sí se respeta.
-  const searchAllStates = Boolean(one(sp.q)?.trim()) && one(sp.soloFiltros) !== "1";
-  // Con «Con esta agencia» (o buscando) y sin anunciante explícito, el default
-  // «particulares» no tiene sentido: se muestran las agencias.
-  const advertiserFilter =
-    advertiserScope === "all" || (!advertiserParam && (searchAllStates || agencyKeys.length > 0)) ? "" : advertiserScope;
-  // Portal de origen: solo ids "seguros" (letras, cifras, punto/guion). El
-  // valor llega a un .eq() parametrizado, pero un id raro no aporta nada.
-  const portalParam = one(sp.portal);
-  const portal = portalParam && /^[a-z0-9_.-]{1,30}$/i.test(portalParam) ? portalParam.toLowerCase() : undefined;
+  // Los filtros de la URL se leen con la MISMA función que el mapa (lib/particulares/filters-from-params.ts).
+  const parsed = parseParticularesParams(sp, currentProfile?.id);
+  const { showRetired, showOutOfZone, drawnPolygons, page, advertiserFilter, agencyKeys, excludeAgencyKeys } = parsed;
 
   // Arrancan ya, en paralelo — solo la query principal necesita esperar a
   // zoneCounts (para resolver "d:<distrito>", ver abajo) e idsInZone (para
@@ -119,78 +66,10 @@ export default async function AdminParticularesPage({
   // el mismo criterio que ve el desplegable en vez de reimplementar
   // normalizeZone() en SQL.
   const zoneCounts = await zoneCountsPromise;
-  // El desplegable de zona es MULTI-selección: el parámetro puede traer
-  // varias entradas separadas por "|" ("d:Salamanca|z:Lista"). Se usa "|" y
-  // no "," porque algún distrito lleva coma en el nombre. Un valor de una
-  // sola entrada (o el legado sin prefijo) sigue funcionando igual: split
-  // devuelve un array de uno.
-  const zoneSelections = zoneParam.split("|").map((s) => s.trim()).filter(Boolean);
-  const zoneNames = zoneSelections.length
-    ? [
-        ...new Set(
-          zoneSelections.flatMap((sel) => {
-            if (sel.startsWith("d:")) {
-              // Distrito → todos sus barrios, con el mismo criterio que el desplegable.
-              return zoneCounts.zoneGroups.find((g) => g.district === sel.slice(2))?.zones.map((z) => z.name) ?? [];
-            }
-            // "z:<barrio>" o valor legado sin prefijo: coincidencia exacta.
-            return [sel.startsWith("z:") ? sel.slice(2) : sel];
-          }),
-        ),
-      ]
-    : undefined;
+  const zoneNames = resolveZoneNames(parsed.zoneSelections, zoneCounts.zoneGroups);
   const idsInZone = drawnPolygons.length > 0 ? await idsInZonePromise : undefined;
 
-  const filters: ParticularesFilters = {
-    search: one(sp.q),
-    operation: pick(one(sp.operation), ["rent", "sale"] as const),
-    zoneNames,
-    idsInZone,
-    priceMin: numOrUndef(one(sp.priceMin)),
-    priceMax: numOrUndef(one(sp.priceMax)),
-    bedroomsMin: numOrUndef(one(sp.bedrooms)),
-    areaMin: numOrUndef(one(sp.areaMin)),
-    last24h: one(sp.last24h) === "1",
-    showDuplicates: one(sp.enlazados) === "1",
-    showOutOfZone,
-    phoneFilter: pick(one(sp.phone), ["no_phone", "with_phone"] as const),
-    gestion: pick(one(sp.gestion), ["unmanaged", "contacted", "assigned", "mine"] as const),
-    currentUserId: currentProfile?.id,
-    advertiser: advertiserFilter,
-    agencyKeys: agencyKeys.length ? agencyKeys : undefined,
-    excludeAgencyKeys: excludeAgencyKeys.length ? excludeAgencyKeys : undefined,
-    searchAllStates,
-    portal,
-    sort: pick(one(sp.sort), ["oldest", "price_desc", "price_asc", "area_desc", "area_asc"] as const),
-    pricePerM2Min: numOrUndef(one(sp.m2Min)),
-    pricePerM2Max: numOrUndef(one(sp.m2Max)),
-    // "0" es un valor VÁLIDO aquí ("cualquier bajada"), así que no vale el
-    // `if (!v)` de numOrUndef… salvo que numOrUndef ya lo trata: "0" es
-    // truthy como string, así que devuelve 0 correctamente.
-    priceDropMinPct: numOrUndef(one(sp.drop)),
-    minDaysListed: numOrUndef(one(sp.dias)),
-    lift: pick(one(sp.ascensor), ["yes", "no"] as const),
-    condition: csv(one(sp.estado)),
-    yearBuiltMin: numOrUndef(one(sp.anioMin)),
-    yearBuiltMax: numOrUndef(one(sp.anioMax)),
-    bathroomsMin: numOrUndef(one(sp.banos)),
-    floorMin: numOrUndef(one(sp.floorMin)),
-    floorMax: numOrUndef(one(sp.plantaMax)),
-    extras: csv(one(sp.extras)),
-    types: csv(one(sp.tipo)),
-    energy: csv(one(sp.energia)),
-    orientation: one(sp.orientacion) || undefined,
-    sinceDays: numOrUndef(one(sp.desde)),
-    bedroomsExact: one(sp.dormExacto) === "1",
-    bathroomsExact: one(sp.banosExacto) === "1",
-    areaMax: numOrUndef(one(sp.areaMax)),
-    maxDaysListed: numOrUndef(one(sp.diasMax)),
-    plotMin: numOrUndef(one(sp.parcelaMin)),
-    plotMax: numOrUndef(one(sp.parcelaMax)),
-    exactLocation: one(sp.ubicExacta) === "1",
-    furnished: pick(one(sp.amueblado), ["yes", "no"] as const),
-    rentalKind: pick(one(sp.alquiler), ["larga", "temporada"] as const),
-  };
+  const filters: ParticularesFilters = { ...parsed.filters, zoneNames, idsInZone };
   // El amueblado ya se filtra en servidor con las etiquetas de `attrs` (0183).
 
   const agencyNamesPromise = getParticularesAgencyNames([...agencyKeys, ...excludeAgencyKeys]).catch(() => ({}));

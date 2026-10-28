@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Check, ExternalLink, Loader2, PhoneCall, TrendingDown } from "lucide-react";
 import { addPortalLinks } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
 import { parsePortalUrl } from "@/lib/portal-links/portals";
@@ -41,6 +41,7 @@ export function SuggestedParticularesBlock({
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const router = useRouter();
+  const prefix = `/${(usePathname() ?? "").split("/")[1] || "es"}`;
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,11 +122,26 @@ export function SuggestedParticularesBlock({
             {state.total}
           </span>
         )}
+        <div className="ml-auto flex items-center gap-1.5">
+          <a
+            href={`${prefix}/admin/captaciones?cliente=${clientId}&vista=map`}
+            className="rounded-lg border border-gold/30 bg-white/70 px-2.5 py-1 text-xs font-semibold text-ink hover:border-gold/60"
+          >
+            Ver en el mapa
+          </a>
+          <a
+            href={`${prefix}/admin/captaciones?cliente=${clientId}`}
+            className="rounded-lg border border-gold/30 bg-white/70 px-2.5 py-1 text-xs font-semibold text-ink hover:border-gold/60"
+          >
+            Abrir en Captaciones
+          </a>
+        </div>
       </div>
 
       <p className="mt-1 text-xs text-ink/50">
         Anuncios de Idealista, Fotocasa y otros portales que encajan con su encargo. Añádelos a su lista
-        para llamar y siguen el mismo camino: llamada, ficha y selección.
+        para llamar y siguen el mismo camino: llamada, ficha y selección. En Captaciones puedes ver todos en el
+        mapa, elegir varios de golpe y captarlos para su book.
       </p>
       {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
 
