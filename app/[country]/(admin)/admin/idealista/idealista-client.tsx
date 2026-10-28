@@ -2,13 +2,14 @@
 
 import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Clapperboard, Video, Plug, Power, Image as ImageIcon, Lightbulb } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
 import { IdealistaListingLeadsModal } from "@/components/admin/idealista-listing-leads-modal";
 import { IdealistaAiSuggestionsModal } from "@/components/admin/idealista-ai-suggestions-modal";
 import { IdealistaStateSelector, STATE_LABELS, type StateOption } from "@/components/admin/idealista-state-selector";
 import { cn } from "@/lib/utils";
+import { IdealistaCrmSyncBadge, type CrmSyncState } from "@/components/admin/idealista-crm-sync-badge";
 
 type Property = {
   id: string;
@@ -240,6 +241,8 @@ export function IdealistaClient({
   listingsWithVideo,
   leadCountsByProperty,
   leadCountsByListing,
+  crmSyncStates = {},
+  portalOrigin = "",
 }: {
   properties: Property[];
   listings: DbIdealistaListing[];
@@ -249,7 +252,14 @@ export function IdealistaClient({
   leadCountsByProperty: Record<string, number>;
   /** idealista_listing_id -> nº de leads matcheados directamente a esa ficha (cubre las "inspo" sin property_id). */
   leadCountsByListing: Record<string, number>;
+  /** idealista_listing_id -> estado de su ficha en el CRM (sincronización por API, 0233). */
+  crmSyncStates?: Record<string, CrmSyncState>;
+  /** Origen público para componer el SmartLink. */
+  portalOrigin?: string;
 }) {
+  // El panel de Idealista solo existe para España (/cl redirige fuera).
+  const routeParams = useParams<{ country?: string }>();
+  const pathCountry = routeParams?.country === "cl" ? "cl" : "es";
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isInspoMode, setIsInspoMode] = useState(false);
   const [editingInspoId, setEditingInspoId] = useState<string | null>(null);
@@ -266,7 +276,9 @@ export function IdealistaClient({
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [apiActionId, setApiActionId] = useState<string | null>(null);
-  const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  // `ok`/`msg`: lo que dijo Idealista. `local`: fallos LOCALES posteriores
+  // (registro, ficha, CRM) — van aparte porque no cambian lo que hizo Idealista.
+  const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string; local?: string }>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningId, setCleaningId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -597,14 +609,18 @@ export function IdealistaClient({
         steps?: string[];
         warnings?: string[];
         errors?: string[];
+        local?: Array<{ step: string; ok: boolean; message: string }>;
+        crmSync?: { ok: boolean; message: string };
       };
 
       const parts = [...(data.steps ?? []), ...(data.warnings ?? []), ...(data.errors ?? [])];
+      const localFailures = (data.local ?? []).filter((l) => !l.ok).map((l) => l.message);
       setPublishResults((prev) => ({
         ...prev,
         [listingId]: {
           ok: data.ok,
           msg: parts.length > 0 ? parts.join(" · ") : data.ok ? "Hecho" : "No se pudo completar",
+          local: localFailures.length > 0 ? localFailures.join(" · ") : undefined,
         },
       }));
       if (data.ok) router.refresh();
@@ -1103,7 +1119,15 @@ export function IdealistaClient({
                       })()}
                       {publishResults[listing.id] && (
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${publishResults[listing.id].ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                          {publishResults[listing.id].msg}
+                          {publishResults[listing.id].ok ? "Idealista: " : ""}{publishResults[listing.id].msg}
+                        </span>
+                      )}
+                      {publishResults[listing.id]?.local && (
+                        <span
+                          className="max-w-[32rem] truncate rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+                          title={publishResults[listing.id].local}
+                        >
+                          ⚠ Local (Idealista sí lo hizo): {publishResults[listing.id].local}
                         </span>
                       )}
                       {listing.api_property_id && (
@@ -1115,6 +1139,15 @@ export function IdealistaClient({
                           {listing.api_state && listing.api_state !== "active" ? ` · ${listing.api_state}` : ""}
                         </span>
                       )}
+                      <IdealistaCrmSyncBadge
+                        listingId={listing.id}
+                        country={pathCountry}
+                        state={crmSyncStates[listing.id] ?? null}
+                        hasApiPropertyId={!!listing.api_property_id}
+                        onCheck={() => handleApiAction(listing.id, "refresh-state")}
+                        onDone={() => router.refresh()}
+                        portalOrigin={portalOrigin}
+                      />
                       {/* El último error del API se guarda en la ficha: si no se
                           enseña, el operador no sabe por qué no salió el anuncio. */}
                       {!publishResults[listing.id] && listing.api_last_error && (
@@ -1275,7 +1308,11 @@ export function IdealistaClient({
                       onClick={() => handleDelete(listing.id, listing.idealista_state === "published")}
                       disabled={deletingId === listing.id}
                       className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-500 transition hover:bg-red-100 disabled:opacity-50"
-                      title={listing.idealista_state === "published" ? "Bajar ficha (se archiva, no se borra)" : "Borrar ficha"}
+                      title={
+                        listing.idealista_state === "published"
+                          ? "Archivar solo en este panel: NO da de baja en Idealista ni toca el CRM"
+                          : "Borrar la ficha del panel (si controla un anuncio vivo en Idealista, se archiva en su lugar). No toca el CRM."
+                      }
                     >
                       {deletingId === listing.id ? (
                         <Loader2 size={14} className="animate-spin" />
