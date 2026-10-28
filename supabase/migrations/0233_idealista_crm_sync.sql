@@ -350,8 +350,10 @@ BEGIN
   END LOOP;
 
   -- Una operación posterior a la decisiva sin resultado → incierto.
+  -- (Una lectura —observe— que falla no cambia nada en Idealista: no cuenta.)
   IF EXISTS (SELECT 1 FROM idealista_ops_timeline(p_listing, p_environment) t
-              WHERE t.outcome IN ('pending', 'unknown') AND (NOT v_has_dec OR t.seq > v_dec.seq)) THEN
+              WHERE t.outcome IN ('pending', 'unknown') AND t.kind NOT IN ('observe', 'observe_reconcile')
+                AND (NOT v_has_dec OR t.seq > v_dec.seq)) THEN
     RETURN jsonb_build_object('state', 'uncertain', 'reason', 'open_operation');
   END IF;
 
@@ -362,6 +364,7 @@ BEGIN
   -- La decisiva se solapa en el tiempo con otra (no rechazada) → incierto.
   IF EXISTS (SELECT 1 FROM idealista_ops_timeline(p_listing, p_environment) t
               WHERE t.seq <> v_dec.seq AND t.outcome <> 'rejected'
+                AND NOT (t.kind IN ('observe', 'observe_reconcile') AND t.outcome <> 'confirmed')
                 AND t.begun_at < v_dec.ended_at AND v_dec.begun_at < t.ended_at) THEN
     RETURN jsonb_build_object('state', 'uncertain', 'reason', 'overlap', 'seq', v_dec.seq);
   END IF;
@@ -765,6 +768,23 @@ BEGIN
   END;
 END $$;
 
+-- Un fallo local FUERA de la función (p. ej. al copiar multimedia, antes de
+-- aplicar) también queda en la fila: el panel lo enseña y se reintenta.
+CREATE OR REPLACE FUNCTION idealista_crm_note_failure(p_listing uuid, p_environment text, p_code text, p_message text)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  s idealista_crm_sync;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('idealista_crm:' || p_listing || ':' || p_environment, 0));
+  s := idealista_crm_sync_row(p_listing, p_environment);
+  UPDATE idealista_crm_sync SET status = 'failed', last_error_code = left(p_code, 200), last_error = left(p_message, 2000),
+         attempts = attempts + 1, last_attempt_at = now()
+   WHERE id = s.id;
+END $$;
+
 -- ── Revisión ────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION idealista_crm_resolve_review(
   p_listing uuid, p_environment text, p_choice text, p_property uuid, p_actor uuid)
@@ -948,6 +968,7 @@ BEGIN
     'idealista_crm_classify(idealista_crm_sync)',
     'idealista_crm_plan(uuid, text)',
     'apply_idealista_crm_sync(uuid, text, bigint, jsonb, jsonb, uuid)',
+    'idealista_crm_note_failure(uuid, text, text, text)',
     'idealista_crm_resolve_review(uuid, text, text, uuid, uuid)',
     'idealista_create_guard(uuid, text)',
     'idealista_recover_api_property_id(uuid, text)',

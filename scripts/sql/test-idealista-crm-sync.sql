@@ -295,6 +295,12 @@ BEGIN
   r := crm_t.sync(l);
   PERFORM test_util.ok(r->>'status' = 'synced', 'observe posterior resuelve el solape');
 
+  -- 9c-bis. Una comprobación (observe) que falla no crea incertidumbre.
+  op := crm_t.op(l, 'observe', NULL);
+  PERFORM crm_t.finish(op, 'unknown', NULL);
+  r := crm_t.sync(l);
+  PERFORM test_util.ok(r->>'status' = 'synced', 'una comprobación fallida no vuelve incierto el estado');
+
   -- 9d. Cambio fuera del registro (api_last_sync_at posterior) → incierto.
   UPDATE idealista_listings SET api_last_sync_at = clock_timestamp() + interval '5 minutes' WHERE id = l;
   r := crm_t.sync(l);
@@ -446,6 +452,15 @@ BEGIN
                        'una ruta borrada no se reutiliza (versión nueva obligatoria)');
   PERFORM test_util.ok(NOT (idealista_crm_media_lookup(pid, ARRAY['src-b']) ? 'src-b') AND (idealista_crm_media_lookup(pid, ARRAY['src-a']) ? 'src-a'),
                        'la caché de orígenes no devuelve objetos borrados');
+END $$;
+
+-- ── 14b. Fallo local antes de aplicar ───────────────────────────────────────
+DO $$
+DECLARE l uuid := (SELECT id FROM idealista_listings WHERE reference_code = 'BC-9014');
+BEGIN
+  PERFORM idealista_crm_note_failure(l, 'production', 'media_timeout', 'Se agotó el tiempo copiando fotos');
+  PERFORM test_util.ok((SELECT status = 'failed' AND last_error_code = 'media_timeout' FROM idealista_crm_sync WHERE listing_id = l),
+                       'un fallo al copiar multimedia queda en la fila (failed)');
 END $$;
 
 -- ── 15. Protecciones de borrado (D11) ───────────────────────────────────────
