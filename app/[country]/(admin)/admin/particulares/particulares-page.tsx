@@ -16,6 +16,7 @@ import { ParticularesClient, type ParticularRow } from "./particulares-client";
 import { ANUNCIOS_POR_PAGINA } from "./constants";
 import { getIdealistaScraperConfig } from "@/lib/api/v1/idealista/config";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { polygonBounds } from "@/lib/geo/zone-geometry";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,8 @@ export default async function AdminParticularesPage({
   const zoneNames = resolveZoneNames(parsed.zoneSelections, zoneCounts.zoneGroups);
   const idsInZone = drawnPolygons.length > 0 ? await idsInZonePromise : undefined;
 
-  const filters: ParticularesFilters = { ...parsed.filters, zoneNames, idsInZone };
+  const zoneBbox = drawnPolygons.length > 0 ? (polygonBounds(drawnPolygons) ?? undefined) : undefined;
+  const filters: ParticularesFilters = { ...parsed.filters, zoneNames, idsInZone, zoneBbox };
   // El amueblado ya se filtra en servidor con las etiquetas de `attrs` (0183).
 
   const agencyNamesPromise = getParticularesAgencyNames([...agencyKeys, ...excludeAgencyKeys]).catch(() => ({}));

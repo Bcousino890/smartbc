@@ -4,6 +4,7 @@ import { createAdminClient } from "../admin";
 import { buildSearchPlan } from "@/lib/particulares/search-clauses";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { isPointInAnyPolygon, type ZonePolygon } from "@/lib/zone-polygon";
+import { polygonBounds } from "@/lib/geo/zone-geometry";
 import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 
 /**
@@ -208,6 +209,8 @@ export type ParticularesFilters = {
   /** Parcela en m² (columna `plot_m2`, migración 0183). */
   plotMin?: number;
   plotMax?: number;
+  /** Caja que rodea la zona dibujada: con muchos `idsInZone` la lista la usa para acotar en la base (ver `getParticularesPageInBigZone`). */
+  zoneBbox?: { minLng: number; minLat: number; maxLng: number; maxLat: number };
   /** Solo coordenada exacta (`location_precision = 'exact'`). */
   exactLocation?: boolean;
   /** Amueblado sí/no (etiquetas `amueblado` / `sin_amueblar` de `attrs`). */
@@ -429,6 +432,53 @@ export function applyParticularesFilters(
   return q;
 }
 
+/** Con más ids que esto en `idsInZone` la URL de PostgREST (≈ 40 bytes por id) deja de caber. */
+const BIG_ZONE_IDS = 120;
+
+/**
+ * La lista con una zona dibujada grande, en dos pasos y con el MISMO resultado que `.in("id", ids)`:
+ *   1. ids ordenados de lo que pasa los demás filtros dentro de la caja de la zona (solo la columna `id`);
+ *   2. se queda con los que caen en el polígono (`idsInZone`), cuenta, corta la página y trae esas ≤ 24 filas.
+ * Devuelve null si algo falla (el llamador sigue por el camino de siempre y acaba en el estado de error).
+ */
+async function getParticularesPageInBigZone(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  attempts: string[],
+  o: { offset: number; pageSize: number; showRetired: boolean; anyState: boolean; filters: ParticularesFilters },
+) {
+  try {
+    const inZone = new Set(o.filters.idsInZone);
+    const { idsInZone: _ids, ...rest } = o.filters;
+    void _ids;
+    const { rows, error } = await fetchAllRows((from, to) => {
+      let q = supabase.from("particulares").select("id");
+      if (!o.anyState) q = q.eq("is_active", !o.showRetired);
+      q = applyParticularesFilters(q, rest, true, true).or(EXCLUYE_PROPIAS);
+      const b = o.filters.zoneBbox;
+      if (b) q = q.gte("latitude", b.minLat).lte("latitude", b.maxLat).gte("longitude", b.minLng).lte("longitude", b.maxLng);
+      if (o.anyState) q = q.order("is_active", { ascending: false });
+      return applyParticularesSort(q, o.filters.sort, o.showRetired && !o.anyState).range(from, to);
+    });
+    if (error) throw new Error(error.message);
+    const ordered = rows.map((r) => r.id as string).filter((id) => inZone.has(id));
+    const pageIds = ordered.slice(o.offset, o.offset + o.pageSize);
+    if (pageIds.length === 0) return { ...(await finishEnrichment(supabase, [], ordered.length)), failed: false as const };
+    for (const cols of attempts) {
+      const res = await supabase.from("particulares").select(cols).in("id", pageIds);
+      if (res.error) continue;
+      const byId = new Map<string, unknown>((res.data ?? []).map((r: { id: string }) => [r.id, r]));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pageRows = pageIds.map((id) => byId.get(id)).filter(Boolean) as any[];
+      return { ...(await finishEnrichment(supabase, pageRows, ordered.length)), failed: false as const };
+    }
+    return null;
+  } catch (err) {
+    console.error("[particulares] lista en zona grande:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 export async function getParticularesPage(opts?: {
   /** Si se pasa junto a `pageSize`, activa paginación real server-side en
    *  vez del comportamiento histórico de traer todo. */
@@ -473,6 +523,12 @@ export async function getParticularesPage(opts?: {
     const pageSize = Math.max(1, opts.pageSize);
     const showRetired = opts.showRetired ?? false;
     const anyState = Boolean(opts.filters?.searchAllStates && opts.filters.search?.trim());
+    // Zona dibujada GRANDE: `.in("id", [miles de ids])` hace una URL que PostgREST rechaza («URI too long») en las
+    // diez variantes de columnas, y la lista salía vacía con error. Se resuelve en dos pasos.
+    if (opts.filters?.idsInZone && opts.filters.idsInZone.length > BIG_ZONE_IDS) {
+      const big = await getParticularesPageInBigZone(supabase, attempts, { offset, pageSize, showRetired, anyState, filters: opts.filters });
+      if (big) return big;
+    }
     for (const cols of attempts) {
       let query = supabase
         .from("particulares")
@@ -492,6 +548,8 @@ export async function getParticularesPage(opts?: {
         const res = await query.range(offset, offset + pageSize - 1);
         if (res.error) {
           lastError = res.error;
+          // La URL no cabe: las demás variantes de columnas fallarán igual, no se pierde tiempo en probarlas.
+          if (/URI too long/i.test(res.error.message)) break;
           continue;
         }
         rows = res.data ?? [];
@@ -956,16 +1014,20 @@ export async function getParticularesIdsInPolygons(
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = createAdminClient() as any;
-    const { rows, error } = await fetchAllRows((from, to) =>
-      supabase
+    // Solo los anuncios de la CAJA que rodea la zona (la base lo filtra por latitud/longitud); el recorte exacto
+    // sigue siendo el de abajo. Antes se traía TODA la tabla (22 000+ filas, ~3 s) para quedarse con unos miles.
+    const box = polygonBounds(polygons);
+    const { rows, error } = await fetchAllRows((from, to) => {
+      let q = supabase
         .from("particulares")
         .select("id, latitude, longitude")
         .eq("is_active", !showRetired)
         .or(EXCLUYE_PROPIAS)
         .not("latitude", "is", null)
-        .not("longitude", "is", null)
-        .range(from, to),
-    );
+        .not("longitude", "is", null);
+      if (box) q = q.gte("latitude", box.minLat).lte("latitude", box.maxLat).gte("longitude", box.minLng).lte("longitude", box.maxLng);
+      return q.order("id", { ascending: true }).range(from, to);
+    });
     if (error) {
       console.error("[particulares] getParticularesIdsInPolygons: error de BD", error);
       return [];
