@@ -2,6 +2,7 @@
 
 // SOLO DESARROLLO LOCAL. Ver page.tsx.
 import { IdealistaCrmSyncBadge, type CrmSyncState } from "@/components/admin/idealista-crm-sync-badge";
+import { REFERENCE_ONLY_MESSAGE } from "@/lib/properties/reference-only";
 
 const base: CrmSyncState = {
   status: "synced", environment: "production", origin: "generated", propertySlug: "piso-luminoso-en-chamberi-x7k2m9q4wzab",
@@ -19,6 +20,7 @@ const ROWS: Array<{ title: string; state: CrmSyncState; apiId: boolean }> = [
   { title: "Estado incierto en Idealista", state: { ...base, status: "uncertain" }, apiId: true },
   { title: "Alta incierta (sin id)", state: { ...base, status: "uncertain_create", origin: null, propertySlug: null, smartlinkPath: null }, apiId: false },
   { title: "Alta confirmada con el id sin guardar", state: { ...base, status: "pending", origin: null, propertySlug: null, smartlinkPath: null }, apiId: false },
+  { title: "En contención (antes de una vuelta atrás del código)", state: { ...base, status: "needs_review", reviewReason: "contained" }, apiId: true },
   { title: "Sincronización apagada", state: { ...base, status: "disabled", origin: null, propertySlug: null, smartlinkPath: null }, apiId: true },
   { title: "Sandbox", state: { ...base, status: "sandbox", environment: "sandbox", origin: null, propertySlug: null, smartlinkPath: null }, apiId: true },
 ];
@@ -42,6 +44,10 @@ export function FixtureIdealistaCrm() {
           />
         </div>
       ))}
+      <div className="rounded-xl border border-ink/10 bg-white/70 p-3 dark:bg-white/5">
+        <p className="mb-2 text-sm font-medium text-ink/80">Mensaje al personal al intentar añadir una ficha de referencia a un catálogo o colección</p>
+        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{REFERENCE_ONLY_MESSAGE}</p>
+      </div>
     </div>
   );
 }
