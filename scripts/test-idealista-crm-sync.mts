@@ -11,7 +11,9 @@ import {
   buildContentSnapshot, buildMediaManifest, buildReferenceProperty, classifyFailure, mediaPath, referenceSlug,
   smartlinkPath, sniffImage, MEDIA_CONCURRENCY,
 } from "../lib/services/idealista/crm-sync/core.ts";
-import { applyLatest, stageMedia, type CrmSyncDeps } from "../lib/services/idealista/crm-sync/sync.ts";
+import { applyLatest, releaseContainment, stageMedia, type CrmSyncDeps } from "../lib/services/idealista/crm-sync/sync.ts";
+import { REFERENCE_ONLY_MESSAGE, staffDbMessage } from "../lib/properties/reference-only.ts";
+import { catalogErrorMessage } from "../lib/catalogs/errors.ts";
 import { propertyRowToClientProperty } from "../lib/db/adapters.ts";
 import { sortMediaByPosition } from "../lib/db/media-order.ts";
 import { SCENARIOS, baseListing, defaultRpc, runScenario } from "./idealista-publish-scenarios.mts";
@@ -217,6 +219,43 @@ console.log("· Proyección pública de una ficha de referencia");
   ok(/Texto público/.test(out) && /s\.test\/1\.jpg|\/p\//.test(out), "con contenido y fotos");
   ok(JSON.stringify(sortMediaByPosition([{ position: null, k: "a" }, { position: 1, k: "b" }, { position: 0, k: "c" }]).map((r: any) => r.k)) === '["c","b","a"]',
      "planos y vídeos: gestionados primero en su orden");
+}
+
+// ── 7b. Mensajes al personal y liberación de la contención ──────────────────
+console.log("· Rechazo de la base explicado al personal (la restricción sigue en la base)");
+{
+  ok(catalogErrorMessage({ message: "reference_only_property", code: "P0001" }) === REFERENCE_ONLY_MESSAGE, "catálogos: mensaje claro");
+  ok(staffDbMessage('ERROR: reference_only_property DETAIL: …') === REFERENCE_ONLY_MESSAGE, "listas, colaboraciones y enlaces: mensaje claro");
+  ok(staffDbMessage("duplicate key value") === "duplicate key value", "otros errores: sin tocar");
+  ok(/SmartLink/.test(REFERENCE_ONLY_MESSAGE) && !/reference_only/.test(REFERENCE_ONLY_MESSAGE), "el mensaje no enseña el código interno");
+  const vc = read("app/[country]/(admin)/admin/clientes/viewing-collections-actions.ts");
+  ok(/match: \/reference_only_property\/, message: REFERENCE_ONLY_MESSAGE/.test(vc), "selecciones y colecciones: traducido en DB_ERROR_MAP");
+  ok(/isReferenceOnlyError\(message\)\) return REFERENCE_ONLY_MESSAGE/.test(read("lib/portal-links/insert.ts")), "enlaces de portal: traducido");
+  ok((read("app/[country]/(admin)/admin/clientes/shortlist-actions.ts").match(/staffDbMessage\(error\.message\)/g) ?? []).length === 4, "listas de clientes: los 4 errores traducidos");
+  ok(/staffDbMessage\(err\.message\)/.test(read("app/[country]/(admin)/admin/propiedades/[slug]/collab-actions.ts")), "enlaces de colaboración: traducido");
+  ok(/staffDbMessage\(error\.message\)/.test(read("lib/portal-links/auto-import.ts")), "conversión de enlaces de portal: traducido");
+}
+console.log("· Liberar la contención: aplicar antes, decidir en la base, sin Idealista");
+{
+  g.__idealista = { calls: [], events: [], respond: () => ({}) };
+  for (const [db, expectOk, re] of [
+    [{ status: "released" }, true, /Liberada/],
+    [{ status: "kept_archived", reason: "withdrawn" }, false, /baja/],
+    [{ status: "kept_archived", reason: "external_change" }, false, /resolver/],
+    [{ status: "kept_archived", reason: "disabled" }, false, /apagada/],
+  ] as Array<[any, boolean, RegExp]>) {
+    const order: string[] = [];
+    const r = await releaseContainment("L", "production", "U", {}, {
+      rpc: async (fn) => { order.push(fn); return fn === "idealista_crm_plan" ? { data: { target: { state: "none" }, enabled: true }, error: null }
+        : fn === "idealista_crm_release_containment" ? { data: db, error: null } : { data: { status: "synced" }, error: null }; },
+      download: async () => { throw new Error("no"); }, upload: async () => ({ ok: true }), publicUrl: (p) => p, remove: async () => {}, now: () => Date.now(),
+    });
+    ok(r.ok === expectOk && re.test(r.message) && order.indexOf("apply_idealista_crm_sync") < order.indexOf("idealista_crm_release_containment"),
+       `${db.status}${db.reason ? `/${db.reason}` : ""}: aplica primero y luego decide la base`, { r, order });
+  }
+  ok(g.__idealista.calls.length === 0, "cero llamadas a Idealista");
+  ok(!/undo|deshacer en bloque/i.test(read("lib/services/idealista/crm-sync/sync.ts")) && /containment_bulk_undo_removed/.test(read("scripts/sql/idealista-crm-sync-containment.sql")),
+     "no existe un «deshacer» en bloque");
 }
 
 // ── 8. Pruebas de fuente ────────────────────────────────────────────────────

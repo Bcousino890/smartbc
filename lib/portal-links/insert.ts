@@ -12,6 +12,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { parsePortalUrl } from "./portals";
 import type { PortalLinkInput } from "./types";
+import { isReferenceOnlyError, REFERENCE_ONLY_MESSAGE } from "@/lib/properties/reference-only";
 
 /** Mismo escalón que `viewing_stops`: deja hueco para insertar entre vecinos. */
 const POSITION_STEP = 100;
@@ -51,6 +52,7 @@ const DB_ERROR_MAP: Array<{ match: RegExp; message: string }> = [
 ];
 
 export function translateLinkDbError(message: string): string {
+  if (isReferenceOnlyError(message)) return REFERENCE_ONLY_MESSAGE; // fichas de referencia de Idealista (0232)
   for (const { match, message: friendly } of DB_ERROR_MAP) {
     if (match.test(message)) return friendly;
   }

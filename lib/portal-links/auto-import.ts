@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 import { getClientDescription } from "@/lib/services/properties/client-description";
 import { crmParticularIdFromUrl, particularIdForPortalUrl, propertyFromCrmParticular } from "./from-crm-particular";
+import { staffDbMessage } from "@/lib/properties/reference-only";
 
 // ============================================================================
 // Crear la ficha de un anuncio de portal, sin nadie delante (2026-10-08).
@@ -63,7 +64,7 @@ export async function attachPropertyToLink(args: {
     .from("client_portal_links")
     .update({ property_id: propertyId, status: "converted", import_error: null })
     .eq("id", linkId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: staffDbMessage(error.message) };
 
   const { error: selError } = await db()
     .from("client_property_selections")
