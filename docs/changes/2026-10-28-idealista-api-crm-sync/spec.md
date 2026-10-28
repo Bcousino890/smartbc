@@ -436,13 +436,15 @@ La ejecuta el operador autorizado, que es Fabricio (corrección 1). Hay dos puer
    - el número de migración siguiente libre.
 
    **Si algo no coincide, no se fusiona** y se ajusta el expediente.
+
+   Desde el cierre del 2026-10-29, las dos comprobaciones validan **definiciones y atributos**, no solo nombres: comando, permisiva, roles, `USING` y `WITH CHECK` de cada política; RLS; `is_staff()`; CHECK con su validación; roles; y, antes de encender, triggers activados, `SECURITY DEFINER` y privilegios. Lo que falta o sale NULL **falla**. El resultado es inequívoco: «APTO» con código 0, o un error «NO FUSIONAR» / «NO ENCENDER» con código distinto de 0.
 2. **Antes de encender:** `scripts/sql/idealista-crm-sync-activation.sql`, solo `SELECT`, después del despliegue:
    - que la 0232 y la 0233 estén aplicadas;
    - que haya **una** «RESERVADO» en `es`;
    - el entorno configurado (sandbox o producción);
    - la agencia técnica;
    - el interruptor apagado;
-   - que el build en marcha sea el de esta tarea (la comprobación de versión la indica `result.md`).
+   - que el build en marcha sea el de esta tarea. Se comprueba **antes**, con los pasos de `result.md`: `origin/main` no lo demuestra.
 
 ## Recuperación de migraciones
 
@@ -464,7 +466,13 @@ Ninguna política ni restricción puede ocultar una fila a esas consultas con se
 - las saca de esas consultas;
 - deja sus SmartLinks sin servicio mientras dure.
 
-Para deshacer la contención, se ejecuta la misma consulta en sentido inverso, solo sobre ese motivo. **No hay ningún riesgo de distribución aceptado:** si la contención no se ha ejecutado, no se revierte el código.
+**No hay «deshacer» en bloque** (cierre del 2026-10-29). Una ficha contenida se libera **ficha a ficha**:
+- solo con el **código compatible ya en marcha** (la liberación va por la ruta `/api/admin/idealista/crm-sync`, que el build anterior no tiene) y con la sincronización **encendida** (que se enciende tras comprobar el build en marcha);
+- `idealista_crm_release_containment` decide con el último estado del anuncio. Si está publicado, el estado es cierto y ya está aplicado en el CRM, se desarchiva. Si está publicado pero falta aplicarlo, se aplica antes.
+- Si la baja está confirmada, sigue archivada como baja. Si está incierta, con alta incierta o esperando revisión, sigue archivada hasta resolverlo.
+- Mientras tanto, `apply_idealista_crm_sync` nunca desarchiva una ficha contenida: la deja en «revisar/contained».
+
+**No hay ningún riesgo de distribución aceptado:** si la contención no se ha ejecutado, no se revierte el código.
 
 **Tabla de comportamiento del código anterior con datos.** Se prueba en T5, con datos y con la contención aplicada y sin aplicar:
 
