@@ -377,7 +377,14 @@ export function FiltersPanel({
               onChange={f.setExactLocation}
             />
             <p className="pt-1 text-xs text-ink/65">Zona dibujada</p>
-            <DrawZoneFilter value={f.drawnZone} onChange={f.setDrawnZone} />
+            <DrawZoneFilter
+              value={f.drawnZone}
+              onChange={f.setDrawnZone}
+              onOpenMap={() => {
+                onClose();
+                f.setView("map");
+              }}
+            />
           </Section>
 
           <div className="space-y-2 py-4">

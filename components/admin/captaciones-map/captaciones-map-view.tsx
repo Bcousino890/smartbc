@@ -67,6 +67,12 @@ export interface CaptacionesMapViewProps {
   /** Abre la ficha completa del anuncio (la del listado, con teléfono y WhatsApp). */
   onOpenFicha?: (id: string) => void;
   actions?: MapViewActions;
+  /**
+   * Cliente elegido, si lo gobierna la página (así Mapa, Cuadrícula y Lista
+   * comparten el mismo). Sin estas dos props el mapa lo lleva él solo.
+   */
+  client?: PickedClient | null;
+  onClientChange?: (c: PickedClient | null) => void;
 }
 
 type ClientState =
@@ -99,6 +105,8 @@ export function CaptacionesMapView({
   initialPolygons,
   filters,
   onZoneChange,
+  client: controlledClient,
+  onClientChange,
   onOpenFicha,
   actions = DEFAULT_ACTIONS,
 }: CaptacionesMapViewProps) {
@@ -236,7 +244,9 @@ export function CaptacionesMapView({
   const inZonePins = useMemo(() => pins.filter((p) => inZoneIds.has(p.id)), [pins, inZoneIds]);
 
   // ── Cliente ──
-  const [client, setClient] = useState<PickedClient | null>(null);
+  const [ownClient, setOwnClient] = useState<PickedClient | null>(null);
+  const client = controlledClient !== undefined ? controlledClient : ownClient;
+  const setClient = onClientChange ?? setOwnClient;
   const [clientState, setClientState] = useState<ClientState>({ status: "idle" });
   useEffect(() => {
     if (!client) {

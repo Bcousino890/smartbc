@@ -122,6 +122,8 @@ type CardProps = {
   onOpen: (row: ParticularRow) => void;
   onPrefetch: (id: string) => void;
   copied: boolean;
+  /** Encaje 0-100 con el encargo del cliente elegido; undefined = sin cliente o sin dato. */
+  score?: number;
   onCopyPhone: (phone: string, id: string) => void;
 };
 
@@ -133,7 +135,7 @@ const KIND_ICON_TONE: Record<SourceKind, string> = {
   agencia_web_propia: "text-teal-700",
 };
 
-function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone }: CardProps) {
+function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone, score }: CardProps) {
   const retired = !row.is_active;
   const cover = row.cover_url ?? row.photos?.[0]?.url ?? null;
   const op = opLabel(row);
@@ -242,8 +244,19 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
           </div>
 
           {/* Nuevo / Bajó de precio: lo que más pesa para captar, siempre sobre la foto. */}
-          {(fresh || drop != null) && (
+          {(fresh || drop != null || score != null) && (
             <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap items-center gap-1">
+              {score != null && (
+                <span
+                  title="Encaje con el encargo del cliente elegido"
+                  className={cn(
+                    "rounded-md px-2 py-1 text-xs font-bold leading-none shadow-sm tabular-nums",
+                    score >= 80 ? "bg-emerald-700 text-white" : score >= 50 ? "bg-amber-500 text-ink" : "bg-white/95 text-ink/70",
+                  )}
+                >
+                  {score > 0 ? `Encaja ${score}` : "No encaja"}
+                </span>
+              )}
               {fresh && (
                 <span className="rounded-md bg-gold px-2 py-1 text-xs font-bold leading-none text-fixed-ink shadow-sm">Nuevo</span>
               )}

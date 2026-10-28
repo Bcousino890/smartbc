@@ -18,6 +18,8 @@ export type { ParticularChangeRow, ParticularRow, StaffOption } from "./particul
 import { ParticularModal } from "./particular-modal";
 import { ParticularCard, type CardLayout } from "./_lista/particular-card";
 import { BAR_BUTTON, FOCUS_RING, SelectField, Segmented } from "./_lista/controls";
+import ClientPicker, { type PickedClient } from "@/components/admin/captaciones-map/client-picker";
+import { useClientScores } from "./use-client-scores";
 import { FiltersPanel } from "./_lista/filters-panel";
 import { buildChips, countPanelFilters } from "./_lista/filters-model";
 import { fmtNum } from "./_lista/format";
@@ -92,11 +94,14 @@ export function ParticularesClient({
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Cliente elegido para puntuar los anuncios: vale para Mapa, Cuadrícula y Lista.
+  const [pickedClient, setPickedClient] = useState<PickedClient | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
   // La vista vive en la URL (`vista=list|map`) para que recargar o compartir
   // el enlace abra la misma; cuadrícula es el valor por defecto.
   const view = f.view;
   const isMap = view === "map";
+  const clientScores = useClientScores(pickedClient, !isMap);
   const layout: CardLayout = view === "list" ? "list" : "grid";
   // Zona del mapa: la vigente en los filtros (la dibujada en el mapa o en el
   // modal «Ubicación en el mapa»). La vista solo la lee al montarse, así que
@@ -420,6 +425,9 @@ export function ParticularesClient({
                 { value: "map", label: "Mapa", icon: <MapIcon size={16} /> },
               ]}
             />
+            {!isMap && (
+              <ClientPicker value={pickedClient} onChange={setPickedClient} subtitle={clientScores.subtitle} theme="light" />
+            )}
             <div ref={toolsRef} className="relative">
               <button type="button" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen((v) => !v)} className={cn(BAR_BUTTON, FOCUS_RING)}>
                 {verifying || refreshState === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Wrench size={15} aria-hidden />}
@@ -447,6 +455,8 @@ export function ParticularesClient({
               advertiser: advertiser === "particular" ? "particular" : "all",
             }}
             onZoneChange={onMapZoneChange}
+            client={pickedClient}
+            onClientChange={setPickedClient}
             onOpenFicha={openParticularById}
           />
         ) : (
@@ -549,6 +559,7 @@ export function ParticularesClient({
                   onPrefetch={prefetchParticularDetail}
                   copied={copiedPhoneId === r.id}
                   onCopyPhone={handleCopyPhone}
+                  score={clientScores.hasScores ? (clientScores.scores.get(r.id) ?? 0) : undefined}
                 />
               ))}
             </div>

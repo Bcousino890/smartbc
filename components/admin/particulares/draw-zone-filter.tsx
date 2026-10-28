@@ -14,6 +14,14 @@ interface DrawZoneFilterProps {
   /** Valor crudo del parámetro `zonePoly` de la URL: JSON de ZonePolygon[] o "". */
   value: string;
   onChange: (value: string) => void;
+  /**
+   * Si viene, «Dibujar en el mapa» lleva a la vista Mapa de la página (la del
+   * botón Cuadrícula / Lista / Mapa) en vez de abrir un mapa aparte en un
+   * modal: es el mismo mapa con los pines, y la zona que se dibuja allí ya se
+   * guarda en este mismo filtro (`zonePoly`). Sin él (configuración de
+   * scrapers, que no tiene vista Mapa) se sigue usando el modal.
+   */
+  onOpenMap?: () => void;
 }
 
 /**
@@ -26,7 +34,7 @@ interface DrawZoneFilterProps {
  * AND sería confuso en una primera versión — ¿por qué hay menos resultados
  * si añadí una zona nueva? — así que se deja fuera a propósito.
  */
-export function DrawZoneFilter({ value, onChange }: DrawZoneFilterProps) {
+export function DrawZoneFilter({ value, onChange, onOpenMap }: DrawZoneFilterProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<ZonePolygon[]>([]);
 
@@ -52,7 +60,7 @@ export function DrawZoneFilter({ value, onChange }: DrawZoneFilterProps) {
     <>
       <button
         type="button"
-        onClick={openModal}
+        onClick={onOpenMap ?? openModal}
         className={
           appliedPolygons.length > 0
             ? "flex items-center gap-1.5 rounded-lg border border-gold bg-gold/15 px-3 py-2 text-sm font-medium text-gold-dark"
@@ -77,6 +85,7 @@ export function DrawZoneFilter({ value, onChange }: DrawZoneFilterProps) {
         </span>
       )}
 
+      {!onOpenMap && (
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -114,6 +123,7 @@ export function DrawZoneFilter({ value, onChange }: DrawZoneFilterProps) {
           </div>
         )}
       </Modal>
+      )}
     </>
   );
 }
