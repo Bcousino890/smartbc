@@ -20,11 +20,19 @@ $$;
 GRANT USAGE ON SCHEMA auth TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated, service_role;
 
--- 0032_fix_staff_rls.sql
-CREATE OR REPLACE FUNCTION public.is_staff() RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()
-     AND role IN ('owner','admin','advisor','agent_admin','agent_senior','agent_junior'))
+-- 0032_fix_staff_rls.sql (copia literal de is_staff)
+CREATE OR REPLACE FUNCTION is_staff()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND role IN ('owner', 'admin', 'advisor', 'agent_admin', 'agent_senior', 'agent_junior')
+  );
 $$;
 CREATE OR REPLACE FUNCTION public.is_admin() RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
