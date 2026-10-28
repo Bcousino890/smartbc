@@ -51,10 +51,10 @@ export function funnelRows(funnel: Funnel, hasClient: boolean): FunnelRow[] {
   const safe = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
   const base = safe(funnel.inZone);
   const pct = (v: number) => (base > 0 ? Math.min(100, Math.round((safe(v) / base) * 100)) : 0);
-  const rows: FunnelRow[] = [{ key: "inZone", label: "En la zona", value: base, pct: base > 0 ? 100 : 0 }];
+  const rows: FunnelRow[] = [{ key: "inZone", label: "Anuncios en la zona", value: base, pct: base > 0 ? 100 : 0 }];
   if (hasClient) {
-    rows.push({ key: "priceOk", label: "Precio y tipo", value: safe(funnel.priceOk), pct: pct(funnel.priceOk) });
-    rows.push({ key: "matches", label: "Encajan 80 %+", value: safe(funnel.matches), pct: pct(funnel.matches) });
+    rows.push({ key: "priceOk", label: "Dentro de su presupuesto", value: safe(funnel.priceOk), pct: pct(funnel.priceOk) });
+    rows.push({ key: "matches", label: "Encajan con su encargo", value: safe(funnel.matches), pct: pct(funnel.matches) });
   }
   return rows;
 }

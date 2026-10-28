@@ -19,21 +19,29 @@ type Props = {
  * Embudo de la zona dibujada. Panel de cristal que flota sobre el mapa:
  * tres barras proporcionales a «en zona» y tres cifras grandes.
  */
+const ROW_HELP: Record<string, string> = {
+  inZone: "Anuncios activos con ubicación dentro de la zona que has dibujado. Es el 100 % de las barras.",
+  priceOk: "De esos, los que son de la misma operación (venta o alquiler) y no superan el presupuesto máximo del encargo.",
+  matches: "De esos, los que puntúan 80 o más al compararlos con todo el encargo (zona, habitaciones, extras…).",
+};
+
+const firstName = (n: string) => n.trim().split(/\s+/)[0] ?? n;
+
 export function FunnelPanel({ funnel, areaKm2, clientName, captured, theme = "light", className }: Props) {
   const hasClient = clientName !== null;
   const rows = funnelRows(funnel, hasClient);
   return (
     <section
       className={`cmp-fun font-crm-sans ${theme === "dark" ? "cmp-dark" : ""} ${className ?? ""}`}
-      aria-label="Embudo de la zona"
+      aria-label="Resumen de la zona"
     >
       <h3 className="cmp-fun-h">
-        <span>Embudo de la zona</span>
+        <span>Resumen de la zona</span>
         <b className="cmp-num">{formatAreaKm2(areaKm2)}</b>
       </h3>
       <div className="cmp-fun-rows">
         {rows.map((r) => (
-          <div key={r.key} className={`cmp-fun-row cmp-fun-${r.key}`}>
+          <div key={r.key} title={ROW_HELP[r.key]} className={`cmp-fun-row cmp-fun-${r.key}`}>
             <span>{r.label}</span>
             <div className="cmp-fun-track" role="presentation">
               <i style={{ width: `${r.pct}%` }} />
@@ -44,23 +52,23 @@ export function FunnelPanel({ funnel, areaKm2, clientName, captured, theme = "li
       </div>
       {funnel.withoutLocation > 0 && (
         <p className="cmp-fun-note">
-          {funnel.withoutLocation} sin ubicación (no se pueden situar en el mapa)
+          Hay {funnel.withoutLocation.toLocaleString("es-ES")} anuncios más sin ubicación: no salen en el mapa y no se cuentan aquí.
         </p>
       )}
       <div className="cmp-fun-big">
         <div>
           <b className="cmp-num crm-number">{funnel.newIn24h}</b>
-          <small>nuevos en 24 h</small>
+          <small>nuevos hoy (24 h)</small>
         </div>
         {hasClient && captured !== null && (
           <div>
             <b className="cmp-num crm-number">{captured}</b>
-            <small>ya captados</small>
+            <small>ya captados para {firstName(clientName ?? "")}</small>
           </div>
         )}
         <div>
           <b className="cmp-num crm-number">{funnel.avgPrice !== null ? formatEuro(funnel.avgPrice) : "—"}</b>
-          <small>precio medio</small>
+          <small>alquiler medio</small>
         </div>
       </div>
       <style>{STYLES}</style>

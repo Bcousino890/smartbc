@@ -657,10 +657,18 @@ export function CaptacionesMapView({
           </div>
 
           <div className="cmv-glass cmv-legend" aria-label="Leyenda de los pines">
-            <div><span className="cmv-lp cmv-lp-hi">1.350€</span>Encaja</div>
-            <div><span className="cmv-lp cmv-lp-mid">1.480€</span>En parte</div>
-            <div><span className="cmv-lp cmv-lp-lo"><i /></span>No encaja</div>
-            <div><span className="cmv-lp cmv-lp-out">1.200€</span>Fuera</div>
+            <b className="cmv-legend-h">{hasScores ? `Encaje con el encargo de ${firstName(client?.name ?? "")}` : "Anuncios (precio en el pin)"}</b>
+            {hasScores ? (
+              <>
+                <div><span className="cmv-lp cmv-lp-hi">1.350€</span>Encaja (80 % o más)</div>
+                <div><span className="cmv-lp cmv-lp-mid">1.480€</span>Encaja en parte (60-79 %)</div>
+                <div><span className="cmv-lp cmv-lp-lo"><i /></span>No encaja (menos de 60 %)</div>
+              </>
+            ) : (
+              <div><span className="cmv-lp cmv-lp-mid">1.480€</span>Dentro de la zona dibujada</div>
+            )}
+            <div><span className="cmv-lp cmv-lp-out">1.200€</span>Fuera de la zona dibujada</div>
+            {!hasScores && <small className="cmv-legend-n">Elige un cliente (arriba a la derecha) para ver cuáles encajan con lo que busca.</small>}
           </div>
 
           <FunnelPanel
@@ -837,6 +845,8 @@ const CSS = `
 .cmv-note-load{width:max-content}
 .cmv-legend{position:absolute;z-index:900;right:14px;top:72px;padding:10px 12px;font-size:12px;display:grid;gap:7px}
 .cmv-legend div{display:flex;gap:8px;align-items:center}
+.cmv-legend-h{font-size:12px;font-weight:700;line-height:1.3;max-width:230px}
+.cmv-legend-n{font-size:11px;line-height:1.35;max-width:230px;opacity:.7}
 .cmv-lp{display:inline-grid;place-items:center;min-width:44px;height:18px;text-align:center;border-radius:999px;font:700 10.5px Lato,sans-serif;padding:0 7px;box-sizing:border-box}
 .cmv-lp-hi{background:#0a0a0a;color:#fff}
 .cmv-dark .cmv-lp-hi{background:#c9a96e;color:#0a0a0a}
