@@ -5,6 +5,8 @@ import { IdealistaNotConfiguredError } from "./client";
 import { createContact, findEveryContact, findEveryProperty, updateContact } from "./endpoints";
 import { normalizePhone } from "./mapper";
 import type { IdealistaContactInput } from "./types";
+import { environmentOf } from "@/lib/services/idealista/crm-sync/core";
+import { beginOperation, finishOperation } from "@/lib/services/idealista/crm-sync/sync";
 
 // Reconstrucción de relaciones con Idealista.
 //
@@ -86,6 +88,21 @@ export async function reconcileProperties(): Promise<ReconcileResult> {
     if (listing.api_clone_property_id) byPropertyId.set(listing.api_clone_property_id, listing);
   }
 
+  // Para el registro de operaciones (Idealista API → CRM): solo cuenta como
+  // observación un emparejamiento SIN ambigüedad — por id, o por una referencia
+  // que es única aquí y cuyo `code` es único entre los anuncios remotos.
+  const localRefCount = new Map<string, number>();
+  for (const listing of (listings ?? []) as LocalListing[]) {
+    const key = listing.reference_code?.trim().toLowerCase();
+    if (key) localRefCount.set(key, (localRefCount.get(key) ?? 0) + 1);
+  }
+  const remoteCodeCount = new Map<string, number>();
+  for (const property of remote) {
+    const key = (property.code ?? "").trim().toLowerCase();
+    if (key) remoteCodeCount.set(key, (remoteCodeCount.get(key) ?? 0) + 1);
+  }
+  const environment = environmentOf(config.sandbox);
+
   // Una ficha sólo se empareja una vez por pasada: si dos anuncios remotos
   // llevan el mismo `code` (original y clon), el segundo no puede sobreescribir
   // el `api_property_id` que acaba de fijar el primero.
@@ -115,6 +132,23 @@ export async function reconcileProperties(): Promise<ReconcileResult> {
           .join(" "),
       });
       continue;
+    }
+
+    // Observación de solo lectura, ANTES de escribir la ficha (así la escritura
+    // de api_last_sync_at no se confunde con una llamada fuera del registro).
+    const codeKey = code.toLowerCase();
+    const unambiguous =
+      !!knownById || (localRefCount.get(codeKey) === 1 && remoteCodeCount.get(codeKey) === 1 && !claimed.has(local.id));
+    if (unambiguous) {
+      try {
+        const op = await beginOperation({
+          listingId: local.id, environment, kind: "observe_reconcile", apiPropertyIdBefore: local.api_property_id,
+          referenceCode: local.reference_code, content: null, manifest: null,
+        });
+        await finishOperation(op, { outcome: "confirmed", httpStatus: 200, state: property.state ?? null, apiPropertyId: propertyId });
+      } catch {
+        // Sin registro la ficha quedará «incierta» para el CRM: es lo prudente.
+      }
     }
 
     // supabase-js no lanza: devuelve `{ error }`. Sin mirarlo, un choque con el
