@@ -144,12 +144,12 @@ Las decisiones de Fabricio no se reabren.
   - multimedia.
 
   Nunca cambian el slug, `bc_reference`, las otras etiquetas ni la procedencia. El estado solo cambia al archivar o desarchivar.
-- **C2. Dirección y coordenadas.** Siguen el `address_visibility` de la ficha:
-  - `exact`: calle, número y ciudad, con coordenadas;
+- **C2. Dirección y coordenadas.** Siguen el `address_visibility` de la ficha con la **misma regla que el mapper** (`mapper.ts:302`), para no enseñar nunca más de lo que enseña Idealista:
   - `street`: calle y ciudad, sin coordenadas;
-  - cualquier otro valor: solo la zona.
+  - `hidden`: solo la zona;
+  - cualquier otro valor (`exact` o vacío): calle, número y ciudad, con coordenadas.
 
-  Nunca se guardan la puerta, el bloque ni la planta.
+  Nunca se guardan la puerta, el bloque ni la planta. *(Ajustado en la ejecución: la revisión 4 decía «cualquier otro valor: solo la zona», que no coincidía con el mapper.)*
 - **C3. Baja.** Solo se archiva una ficha generada que esté en `available`. Si otro estado se ha puesto a mano, queda en «revisar».
 - **C4. Reactivación.** Volver a publicar desarchiva solo `archived_reason = 'idealista_api_withdrawn'`.
 - **C5. Slug.** El prefijo habitual por título más al menos 10 caracteres aleatorios en base 36.
@@ -183,6 +183,8 @@ Cada fila guarda `ok` y `detail`. Un fallo de fotos o local **no cambia** la con
 **Solapes, sin actualizar filas.** El intervalo de una operación va de su `seq` a su `result_seq`, o queda abierto si no hay resultado. Dos operaciones de la misma ficha y entorno se solapan si sus intervalos se cruzan. Se calcula al leer.
 
 **Sin resultado.** Una operación sin resultado y con más de 10 minutos se lee como `unknown`; el tope de la ruta es de 120 s.
+
+**Las lecturas no crean incertidumbre.** Un `observe` que falla (red, 5xx) no cambia nada en Idealista: ni cuenta como operación abierta ni como solape.
 
 **Registro previo obligatorio (D18).** Si falla `idealista_op_begin`, no se llama a Idealista y se devuelve un error local.
 
@@ -272,7 +274,7 @@ Un trigger hace inmutables el origen y la propiedad una vez puestos. La única e
 - las funciones SQL de catálogo excluyen `reference_only`. Se parte de su última definición y solo se añade el predicado.
 
 **Filtros en la aplicación**, como defensa en profundidad:
-- `applyPublicWebFilter`;
+- la web pública **no** lleva filtro propio: el CHECK obliga a `published_web = false` y `applyPublicWebFilter` exige `true` (su prueba de contrato fija exactamente tres condiciones; no se tocó);
 - `getSuggestedProperties`;
 - la búsqueda y el alta de `/s`;
 - `getPropertyForOffer` (D22);
@@ -333,7 +335,7 @@ Hay triggers `BEFORE DELETE` en `properties` e `idealista_listings`. Rechazan el
 - tiene `api_property_id` **o** un `create` en `uncertain_create`;
 - no está retirada con confirmación.
 
-`deleteProperty` y `delete-listing` traducen ese rechazo en un mensaje que propone archivar.
+`deleteProperty` lo comprueba **antes** de cualquier efecto secundario (desvincular captaciones, fotos) con `idealista_property_ad_live` y traduce el rechazo en un mensaje que propone archivar. `delete-listing`, si la ficha controla un anuncio vivo o desconocido, la archiva en el panel en vez de borrarla.
 
 ### 10. Interruptor (D24)
 
@@ -511,6 +513,7 @@ Para deshacer la contención, se ejecuta la misma consulta en sentido inverso, s
 - El script real del VPS.
 - La resolución DNS y el TLS reales de `safeFetch`.
 - **El simulador de PostgREST no hace cumplir las políticas, los triggers ni los CHECK.** Esas garantías se prueban aparte, en el Postgres temporal.
+- **`clone` escribe `api_last_sync_at`** y no se registra: tras un clonado el estado se verá incierto hasta pulsar «Comprobar en Idealista». Es conservador; `clone` no tiene botón en el panel.
 
 ## Aprobación
 
