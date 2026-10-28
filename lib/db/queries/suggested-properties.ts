@@ -187,7 +187,11 @@ export async function getSuggestedProperties(
       property_photos(url, position, is_cover)
     `) as any)
     .eq("status", "available")
-    .is("archived_at", null);
+    .is("archived_at", null)
+    // Fichas de referencia de Idealista (0232): solo se comparten por SmartLink,
+    // nunca como sugerencia ni en las alertas. La base ya lo impide (política y
+    // CHECK); esto es la segunda barrera.
+    .not("reference_only", "is", true);
 
   if (opts?.country) query = query.eq("country", opts.country);
   if (opts?.createdAfter) query = query.gt("created_at", opts.createdAfter);
@@ -356,6 +360,8 @@ export async function getPropertyForOffer(
     `,
     )
     .eq("id", propertyId)
+    // D22: el correo de oferta no se habilita para fichas de referencia.
+    .not("reference_only", "is", true)
     .maybeSingle();
 
   if (error || !data) return null;

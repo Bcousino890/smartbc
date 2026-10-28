@@ -3,7 +3,11 @@
 // Fabricio. Pura: se prueba en scripts/test-catalogs.mts.
 // ============================================================================
 
+import { REFERENCE_ONLY_ERROR, REFERENCE_ONLY_MESSAGE } from "@/lib/properties/reference-only";
+
 const MESSAGES: Record<string, string> = {
+  // Fichas de referencia de Idealista (0232): solo SmartLink.
+  [REFERENCE_ONLY_ERROR]: REFERENCE_ONLY_MESSAGE,
   unauthenticated: "Tu sesión ha caducado. Vuelve a entrar.",
   forbidden: "No tienes acceso a este catálogo.",
   already_in_catalog: "Esa propiedad ya está en este catálogo.",

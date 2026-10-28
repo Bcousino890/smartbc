@@ -413,6 +413,9 @@ export type DeletePropertyResult = { ok: true } | { ok: false; error: string };
 // caen por ON DELETE CASCADE) y la fila de la propiedad. Requiere permiso
 // `properties.delete`. Las captaciones que la habían convertido se desvinculan
 // y vuelven a "confirmada" para poder re-convertirlas.
+const IDEALISTA_AD_LIVE_MESSAGE =
+  "tiene un anuncio de Idealista activo o en estado desconocido. Dalo de baja por API (o compruébalo) o archiva la propiedad en vez de borrarla.";
+
 export async function deleteProperty(
   slug: string,
   country?: string,
@@ -434,6 +437,14 @@ export async function deleteProperty(
   if (!propRow) return { ok: false, error: "property_not_found" };
 
   const admin = createAdminClient() as any;
+
+  // D11 (0232): con un anuncio de Idealista activo o en estado desconocido no se
+  // borra. Se mira ANTES de desvincular captaciones o tocar fotos, para no dejar
+  // efectos a medias; el trigger de la base lo vuelve a impedir de todos modos.
+  const { data: adLive, error: adLiveError } = await admin.rpc("idealista_property_ad_live", { p_property: propRow.id });
+  if (adLiveError || adLive === true) {
+    return { ok: false, error: IDEALISTA_AD_LIVE_MESSAGE };
+  }
 
   // Rutas de storage de las fotos: las filas de property_photos caen por
   // ON DELETE CASCADE, pero los archivos del bucket no, así que se borran a
@@ -498,7 +509,9 @@ export async function deleteProperty(
     .from("properties")
     .delete()
     .eq("id", propRow.id);
-  if (delErr) return { ok: false, error: delErr.message };
+  if (delErr) {
+    return { ok: false, error: /idealista_ad_live/.test(delErr.message) ? IDEALISTA_AD_LIVE_MESSAGE : delErr.message };
+  }
 
   // La fila ya no existe: ahora sí, limpiar el bucket (best-effort — un fallo
   // aquí deja archivos huérfanos, nunca una propiedad sin fotos).

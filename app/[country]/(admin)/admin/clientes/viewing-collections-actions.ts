@@ -32,6 +32,7 @@ import {
   type SelectionStatus,
   type StopConfirmation,
 } from "@/lib/viewing-collections/types";
+import { REFERENCE_ONLY_MESSAGE } from "@/lib/properties/reference-only";
 
 export type ActionResult<T = unknown> =
   | ({ ok: true } & (T extends object ? T : unknown))
@@ -41,6 +42,8 @@ export type ActionResult<T = unknown> =
 // Los CHECK y triggers producen mensajes crudos con el nombre de la constraint.
 // Nunca deben llegar así al agente.
 const DB_ERROR_MAP: Array<{ match: RegExp; message: string }> = [
+  // Fichas de referencia de Idealista (0232): la base las rechaza; aquí se explica.
+  { match: /reference_only_property/, message: REFERENCE_ONLY_MESSAGE },
   {
     match: /vs_exact_address_requires_confirmation/,
     message:

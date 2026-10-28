@@ -21,6 +21,7 @@ import { canAccessClient } from "@/lib/db/queries/viewing-collections";
 import { scopeKindForAction } from "@/lib/permissions-scope";
 import { isCollectionLanguage } from "@/lib/viewing-collections/i18n";
 import { createItinerary } from "./viewing-collections-actions";
+import { staffDbMessage } from "@/lib/properties/reference-only";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -136,7 +137,7 @@ export async function createClientShortlist(
     .select("id, token")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: staffDbMessage(error.message) };
 
   // Las fichas primero y los anuncios después: lo que ya es nuestro se
   // presenta mejor, y el cliente empieza por ahí.
@@ -187,7 +188,7 @@ export async function renewClientShortlist(
     .select("client_id")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: staffDbMessage(error.message) };
   revalidateClient(data.client_id);
   return { ok: true };
 }
@@ -208,7 +209,7 @@ export async function revokeClientShortlist(
     .select("client_id")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: staffDbMessage(error.message) };
   revalidateClient(data.client_id);
   return { ok: true };
 }
@@ -229,7 +230,7 @@ export async function archiveClientShortlist(
     .select("client_id")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: staffDbMessage(error.message) };
   revalidateClient(data.client_id);
   return { ok: true };
 }

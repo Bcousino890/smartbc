@@ -1,0 +1,350 @@
+{
+  "base": "9356300a",
+  "note": "Llamadas a Idealista (nombre + argumentos sin configuración) por escenario.",
+  "alta": {
+    "ok": true,
+    "calls": [
+      {
+        "name": "createProperty",
+        "args": [
+          {
+            "type": "flat",
+            "address": {
+              "visibility": "street",
+              "streetName": "Calle de Prueba",
+              "streetNumber": "12",
+              "floor": "3",
+              "postalCode": "28010",
+              "town": "Madrid",
+              "country": "Spain",
+              "latitude": 40.433,
+              "longitude": -3.704,
+              "precision": "exact"
+            },
+            "contactId": 4242,
+            "features": {
+              "areaConstructed": 90,
+              "conservation": "good",
+              "areaUsable": 80,
+              "bathroomNumber": 1,
+              "rooms": 2,
+              "energyCertificateRating": "unknown",
+              "liftAvailable": true,
+              "conditionedAir": false,
+              "terrace": true,
+              "balcony": false,
+              "garden": false,
+              "pool": false,
+              "storage": false,
+              "wardrobes": false,
+              "parkingAvailable": false,
+              "handicappedAdaptedAccess": false,
+              "handicappedAdaptedUse": false,
+              "orientationNorth": false,
+              "orientationSouth": false,
+              "orientationEast": false,
+              "orientationWest": false,
+              "recommendedForChildren": false,
+              "petsAllowed": false,
+              "windowsLocation": "external",
+              "penthouse": false,
+              "studio": false,
+              "duplex": false,
+              "isInTopFloor": false
+            },
+            "operation": {
+              "type": "rent",
+              "price": 2400
+            },
+            "code": "BC-7001",
+            "reference": "BC-7001",
+            "descriptions": [
+              {
+                "language": "es",
+                "text": "Piso exterior de dos dormitorios.\n\nRequisitos: 1 fianza + personal shopper\n\nPara más propiedades consulta por chat de Idealista y WhatsApp y te enviamos más opciones que se acomoden a tus necesidades."
+              }
+            ],
+            "additionalLink": "https://www.bcousinoprop.com/",
+            "scope": "idealista"
+          }
+        ]
+      },
+      {
+        "name": "putImages",
+        "args": [
+          9001,
+          [
+            {
+              "url": "https://portal.test/api/public/idealista-photos/00000000-0000-4000-8000-0000000a1001/photo/0"
+            },
+            {
+              "url": "https://portal.test/api/public/idealista-photos/00000000-0000-4000-8000-0000000a1001/photo/1"
+            },
+            {
+              "url": "https://portal.test/api/public/idealista-photos/00000000-0000-4000-8000-0000000a1001/plan/0"
+            }
+          ]
+        ]
+      },
+      {
+        "name": "findImages",
+        "args": [
+          9001
+        ]
+      },
+      {
+        "name": "findVideos",
+        "args": [
+          9001
+        ]
+      },
+      {
+        "name": "createVideo",
+        "args": [
+          9001,
+          {
+            "url": "https://cdn.test/v.mp4",
+            "order": 1
+          }
+        ]
+      },
+      {
+        "name": "findVideos",
+        "args": [
+          9001
+        ]
+      }
+    ]
+  },
+  "actualización": {
+    "ok": true,
+    "calls": [
+      {
+        "name": "updateProperty",
+        "args": [
+          9001,
+          {
+            "type": "flat",
+            "address": {
+              "visibility": "street",
+              "streetName": "Calle de Prueba",
+              "streetNumber": "12",
+              "floor": "3",
+              "postalCode": "28010",
+              "town": "Madrid",
+              "country": "Spain",
+              "latitude": 40.433,
+              "longitude": -3.704,
+              "precision": "exact"
+            },
+            "contactId": 4242,
+            "features": {
+              "areaConstructed": 90,
+              "conservation": "good",
+              "areaUsable": 80,
+              "bathroomNumber": 1,
+              "rooms": 2,
+              "energyCertificateRating": "unknown",
+              "liftAvailable": true,
+              "conditionedAir": false,
+              "terrace": true,
+              "balcony": false,
+              "garden": false,
+              "pool": false,
+              "storage": false,
+              "wardrobes": false,
+              "parkingAvailable": false,
+              "handicappedAdaptedAccess": false,
+              "handicappedAdaptedUse": false,
+              "orientationNorth": false,
+              "orientationSouth": false,
+              "orientationEast": false,
+              "orientationWest": false,
+              "recommendedForChildren": false,
+              "petsAllowed": false,
+              "windowsLocation": "external",
+              "penthouse": false,
+              "studio": false,
+              "duplex": false,
+              "isInTopFloor": false
+            },
+            "operation": {
+              "type": "rent",
+              "price": 2400
+            },
+            "reference": "BC-7001",
+            "descriptions": [
+              {
+                "language": "es",
+                "text": "Piso exterior de dos dormitorios.\n\nRequisitos: 1 fianza + personal shopper\n\nPara más propiedades consulta por chat de Idealista y WhatsApp y te enviamos más opciones que se acomoden a tus necesidades."
+              }
+            ],
+            "additionalLink": "https://www.bcousinoprop.com/",
+            "scope": "idealista"
+          }
+        ]
+      },
+      {
+        "name": "putImages",
+        "args": [
+          9001,
+          [
+            {
+              "url": "https://portal.test/api/public/idealista-photos/00000000-0000-4000-8000-0000000a1001/photo/0"
+            },
+            {
+              "url": "https://portal.test/api/public/idealista-photos/00000000-0000-4000-8000-0000000a1001/photo/1"
+            },
+            {
+              "url": "https://portal.test/api/public/idealista-photos/00000000-0000-4000-8000-0000000a1001/plan/0"
+            }
+          ]
+        ]
+      },
+      {
+        "name": "findImages",
+        "args": [
+          9001
+        ]
+      },
+      {
+        "name": "findVideos",
+        "args": [
+          9001
+        ]
+      },
+      {
+        "name": "deleteVideo",
+        "args": [
+          9001,
+          5
+        ]
+      },
+      {
+        "name": "createVideo",
+        "args": [
+          9001,
+          {
+            "url": "https://cdn.test/v.mp4",
+            "order": 1
+          }
+        ]
+      },
+      {
+        "name": "findVideos",
+        "args": [
+          9001
+        ]
+      }
+    ]
+  },
+  "alta rechazada (400)": {
+    "ok": false,
+    "calls": [
+      {
+        "name": "createProperty",
+        "args": [
+          {
+            "type": "flat",
+            "address": {
+              "visibility": "street",
+              "streetName": "Calle de Prueba",
+              "streetNumber": "12",
+              "floor": "3",
+              "postalCode": "28010",
+              "town": "Madrid",
+              "country": "Spain",
+              "latitude": 40.433,
+              "longitude": -3.704,
+              "precision": "exact"
+            },
+            "contactId": 4242,
+            "features": {
+              "areaConstructed": 90,
+              "conservation": "good",
+              "areaUsable": 80,
+              "bathroomNumber": 1,
+              "rooms": 2,
+              "energyCertificateRating": "unknown",
+              "liftAvailable": true,
+              "conditionedAir": false,
+              "terrace": true,
+              "balcony": false,
+              "garden": false,
+              "pool": false,
+              "storage": false,
+              "wardrobes": false,
+              "parkingAvailable": false,
+              "handicappedAdaptedAccess": false,
+              "handicappedAdaptedUse": false,
+              "orientationNorth": false,
+              "orientationSouth": false,
+              "orientationEast": false,
+              "orientationWest": false,
+              "recommendedForChildren": false,
+              "petsAllowed": false,
+              "windowsLocation": "external",
+              "penthouse": false,
+              "studio": false,
+              "duplex": false,
+              "isInTopFloor": false
+            },
+            "operation": {
+              "type": "rent",
+              "price": 2400
+            },
+            "code": "BC-7001",
+            "reference": "BC-7001",
+            "descriptions": [
+              {
+                "language": "es",
+                "text": "Piso exterior de dos dormitorios.\n\nRequisitos: 1 fianza + personal shopper\n\nPara más propiedades consulta por chat de Idealista y WhatsApp y te enviamos más opciones que se acomoden a tus necesidades."
+              }
+            ],
+            "additionalLink": "https://www.bcousinoprop.com/",
+            "scope": "idealista"
+          }
+        ]
+      }
+    ]
+  },
+  "baja": {
+    "ok": true,
+    "calls": [
+      {
+        "name": "deactivateProperty",
+        "args": [
+          9001
+        ]
+      }
+    ]
+  },
+  "reactivación": {
+    "ok": true,
+    "calls": [
+      {
+        "name": "reactivateProperty",
+        "args": [
+          9001
+        ]
+      }
+    ]
+  },
+  "comprobar estado": {
+    "ok": true,
+    "calls": [
+      {
+        "name": "findProperty",
+        "args": [
+          9001
+        ]
+      },
+      {
+        "name": "findImages",
+        "args": [
+          9001
+        ]
+      }
+    ]
+  }
+}

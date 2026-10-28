@@ -39,6 +39,13 @@ jobs:
       - name: Idealista Partner API (payload contra los schemas, offline)
         run: npm run test:idealista
 
+      # Idealista API → CRM (0232/0233): las llamadas a Idealista son las mismas
+      # que en la versión base, el registro va antes de cada llamada, los fallos
+      # locales no se confunden con los de Idealista y el reintento no llama a
+      # Idealista. Fakes en scripts/shims/idealista-publish/; sin red ni base.
+      - name: Idealista → CRM (sincronización, offline)
+        run: npm run test:idealista-crm-sync
+
       # La regla que decide si dos leads son la MISMA persona. Un falso
       # positivo esconde un lead de la bandeja, así que se vigila en CI.
       - name: Unificación de leads (regla de fusión, offline)

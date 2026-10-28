@@ -10,6 +10,7 @@ import {
   revokeCollabLink,
   type CollabLinkRow,
 } from "@/lib/db/queries/collab-links";
+import { staffDbMessage } from "@/lib/properties/reference-only";
 
 // Enlaces "en blanco" para empresas colaboradoras (migración 0231). Mismo
 // permiso que los SmartLinks: editar propiedades.
@@ -40,7 +41,7 @@ export async function createCollabLinkAction(
     revalidatePath(`/admin/propiedades/${slug}`);
     return { ok: true, token, expiresAt };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "unknown_error" };
+    return { ok: false, error: err instanceof Error ? staffDbMessage(err.message) : "unknown_error" };
   }
 }
 

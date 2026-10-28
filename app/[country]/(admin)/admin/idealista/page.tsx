@@ -10,6 +10,7 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getIdealistaCoverage } from "@/lib/db/queries/idealista-coverage";
 import { IdealistaClient } from "./idealista-client";
 import { CoverageSection } from "./coverage-section";
+import { loadCrmSyncStates } from "@/lib/services/idealista/crm-sync/panel";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,9 @@ export default async function AdminIdealistaPage({
     )
     .not("bc_reference", "is", null)
     .is("archived_at", null)
+    // Una ficha de referencia ES el reflejo de un anuncio: no se publica otra
+    // vez desde ella (la base también lo impide en idealista_listings).
+    .not("reference_only", "is", true)
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -46,6 +50,12 @@ export default async function AdminIdealistaPage({
     .from("idealista_listings")
     .select("*")
     .order("updated_at", { ascending: false });
+
+  // Estado de la ficha del CRM asociada a cada anuncio por API (0233).
+  const crmSyncStates = await loadCrmSyncStates(
+    supabase,
+    ((listings ?? []) as Array<{ id: string }>).map((l) => l.id),
+  );
 
   // Qué fichas (propiedad o inspo) ya tienen un vídeo automático generado, para
   // poder enseñar "Descargar" en la lista sin abrir cada una a comprobarlo.
@@ -222,7 +232,7 @@ export default async function AdminIdealistaPage({
             hotfix: el tipo local DbIdealistaListing de idealista-client.tsx
             derivó respecto al cast inline de `idealista`; la data es la misma
             que la versión raíz (que compila y funciona en runtime). */}
-        <IdealistaClient properties={rows} listings={idealista as any} listingsWithVideo={listingsWithVideo} leadCountsByProperty={leadCountsByProperty} leadCountsByListing={leadCountsByListing} />
+        <IdealistaClient properties={rows} listings={idealista as any} listingsWithVideo={listingsWithVideo} leadCountsByProperty={leadCountsByProperty} leadCountsByListing={leadCountsByListing} crmSyncStates={crmSyncStates} portalOrigin={process.env.NEXT_PUBLIC_PORTAL_URL ?? ""} />
       </div>
 
       <CoverageSection coverage={coverage} country={country} />

@@ -1,4 +1,5 @@
 import "server-only";
+import { sortMediaByPosition } from "@/lib/db/media-order";
 import { storedSlugFromShare } from "../../share-slug";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
@@ -103,10 +104,10 @@ export async function getPropertyBySlugPublic(slug: string) {
     try {
       const { data: media, error } = await (supabase as any)
         .from("property_media")
-        .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
+        .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url, position")
         .eq("property_id", row.id)
         .in("type", ["video", "plan"]);
-      return { ...row, property_media: error ? [] : (media ?? []) };
+      return { ...row, property_media: error ? [] : sortMediaByPosition(media ?? []) };
     } catch {
       return { ...row, property_media: [] };
     }
@@ -150,10 +151,10 @@ export async function getPropertyMediaForAdmin(propertyId: string) {
   const supabase = await createClient();
   const { data: media } = await (supabase as any)
     .from("property_media")
-    .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
+    .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url, position")
     .eq("property_id", propertyId)
     .in("type", ["video", "plan"]);
-  return media ?? [];
+  return sortMediaByPosition(media ?? []);
 }
 
 /** Propiedad + `property_media`. La usan la story y el PDF; la ficha usa las dos piezas por separado. */
