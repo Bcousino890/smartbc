@@ -33,6 +33,19 @@ BEGIN
          api_last_sync_at = clock_timestamp() WHERE id = l2;
   PERFORM apply_idealista_crm_sync(l2, 'production', ((idealista_crm_plan(l2, 'production'))->'target'->>'seq')::bigint, NULL, NULL, NULL);
   INSERT INTO ids VALUES ('listing_exist', l2), ('exist', '10000000-0000-0000-0000-000000000002');
+  -- Una segunda ficha generada: se dará de baja durante la contención.
+  DECLARE l3 uuid; op3 uuid := gen_random_uuid(); r3 jsonb;
+  BEGIN
+    INSERT INTO idealista_listings (reference_code, is_inspo, inspo_title) VALUES ('BC-R003', true, 'Segunda') RETURNING id INTO l3;
+    PERFORM idealista_op_begin(op3, l3, 'production', 'create', NULL, 'BC-R003', '{}', '{}', NULL);
+    PERFORM idealista_op_finish(op3, 'confirmed', 201, 'active', 5003, NULL);
+    UPDATE idealista_listings SET api_property_id = 5003, api_state = 'active', idealista_state = 'published',
+           api_last_sync_at = clock_timestamp() WHERE id = l3;
+    r3 := apply_idealista_crm_sync(l3, 'production', ((idealista_crm_plan(l3, 'production'))->'target'->>'seq')::bigint,
+          jsonb_build_object('slug', 'segunda-r003-p4m8k2q7zx', 'title', 'Segunda', 'operation', 'sale', 'price', 300000,
+                             'zone', 'Madrid', 'features', '[]'::jsonb), NULL, NULL);
+    INSERT INTO ids VALUES ('listing_gen2', l3), ('gen2', (r3->>'property_id')::uuid);
+  END;
 END $$;
 GRANT SELECT ON ids TO authenticated, anon, service_role;
 
@@ -121,12 +134,63 @@ BEGIN
                        'el código nuevo respeta la contención (no desarchiva)');
 END $$;
 
-\echo '== Deshacer la contención'
-\set undo 1
+\echo '== Informe de la contención (solo lectura)'
+\set report 1
 \i scripts/sql/idealista-crm-sync-containment.sql
-\unset undo
-DO $$ BEGIN
-  PERFORM test_util.ok((SELECT archived_at IS NULL AND archived_reason IS NULL FROM properties WHERE id = (SELECT v FROM ids WHERE k = 'gen')),
-                       'deshacer: vuelve a estar visible solo por SmartLink');
+\unset report
+
+\echo '== Liberar ficha a ficha, solo con el último estado cierto'
+DO $$
+DECLARE g uuid := (SELECT v FROM ids WHERE k = 'gen'); lg uuid := (SELECT v FROM ids WHERE k = 'listing_gen');
+        g2 uuid := (SELECT v FROM ids WHERE k = 'gen2'); lg2 uuid := (SELECT v FROM ids WHERE k = 'listing_gen2'); r jsonb;
+BEGIN
+  -- Con la sincronización apagada (antes de comprobar el build) no se libera nada.
+  UPDATE app_settings SET value = '{"enabled": false}' WHERE key = 'idealista_crm_sync';
+  r := idealista_crm_release_containment(lg, 'production', NULL);
+  PERFORM test_util.ok(r->>'reason' = 'disabled' AND (SELECT archived_at IS NOT NULL FROM properties WHERE id = g),
+                       'interruptor apagado: sigue archivada');
+  UPDATE app_settings SET value = '{"enabled": true}' WHERE key = 'idealista_crm_sync';
+
+  -- El build anterior publicó sin registrar: el estado es incierto → sigue archivada.
+  UPDATE idealista_listings SET api_last_sync_at = clock_timestamp() + interval '2 minutes' WHERE id = lg;
+  r := idealista_crm_release_containment(lg, 'production', NULL);
+  PERFORM test_util.ok(r->>'status' = 'kept_archived' AND r->>'reason' = 'external_change'
+                       AND (SELECT archived_reason FROM properties WHERE id = g) = 'idealista_crm_containment',
+                       'estado incierto (llamada fuera del registro): sigue archivada');
+  PERFORM test_util.ok((SELECT status FROM idealista_crm_sync WHERE listing_id = lg) = 'uncertain', '…y el panel lo muestra como incierto');
+
+  -- Se comprueba en Idealista (observe) y sigue publicada, pero aún no está aplicado.
+  UPDATE idealista_listings SET api_last_sync_at = NULL WHERE id = lg;
+  PERFORM idealista_op_begin('20000000-0000-0000-0000-0000000000a1', lg, 'production', 'observe', 5001, NULL, NULL, NULL, NULL);
+  PERFORM idealista_op_finish('20000000-0000-0000-0000-0000000000a1', 'confirmed', 200, 'active', 5001, NULL);
+  r := idealista_crm_release_containment(lg, 'production', NULL);
+  PERFORM test_util.ok(r->>'reason' = 'apply_first' AND (SELECT archived_at IS NOT NULL FROM properties WHERE id = g),
+                       'publicada pero sin aplicar: primero se aplica, sigue archivada');
+  r := apply_idealista_crm_sync(lg, 'production', ((idealista_crm_plan(lg, 'production'))->'target'->>'seq')::bigint, NULL, NULL, NULL);
+  PERFORM test_util.ok(r->>'reason' = 'contained' AND (SELECT archived_reason FROM properties WHERE id = g) = 'idealista_crm_containment',
+                       'aplicar no desarchiva una contenida (queda en revisar/contained)');
+  r := idealista_crm_release_containment(lg, 'production', NULL);
+  PERFORM test_util.ok(r->>'status' = 'released' AND (SELECT archived_at IS NULL AND archived_reason IS NULL FROM properties WHERE id = g),
+                       'publicada, cierta y aplicada: se libera');
+  PERFORM test_util.ok((SELECT status FROM idealista_crm_sync WHERE listing_id = lg) = 'synced', '…y la fila vuelve a synced');
+
+  -- La segunda se dio de baja (confirmada) durante la contención → sigue archivada, como baja.
+  PERFORM idealista_op_begin('20000000-0000-0000-0000-0000000000a2', lg2, 'production', 'deactivate', 5003, NULL, NULL, NULL, NULL);
+  PERFORM idealista_op_finish('20000000-0000-0000-0000-0000000000a2', 'confirmed', 200, 'inactive', 5003, NULL);
+  r := idealista_crm_release_containment(lg2, 'production', NULL);
+  PERFORM test_util.ok(r->>'reason' = 'withdrawn' AND (SELECT archived_at IS NOT NULL AND archived_reason = 'idealista_api_withdrawn'
+                         AND status = 'archived' FROM properties WHERE id = g2), 'retirada: sigue archivada como baja');
+
+  -- Una baja sin resultado (incierta) en la primera: se vuelve a contener y no se libera.
+  UPDATE properties SET archived_at = now(), archived_reason = 'idealista_crm_containment' WHERE id = g;
+  PERFORM idealista_op_begin('20000000-0000-0000-0000-0000000000a3', lg, 'production', 'deactivate', 5001, NULL, NULL, NULL, NULL);
+  r := idealista_crm_release_containment(lg, 'production', NULL);
+  PERFORM test_util.ok(r->>'status' = 'kept_archived' AND (SELECT archived_at IS NOT NULL FROM properties WHERE id = g),
+                       'baja incierta: sigue archivada hasta resolverla');
+
+  -- Una propiedad existente nunca se toca.
+  PERFORM test_util.ok((idealista_crm_release_containment((SELECT v FROM ids WHERE k = 'listing_exist'), 'production', NULL))->>'status' = 'not_contained',
+                       'existente: no aplica');
 END $$;
+
 \echo 'test-idealista-crm-rollback.sql: todas las comprobaciones en verde'

@@ -2,7 +2,7 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { environmentOf, MEDIA_BUDGET_IN_RETRY_MS } from "@/lib/services/idealista/crm-sync/core";
-import { applyLatest, recoverApiPropertyId, resolveReview } from "@/lib/services/idealista/crm-sync/sync";
+import { applyLatest, recoverApiPropertyId, releaseContainment, resolveReview } from "@/lib/services/idealista/crm-sync/sync";
 
 // Sincronización Idealista API → CRM, SIN Idealista (D6, I1): reintenta solo
 // la parte local, resuelve una revisión o recupera el id de un alta ya
@@ -13,7 +13,7 @@ export const maxDuration = 300;
 
 type Body = {
   listingId?: string;
-  action?: "retry" | "resolve_review" | "recover_api_id";
+  action?: "retry" | "resolve_review" | "recover_api_id" | "release_containment";
   choice?: "use_existing" | "generate";
   propertyId?: string;
 };
@@ -51,6 +51,10 @@ export async function POST(req: Request) {
     if (!r.ok) return Response.json({ ok: false, message: `No se pudo resolver: ${r.error ?? "desconocido"}` });
     const applied = await applyLatest(listingId, environment, { budgetMs: MEDIA_BUDGET_IN_RETRY_MS, actorId: profile.id });
     return Response.json(applied);
+  }
+  if (body.action === "release_containment") {
+    const r = await releaseContainment(listingId, environment, profile.id, { budgetMs: MEDIA_BUDGET_IN_RETRY_MS });
+    return Response.json(r);
   }
   if (body.action === "recover_api_id") {
     const r = await recoverApiPropertyId(listingId, environment);

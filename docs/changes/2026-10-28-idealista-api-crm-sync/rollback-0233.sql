@@ -21,6 +21,7 @@ DROP FUNCTION IF EXISTS idealista_crm_media_stage(uuid, text, text, text, bigint
 DROP FUNCTION IF EXISTS idealista_recover_api_property_id(uuid, text);
 DROP FUNCTION IF EXISTS idealista_create_guard(uuid, text);
 DROP FUNCTION IF EXISTS idealista_crm_resolve_review(uuid, text, text, uuid, uuid);
+DROP FUNCTION IF EXISTS idealista_crm_release_containment(uuid, text, uuid);
 DROP FUNCTION IF EXISTS idealista_crm_note_failure(uuid, text, text, text);
 DROP FUNCTION IF EXISTS apply_idealista_crm_sync(uuid, text, bigint, jsonb, jsonb, uuid);
 DROP FUNCTION IF EXISTS idealista_crm_plan(uuid, text);

@@ -689,6 +689,11 @@ BEGIN
                status = 'available', updated_at = now()
          WHERE id = v_pid;
         v_note := 'unarchived';
+      ELSIF v_prop.archived_reason = 'idealista_crm_containment' THEN
+        -- Contención (antes de una vuelta atrás del código): se aplica el
+        -- contenido pero NO se desarchiva. Solo la libera
+        -- idealista_crm_release_containment, ficha a ficha.
+        v_note := 'contained';
       ELSIF v_prop.archived_at IS NOT NULL OR v_prop.status = 'archived' THEN
         v_note := 'archived_by_someone_else';
       END IF;
@@ -751,11 +756,16 @@ BEGIN
       tag_already_present = coalesce(tag_already_present, v_had_tag),
       smartlink_path = CASE WHEN v_origin = 'generated' THEN idealista_crm_smartlink_path(v_prop.slug, v_prop.bc_reference)
                             ELSE smartlink_path END,
-      applied_seq = v_seq, status = 'synced', synced_at = now(), last_attempt_at = now(),
-      last_error_code = NULL, last_error = NULL, review_reason = NULL, review_candidates = NULL
+      applied_seq = v_seq,
+      status = CASE WHEN v_note = 'contained' THEN 'needs_review' ELSE 'synced' END,
+      synced_at = now(), last_attempt_at = now(),
+      last_error_code = NULL, last_error = NULL,
+      review_reason = CASE WHEN v_note = 'contained' THEN 'contained' END, review_candidates = NULL
      WHERE id = s.id;
 
-    RETURN jsonb_build_object('status', 'synced', 'state', 'published', 'origin', v_origin, 'property_id', v_pid,
+    RETURN jsonb_build_object('status', CASE WHEN v_note = 'contained' THEN 'needs_review' ELSE 'synced' END,
+      'reason', CASE WHEN v_note = 'contained' THEN 'contained' END,
+      'state', 'published', 'origin', v_origin, 'property_id', v_pid,
       'smartlink_path', CASE WHEN v_origin = 'generated' THEN idealista_crm_smartlink_path(v_prop.slug, v_prop.bc_reference) END,
       'note', v_note);
   EXCEPTION WHEN OTHERS THEN
@@ -783,6 +793,69 @@ BEGIN
   UPDATE idealista_crm_sync SET status = 'failed', last_error_code = left(p_code, 200), last_error = left(p_message, 2000),
          attempts = attempts + 1, last_attempt_at = now()
    WHERE id = s.id;
+END $$;
+
+-- ── Liberar la contención (ficha a ficha) ───────────────────────────────────
+-- Sustituye al «deshacer en bloque». Solo con el código compatible en marcha
+-- (esta función la llama la ruta /api/admin/idealista/crm-sync, que no existe
+-- en el build anterior) y con la sincronización ENCENDIDA (se enciende tras
+-- comprobar el build en marcha). Decide con el último estado del anuncio:
+--   · publicado, cierto y ya aplicado en el CRM → se desarchiva;
+--   · publicado pero aún sin aplicar            → 'apply_first' (aplicar antes);
+--   · retirado (baja confirmada)                → sigue archivada, como baja;
+--   · incierto, alta incierta, revisar o nada   → sigue archivada hasta resolverlo.
+CREATE OR REPLACE FUNCTION idealista_crm_release_containment(p_listing uuid, p_environment text, p_actor uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  s     idealista_crm_sync;
+  v_t   jsonb;
+  v_p   record;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('idealista_crm:' || p_listing || ':' || p_environment, 0));
+  s := idealista_crm_sync_row(p_listing, p_environment);
+  IF NOT idealista_crm_sync_enabled() THEN
+    RETURN jsonb_build_object('status', 'kept_archived', 'reason', 'disabled');
+  END IF;
+  IF s.property_origin IS DISTINCT FROM 'generated' OR s.property_id IS NULL THEN
+    RETURN jsonb_build_object('status', 'not_contained', 'reason', 'not_generated');
+  END IF;
+  SELECT id, status, archived_at, archived_reason INTO v_p FROM properties WHERE id = s.property_id FOR UPDATE;
+  IF v_p.archived_reason IS DISTINCT FROM 'idealista_crm_containment' THEN
+    RETURN jsonb_build_object('status', 'not_contained', 'reason', 'not_contained');
+  END IF;
+
+  v_t := idealista_crm_target(p_listing, p_environment);
+
+  IF v_t->>'state' = 'withdrawn' THEN
+    UPDATE properties SET archived_reason = 'idealista_api_withdrawn', status = 'archived',
+           archived_auto_at = coalesce(archived_auto_at, now()), updated_at = now()
+     WHERE id = v_p.id;
+    UPDATE idealista_crm_sync SET status = 'synced', review_reason = NULL, last_attempt_at = now() WHERE id = s.id;
+    RETURN jsonb_build_object('status', 'kept_archived', 'reason', 'withdrawn');
+  END IF;
+
+  IF v_t->>'state' = 'published' THEN
+    IF (v_t->>'seq')::bigint > s.applied_seq THEN
+      RETURN jsonb_build_object('status', 'kept_archived', 'reason', 'apply_first');
+    END IF;
+    UPDATE properties SET archived_at = NULL, archived_auto_at = NULL, archived_reason = NULL,
+           status = CASE WHEN status = 'archived' THEN 'available'::property_status ELSE status END, updated_at = now()
+     WHERE id = v_p.id;
+    UPDATE idealista_crm_sync SET status = 'synced', review_reason = NULL, last_attempt_at = now(),
+           origin_decided_by = coalesce(origin_decided_by, p_actor)
+     WHERE id = s.id;
+    RETURN jsonb_build_object('status', 'released');
+  END IF;
+
+  -- Incierto, alta incierta, baja que no hicimos o sin ninguna confirmación.
+  UPDATE idealista_crm_sync SET
+    status = CASE WHEN v_t->>'state' IN ('uncertain', 'uncertain_create') THEN v_t->>'state' ELSE 'needs_review' END,
+    review_reason = coalesce(v_t->>'reason', 'contained'), last_attempt_at = now()
+   WHERE id = s.id;
+  RETURN jsonb_build_object('status', 'kept_archived', 'reason', coalesce(v_t->>'reason', v_t->>'state'));
 END $$;
 
 -- ── Revisión ────────────────────────────────────────────────────────────────
@@ -969,6 +1042,7 @@ BEGIN
     'idealista_crm_plan(uuid, text)',
     'apply_idealista_crm_sync(uuid, text, bigint, jsonb, jsonb, uuid)',
     'idealista_crm_note_failure(uuid, text, text, text)',
+    'idealista_crm_release_containment(uuid, text, uuid)',
     'idealista_crm_resolve_review(uuid, text, text, uuid, uuid)',
     'idealista_create_guard(uuid, text)',
     'idealista_recover_api_property_id(uuid, text)',

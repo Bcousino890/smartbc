@@ -30,6 +30,7 @@ export interface CrmSyncState {
 export type CrmSyncAction =
   | { action: "retry" }
   | { action: "recover_api_id" }
+  | { action: "release_containment" }
   | { action: "resolve_review"; choice: "use_existing" | "generate"; propertyId?: string };
 
 const REVIEW_REASON: Record<string, string> = {
@@ -38,6 +39,7 @@ const REVIEW_REASON: Record<string, string> = {
   explicit_link_changed: "la ficha apunta ahora a otra propiedad",
   manual_status: "la ficha de referencia cambió de estado a mano",
   external_withdrawal_or_quality: "Idealista la dio de baja sin que lo pidiéramos (calidad, caducidad…)",
+  contained: "en contención (archivada antes de una vuelta atrás del código)",
 };
 
 async function postCrmSync(listingId: string, body: CrmSyncAction): Promise<{ ok: boolean; message: string }> {
@@ -133,6 +135,13 @@ export function IdealistaCrmSyncBadge({
         actions.push(
           <button key="gen" className={button} disabled={busy} onClick={() => act({ action: "resolve_review", choice: "generate" })}>
             Crear ficha de referencia
+          </button>,
+        );
+      } else if (state.reviewReason === "contained") {
+        actions.push(
+          <button key="release" className={button} disabled={busy} onClick={() => act({ action: "release_containment" })}
+            title="Solo se libera si el último estado del anuncio es «publicado», es cierto y ya está aplicado">
+            <RefreshCw size={11} /> Liberar contención
           </button>,
         );
       } else {

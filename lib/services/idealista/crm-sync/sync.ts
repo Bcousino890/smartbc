@@ -402,3 +402,33 @@ export async function recoverApiPropertyId(
   if (error || !data) return { ok: false, error: error?.message ?? "sin respuesta" };
   return { ok: data.ok === true, apiPropertyId: data.api_property_id ?? undefined, error: data.error ?? undefined };
 }
+
+/**
+ * Libera UNA ficha contenida (spec «Recuperación»). Primero aplica el último
+ * estado confirmado; después la base decide: solo se desarchiva si el anuncio
+ * está publicado, el estado es cierto y ya está aplicado. Retiradas e inciertas
+ * siguen archivadas. Nunca llama a Idealista.
+ */
+export async function releaseContainment(
+  listingId: string,
+  environment: CrmEnvironment,
+  actorId: string,
+  opts: { budgetMs?: number } = {},
+  d?: CrmSyncDeps,
+): Promise<{ ok: boolean; status: string; reason?: string; message: string }> {
+  const x = await deps(d);
+  await applyLatest(listingId, environment, { budgetMs: opts.budgetMs, actorId }, x);
+  const { data, error } = await x.rpc("idealista_crm_release_containment", {
+    p_listing: listingId, p_environment: environment, p_actor: actorId,
+  });
+  if (error || !data) return { ok: false, status: "failed", message: `No se pudo liberar: ${error?.message ?? "sin respuesta"}` };
+  const reason = data.reason ?? undefined;
+  const message =
+    data.status === "released" ? "Liberada: vuelve a verse por su SmartLink."
+    : reason === "withdrawn" ? "Sigue archivada: Idealista confirmó la baja."
+    : reason === "disabled" ? "Sigue archivada: la sincronización está apagada."
+    : reason === "apply_first" ? "Sigue archivada: hay un estado nuevo sin aplicar; vuelve a intentarlo."
+    : data.status === "not_contained" ? "Esta ficha no está en contención."
+    : "Sigue archivada hasta resolver el estado en Idealista (comprobar o reconciliar).";
+  return { ok: data.status === "released", status: String(data.status), reason, message };
+}

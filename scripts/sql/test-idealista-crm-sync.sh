@@ -37,6 +37,9 @@ if [ "$what" = recuperacion ] || [ "$what" = todo ]; then
   echo "== recuperación con datos"
   fresh
   $R sql $S/test-idealista-crm-rollback.sql 2>&1 | grep -E "ok ·|TEST FAIL|ERROR|en verde|^==" | sed 's/^psql:[^ ]* NOTICE:  //'
+  echo "== la contención ya no tiene «deshacer en bloque»"
+  if $R sqlv undo=1 -- $S/idealista-crm-sync-containment.sql >/dev/null 2>&1; then echo "TEST FAIL: undo=1 se ejecutó"; exit 1; fi
+  echo "ok · undo=1 se rechaza (containment_bulk_undo_removed)"
   echo "== las reversiones se niegan con datos"
   D=docs/changes/2026-10-28-idealista-api-crm-sync
   if $R sql $D/rollback-0233.sql >/dev/null 2>&1; then echo "TEST FAIL: rollback-0233 se ejecutó con datos"; exit 1; fi
