@@ -94,6 +94,7 @@
     "test:catalogs-i18n": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-i18n.mts",
     "test:catalogs-translations": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-translations.mts",
     "test:catalogs-photos": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-photos.mts",
+    "test:furnishing-proposal": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-furnishing-proposal.mts",
     "test:catalogs-finish": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-catalogs-finish.mts",
     "test:housely": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-housely-scraper.mts",
     "test:innea": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-innea-scraper.mts",

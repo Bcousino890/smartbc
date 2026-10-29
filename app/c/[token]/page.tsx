@@ -14,6 +14,8 @@ import { getStoryExperiencePublic } from "@/lib/db/queries/story";
 import { findNearbyUniversities } from "@/lib/geo/universities-nearby";
 import { currentMapProvider } from "@/lib/services/location/provider";
 import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
+import { getFurnishingPublic } from "@/lib/db/queries/furnishing";
+import { furnishingTeaser } from "@/lib/furnishing/proposal";
 
 export const dynamic = "force-dynamic";
 
@@ -173,7 +175,7 @@ export default async function TokenSharePage({
     .filter((m) => m.type === "plan" && m.url)
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
 
-  const [experience, neighborhood] = await Promise.all([
+  const [experience, neighborhood, furnishing] = await Promise.all([
     getStoryExperiencePublic(row.id),
     getNeighborhoodPublic({
       zone: row.zone,
@@ -181,6 +183,7 @@ export default async function TokenSharePage({
       lat: property.latitude ?? null,
       lng: property.longitude ?? null,
     }),
+    getFurnishingPublic(row.id),
   ]);
 
   // El visitante de /c/{token} debe REENVIAR esta misma URL tokenizada por
@@ -207,6 +210,7 @@ export default async function TokenSharePage({
         mapProvider={currentMapProvider().provider}
         experienceState={experience.state}
         neighborhood={neighborhood}
+        furnishing={furnishingTeaser(furnishing, `/c/${encodeURIComponent(token)}/propuesta`)}
       />
     </>
   );

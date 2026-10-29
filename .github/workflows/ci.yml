@@ -95,6 +95,9 @@ jobs:
       # PR7a: variantes por ancho del proxy, srcset de la portada y anchos del PDF (sharp sobre fotos sintéticas). Sin BD.
       - name: "Catálogos (resolución de fotos, offline)"
         run: npm run test:catalogs-photos
+      # Propuesta de mobiliario (0235): visor, parejas antes/después, carga múltiple y barreras de acceso. Sin BD.
+      - name: "Propuesta amueblada (offline)"
+        run: npm run test:furnishing-proposal
       # PR7b: tono adaptativo por foto (fotos reales del repo y una oscura simulada), rutas con acabado, PDF, contraste y filete. Sin BD.
       - name: "Catálogos (acabado fotográfico, offline)"
         run: npm run test:catalogs-finish

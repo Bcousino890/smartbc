@@ -17,6 +17,7 @@ import {
   Plus,
   Save,
   Send,
+  Sofa,
   Sparkles,
   Trash2,
   User,
@@ -49,6 +50,8 @@ import {
 import { postUploadForm } from "@/lib/http/upload-form";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { PropertyVideoPanel } from "@/components/admin/property-video-panel";
+import { PropertyFurnishingPanel } from "@/components/admin/property-furnishing-panel";
+import type { FurnishingAdminData } from "@/lib/db/queries/furnishing";
 import {
   type SmartLinkRow,
   SmartLinksPanel,
@@ -136,6 +139,7 @@ export function PropertyEditView({
   shares,
   videos: initialVideos = [],
   plans: initialPlans = [],
+  furnishing = { proposal: null, images: [] },
   allTags = [],
   tagIds = [],
   country: tagCountry = "es",
@@ -147,6 +151,7 @@ export function PropertyEditView({
   country?: string;
   videos?: MediaItem[];
   plans?: MediaItem[];
+  furnishing?: FurnishingAdminData;
 }) {
   const t = useT();
   const router = useRouter();
@@ -1725,6 +1730,21 @@ export function PropertyEditView({
               Sin planos aún. Sube imágenes de la distribución.
             </p>
           )}
+        </Section>
+
+        {/* Propuesta de mobiliario: parejas antes/después y visor del cliente */}
+        <Section
+          icon={<Sofa size={15} strokeWidth={1.75} />}
+          title="Propuesta amueblada"
+          subtitle="Mobiliario virtual comparado con las fotografías del piso. Se enseña en el enlace compartido al publicarla."
+        >
+          <PropertyFurnishingPanel
+            slug={property.slug}
+            country={country}
+            previewHref={`${PORTAL_URL}/compartir/${publicSlug}/propuesta`}
+            initialProposal={furnishing.proposal}
+            initialImages={furnishing.images}
+          />
         </Section>
 
         {/* Publicación en web pública */}
