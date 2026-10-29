@@ -1,7 +1,7 @@
 "use client";
 
 // Interruptor de la sincronización Idealista API → CRM (0234). Solo lo pinta
-// la página para el dueño. «Encender» solo se activa con todas las
+// la página para el dueño y los admin. «Encender» solo se activa con todas las
 // comprobaciones en verde (y la base lo vuelve a comprobar al pulsar).
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Power, RefreshCw, XCircle } from "lucide-react";
@@ -11,7 +11,7 @@ type SaveResult = { ok: boolean; enabled?: boolean; failing?: string[]; error?: 
 
 async function loadStatus(): Promise<SwitchStatus> {
   const res = await fetch("/api/admin/idealista/crm-sync/switch", { cache: "no-store" });
-  if (!res.ok) throw new Error(res.status === 403 ? "Solo el dueño puede ver esto." : `Error ${res.status}`);
+  if (!res.ok) throw new Error(res.status === 403 ? "Solo el dueño o un administrador pueden ver esto." : `Error ${res.status}`);
   return (await res.json()) as SwitchStatus;
 }
 
