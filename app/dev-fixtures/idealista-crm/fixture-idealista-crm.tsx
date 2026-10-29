@@ -3,6 +3,30 @@
 // SOLO DESARROLLO LOCAL. Ver page.tsx.
 import { IdealistaCrmSyncBadge, type CrmSyncState } from "@/components/admin/idealista-crm-sync-badge";
 import { REFERENCE_ONLY_MESSAGE } from "@/lib/properties/reference-only";
+import { CrmSyncSwitchSection } from "@/app/[country]/(admin)/admin/idealista/configuracion/crm-sync-switch-section";
+import type { SwitchStatus } from "@/lib/services/idealista/crm-sync/switch";
+
+const GREEN = Array.from({ length: 112 }, (_, i) => ({ check: `comprobación sintética ${i + 1}`, expected: "x", found: "x", ok: true }));
+function fakeSwitch(missingTag: boolean) {
+  let enabled = false;
+  const status = (): SwitchStatus => {
+    const checks = missingTag
+      ? [{ check: "una sola «RESERVADO» en es", expected: "1", found: "0", ok: false }, ...GREEN]
+      : GREEN;
+    return { available: true, enabled, checks, allOk: checks.every((c) => c.ok),
+      lastChange: enabled ? { enabled: true, at: "2026-10-29T10:00:00Z", by: "Fabricio (fixture)" } : null };
+  };
+  return {
+    load: async () => status(),
+    save: async (next: boolean) => {
+      if (next && missingTag) return { ok: false, failing: ["una sola «RESERVADO» en es"], error: "checks_failing" };
+      enabled = next;
+      return { ok: true, enabled };
+    },
+  };
+}
+const SWITCH_MISSING = fakeSwitch(true);
+const SWITCH_OK = fakeSwitch(false);
 
 const base: CrmSyncState = {
   status: "synced", environment: "production", origin: "generated", propertySlug: "piso-luminoso-en-chamberi-x7k2m9q4wzab",
@@ -44,6 +68,9 @@ export function FixtureIdealistaCrm() {
           />
         </div>
       ))}
+      <h2 className="pt-4 font-display text-xl text-ink">Configuración → Idealista · interruptor</h2>
+      <div data-fixture="switch-missing"><CrmSyncSwitchSection load={SWITCH_MISSING.load} save={SWITCH_MISSING.save} /></div>
+      <div data-fixture="switch-ok"><CrmSyncSwitchSection load={SWITCH_OK.load} save={SWITCH_OK.save} /></div>
       <div className="rounded-xl border border-ink/10 bg-white/70 p-3 dark:bg-white/5">
         <p className="mb-2 text-sm font-medium text-ink/80">Mensaje al personal al intentar añadir una ficha de referencia a un catálogo o colección</p>
         <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{REFERENCE_ONLY_MESSAGE}</p>
