@@ -10,7 +10,7 @@ fails=0
 mutate() {  # nombre, archivo, suite, script de python que recibe el texto en s
   name="$1"; file="$2"; suite="$3"; py="$4"
   rm -rf "$TMPD/m"; mkdir -p "$TMPD/m"
-  cp supabase/migrations/019[2-6]_*.sql supabase/migrations/0232_*.sql supabase/migrations/0233_*.sql "$TMPD/m/"
+  cp supabase/migrations/019[2-6]_*.sql supabase/migrations/0232_*.sql supabase/migrations/0233_*.sql supabase/migrations/0234_*.sql "$TMPD/m/"
   python3 - "$TMPD/m/$file" "$py" <<'PY'
 import sys
 p, code = sys.argv[1], sys.argv[2]
@@ -58,4 +58,9 @@ mutate "trigger de asociación sin SECURITY DEFINER" $B frontera \
   "s = s.replace(\"LANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public\nAS \$\$\nBEGIN\n  IF NEW.property_id IS NULL THEN\", \"LANGUAGE plpgsql\nSET search_path = public\nAS \$\$\nBEGIN\n  IF NEW.property_id IS NULL THEN\")"
 mutate "sin trigger en client_shortlist_items" $B frontera \
   "s = s.replace(\"'client_shortlist_items', 'client_portal_links'\", \"'client_portal_links'\")"
+C=0234_idealista_crm_switch.sql
+mutate "encender aunque haya comprobaciones en rojo" $C interruptor \
+  "s = s.replace(\"IF p_enabled AND (v_total = 0 OR v_failing IS NOT NULL) THEN\", \"IF false THEN\")"
+mutate "el informe da por buena una comprobación NULL" $C interruptor \
+  "s = s.replace(\"btrim(regexp_replace(encontrado, '\\\\s+', ' ', 'g')), false)\", \"btrim(regexp_replace(encontrado, '\\\\s+', ' ', 'g')), true)\")"
 [ "$fails" -eq 0 ] && echo "mutaciones: todas detectadas" || { echo "mutaciones: $fails sin detectar"; exit 1; }
