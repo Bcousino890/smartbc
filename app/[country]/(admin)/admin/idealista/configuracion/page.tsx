@@ -10,6 +10,8 @@ import { AIConfigSection } from "./ai-config-section";
 import { ExtensionTokenSection } from "./extension-token-section";
 import { PartnerApiSection } from "./partner-api-section";
 import { VideoMusicSection } from "./video-music-section";
+import { CrmSyncSwitchSection } from "./crm-sync-switch-section";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,8 @@ export default async function IdealistaConfigPage({
   const { country } = await params;
   if (country !== "es") redirect(getCountryConfig(country).prefix);
   await guardPage("publicacion", country);
+  // El interruptor de la sincronización con el CRM es solo del dueño (0234).
+  const isOwner = (await getCurrentProfile())?.role === "owner";
 
   const supabase = createAdminClient() as any;
 
@@ -59,6 +63,8 @@ export default async function IdealistaConfigPage({
       </div>
 
       <PartnerApiSection />
+
+      {isOwner && <CrmSyncSwitchSection />}
 
       <ExtensionTokenSection />
 

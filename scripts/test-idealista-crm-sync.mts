@@ -14,6 +14,7 @@ import {
 import { applyLatest, releaseContainment, stageMedia, type CrmSyncDeps } from "../lib/services/idealista/crm-sync/sync.ts";
 import { REFERENCE_ONLY_MESSAGE, staffDbMessage } from "../lib/properties/reference-only.ts";
 import { catalogErrorMessage } from "../lib/catalogs/errors.ts";
+import { getSwitchStatus, setSwitch } from "../lib/services/idealista/crm-sync/switch.ts";
 import { propertyRowToClientProperty } from "../lib/db/adapters.ts";
 import { sortMediaByPosition } from "../lib/db/media-order.ts";
 import { SCENARIOS, baseListing, defaultRpc, runScenario } from "./idealista-publish-scenarios.mts";
@@ -256,6 +257,36 @@ console.log("· Liberar la contención: aplicar antes, decidir en la base, sin I
   ok(g.__idealista.calls.length === 0, "cero llamadas a Idealista");
   ok(!/undo|deshacer en bloque/i.test(read("lib/services/idealista/crm-sync/sync.ts")) && /containment_bulk_undo_removed/.test(read("scripts/sql/idealista-crm-sync-containment.sql")),
      "no existe un «deshacer» en bloque");
+}
+
+// ── 7c. Interruptor en el CRM (0234) ───────────────────────────────────────
+console.log("· Interruptor desde el CRM");
+{
+  const rows = [
+    { comprobacion: "una sola «RESERVADO» en es", esperado: "1", encontrado: "0", ok: false },
+    { comprobacion: "RLS activada en properties", esperado: "true", encontrado: "true", ok: true },
+  ];
+  const q = (data: unknown) => { const b: any = { select: () => b, eq: () => b, order: () => b, limit: () => b, maybeSingle: async () => ({ data, error: null }) }; return b; };
+  const fakeDb = (reportError = false, setting: any = { value: { enabled: false } }) => ({
+    rpc: async (fn: string, args?: any) => fn === "idealista_crm_activation_report"
+      ? (reportError ? { data: null, error: { message: "function does not exist" } } : { data: rows, error: null })
+      : { data: { ok: args?.p_enabled === false, error: args?.p_enabled ? "checks_failing" : undefined, failing: args?.p_enabled ? ["una sola «RESERVADO» en es"] : undefined }, error: null },
+    from: (t: string) => q(t === "app_settings" ? setting : null),
+  });
+  const st = await getSwitchStatus(fakeDb() as any);
+  ok(st.available && !st.enabled && !st.allOk && st.checks.length === 2 && st.checks[0].found === "0", "estado: comprobaciones y apagada");
+  ok(!(await getSwitchStatus(fakeDb(true) as any)).available, "sin la función (despliegue sin migraciones): no disponible");
+  const on = await setSwitch(true, "U", fakeDb() as any);
+  ok(!on.ok && on.failing?.[0] === "una sola «RESERVADO» en es", "encender con algo en rojo: se niega (lo decide la base)");
+  ok((await setSwitch(false, "U", fakeDb() as any)).ok, "apagar: siempre");
+  const route = read("app/api/admin/idealista/crm-sync/switch/route.ts");
+  ok(/profile\.role !== "owner"/.test(route) && /export async function GET\(\)\s*\{\s*const gate = await owner\(\)/.test(route) && /export async function POST[\s\S]*await owner\(\)/.test(route),
+     "ruta: solo el dueño, en GET y POST");
+  ok(!/partner-api\/(client|endpoints)/.test(route + read("lib/services/idealista/crm-sync/switch.ts")), "ruta e interruptor: no llaman a Idealista");
+  const page = read("app/[country]/(admin)/admin/idealista/configuracion/page.tsx");
+  ok(/role === "owner"/.test(page) && /\{isOwner && <CrmSyncSwitchSection \/>\}/.test(page), "la sección solo se pinta para el dueño");
+  ok(/disabled=\{busy \|\| !status\.allOk \|\| status\.enabled\}/.test(read("app/[country]/(admin)/admin/idealista/configuracion/crm-sync-switch-section.tsx")),
+     "«Encender» desactivado si algo está en rojo");
 }
 
 // ── 8. Pruebas de fuente ────────────────────────────────────────────────────
