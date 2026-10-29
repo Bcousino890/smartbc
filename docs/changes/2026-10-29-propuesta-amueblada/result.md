@@ -48,3 +48,9 @@ Base `origin/main` `53714f22`. Todo se comprobó en local con datos sintéticos.
 - El tipo de vivienda se enseña tal como está en el registro (`property_type`), igual que en la ficha compartida. En el fixture salía «flat».
 - Volver desde `/c/[token]/propuesta` a `/c/[token]` cuenta otra apertura del SmartLink, porque es la misma página con tracking.
 - Revisión de Codex: no hecha (opcional, a petición de Fabricio).
+
+## Cierre
+
+- PR #383 fusionado por Fabricio el 2026-10-29 a las 17:31 UTC (`e116104f`). La CI de `main` sobre el merge salió en verde.
+- A las 17:51 UTC la ficha de producción aún no mostraba la sección «Propuesta amueblada», así que producción seguía con la versión anterior. Este cierre aporta un commit nuevo a `main` para que el despliegue automático vuelva a ejecutarse: según `scripts/vps-autodeploy.sh`, un build fallido no se reintenta con el mismo commit.
+- Pendiente de Fabricio: cargar y publicar la propuesta de BC-2138 desde la ficha.
