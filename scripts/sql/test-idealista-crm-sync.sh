@@ -33,6 +33,18 @@ if [ "$what" = frontera ] || [ "$what" = todo ]; then
   fresh
   $R sql $S/test-idealista-crm-boundary.sql 2>&1 | grep -E "ok ·|TEST FAIL|ERROR|en verde" | sed 's/^psql:[^ ]* NOTICE:  //'
 fi
+if [ "$what" = interruptor ] || [ "$what" = todo ]; then
+  echo "== interruptor en el CRM (0234 aplicada dos veces)"
+  fresh
+  $R sql $M/0234_idealista_crm_switch.sql $M/0234_idealista_crm_switch.sql >/dev/null 2>&1
+  $R sql $S/test-idealista-crm-switch.sql 2>&1 | grep -E "ok ·|TEST FAIL|ERROR|en verde" | sed 's/^psql:[^ ]* NOTICE:  //'
+  echo "== reversión de 0234 (con registro: la tabla se conserva)"
+  $R sql docs/changes/2026-10-29-idealista-crm-interruptor/rollback-0234.sql >/dev/null
+  printf "%s\n" "DO \$\$ BEGIN PERFORM test_util.ok(to_regprocedure('public.idealista_crm_set_enabled(boolean, uuid)') IS NULL AND to_regclass('public.idealista_crm_switch_log') IS NOT NULL, 'reversión: funciones fuera, historial conservado'); END \$\$;" > "${TMPDIR:-/tmp}/rb0234.sql"
+  $R sql "${TMPDIR:-/tmp}/rb0234.sql" 2>&1 | grep -E "ok ·|TEST FAIL|ERROR" | sed 's/^psql:[^ ]* NOTICE:  //'
+  rm -f "${TMPDIR:-/tmp}/rb0234.sql"
+  $R sql $M/0234_idealista_crm_switch.sql >/dev/null 2>&1 && echo "ok · 0234 se vuelve a aplicar"
+fi
 if [ "$what" = recuperacion ] || [ "$what" = todo ]; then
   echo "== recuperación con datos"
   fresh

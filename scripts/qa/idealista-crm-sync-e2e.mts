@@ -54,6 +54,27 @@ for (const t of targets) {
     }
   }
 }
+// Interruptor (página de fixtures, acciones falsas): con algo en rojo «Encender»
+// está desactivado; con todo en verde, enciende tras confirmar.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  page.on("dialog", (d) => void d.accept());
+  await page.goto(`${DEV}/dev-fixtures/idealista-crm`, { waitUntil: "networkidle", timeout: 60_000 });
+  const missingBtn = page.locator('[data-fixture="switch-missing"] button', { hasText: "Encender" });
+  const okBtn = page.locator('[data-fixture="switch-ok"] button', { hasText: "Encender" });
+  const disabled = await missingBtn.isDisabled();
+  await okBtn.click();
+  await page.locator('[data-fixture="switch-ok"] [data-crm-switch="on"]').waitFor({ timeout: 5000 }).catch(() => null);
+  const on = (await page.locator('[data-fixture="switch-ok"] [data-crm-switch="on"]').count()) === 1;
+  const hint = (await page.locator('[data-fixture="switch-missing"]').innerText()).includes("Crea la etiqueta «RESERVADO»");
+  for (const [good, msg] of [[disabled, "interruptor: con algo en rojo «Encender» está desactivado"], [hint, "interruptor: dice cómo arreglarlo (crear RESERVADO)"], [on, "interruptor: con todo en verde enciende tras confirmar"]] as Array<[boolean, string]>) {
+    if (!good) fails++;
+    console.log(`  ${good ? "✓" : "✗"} ${msg}`);
+  }
+  await page.screenshot({ path: join(OUT, "interruptor-tras-encender-1440-light.png"), fullPage: true });
+  await ctx.close();
+}
 for (const w of [1440, 390]) {
   const differ = bgOf[`${w}-light`] && bgOf[`${w}-dark`] && bgOf[`${w}-light`] !== bgOf[`${w}-dark`];
   if (!differ) fails++;
