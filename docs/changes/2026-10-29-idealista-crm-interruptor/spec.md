@@ -18,6 +18,7 @@ Permite encender y apagar la sincronización Idealista API → CRM ([expediente 
 - **D1 (2026-10-29).** Se enciende y se apaga desde Configuración → Idealista, solo para el **dueño** (`owner`).
 - **D2 (2026-10-29).** «Encender» solo funciona si todas las comprobaciones de activación salen bien. «Apagar» funciona siempre.
 - **D3 (2026-10-29).** Queda registrado quién lo cambió y cuándo.
+- **D4 (2026-10-29), cambia D1.** También lo pueden usar los **administradores** (`admin`), los mismos que ya publican por API. Palabras de Fabricio: «si hazlo, lo tengo que ver yo».
 
 ## Alcance
 

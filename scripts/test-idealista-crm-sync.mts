@@ -280,11 +280,11 @@ console.log("· Interruptor desde el CRM");
   ok(!on.ok && on.failing?.[0] === "una sola «RESERVADO» en es", "encender con algo en rojo: se niega (lo decide la base)");
   ok((await setSwitch(false, "U", fakeDb() as any)).ok, "apagar: siempre");
   const route = read("app/api/admin/idealista/crm-sync/switch/route.ts");
-  ok(/profile\.role !== "owner"/.test(route) && /export async function GET\(\)\s*\{\s*const gate = await owner\(\)/.test(route) && /export async function POST[\s\S]*await owner\(\)/.test(route),
-     "ruta: solo el dueño, en GET y POST");
+  ok(/\["owner", "admin"\]\.includes\(profile\.role\)/.test(route) && /export async function GET\(\)\s*\{\s*const gate = await owner\(\)/.test(route) && /export async function POST[\s\S]*await owner\(\)/.test(route),
+     "ruta: solo dueño y admin, en GET y POST");
   ok(!/partner-api\/(client|endpoints)/.test(route + read("lib/services/idealista/crm-sync/switch.ts")), "ruta e interruptor: no llaman a Idealista");
   const page = read("app/[country]/(admin)/admin/idealista/configuracion/page.tsx");
-  ok(/role === "owner"/.test(page) && /\{isOwner && <CrmSyncSwitchSection \/>\}/.test(page), "la sección solo se pinta para el dueño");
+  ok(/role === "owner" \|\| role === "admin"/.test(page) && /\{canSwitch && <CrmSyncSwitchSection \/>\}/.test(page), "la sección solo se pinta para dueño y admin");
   ok(/disabled=\{busy \|\| !status\.allOk \|\| status\.enabled\}/.test(read("app/[country]/(admin)/admin/idealista/configuracion/crm-sync-switch-section.tsx")),
      "«Encender» desactivado si algo está en rojo");
 }

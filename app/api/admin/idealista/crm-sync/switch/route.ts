@@ -2,14 +2,15 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getSwitchStatus, setSwitch } from "@/lib/services/idealista/crm-sync/switch";
 
-// Interruptor de la sincronización Idealista API → CRM (0234). SOLO el dueño.
+// Interruptor de la sincronización Idealista API → CRM (0234). Dueño y admin
+// (los mismos que ya pueden publicar, dar de baja y reactivar por API).
 // GET: estado y comprobaciones. POST {enabled}: encender (solo si todo sale
 // bien; lo decide la base) o apagar (siempre). Nunca llama a Idealista.
 
 async function owner() {
   const profile = await getCurrentProfile();
   if (!profile) return { error: Response.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
-  if (profile.role !== "owner") return { error: Response.json({ ok: false, error: "Forbidden" }, { status: 403 }) };
+  if (!["owner", "admin"].includes(profile.role)) return { error: Response.json({ ok: false, error: "Forbidden" }, { status: 403 }) };
   return { profile };
 }
 
