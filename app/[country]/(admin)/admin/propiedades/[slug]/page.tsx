@@ -4,6 +4,7 @@ import {
   getPropertyRowBySlugForAdmin,
 } from "@/lib/db/queries/properties";
 import { getSharesForProperty } from "@/lib/db/queries/shares";
+import { getFurnishingForAdmin } from "@/lib/db/queries/furnishing";
 import { getPropertyTags, getTagIdsForProperty } from "@/lib/db/queries/property-tags";
 import { tagIdsInCatalog } from "@/lib/properties/tags";
 import { guardPage } from "@/lib/auth/guard";
@@ -89,7 +90,7 @@ export default async function PropertyDetailPage({
   // Con el id ya conocido: medios, SmartLinks (con stats de aperturas) y las
   // etiquetas de ESTA propiedad, en paralelo. Mismos errores que antes: los
   // SmartLinks lanzan; medios y etiquetas fallan en vacío.
-  const [allMedia, shares, linkedTagIds] = await Promise.all([
+  const [allMedia, shares, linkedTagIds, furnishing] = await Promise.all([
     getPropertyMediaForAdmin(property.id) as Promise<
       Array<{
         id: string;
@@ -101,6 +102,7 @@ export default async function PropertyDetailPage({
     >,
     getSharesForProperty(property.id),
     allTags.length > 0 ? getTagIdsForProperty(property.id) : Promise.resolve([]),
+    getFurnishingForAdmin(property.id),
   ]);
 
   const agency = Array.isArray(property.agencies)
@@ -122,6 +124,7 @@ export default async function PropertyDetailPage({
       country={country}
       videos={videos}
       plans={plans}
+      furnishing={furnishing}
       property={{
         id: property.id,
         slug: property.slug,

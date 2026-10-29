@@ -4,13 +4,14 @@ import {
   uploadPropertyPlan,
   uploadPropertyVideo,
 } from "@/app/(admin)/admin/propiedades/actions";
+import { uploadFurnishingPair } from "@/app/(admin)/admin/propiedades/furnishing-actions";
 
 export const dynamic = "force-dynamic";
 // Un vídeo de cientos de MB tarda en subir a storage.
 export const maxDuration = 300;
 
 /**
- * Fotos, vídeos y planos de una propiedad — la MISMA lógica que los server
+ * Fotos, vídeos, planos y propuesta de mobiliario de una propiedad — la MISMA lógica que los server
  * actions de actions.ts (permisos incluidos: cada función comprueba
  * properties/edit), pero por un route handler.
  *
@@ -25,6 +26,8 @@ const HANDLERS = {
   photo: uploadPropertyPhoto,
   video: uploadPropertyVideo,
   plan: uploadPropertyPlan,
+  // Pareja antes/después de la propuesta de mobiliario (furnishing-actions.ts).
+  furnishing: uploadFurnishingPair,
 } as const;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ kind: string }> }) {

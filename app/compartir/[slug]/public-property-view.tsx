@@ -13,6 +13,7 @@ import {
   Phone,
   Play,
   Ruler,
+  Sofa,
   Sparkles,
   X,
 } from "lucide-react";
@@ -35,6 +36,8 @@ import { useAnalytics } from "@/hooks/use-analytics";
 import { LocationModule } from "./location-module";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import type { MapProvider } from "@/lib/services/location/provider";
+import type { FurnishingTeaser } from "@/lib/furnishing/proposal";
+import { isOptimizableSrc } from "@/lib/images/optimizable-src";
 
 // ============================================================================
 // SMARTLINK 2.0 · Adaptive Property Renderer
@@ -146,6 +149,7 @@ export function PublicPropertyView({
   universities,
   mapProvider,
   experienceState,
+  furnishing,
 }: {
   property: Property;
   videos?: VideoMedia[];
@@ -171,6 +175,8 @@ export function PublicPropertyView({
    *  narrativa aprobada. Solo alimenta analytics — el render se decide por
    *  los datos que llegan. */
   experienceState?: "complete" | "partial" | "sparse" | "facts_led";
+  /** Propuesta de mobiliario publicada (0235): acceso a su visor. */
+  furnishing?: FurnishingTeaser | null;
 }) {
   // property.id en el DTO público ES el slug (nunca se expone el UUID):
   // se manda como propertySlug y el servidor lo resuelve a property_id.
@@ -423,6 +429,9 @@ export function PublicPropertyView({
             ))}
           </div>
         </section>
+
+        {/* PROPUESTA DE MOBILIARIO — solo si está publicada. */}
+        {furnishing && <FurnishingTeaserCard teaser={furnishing} />}
 
         {/* 04 · INTRO editorial (solo story aprobado). */}
         {/* PROPERTY PRELUDE · apertura editorial. Sin card, sin borde, sin
@@ -1352,6 +1361,39 @@ const ZONE_COORDS: Record<string, { lat: number; lng: number; zoom: number }> = 
 };
 
 // ─── 03 · KEY FACTS helpers ─────────────────────────────────────────────────
+
+function FurnishingTeaserCard({ teaser }: { teaser: FurnishingTeaser }) {
+  return (
+    <section className="mt-5 overflow-hidden rounded-2xl border border-gold/20 bg-white/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm">
+      <a href={teaser.href} className="group flex flex-col md:flex-row">
+        <div className="relative aspect-[3/2] w-full shrink-0 overflow-hidden bg-cream-100 md:w-[42%]">
+          <Image
+            src={teaser.coverUrl}
+            alt="Propuesta de mobiliario virtual"
+            fill
+            sizes="(max-width: 768px) 100vw, 480px"
+            className="object-cover transition duration-500 group-hover:scale-[1.02]"
+            unoptimized={!isOptimizableSrc(teaser.coverUrl)}
+          />
+        </div>
+        <div className="flex flex-1 flex-col justify-center gap-3 p-6 md:p-8">
+          <p className="crm-label inline-flex items-center gap-2 text-gold-dark">
+            <Sofa size={14} strokeWidth={1.75} />
+            Propuesta de mobiliario
+          </p>
+          <h2 className="crm-section-title text-ink">Imagina la vivienda amueblada</h2>
+          <p className="text-sm leading-relaxed text-ink/65">
+            {teaser.count} {teaser.count === 1 ? "imagen" : "imágenes"} para comparar cada estancia con su
+            fotografía actual. El mobiliario es una propuesta virtual.
+          </p>
+          <span className="mt-1 inline-flex w-fit items-center gap-2 rounded-lg bg-ink px-4 py-2.5 crm-button text-cream-50 transition group-hover:bg-ink-soft">
+            Ver propuesta amueblada <span aria-hidden="true">→</span>
+          </span>
+        </div>
+      </a>
+    </section>
+  );
+}
 
 function buildKeyFacts(property: Property) {
   const facts: Array<{ label: string; value: string; icon: React.ReactNode }> = [
