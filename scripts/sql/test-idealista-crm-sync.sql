@@ -314,6 +314,54 @@ BEGIN
   PERFORM test_util.ok(r->>'status' = 'synced', 'un rechazo (4xx) y su escritura de api_last_sync_at no crean incertidumbre');
 END $$;
 
+-- ── 9f. Registro sin ninguna operación decisiva (0236) ──────────────────────
+-- Antes, idealista_crm_target leía v_dec.seq sin asignar y plan fallaba
+-- («record "v_dec" is not assigned yet» → «No se pudo preparar la sincronización»).
+-- Solo falla en la PRIMERA llamada de una sesión: después plpgsql reutiliza el
+-- plan ya preparado y lee NULL. Por eso este bloque abre una conexión nueva.
+\connect
+SET client_min_messages = notice;
+DO $$
+DECLARE l uuid; r jsonb; t jsonb; op uuid;
+BEGIN
+  -- Anuncio anterior a la sincronización, ya dado de baja: «Actualizar por API» confirma con estado inactive.
+  INSERT INTO idealista_listings (reference_code, is_inspo, inspo_title, api_property_id)
+  VALUES ('BC-9091', false, 'Anuncio antiguo dado de baja', 9091) RETURNING id INTO l;
+  PERFORM crm_t.op(l, 'update', 'confirmed', 'inactive', 9091);
+  t := idealista_crm_target(l, 'production');
+  PERFORM test_util.ok(t->>'state' = 'none', 'modificación de un anuncio ya dado de baja → nada que reflejar (sin error)');
+  r := crm_t.sync(l);
+  PERFORM test_util.ok(r->>'reason' = 'nothing_confirmed' AND crm_t.prop_of(l) IS NULL
+                       AND NOT EXISTS (SELECT 1 FROM properties WHERE external_id = 'idealista-api-' || l || '-production'),
+                       'nada que reflejar → no se crea ninguna ficha');
+  PERFORM test_util.ok((SELECT status = 'pending' AND last_attempt_at IS NOT NULL FROM idealista_crm_sync
+                         WHERE listing_id = l AND environment = 'production'),
+                       'nada que reflejar → la fila queda «pending» con intento (el panel no enseña nada)');
+
+  -- Solo rechazos y una comprobación fallida: tampoco hay decisiva.
+  l := crm_t.listing('BC-9092', true);
+  PERFORM crm_t.op(l, 'create', 'rejected', NULL);
+  op := crm_t.op(l, 'observe', NULL);
+  PERFORM crm_t.finish(op, 'unknown', NULL);
+  PERFORM test_util.ok(idealista_crm_target(l, 'production')->>'state' = 'none', 'solo rechazos y una lectura fallida → nada que reflejar');
+
+  -- Una operación abierta sin decisiva previa → incierto (también fallaba).
+  INSERT INTO idealista_listings (reference_code, is_inspo, inspo_title, api_property_id)
+  VALUES ('BC-9093', false, 'Anuncio antiguo', 9093) RETURNING id INTO l;
+  PERFORM crm_t.op(l, 'deactivate', NULL);
+  t := idealista_crm_target(l, 'production');
+  PERFORM test_util.ok(t->>'state' = 'uncertain' AND t->>'reason' = 'open_operation', 'operación abierta sin decisiva previa → incierto');
+  r := crm_t.sync(l);
+  PERFORM test_util.ok(r->>'status' = 'uncertain', 'operación abierta sin decisiva previa → plan y apply no fallan');
+
+  -- Y una modificación de un anuncio antiguo ACTIVO sí crea su ficha de referencia.
+  INSERT INTO idealista_listings (reference_code, is_inspo, inspo_title, api_property_id)
+  VALUES ('BC-9094', true, 'Anuncio antiguo activo', 9094) RETURNING id INTO l;
+  PERFORM crm_t.op(l, 'update', 'confirmed', 'active', 9094);
+  r := crm_t.sync(l);
+  PERFORM test_util.ok(r->>'status' = 'synced' AND r->>'origin' = 'generated', 'modificación de un anuncio antiguo activo → ficha de referencia');
+END $$;
+
 -- ── 10. Alta sin id / alta incierta (corrección 5) ──────────────────────────
 DO $$
 DECLARE l uuid; r jsonb; op uuid;

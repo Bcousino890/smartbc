@@ -25,6 +25,8 @@ export interface CrmSyncState {
   candidates: CrmSyncCandidate[];
   lastError: string | null;
   lastErrorCode: string | null;
+  /** El registro no tiene nada confirmado que reflejar: no hay ficha que enseñar. */
+  nothingToReflect?: boolean;
 }
 
 export type CrmSyncAction =
@@ -83,6 +85,7 @@ export function IdealistaCrmSyncBadge({
 
   if (!state && hasApiPropertyId) return null; // anuncio anterior a la sincronización (D10)
   if (!state) return null;
+  if (state.nothingToReflect) return null; // p. ej. modificación de un anuncio ya dado de baja
 
   const act = async (body: CrmSyncAction) => {
     setBusy(true);

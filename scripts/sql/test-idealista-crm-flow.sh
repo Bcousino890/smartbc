@@ -12,7 +12,7 @@ S=scripts/sql
 $R reset
 $R sql $S/stub-supabase.sql $S/test-util.sql $S/fixtures-core.sql $M/0192_catalogs_core.sql $M/0193_catalog_public.sql \
        $M/0194_catalog_contact.sql $M/0195_catalog_selection.sql $M/0196_catalog_adjustments.sql $S/stub-idealista-crm.sql \
-       $M/0232_idealista_reference_boundary.sql $M/0233_idealista_crm_sync.sql >/dev/null 2>&1
+       $M/0232_idealista_reference_boundary.sql $M/0233_idealista_crm_sync.sql $M/0236_idealista_crm_target_sin_decisiva.sql >/dev/null 2>&1
 SEED=$(mktemp "${TMPDIR:-/tmp}/crm-flow.XXXXXX")
 cat > "$SEED" <<'SQL'
 UPDATE app_settings SET value = '{"enabled": true}' WHERE key = 'idealista_crm_sync';
