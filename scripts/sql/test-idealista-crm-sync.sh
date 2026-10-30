@@ -16,11 +16,12 @@ fresh() {
   # shellcheck disable=SC2086
   $R sql $BASE >/dev/null 2>&1
   $R sql $M/0232_idealista_reference_boundary.sql $M/0232_idealista_reference_boundary.sql \
-         $M/0233_idealista_crm_sync.sql $M/0233_idealista_crm_sync.sql >/dev/null 2>&1
+         $M/0233_idealista_crm_sync.sql $M/0233_idealista_crm_sync.sql \
+         $M/0236_idealista_crm_target_sin_decisiva.sql $M/0236_idealista_crm_target_sin_decisiva.sql >/dev/null 2>&1
 }
 
 if [ "$what" = comportamiento ] || [ "$what" = todo ]; then
-  echo "== comportamiento (0232 y 0233 aplicadas dos veces)"
+  echo "== comportamiento (0232, 0233 y 0236 aplicadas dos veces)"
   fresh
   $R sql $S/test-idealista-crm-sync.sql 2>&1 | grep -E "ok ·|TEST FAIL|ERROR|en verde" | sed 's/^psql:[^ ]* NOTICE:  //'
   echo "== concurrencia: dos sesiones aplican la misma ficha a la vez"
