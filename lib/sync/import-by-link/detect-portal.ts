@@ -48,6 +48,11 @@ const RULES: { match: (host: string) => boolean; portal: ImportPortal }[] = [
     match: (h) => /(^|\.)spain-sothebysrealty\.com$/i.test(h),
     portal: "sothebys",
   },
+  {
+    // Chile: avisos de Portal Inmobiliario y los de MercadoLibre Chile (misma plataforma).
+    match: (h) => /(^|\.)portalinmobiliario\.com$/i.test(h) || /(^|\.)mercadolibre\.cl$/i.test(h),
+    portal: "portalinmobiliario",
+  },
 ];
 
 export function detectPortal(rawUrl: string): {

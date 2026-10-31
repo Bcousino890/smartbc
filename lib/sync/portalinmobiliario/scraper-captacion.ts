@@ -567,6 +567,59 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
   };
 }
 
+
+function finishScraped(partial: Partial<ScrapedCaptacion>, site: string, url: string): ScrapedCaptacion {
+  return {
+    title: partial.title ?? null,
+    description: partial.description ?? null,
+    price: partial.price ?? null,
+    currency: partial.currency ?? null,
+    bedrooms: partial.bedrooms ?? null,
+    bathrooms: partial.bathrooms ?? null,
+    square_meters: partial.square_meters ?? null,
+    useful_square_meters: partial.useful_square_meters ?? null,
+    region: partial.region ?? null,
+    commune: partial.commune ?? null,
+    zone: partial.zone ?? null,
+    address_scraped: partial.address_scraped ?? null,
+    latitude: partial.latitude ?? null,
+    longitude: partial.longitude ?? null,
+    cover_photo_url: partial.cover_photo_url ?? null,
+    photo_urls: partial.photo_urls ?? [],
+    features: partial.features ?? [],
+    broker_name: partial.broker_name ?? null,
+    external_reference:
+      partial.external_reference ??
+      extractReferenceFromDescription(partial.description ?? null),
+    operation: partial.operation ?? detectOperation(url),
+    portal_publication_number:
+      partial.portal_publication_number ??
+      extractMLId(url)?.replace(/^MLC/i, "") ??
+      null,
+    published_ago: partial.published_ago ?? null,
+    source_site: site,
+  };
+}
+
+/**
+ * Lee un aviso de Portal Inmobiliario a partir del HTML YA descargado (por el
+ * servidor con proxy o pegado por la persona). Es la misma lectura que usa la
+ * captación, sin pedir nada a la red salvo la galería completa (opcional).
+ */
+export async function scrapeCaptacionFromHtml(url: string, html: string): Promise<ScrapedCaptacion> {
+  const $ = cheerio.load(html);
+  const partial = scrapeMLPage($, html);
+  const mlId = extractMLId(url);
+  if (mlId) {
+    const galleryPhotos = await fetchMLGalleryPhotos(mlId);
+    if (galleryPhotos.length > 0) {
+      partial.photo_urls = galleryPhotos;
+      partial.cover_photo_url = galleryPhotos[0];
+    }
+  }
+  return finishScraped(partial, detectSite(url), url);
+}
+
 export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion> {
   const site = detectSite(url);
 
@@ -663,34 +716,5 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
     }
   }
 
-  return {
-    title: partial.title ?? null,
-    description: partial.description ?? null,
-    price: partial.price ?? null,
-    currency: partial.currency ?? null,
-    bedrooms: partial.bedrooms ?? null,
-    bathrooms: partial.bathrooms ?? null,
-    square_meters: partial.square_meters ?? null,
-    useful_square_meters: partial.useful_square_meters ?? null,
-    region: partial.region ?? null,
-    commune: partial.commune ?? null,
-    zone: partial.zone ?? null,
-    address_scraped: partial.address_scraped ?? null,
-    latitude: partial.latitude ?? null,
-    longitude: partial.longitude ?? null,
-    cover_photo_url: partial.cover_photo_url ?? null,
-    photo_urls: partial.photo_urls ?? [],
-    features: partial.features ?? [],
-    broker_name: partial.broker_name ?? null,
-    external_reference:
-      partial.external_reference ??
-      extractReferenceFromDescription(partial.description ?? null),
-    operation: partial.operation ?? detectOperation(url),
-    portal_publication_number:
-      partial.portal_publication_number ??
-      extractMLId(url)?.replace(/^MLC/i, "") ??
-      null,
-    published_ago: partial.published_ago ?? null,
-    source_site: site,
-  };
+  return finishScraped(partial, site, url);
 }

@@ -502,6 +502,11 @@ export async function confirmDraft(args: { actor: string; id: string; expectedVe
   }
   if (rpc.error) return fail(errCode(rpc.error));
   const r = rpc.data as { property_id: string; slug: string; created: boolean; choice: DuplicateChoice };
+  // La RPC no sabe de monedas: una ficha nueva de Chile se guarda en la moneda del anuncio (UF o pesos), no en euros.
+  if (args.choice.kind === "new" && r.created && d.country === "cl") {
+    const cur = String((d.extracted?.preview as Partial<ImportPreview> | undefined)?.currency ?? "").toLowerCase();
+    await db().from("properties").update({ currency: cur === "uf" || cur === "usd" ? cur : "clp" }).eq("id", r.property_id);
+  }
   // Pasos pendientes (I-12): fotos solo si se creó ficha nueva; catálogo y enlace del cliente si venían.
   const fresh = (await getDraft(args.actor, d.id))!;
   if (Object.keys(fresh.steps ?? {}).length === 0) {

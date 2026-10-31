@@ -18,6 +18,7 @@ export type ImportPortal =
   | "ukio"
   | "airbnb"
   | "sothebys"
+  | "portalinmobiliario"
   | "generic";
 
 export type ImportPhoto = {

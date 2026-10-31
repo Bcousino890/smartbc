@@ -12,6 +12,7 @@ import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
 import { extractAirbnb, normalizeAirbnbUrl } from "./extractors/airbnb";
 import { extractSothebys } from "./extractors/sothebys";
+import { extractPortalInmobiliario } from "./extractors/portalinmobiliario";
 import { extractVideos, dedupeVideos } from "./extract-videos";
 import { dedupKey } from "../scrapers/image-utils";
 import { getProxyUrl } from "../proxy-config";
@@ -128,6 +129,23 @@ export async function extractFromUrl(
     : await fetchHtml(detected.url.toString());
   if (!fetched.ok) return { ok: false, error: fetched.error };
 
+  // Portal Inmobiliario manda a los servidores a una página de "verificación
+  // de cuenta" en vez del aviso. Se dice claro y la pantalla ofrece pegar el
+  // código de la página (que siempre funciona).
+  if (
+    detected.portal === "portalinmobiliario" &&
+    (/account-verification|suspicious-traffic/i.test(fetched.finalUrl) ||
+      /suspicious-traffic-frontend/i.test(fetched.html.slice(0, 2000)))
+  ) {
+    return {
+      ok: false,
+      error: {
+        kind: "blocked",
+        reason: "Portal Inmobiliario no deja leer el aviso desde el servidor. Pega el código de la página.",
+      },
+    };
+  }
+
   const $ = cheerio.load(fetched.html);
   const finalUrl = fetched.finalUrl;
 
@@ -161,6 +179,9 @@ export async function extractFromUrl(
       break;
     case "sothebys":
       preview = extractSothebys($, finalUrl);
+      break;
+    case "portalinmobiliario":
+      preview = await extractPortalInmobiliario(fetched.html, detected.url.toString());
       break;
     case "mobilia":
     case "generic":

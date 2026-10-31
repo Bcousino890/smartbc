@@ -87,6 +87,17 @@ export function DraftReview({
   const [steps, setSteps] = useState<DraftRow["steps"]>({});
   const [result, setResult] = useState<{ slug: string; choice: string } | null>(null);
   const confirming = useRef(false);
+  // Chile: pesos que vale 1 UF hoy, para enseñar el precio en pesos.
+  const [ufInClp, setUfInClp] = useState<number | null>(null);
+  useEffect(() => {
+    if (country !== "cl") return;
+    fetch("/api/exchange-rate?from=UF&to=CLP")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.rate > 1000) setUfInClp(j.rate);
+      })
+      .catch(() => {});
+  }, [country]);
 
   const apply = useCallback((l: Loaded) => {
     const d = l.draft;
@@ -117,6 +128,9 @@ export function DraftReview({
     return error ? <ErrorBox text={error} /> : <p className="text-sm text-ink/55">Cargando el borrador…</p>;
   }
   const d = loaded.draft;
+  // Chile: la moneda es la del anuncio (UF o pesos); España siempre euros.
+  const previewCurrency = String((d.extracted?.preview as { currency?: string | null } | undefined)?.currency ?? "").toLowerCase();
+  const priceUnit = country === "cl" ? (previewCurrency === "uf" ? "UF" : previewCurrency === "usd" ? "US$" : "$ CLP") : "€";
   const evidence = ((d.extracted?.evidence ?? {}) as Record<string, FieldEvidence>) || {};
   const set = <K extends keyof DraftFields>(k: K, v: DraftFields[K]) => {
     setFields((f) => ({ ...f, [k]: v }));
@@ -297,11 +311,11 @@ export function DraftReview({
         ) : (
           <div />
         )}
-        {textField("price", fields.operation === "rent" ? "Precio (€/mes)" : "Precio (€)", { type: "number" })}
+        {textField("price", `Precio (${priceUnit})${fields.operation === "rent" ? "/mes" : ""}${priceUnit === "UF" && ufInClp && fields.price ? ` ≈ $${Math.round(fields.price * ufInClp).toLocaleString("es-CL")} CLP` : ""}`, { type: "number" })}
         {textField("squareMeters", FIELD_LABELS.squareMeters!, { type: "number" })}
         {textField("bedrooms", FIELD_LABELS.bedrooms!, { type: "number" })}
         {textField("bathrooms", FIELD_LABELS.bathrooms!, { type: "number" })}
-        {textField("zone", FIELD_LABELS.zone!, { placeholder: "Salamanca, Chamberí…" })}
+        {textField("zone", FIELD_LABELS.zone!, { placeholder: country === "cl" ? "Las Condes, Providencia…" : "Salamanca, Chamberí…" })}
         {textField("subzone", FIELD_LABELS.subzone!, { placeholder: "Recoletos, Almagro…" })}
         {textField("floor", FIELD_LABELS.floor!, { placeholder: "3, bajo, ático…" })}
         {textField("address", FIELD_LABELS.address!, { placeholder: "No se enseña al cliente" })}
