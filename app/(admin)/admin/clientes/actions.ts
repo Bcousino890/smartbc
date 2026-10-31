@@ -152,21 +152,25 @@ export async function createNewClient(
   if (!inviteResult.ok) {
     return {
       ok: false,
-      error: inviteResult.error || "Error creating profile",
+      error: /already been registered|already registered/i.test(inviteResult.error ?? "")
+        ? "Ya existe un cliente con ese correo (puede estar en otro país o sin asignar). Búscalo por su correo."
+        : inviteResult.error || "Error creating profile",
     };
   }
 
   const clientId = inviteResult.userId;
   await assignToCreator(adminClient as any, clientId, auth); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  if (input.phone) {
-    const { error: phoneError } = await (adminClient as any)
+  // Este alta es el de Chile (único que lo usa): sin `country` el perfil nacía
+  // como 'es' y el cliente aparecía en España, no en la lista de Chile.
+  {
+    const { error: profileError } = await (adminClient as any)
       .from("profiles")
-      .update({ phone: input.phone })
+      .update({ country: "cl", ...(input.phone ? { phone: input.phone } : {}) })
       .eq("id", clientId);
 
-    if (phoneError) {
-      return { ok: false, error: phoneError.message };
+    if (profileError) {
+      return { ok: false, error: profileError.message };
     }
   }
 
@@ -179,6 +183,7 @@ export async function createNewClient(
     .from("client_preferences")
     .insert({
       client_id: clientId,
+      country: "cl",
       operation: input.operation === "alquiler" ? "rent" : "sale",
       stay: input.stayType === "corta" ? "short" : "long",
       zones: [...zonesArray, ...allSubzones], // Include both zones and subzones in the array

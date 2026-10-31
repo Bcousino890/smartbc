@@ -49,6 +49,7 @@ import {
 import type { Country } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 import { AddLinksDialog } from "./add-links-dialog";
+import { ImportLinkDialog } from "./import-link-dialog";
 import { PortalLinkRow } from "./portal-link-row";
 import { Label, Ornament, Rule } from "./portal-links-ui";
 
@@ -78,6 +79,7 @@ export function PortalLinksBlock({
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [assignee, setAssignee] = useState("");
   const [sendLanguage, setSendLanguage] = useState("es");
@@ -485,6 +487,17 @@ export function PortalLinksBlock({
             {canCreate && (
               <button
                 type="button"
+                onClick={() => setImportOpen(true)}
+                title="Pega un enlace y crea la ficha de la propiedad, vinculada a este cliente"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 font-sans text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              >
+                <Link2 size={12} strokeWidth={1.75} className="text-gold-dark" />
+                Importar por link
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
                 onClick={() => setAddOpen(true)}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-2 font-sans text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
               >
@@ -786,6 +799,15 @@ export function PortalLinksBlock({
           )}
         </div>
       </section>
+
+      {importOpen && (
+        <ImportLinkDialog
+          clientId={clientId}
+          clientName={clientName}
+          country={country}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
 
       {addOpen && (
         <AddLinksDialog

@@ -31,6 +31,7 @@ import { syncDiscardedLink } from "@/lib/portal-links/discard-sync";
 import { createItinerary } from "./viewing-collections-actions";
 import { addLinksToActiveShortlist } from "@/lib/client-shortlist/auto-add";
 import { reviveExistingLinks } from "@/lib/portal-links/revive";
+import { parsePortalUrl } from "@/lib/portal-links/portals";
 import {
   insertPortalLinks,
   linkText,
@@ -143,6 +144,33 @@ export async function addPortalLinks(
     skipped: res.skipped,
     invalid: res.invalid,
   };
+}
+
+/**
+ * "Importar por link" desde la ficha: deja el anuncio en la lista del cliente
+ * (si ya estaba, lo reutiliza) y devuelve su id para abrir el importador ya
+ * vinculado a este cliente: al confirmar, la ficha nueva queda en su selección.
+ */
+export async function addPortalLinkForImport(
+  clientId: string,
+  url: string,
+): Promise<LinkActionResult<{ linkId: string }>> {
+  const parsed = parsePortalUrl(url ?? "");
+  if (!parsed) return { ok: false, error: "El enlace no es válido. Debe empezar por http:// o https://." };
+
+  const added = await addPortalLinks(clientId, [{ url }]);
+  // «Ya está en la lista» no es un fallo: se importa desde el enlace existente.
+  const already = !added.ok && /ya est[aá] en la lista/i.test(added.error);
+  if (!added.ok && !already) return added;
+
+  const { data } = await db()
+    .from("client_portal_links")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("url_key", parsed.urlKey)
+    .maybeSingle();
+  if (!data?.id) return { ok: false, error: "No se pudo localizar el enlace en la lista del cliente." };
+  return { ok: true, linkId: data.id as string };
 }
 
 /**
