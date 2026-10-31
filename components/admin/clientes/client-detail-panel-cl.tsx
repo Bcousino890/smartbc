@@ -39,6 +39,9 @@ import {
 type FeedbackKind = "idle" | "saved" | "error";
 
 const ARCHITECTURAL_TYPES = [
+  // Mismo valor que guarda el diálogo de alta (etiqueta tal cual).
+  { value: "Local comercial", label: "Local comercial" },
+  { value: "Nave industrial", label: "Nave industrial" },
   { value: "mediterranea", label: "Mediterránea" },
   { value: "chilena", label: "Chilena" },
   { value: "inglesa", label: "Inglesa" },

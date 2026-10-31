@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Plus, Loader2, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { createNewClient } from "@/app/(admin)/admin/clientes/actions";
 import type { Operation, ClientProfileType } from "@/lib/types";
@@ -46,6 +46,25 @@ export function CreateClientDialogCL() {
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<"idle" | "success" | "error" | "validating">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Pesos que vale 1 UF hoy (para mostrar el presupuesto en la otra moneda).
+  const [ufInClp, setUfInClp] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!open || ufInClp) return;
+    fetch("/api/exchange-rate?from=UF&to=CLP")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.rate > 1000) setUfInClp(d.rate);
+      })
+      .catch(() => {});
+  }, [open, ufInClp]);
+
+  const budgetHint = (n: number) => {
+    if (!n || !ufInClp) return null;
+    return form.currencyPreference === "UF"
+      ? `≈ $${Math.round(n * ufInClp).toLocaleString("es-CL")} CLP`
+      : `≈ UF ${(n / ufInClp).toLocaleString("es-CL", { maximumFractionDigits: 1 })}`;
+  };
 
   const [form, setForm] = useState<FormState>({
     firstName: "",
@@ -314,8 +333,15 @@ export function CreateClientDialogCL() {
                         onChange={(e) => patch("budgetMax", parseInt(e.target.value) || 0)}
                         className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                       />
+                      <p className="text-[11px] text-ink/55">{budgetHint(form.budgetMin)}</p>
+                      <p className="text-[11px] text-ink/55">{budgetHint(form.budgetMax)}</p>
                     </div>
                   </div>
+                  {ufInClp && (
+                    <p className="text-[11px] text-ink/45">
+                      UF de hoy: ${ufInClp.toLocaleString("es-CL", { maximumFractionDigits: 2 })}
+                    </p>
+                  )}
 
                   {/* Ubicación en cascada */}
                   <div className="rounded-xl border border-gold/15 bg-white/40 p-3 space-y-3">
@@ -478,7 +504,7 @@ export function CreateClientDialogCL() {
                   <div>
                     <p className="mb-1.5 text-xs font-medium text-ink/60">Tipo de propiedad</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {(["Mediterránea", "Chilena", "Inglesa", "Moderna", "Neoclásica", "Colonial", "Contemporánea"] as const).map((type) => (
+                      {(["Local comercial", "Nave industrial", "Mediterránea", "Chilena", "Inglesa", "Moderna", "Neoclásica", "Colonial", "Contemporánea"] as const).map((type) => (
                         <button
                           key={type}
                           type="button"

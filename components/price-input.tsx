@@ -37,7 +37,7 @@ export function PriceInput({
     const loadExchangeRate = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/exchange-rate?from=CLP&to=UF");
+        const res = await fetch("/api/exchange-rate?from=UF&to=CLP");
         if (res.ok) {
           const data = await res.json();
           setExchangeRate(data.rate || DEFAULT_CLP_TO_UF_RATE);

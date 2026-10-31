@@ -7,30 +7,53 @@
 // pares CLP↔UF invertidos: convertir CLP→UF multiplicaba por 34500 y daba
 // cifras absurdas.
 
-const UF_IN_CLP = 39000; // Aproximado: 1 UF ≈ 39.000 CLP
+const UF_FALLBACK_CLP = 39000; // Solo si mindicador.cl no responde
 
-const RATES: Record<string, Record<string, number>> = {
-  CLP: {
-    UF: 1 / UF_IN_CLP,
-    EUR: 0.00098, // 1 EUR ≈ 1.020 CLP
-    USD: 0.00105, // 1 USD ≈ 950 CLP
-  },
-  UF: {
-    CLP: UF_IN_CLP,
-    EUR: 38.2,
-    USD: 41,
-  },
-  EUR: {
-    CLP: 1020,
-    UF: 1020 / UF_IN_CLP,
-    USD: 1.1,
-  },
-  USD: {
-    CLP: 950,
-    UF: 950 / UF_IN_CLP,
-    EUR: 0.91,
-  },
-};
+// Valor de la UF de hoy (mindicador.cl); se reutiliza una hora.
+let ufCache: { value: number; at: number } | null = null;
+
+async function getUfInClp(): Promise<number> {
+  if (ufCache && Date.now() - ufCache.at < 3_600_000) return ufCache.value;
+  try {
+    const res = await fetch("https://mindicador.cl/api/uf", { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      const value = Number(data?.serie?.[0]?.valor);
+      if (Number.isFinite(value) && value > 1000) {
+        ufCache = { value, at: Date.now() };
+        return value;
+      }
+    }
+  } catch {
+    // cae al último valor conocido o al aproximado
+  }
+  return ufCache?.value ?? UF_FALLBACK_CLP;
+}
+
+function buildRates(ufInClp: number): Record<string, Record<string, number>> {
+  return {
+    CLP: {
+      UF: 1 / ufInClp,
+      EUR: 0.00098, // 1 EUR ≈ 1.020 CLP
+      USD: 0.00105, // 1 USD ≈ 950 CLP
+    },
+    UF: {
+      CLP: ufInClp,
+      EUR: (ufInClp / 1020),
+      USD: (ufInClp / 950),
+    },
+    EUR: {
+      CLP: 1020,
+      UF: 1020 / ufInClp,
+      USD: 1.1,
+    },
+    USD: {
+      CLP: 950,
+      UF: 950 / ufInClp,
+      EUR: 0.91,
+    },
+  };
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -42,7 +65,7 @@ export async function GET(request: Request) {
       return Response.json({ rate: 1, from, to });
     }
 
-    const rate = RATES[from]?.[to];
+    const rate = buildRates(await getUfInClp())[from]?.[to];
 
     if (rate === undefined) {
       return Response.json(
