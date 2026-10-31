@@ -31,6 +31,9 @@ type FormState = {
   minBedrooms: number;
   minBathrooms: number;
   minSquareMeters: number;
+  maxSquareMeters: number;
+  minUsefulSquareMeters: number;
+  maxUsefulSquareMeters: number;
   requiresServiceBedroom: boolean | undefined;
   minParkingSpaces: number;
   prefersCondominium: boolean | undefined;
@@ -82,6 +85,9 @@ export function CreateClientDialogCL() {
     minBedrooms: 0,
     minBathrooms: 0,
     minSquareMeters: 0,
+    maxSquareMeters: 0,
+    minUsefulSquareMeters: 0,
+    maxUsefulSquareMeters: 0,
     requiresServiceBedroom: undefined,
     minParkingSpaces: 0,
     prefersCondominium: undefined,
@@ -100,6 +106,16 @@ export function CreateClientDialogCL() {
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
       setFeedback("error");
       setErrorMsg("Nombre, apellido y email son requeridos");
+      return;
+    }
+
+    const badRange = (min: number, max: number) => min > 0 && max > 0 && min > max;
+    if (
+      badRange(form.minSquareMeters, form.maxSquareMeters) ||
+      badRange(form.minUsefulSquareMeters, form.maxUsefulSquareMeters)
+    ) {
+      setFeedback("error");
+      setErrorMsg("Los m² mínimos no pueden superar a los máximos.");
       return;
     }
 
@@ -124,6 +140,13 @@ export function CreateClientDialogCL() {
         minBedrooms: form.minBedrooms,
         minBathrooms: form.minBathrooms,
         minSquareMeters: form.minSquareMeters,
+        maxSquareMeters: form.maxSquareMeters,
+        minUsefulSquareMeters: form.minUsefulSquareMeters,
+        maxUsefulSquareMeters: form.maxUsefulSquareMeters,
+        preferredRegions: form.preferredRegions,
+        preferredCommunes: form.preferredCommunes,
+        preferredSectors: form.preferredSectors,
+        currencyPreference: form.currencyPreference,
         requiresServiceBedroom: form.requiresServiceBedroom,
         minParkingSpaces: form.minParkingSpaces,
         prefersCondominium: form.prefersCondominium,
@@ -158,6 +181,9 @@ export function CreateClientDialogCL() {
             minBedrooms: 0,
             minBathrooms: 0,
             minSquareMeters: 0,
+            maxSquareMeters: 0,
+            minUsefulSquareMeters: 0,
+            maxUsefulSquareMeters: 0,
             requiresServiceBedroom: undefined,
             minParkingSpaces: 0,
             prefersCondominium: undefined,
@@ -401,7 +427,7 @@ export function CreateClientDialogCL() {
                   </div>
 
                   {/* Especificaciones básicas */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       type="number"
                       min="0"
@@ -418,14 +444,46 @@ export function CreateClientDialogCL() {
                       onChange={(e) => patch("minBathrooms", parseInt(e.target.value) || 0)}
                       className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                     />
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="m² mín"
-                      value={form.minSquareMeters || ""}
-                      onChange={(e) => patch("minSquareMeters", parseInt(e.target.value) || 0)}
-                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
-                    />
+                  </div>
+                  <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                    <span className="text-xs font-medium text-ink/60">m² totales</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Mín m²"
+                        value={form.minSquareMeters || ""}
+                        onChange={(e) => patch("minSquareMeters", parseInt(e.target.value) || 0)}
+                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Máx m²"
+                        value={form.maxSquareMeters || ""}
+                        onChange={(e) => patch("maxSquareMeters", parseInt(e.target.value) || 0)}
+                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-ink/60">m² útiles</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Mín m²"
+                        value={form.minUsefulSquareMeters || ""}
+                        onChange={(e) => patch("minUsefulSquareMeters", parseInt(e.target.value) || 0)}
+                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Máx m²"
+                        value={form.maxUsefulSquareMeters || ""}
+                        onChange={(e) => patch("maxUsefulSquareMeters", parseInt(e.target.value) || 0)}
+                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
               </section>

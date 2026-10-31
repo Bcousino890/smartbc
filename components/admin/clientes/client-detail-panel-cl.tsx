@@ -75,6 +75,9 @@ type ChileFiltersState = {
   minBedrooms: number;
   minBathrooms: number;
   minSquareMeters: number;
+  maxSquareMeters: number;
+  minUsefulSquareMeters: number;
+  maxUsefulSquareMeters: number;
   requiresServiceBedroom: boolean | undefined;
   preferredArchitecturalTypes: string[];
   minParkingSpaces: number;
@@ -84,25 +87,29 @@ type ChileFiltersState = {
 };
 
 function snapshotFromClient(client: AdminClient): ChileFiltersState {
+  const c = client.chilePrefs;
   return {
     operation: (client.operation as "alquiler" | "venta") || "venta",
-    preferredRegions: [],
-    preferredCommunes: [],
-    preferredSectors: [],
+    preferredRegions: c?.regions ?? [],
+    preferredCommunes: c?.communes ?? [],
+    preferredSectors: c?.sectors ?? [],
     budgetMin: client.budgetMin || 0,
     budgetMax: client.budgetMax || 0,
-    minPriceUf: 0,
-    maxPriceUf: 0,
-    currencyPreference: "CLP",
-    minBedrooms: 0,
-    minBathrooms: 0,
-    minSquareMeters: 0,
-    requiresServiceBedroom: undefined,
-    preferredArchitecturalTypes: [],
-    minParkingSpaces: 0,
-    prefersCondominium: undefined,
-    preferredOrientations: [],
-    minFloors: 0,
+    minPriceUf: c?.minPriceUf ?? 0,
+    maxPriceUf: c?.maxPriceUf ?? 0,
+    currencyPreference: c?.currency ?? "CLP",
+    minBedrooms: c?.minBedrooms ?? 0,
+    minBathrooms: c?.minBathrooms ?? 0,
+    minSquareMeters: client.areaPrefs?.minTotal ?? 0,
+    maxSquareMeters: client.areaPrefs?.maxTotal ?? 0,
+    minUsefulSquareMeters: client.areaPrefs?.minUseful ?? 0,
+    maxUsefulSquareMeters: client.areaPrefs?.maxUseful ?? 0,
+    requiresServiceBedroom: c?.requiresServiceBedroom,
+    preferredArchitecturalTypes: c?.architecturalTypes ?? [],
+    minParkingSpaces: c?.minParking ?? 0,
+    prefersCondominium: c?.prefersCondominium,
+    preferredOrientations: c?.orientations ?? [],
+    minFloors: c?.minFloors ?? 0,
   };
 }
 
@@ -178,7 +185,10 @@ function ClientDetailPanelCLInner({
         currencyPreference: state.currencyPreference,
         minBedrooms: state.minBedrooms || undefined,
         minBathrooms: state.minBathrooms || undefined,
-        minSquareMeters: state.minSquareMeters || undefined,
+        minSquareMeters: state.minSquareMeters,
+        maxSquareMeters: state.maxSquareMeters,
+        minUsefulSquareMeters: state.minUsefulSquareMeters,
+        maxUsefulSquareMeters: state.maxUsefulSquareMeters,
         requiresServiceBedroom: state.requiresServiceBedroom,
         preferredArchitecturalTypes: state.preferredArchitecturalTypes,
         minParkingSpaces: state.minParkingSpaces || undefined,
@@ -389,7 +399,7 @@ function ClientDetailPanelCLInner({
         </div>
 
         {/* Especificaciones básicas */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <NumberInputField
             label="Dorms. mín."
             value={state.minBedrooms}
@@ -402,12 +412,12 @@ function ClientDetailPanelCLInner({
             onChange={(v) => patch("minBathrooms", v)}
             icon={<Bath size={13} strokeWidth={1.75} />}
           />
-          <NumberInputField
-            label="m² mín."
-            value={state.minSquareMeters}
-            onChange={(v) => patch("minSquareMeters", v)}
-            icon={<Home size={13} strokeWidth={1.75} />}
-          />
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          <NumberInputField label="Totales mín. m²" value={state.minSquareMeters} onChange={(v) => patch("minSquareMeters", v)} icon={<Home size={13} strokeWidth={1.75} />} />
+          <NumberInputField label="Totales máx. m²" value={state.maxSquareMeters} onChange={(v) => patch("maxSquareMeters", v)} icon={<Home size={13} strokeWidth={1.75} />} />
+          <NumberInputField label="Útiles mín. m²" value={state.minUsefulSquareMeters} onChange={(v) => patch("minUsefulSquareMeters", v)} icon={<Home size={13} strokeWidth={1.75} />} />
+          <NumberInputField label="Útiles máx. m²" value={state.maxUsefulSquareMeters} onChange={(v) => patch("maxUsefulSquareMeters", v)} icon={<Home size={13} strokeWidth={1.75} />} />
         </div>
 
         {/* Especificaciones arquitectónicas */}

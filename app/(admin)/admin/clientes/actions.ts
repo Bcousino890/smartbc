@@ -10,6 +10,7 @@ import { createInvitedUser } from "@/lib/email/password-reset";
 import type { ClientProfileType, Operation, StayType } from "@/lib/types";
 import {
   buildPreferencesPayload,
+  cleanPolygons,
   validateBrief,
   type BriefInput,
   type BriefProfile,
@@ -43,12 +44,20 @@ export type CreateClientInput = {
   minBedrooms?: number;
   minBathrooms?: number;
   minSquareMeters?: number;
+  maxSquareMeters?: number;
+  minUsefulSquareMeters?: number;
+  maxUsefulSquareMeters?: number;
   requiresServiceBedroom?: boolean;
   minParkingSpaces?: number;
   prefersCondominium?: boolean;
   preferredArchitecturalTypes?: string[];
   preferredOrientations?: string[];
   minFloors?: number;
+  // Chile: los mismos filtros que la ficha, para que lo que se marca al dar de alta se guarde.
+  preferredRegions?: string[];
+  preferredCommunes?: string[];
+  preferredSectors?: string[];
+  currencyPreference?: "CLP" | "UF";
   universities?: string;
   occupants: number;
   students: number;
@@ -88,6 +97,35 @@ async function assignToCreator(db: any, clientId: string, creator: { userId?: st
 export type CreateClientResult =
   | { ok: true; clientId: string }
   | { ok: false; error: string };
+
+// Preferencias de Chile del alta. Antes solo se guardaban zonas y presupuesto:
+// dormitorios, baños, m², tipos, orientaciones y las zonas dibujadas en el mapa
+// se perdían al crear el cliente. 0 / vacío = sin filtro (null).
+function chilePreferenceColumns(input: CreateClientInput): Record<string, unknown> {
+  const n = (v?: number) => (v && v > 0 ? v : null);
+  const cols: Record<string, unknown> = {
+    min_bedrooms: n(input.minBedrooms),
+    min_bathrooms: n(input.minBathrooms),
+    min_square_meters: n(input.minSquareMeters),
+    max_square_meters: n(input.maxSquareMeters),
+    min_useful_square_meters: n(input.minUsefulSquareMeters),
+    max_useful_square_meters: n(input.maxUsefulSquareMeters),
+    min_parking_spaces: n(input.minParkingSpaces),
+    min_floors: n(input.minFloors),
+    preferred_architectural_types: input.preferredArchitecturalTypes ?? [],
+    preferred_orientations: input.preferredOrientations ?? [],
+  };
+  if (input.requiresServiceBedroom !== undefined) cols.requires_service_bedroom = input.requiresServiceBedroom;
+  if (input.prefersCondominium !== undefined) cols.prefers_condominium = input.prefersCondominium;
+  if (input.preferredRegions) cols.preferred_regions = input.preferredRegions;
+  if (input.preferredCommunes) cols.preferred_communes = input.preferredCommunes;
+  if (input.preferredSectors) cols.preferred_sectors = input.preferredSectors;
+  if (input.currencyPreference) cols.currency_preference = input.currencyPreference;
+  if (input.interestPolygons?.length) {
+    cols.search_polygons = cleanPolygons(input.interestPolygons.map((p) => p.coordinates?.[0]));
+  }
+  return cols;
+}
 
 export async function createNewClient(
   input: CreateClientInput,
@@ -152,6 +190,7 @@ export async function createNewClient(
       pets: input.pets,
       universities: input.universities || null,
       notes: input.notes || null,
+      ...chilePreferenceColumns(input),
     } as any);
 
   if (prefsError) {
@@ -309,6 +348,9 @@ export type SaveClientPreferencesChileInput = {
   minBedrooms?: number;
   minBathrooms?: number;
   minSquareMeters?: number;
+  maxSquareMeters?: number;
+  minUsefulSquareMeters?: number;
+  maxUsefulSquareMeters?: number;
   requiresServiceBedroom?: boolean;
   preferredArchitecturalTypes: string[];
   minParkingSpaces?: number;
@@ -344,7 +386,11 @@ export async function saveClientPreferencesChile(
   if (input.maxPriceUf !== undefined) updateData.max_price_uf = input.maxPriceUf;
   if (input.minBedrooms !== undefined) updateData.min_bedrooms = input.minBedrooms;
   if (input.minBathrooms !== undefined) updateData.min_bathrooms = input.minBathrooms;
-  if (input.minSquareMeters !== undefined) updateData.min_square_meters = input.minSquareMeters;
+  // 0 = sin tope: se guarda como null para poder vaciar el campo.
+  if (input.minSquareMeters !== undefined) updateData.min_square_meters = input.minSquareMeters || null;
+  if (input.maxSquareMeters !== undefined) updateData.max_square_meters = input.maxSquareMeters || null;
+  if (input.minUsefulSquareMeters !== undefined) updateData.min_useful_square_meters = input.minUsefulSquareMeters || null;
+  if (input.maxUsefulSquareMeters !== undefined) updateData.max_useful_square_meters = input.maxUsefulSquareMeters || null;
   if (input.requiresServiceBedroom !== undefined) updateData.requires_service_bedroom = input.requiresServiceBedroom;
   if (input.minParkingSpaces !== undefined) updateData.min_parking_spaces = input.minParkingSpaces;
   if (input.prefersCondominium !== undefined) updateData.prefers_condominium = input.prefersCondominium;

@@ -344,6 +344,25 @@ export type AdminClient = {
   sector: string;
   budgetMin: number;
   budgetMax: number;
+  /** Superficie que pide (Chile): totales y útiles, mínimo y máximo. 0 = sin tope. */
+  areaPrefs?: { minTotal: number; maxTotal: number; minUseful: number; maxUseful: number };
+  /** Filtros de búsqueda de Chile tal como están guardados (la ficha los carga al abrir). */
+  chilePrefs?: {
+    regions: string[];
+    communes: string[];
+    sectors: string[];
+    currency: "CLP" | "UF";
+    minBedrooms: number;
+    minBathrooms: number;
+    minParking: number;
+    minFloors: number;
+    requiresServiceBedroom?: boolean;
+    prefersCondominium?: boolean;
+    architecturalTypes: string[];
+    orientations: string[];
+    minPriceUf: number;
+    maxPriceUf: number;
+  };
   // Composición del grupo que ocupará la vivienda.
   occupants: number;
   students: number;
