@@ -19,6 +19,16 @@ interface MapComponentProps {
   existingPolygons?: PolygonData[];
 }
 
+// getLatLngs() de un L.Polygon viene SIEMPRE anidado (LatLng[][]: el anillo
+// exterior primero). Tratarlo como LatLng[] daba [undefined, undefined] y, al
+// recrear el mapa con ese polígono, Leaflet lanzaba "Invalid LatLng" y la
+// pantalla caía con "Application error".
+function ringsOf(layer: L.Polygon): number[][][] {
+  const rings = layer.getLatLngs() as unknown as L.LatLng[][];
+  const ring = rings[0] ?? [];
+  return [ring.map((ll) => [ll.lng, ll.lat])];
+}
+
 export default function MapComponent({
   onPolygonDrawn,
   existingPolygons = [],
@@ -93,11 +103,7 @@ export default function MapComponent({
       drawnItems.current!.addLayer(layer);
 
       if (layer instanceof L.Polygon) {
-        const coords = layer.getLatLngs() as L.LatLng[];
-        const coordinates = [
-          coords.map((latlng) => [latlng.lng, latlng.lat]),
-        ];
-        onPolygonDrawn(coordinates);
+        onPolygonDrawn(ringsOf(layer));
       }
     });
 
@@ -105,11 +111,7 @@ export default function MapComponent({
       const layers = e.layers;
       layers.eachLayer(function (layer: any) {
         if (layer instanceof L.Polygon) {
-          const coords = layer.getLatLngs() as L.LatLng[];
-          const coordinates = [
-            coords.map((latlng) => [latlng.lng, latlng.lat]),
-          ];
-          onPolygonDrawn(coordinates);
+          onPolygonDrawn(ringsOf(layer));
         }
       });
     });
@@ -117,7 +119,10 @@ export default function MapComponent({
     // Cargar polígonos existentes
     existingPolygons.forEach((polygon) => {
       if (polygon.coordinates.length > 0) {
-        const latlngs = polygon.coordinates[0].map(([lng, lat]) => [lat, lng]);
+        const latlngs = polygon.coordinates[0]
+          .filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat))
+          .map(([lng, lat]) => [lat, lng]);
+        if (latlngs.length < 3) return;
         const polyLayer = L.polygon(latlngs as L.LatLngExpression[], {
           color: "#ff7800",
           fillOpacity: 0.2,
