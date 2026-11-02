@@ -184,12 +184,12 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     avatarUrl: r.avatar_url ?? null,
     messageExcerpt: excerpt(r.message),
     propertyPrice: r.property_price ?? null,
-    // Solo con vínculo exacto se afirma la vivienda: la portada de nuestra
-    // ficha (nítida) y, si no la hay, la miniatura que vio en Idealista. Sin
-    // vínculo exacto, ninguna foto: sería la de un piso «parecido».
-    propertyImageUrl: isExactLink(r.property_link_method)
-      ? (r.listing_cover_url ?? r.property_image_url ?? null)
-      : null,
+    // Solo con vínculo exacto se afirma la vivienda, y solo con la portada de
+    // NUESTRA ficha: la miniatura del hilo de Idealista es pequeña y estirada
+    // a la tarjeta se veía borrosa (queja de Fabricio, 2026-11-02). Sin
+    // portada propia, la tarjeta va sin foto; la miniatura solo sirve de
+    // respaldo pequeño en la ficha.
+    propertyImageUrl: isExactLink(r.property_link_method) ? (r.listing_cover_url ?? null) : null,
     linkStatus: linkStatus(r.property_link_method),
     routingStatus: effectiveRoutingStatus(r.routing_status, r.assigned_to),
     routingReason: r.routing_reason ?? null,
@@ -474,7 +474,7 @@ async function groupByProperty(
         // La foto del anuncio de Idealista, ya realojada en nuestro bucket por
         // la ingesta. Si la ficha tiene portada propia, la pisa más abajo. El
         // grupo «Por verificar» no afirma ninguna vivienda: sin foto.
-        coverUrl: exact ? (r.listing_cover_url ?? r.property_image_url ?? null) : null,
+        coverUrl: exact ? (r.listing_cover_url ?? null) : null,
         leads: [item],
         count: 1,
         lastLeadAt: item.createdAt,
