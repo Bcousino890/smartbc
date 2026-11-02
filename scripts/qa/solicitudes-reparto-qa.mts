@@ -78,6 +78,10 @@ async function shot(page: Page, name: string) {
   const cards = await page.locator("[data-lead-id]").count();
   check("A · Tarjetas: se pintan las solicitudes", cards >= 10, `${cards} tarjetas`);
   check("A · vínculo visible en la tarjeta", (await page.getByText("Vínculo exacto").count()) > 0 && (await page.getByText("Por verificar").count()) > 0);
+  // Extensión atrasada: aviso con el paquete para descargar (administradora).
+  const notice = page.locator("[data-extension-notice]");
+  check("Extensión · aviso de versión atrasada con descarga", (await notice.count()) === 1
+    && /extension-download/.test((await notice.getByRole("link").first().getAttribute("href")) ?? ""));
   // El texto de orden dice el orden que de verdad se aplica.
   const orderText = async (q: string) => {
     await page.goto(`${BASE}/es/admin/solicitudes?${q}`, { waitUntil: "networkidle" });

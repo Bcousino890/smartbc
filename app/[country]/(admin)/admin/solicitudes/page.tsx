@@ -27,6 +27,7 @@ import {
   type InboxFilters,
 } from "@/lib/sales-inbox/types";
 import { effectiveSort } from "@/lib/sales-inbox/views";
+import { getExtensionCaptureStatus } from "@/lib/db/queries/extension-status";
 import { getCountryConfig, isCountry, type Country } from "@/lib/country-config";
 import { PageFooter } from "@/components/ui/page-footer";
 import { InboxShell } from "./_components/inbox-shell";
@@ -132,7 +133,7 @@ export default async function SalesInboxPage({
 
   const leadId = one(sp.lead) ?? null;
 
-  const [counts, pageData, board, staff, selectedLead] = await Promise.all([
+  const [counts, pageData, board, staff, selectedLead, extensionStatus] = await Promise.all([
     getInboxCounts(),
     // El tablero de prioridades recorre su propio conjunto; la lista paginada
     // no hace falta en ese modo.
@@ -142,6 +143,8 @@ export default async function SalesInboxPage({
     layout === "priorities" ? getPriorityBoard(filters) : Promise.resolve(null),
     getAssignableStaff(),
     leadId ? getLeadDetail(leadId) : Promise.resolve(null),
+    // Aviso de extensión desactualizada: solo para quien trabaja la bandeja.
+    editGate.ok ? getExtensionCaptureStatus() : Promise.resolve(null),
   ]);
 
   // Un lead que ya no existe (o que el alcance no permite ver) no puede dejar
@@ -173,6 +176,7 @@ export default async function SalesInboxPage({
       layout={layout}
       sort={sort}
       board={board}
+      extensionStatus={extensionStatus}
     />
   );
 }

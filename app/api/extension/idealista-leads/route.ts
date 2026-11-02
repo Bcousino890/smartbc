@@ -154,7 +154,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Token inválido o expirado" }, { status: 401, headers: corsHeaders() });
   }
 
-  let body: { source?: unknown; leads?: unknown };
+  let body: { source?: unknown; leads?: unknown; extensionVersion?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -435,6 +435,28 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("idealista-leads reconcile error:", err);
   }
+  // Qué extensión capturó y si trajo el código del anuncio: Solicitudes lo
+  // enseña y avisa cuando la extensión se ha quedado atrás. Best-effort.
+  {
+    const incomingList = [...incoming.values()];
+    const extensionVersion = typeof body.extensionVersion === "string" ? body.extensionVersion.slice(0, 20) : null;
+    const { error: settingError } = await db.from("app_settings").upsert(
+      {
+        key: "idealista.extension_capture",
+        value: {
+          version: extensionVersion,
+          at: new Date().toISOString(),
+          source,
+          received: incomingList.length,
+          with_code: incomingList.filter((l) => !!l.idealista_code).length,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+    if (settingError) console.error("idealista-leads extension_capture:", settingError.message);
+  }
+
   // Caducidad (0238): oculta a los 30 días y borra a los 60 las solicitudes sin
   // cliente. Se lanza aquí porque la recepción ocurre a diario y no hace falta
   // tocar el crontab del VPS; también lo lanza /api/cron/api-cleanup.

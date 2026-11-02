@@ -18,8 +18,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Plus, Search, X } from "lucide-react";
 import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
+import type { ExtensionCaptureStatus } from "@/lib/db/queries/extension-status";
 import type {
   CommercialState,
   InboxCounts,
@@ -38,6 +39,7 @@ import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import { useTn } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/plural";
+import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { cn } from "@/lib/utils";
 import { Button, Empty, Labeled, Modal, Pill, Select, TextArea } from "@/components/admin/ui/primitives";
 import { LeadCard } from "./lead-card";
@@ -98,6 +100,7 @@ export function InboxShell({
   layout = "cards",
   sort = "newest",
   board = null,
+  extensionStatus = null,
 }: {
   view: InboxView;
   counts: InboxCounts;
@@ -116,6 +119,8 @@ export function InboxShell({
   layout?: InboxLayout;
   /** Orden efectivo de la lista (el elegido o el de la vista). */
   sort?: InboxSort;
+  /** Última captura del inbox: si la extensión va atrasada, se avisa aquí. */
+  extensionStatus?: ExtensionCaptureStatus | null;
   board?: (PriorityBoard & { unplanned: number }) | null;
 }) {
   const t = useT();
@@ -243,6 +248,9 @@ export function InboxShell({
     <div className="sol-root min-h-screen">
       {/* ── La bandeja (oculta, pero montada, mientras se mira una ficha) ── */}
       <div className={cn("px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8", selectedId && "hidden")}>
+        {extensionStatus?.outdated && (
+          <ExtensionNotice status={extensionStatus} isAdmin={isAdmin} prefix={config.prefix} locale={config.locale} />
+        )}
         <header>
           <p className="sol-meta text-sol-muted">
             {t("inbox.breadcrumb")} <span aria-hidden>/</span> {t("inbox.title")}
@@ -628,6 +636,62 @@ export function InboxShell({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * La extensión que captura el inbox se ha quedado atrás: sin el código del
+ * anuncio no hay foto, ni «Por piso», ni reparto automático. Se dice aquí,
+ * donde se ve, con el paquete al día para descargar (administradores) y los
+ * pasos. Desaparece solo en cuanto llega una captura de la versión exigida.
+ */
+function ExtensionNotice({
+  status,
+  isAdmin,
+  prefix,
+  locale,
+}: {
+  status: ExtensionCaptureStatus;
+  isAdmin: boolean;
+  prefix: string;
+  locale: string;
+}) {
+  const t = useT();
+  return (
+    <section
+      role="status"
+      data-extension-notice=""
+      className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 text-sol-ink"
+    >
+      <p className="text-lg font-semibold">{t("inbox.extension.title")}</p>
+      <p className="mt-1 text-sm text-sol-muted">
+        {t("inbox.extension.body", { required: status.required })}{" "}
+        {status.at ? (
+          <>
+            {t("inbox.extension.lastCapture", { version: status.version ?? t("inbox.extension.oldVersion") })}{" "}
+            <RelativeTime at={status.at} locale={locale} />.
+          </>
+        ) : null}
+      </p>
+      <ol className="mt-3 list-decimal space-y-1 ps-5 text-sm text-sol-ink">
+        <li>{t("inbox.extension.step1")}</li>
+        <li>{t("inbox.extension.step2")}</li>
+        <li>{t("inbox.extension.step3", { version: status.available })}</li>
+      </ol>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {isAdmin ? (
+          <a
+            href={`${prefix.replace(/\/[a-z]{2}$/, "")}/api/admin/idealista/extension-download`}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-ink px-4 text-sm font-bold uppercase tracking-wider text-cream-50 hover:bg-ink-soft"
+          >
+            <Download size={15} strokeWidth={2} />
+            {t("inbox.extension.download", { version: status.available })}
+          </a>
+        ) : (
+          <span className="text-sm text-sol-muted">{t("inbox.extension.askAdmin")}</span>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -354,3 +354,13 @@ Tras ver Solicitudes en producción, Fabricio señaló cuatro cosas: «Por piso�
 ## 14. Estética: vuelta al lenguaje del CRM (2026-11-02)
 
 Con las funciones ya validadas, Fabricio pidió que Solicitudes y Reparto se vean como el resto del CRM. Se mantiene la composición del Figma y se cambia el lenguaje visual (Lato y Optima en mayúsculas, tinta, crema y oro, esquinas del CRM). Detalle en [comparacion-figma.md §7](comparacion-figma.md). Cambio solo de presentación: la capa `.sol-root` pasa a beber de los tokens del CRM y los componentes solo cambian radios. Guarda tipográfica sin fallos en estas pantallas; `test:crm-appearance` en verde.
+
+## 15. Aviso de extensión desactualizada y paquete descargable (2026-11-03)
+
+Tras el despliegue de 0238, producción seguía enseñando todo «Por verificar»: las 604 solicitudes se capturaron con la extensión anterior, que no leía el código del anuncio, y la extensión está instalada en el Chrome de quien captura el inbox (no en el Mac de Fabricio; las capturas no van firmadas por usuario). Para que la actualización no dependa de explicaciones:
+
+- La extensión (1.14.1) manda su versión en cada envío; la recepción guarda la última captura en `app_settings` (`idealista.extension_capture`: versión, fecha, cuántas llegaron y cuántas con código).
+- Solicitudes muestra un aviso, a quien trabaja la bandeja, cuando la última captura viene de una versión anterior a la 1.14.0 (o sin versión), con los tres pasos y, para administradores, el botón «Descargar extensión» (`GET /api/admin/idealista/extension-download`: zip construido en el momento desde `chrome-extension/` del propio despliegue, sin dependencias). El aviso desaparece solo con la primera captura de la versión exigida.
+- El cajón «Por verificar» de «Por piso» pasa a ser una fila sencilla que explica por qué están ahí esas solicitudes, sin foto ni precio.
+
+Verificación: unitarias (comparación de versiones; el zip se lista y se comprueba con `unzip`), guarda tipográfica sin fallos, QA visual con la comprobación del aviso y su enlace de descarga.

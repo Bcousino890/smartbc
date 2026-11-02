@@ -280,7 +280,9 @@
           "Content-Type": "application/json",
           Authorization: "Bearer " + token,
         },
-        body: JSON.stringify({ source, leads }),
+        // La versión viaja con cada envío: el CRM avisa en Solicitudes si la
+        // extensión que captura se ha quedado atrás (sin código del anuncio).
+        body: JSON.stringify({ source, leads, extensionVersion: chrome.runtime.getManifest().version }),
       });
       if (res.status === 401) {
         lastSendFatal = true;

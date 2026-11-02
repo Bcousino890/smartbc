@@ -159,5 +159,9 @@ d.idealista_listing_codes = [
   { id: id("009", 2), listing_id: id("001", 10), idealista_property_id: "900210", reference_code: "BC-9010", property_id: null, valid_from: ago(400), valid_to: null, source: "catalogo" },
 ];
 d.zinto_conversations = [{ id: id("004", 99), phone_number: "34600108208", lead_id: id("003", 8), country: "es" }];
+// Última captura del inbox de una extensión anterior a la 1.14 (sin versión):
+// Solicitudes avisa de que hay que actualizarla.
+d.app_settings = [...(d.app_settings ?? []), { id: id("009", 1), key: "idealista.extension_capture", value: { version: null, at: ago(90), source: "detail", received: 1, with_code: 0 }, updated_at: ago(90) }];
+
 writeFileSync(OUT, JSON.stringify(d));
 console.log(`solicitudes-reparto: ${facts.length} solicitudes, ${rules.length} reglas → ${OUT}`);
