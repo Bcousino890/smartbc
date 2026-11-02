@@ -90,7 +90,7 @@ export function LeadCard({
         )}
       >
         {/* Vivienda */}
-        <span className="relative block aspect-[16/9] w-full bg-ink/[0.05]">
+        <span className="relative block aspect-[16/9] w-full overflow-hidden bg-ink/[0.05]">
           {lead.propertyImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -100,7 +100,7 @@ export function LeadCard({
               onError={(e) => {
                 e.currentTarget.style.display = "none";
               }}
-              className="h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (
             <span className="flex h-full flex-col items-center justify-center gap-1 text-ink/35">

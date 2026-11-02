@@ -129,7 +129,7 @@ function RepartoTable({
   const pages = Math.max(1, Math.ceil(page.total / page.pageSize));
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 pb-28 sm:px-6 lg:px-10">
+    <div className="mx-auto max-w-[1200px] px-4 pb-10 sm:px-6 lg:px-10">
       <AdminPageHeader titleKey="reparto.title" subtitleKey="reparto.subtitle" />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -301,8 +301,10 @@ function RepartoTable({
 
       {/* Barra contextual de selección */}
       {picked.size > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:px-6">
-          <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-2">
+        // Pegada al pie DEL CONTENIDO (no de la ventana): no se mete bajo el menú
+        // lateral ni tapa la última fila.
+        <div className="sticky bottom-3 z-30 mt-4 rounded-lg border border-ink/10 bg-white/95 px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-ink" aria-live="polite">
               {t("reparto.selected", { count: picked.size })}
             </span>
