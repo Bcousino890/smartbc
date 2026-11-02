@@ -11,6 +11,21 @@ Extensión de Chrome con tres funciones:
    portal y los manda a la sección **Enlaces de portales** de su ficha, con el
    compañero que los va a llamar ya asignado.
 
+## Código del anuncio en cada solicitud (1.14)
+
+El CRM solo agrupa, reparte y enseña un inmueble cuando sabe **exactamente**
+qué anuncio consultó el contacto, y eso lo dice el «Cod.» del anuncio (el
+número de `idealista.com/inmueble/<Cod.>/`). Hasta la 1.13 solo se capturaba
+si el modal del anuncio estaba abierto en el hilo, y casi nunca lo estaba: por
+eso casi todo llegaba «Por verificar».
+
+Desde la 1.14, al capturar un hilo (a mano o con «Capturar todas») la
+extensión busca el código en el enlace de la tarjeta del anuncio y, si no
+está, **abre el modal del anuncio un instante, lee «Cod.» y «Ref.» y lo
+cierra**. Si el modal no aparece en 3 segundos se sigue sin él: la solicitud
+llega igual, marcada «Por verificar». Los hilos ya capturados antes de la 1.14
+no tienen código; el CRM los oculta a los 30 días si no tienen cliente.
+
 ## Filtros extra en los listados (1.13)
 
 Se filtra en el navegador, sobre los anuncios de la página, y se recuerda entre

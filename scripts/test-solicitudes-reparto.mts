@@ -27,6 +27,7 @@ import {
   subjectKey,
 } from "../lib/sales-inbox/routing.ts";
 import { effectiveSort, fichaActions, groupKeyFor, orderLabelKey, priorityColumn } from "../lib/sales-inbox/views.ts";
+import { idealistaAdUrl } from "../lib/sales-inbox/routing.ts";
 import { INBOX_SORTS } from "../lib/sales-inbox/types.ts";
 import { solicitudesEn, solicitudesEs } from "../lib/i18n/solicitudes-strings.ts";
 import { NO_WHATSAPP, type LeadListItem } from "../lib/sales-inbox/types.ts";
@@ -228,6 +229,15 @@ t("Orden · el texto sigue al orden efectivo, el elegido o el de la vista", () =
     assert.ok(solicitudesEn[key], `en: ${key}`);
   }
   assert.notEqual(solicitudesEs[orderLabelKey("oldest")], solicitudesEs[orderLabelKey("newest")]);
+});
+
+t("Enlace al anuncio · solo con un código numérico de idealista.com", () => {
+  assert.equal(idealistaAdUrl("108123456"), "https://www.idealista.com/inmueble/108123456/");
+  assert.equal(idealistaAdUrl(" 900210 "), "https://www.idealista.com/inmueble/900210/");
+  assert.equal(idealistaAdUrl("BC-9010"), null);
+  assert.equal(idealistaAdUrl(""), null);
+  assert.equal(idealistaAdUrl(null), null);
+  assert.equal(idealistaAdUrl("1234"), null);
 });
 
 // ─── 3 · R02 en la aplicación ────────────────────────────────────────────────

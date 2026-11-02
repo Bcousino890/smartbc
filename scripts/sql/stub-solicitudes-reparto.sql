@@ -74,3 +74,10 @@ CREATE TABLE IF NOT EXISTS zinto_messages (
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON profiles_country_roles, zinto_conversations, zinto_messages TO service_role;
+
+-- 0001 (portada de la ficha propia), 0019 (fotos del anuncio) y 0118 (ids de
+-- la Partner API): lo que lee la vista de 0238 y listings_for_code.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS cover_photo_url text;
+ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS photo_ids text[] DEFAULT '{}';
+ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS api_property_id bigint;
+ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS api_clone_property_id bigint;

@@ -678,12 +678,95 @@
 
     // Cod./Ref. — visibles si el modal de la propiedad está abierto.
     // El punto es obligatorio para no capturar palabras tipo "Reciente".
-    const codMatch = bodyText.match(/Cod\.\s*:?\s*(\d{6,})/i);
+    const codMatch = bodyText.match(COD_RE);
     if (codMatch) lead.idealistaCode = codMatch[1];
-    const refMatch = bodyText.match(/Ref\.\s*:?\s*([A-Za-z0-9_-]{2,20})/);
+    const refMatch = bodyText.match(REF_RE);
     if (refMatch) lead.propertyRef = refMatch[1];
 
+    // Sin el «Cod.» a la vista, el CRM no puede saber QUÉ anuncio consultó
+    // (solo agrupa y reparte con vínculo exacto). Se busca en el enlace de la
+    // tarjeta del anuncio y, si no está, se abre su modal un instante para
+    // leerlo. Ver readAdIdentifiers.
+    if (!lead.idealistaCode) {
+      const ids = await readAdIdentifiers();
+      if (ids.code) lead.idealistaCode = ids.code;
+      if (ids.ref && !lead.propertyRef) lead.propertyRef = ids.ref;
+    }
+
     return lead;
+  }
+
+  const COD_RE = /Cod\.\s*:?\s*(\d{6,})/i;
+  const REF_RE = /Ref\.\s*:?\s*([A-Za-z0-9_-]{2,20})/;
+
+  // Elemento de la tarjeta del anuncio en el hilo (la primera: el anuncio por
+  // el que se abrió la conversación).
+  function findAdCard() {
+    return [...document.querySelectorAll("button, a")].find((el) => el.querySelector('img[alt="Imagen del anuncio"]')) || null;
+  }
+
+  /**
+   * Identificador exacto del anuncio consultado: {code, ref}.
+   *  1. Un enlace a /inmueble/<id>/ en la propia tarjeta (o dentro de ella).
+   *  2. Si no, se pulsa la tarjeta para abrir el modal del anuncio, se lee
+   *     «Cod.» (y «Ref.») de su texto y se cierra con Escape. Si el modal no
+   *     aparece en 3 s, se deja estar: la solicitud llega sin código y el CRM
+   *     la enseña como «Por verificar».
+   */
+  async function readAdIdentifiers() {
+    const out = { code: null, ref: null };
+    const card = findAdCard();
+    if (!card) return out;
+
+    const linkEl = card.matches("a[href]") ? card : card.querySelector("a[href]");
+    const href = linkEl ? linkEl.getAttribute("href") || "" : "";
+    const fromHref = href.match(/\/inmueble\/(\d{6,})/);
+    if (fromHref) {
+      out.code = fromHref[1];
+      return out;
+    }
+    // Una tarjeta-enlace que navegaría a otra página no se pulsa: perderíamos
+    // el hilo. Solo se abre el modal de los botones.
+    if (linkEl && /^https?:/.test(href) && !href.includes("/inbox/")) return out;
+
+    const before = document.body.innerText || "";
+    if (COD_RE.test(before)) {
+      out.code = (before.match(COD_RE) || [])[1] || null;
+      out.ref = (before.match(REF_RE) || [])[1] || null;
+      return out;
+    }
+    try {
+      card.click();
+      const text = await waitFor(() => {
+        const t = document.body.innerText || "";
+        return COD_RE.test(t) ? t : null;
+      }, 3000, 150);
+      if (text) {
+        out.code = (text.match(COD_RE) || [])[1] || null;
+        out.ref = (text.match(REF_RE) || [])[1] || null;
+      }
+    } catch (e) {
+      // Un fallo aquí nunca debe impedir enviar la solicitud.
+    } finally {
+      await closeAdModal();
+    }
+    return out;
+  }
+
+  async function closeAdModal() {
+    const isOpen = () => COD_RE.test(document.body.innerText || "");
+    if (!isOpen()) return;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
+    await sleep(250);
+    if (isOpen()) {
+      const closeBtn = [...document.querySelectorAll("button")].find((b) =>
+        /cerrar|close/i.test((b.getAttribute("aria-label") || "") + " " + (b.textContent || "")),
+      );
+      if (closeBtn) closeBtn.click();
+      await sleep(250);
+    }
+    // Si sigue abierto se deja: el siguiente paso del recorrido navega a otro
+    // hilo y la SPA lo desmonta.
   }
 
   // ── Modo LISTA: botón flotante ─────────────────────────────────────

@@ -35,14 +35,7 @@ import {
   type FollowUpState,
   type LeadFacts,
 } from "@/lib/sales-inbox/derive";
-import {
-  effectiveRoutingStatus,
-  linkStatus,
-  previousPublicationCode,
-  type LinkStatus,
-  type RoutingStatus,
-  type ZintoSyncInfo,
-} from "@/lib/sales-inbox/routing";
+import { effectiveRoutingStatus, idealistaAdUrl, isExactLink, linkStatus, previousPublicationCode, type LinkStatus, type RoutingStatus, type ZintoSyncInfo } from "@/lib/sales-inbox/routing";
 import { getAssignmentEvents, getZintoSync } from "./routing";
 import { groupKeyFor, priorityColumn } from "@/lib/sales-inbox/views";
 import {
@@ -110,6 +103,9 @@ const LIST_COLUMNS = [
   // Identificador del anuncio que trajo la solicitud (Ref. o Cod.).
   "property_ref",
   "idealista_code",
+  // 0238 · portada y código público del anuncio IDENTIFICADO.
+  "listing_cover_url",
+  "listing_ad_code",
 ].join(", ");
 
 /** Lo que cabe en una tarjeta. El mensaje original nunca se recorta en la base. */
@@ -188,7 +184,12 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     avatarUrl: r.avatar_url ?? null,
     messageExcerpt: excerpt(r.message),
     propertyPrice: r.property_price ?? null,
-    propertyImageUrl: r.property_image_url ?? null,
+    // Solo con vínculo exacto se afirma la vivienda: la portada de nuestra
+    // ficha (nítida) y, si no la hay, la miniatura que vio en Idealista. Sin
+    // vínculo exacto, ninguna foto: sería la de un piso «parecido».
+    propertyImageUrl: isExactLink(r.property_link_method)
+      ? (r.listing_cover_url ?? r.property_image_url ?? null)
+      : null,
     linkStatus: linkStatus(r.property_link_method),
     routingStatus: effectiveRoutingStatus(r.routing_status, r.assigned_to),
     routingReason: r.routing_reason ?? null,
@@ -473,7 +474,7 @@ async function groupByProperty(
         // La foto del anuncio de Idealista, ya realojada en nuestro bucket por
         // la ingesta. Si la ficha tiene portada propia, la pisa más abajo. El
         // grupo «Por verificar» no afirma ninguna vivienda: sin foto.
-        coverUrl: exact ? (r.property_image_url ?? null) : null,
+        coverUrl: exact ? (r.listing_cover_url ?? r.property_image_url ?? null) : null,
         leads: [item],
         count: 1,
         lastLeadAt: item.createdAt,
@@ -786,6 +787,8 @@ export type LeadDetail = {
    * guardado no es una publicación anterior: aquí va null.
    */
   previousPublicationCode: string | null;
+  /** Enlace público del anuncio en idealista.com; solo con vínculo exacto. */
+  adUrl: string | null;
   linkMethod: string | null;
   linkStatus: LinkStatus;
   routingStatus: RoutingStatus;
@@ -855,12 +858,16 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
   ]);
 
   const [property, linkedClient, duplicates, clientRow, zintoSync, history, listingCode] = await Promise.all([
-    // La ficha propia manda; si no la hay, el anuncio de Idealista.
-    row.matched_property_id
-      ? getPropertyContext(row.matched_property_id)
-      : row.matched_listing_id
-        ? getListingContext(row.matched_listing_id)
-        : null,
+    // Solo con vínculo exacto se enseña un inmueble: el emparejamiento
+    // antiguo por dirección y precio se guarda como «sin evidencia» y no se
+    // afirma. La ficha propia manda; si no la hay, el anuncio de Idealista.
+    !isExactLink(row.property_link_method)
+      ? null
+      : row.matched_property_id
+        ? getPropertyContext(row.matched_property_id)
+        : row.matched_listing_id
+          ? getListingContext(row.matched_listing_id)
+          : null,
     row.client_id ? getClientRef(row.client_id) : null,
     getDuplicates(id, row.phone_digits ?? ""),
     row.client_id
@@ -934,6 +941,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     propertyRef: row.property_ref ?? null,
     idealistaCode: row.idealista_code ?? null,
     previousPublicationCode: listingCode,
+    adUrl: isExactLink(row.property_link_method)
+      ? (idealistaAdUrl(row.listing_ad_code) ?? idealistaAdUrl(row.idealista_code))
+      : null,
     linkMethod: row.property_link_method ?? null,
     linkStatus: linkStatus(row.property_link_method),
     routingStatus: effectiveRoutingStatus(row.routing_status, row.assigned_to),
@@ -1030,7 +1040,7 @@ async function getListingContext(listingId: string): Promise<LeadPropertyContext
     const { data } = await db()
       .from("idealista_listings")
       .select(
-        "id, reference_code, inspo_title, address_street, address_city, operation, price, total_rental_price",
+        "id, reference_code, inspo_title, address_street, address_city, operation, price, total_rental_price, photo_ids",
       )
       .eq("id", listingId)
       .maybeSingle();
@@ -1050,7 +1060,7 @@ async function getListingContext(listingId: string): Promise<LeadPropertyContext
       // traduce aquí para no darle un significado que no tiene.
       status: null,
       zone: data.address_city ?? null,
-      coverUrl: null,
+      coverUrl: Array.isArray(data.photo_ids) && data.photo_ids[0] ? String(data.photo_ids[0]) : null,
     };
   } catch {
     return null;

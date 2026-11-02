@@ -1,5 +1,11 @@
 import "server-only";
 
+// ⚠️ Desde 0238 (2026-11-02) la RECEPCIÓN de solicitudes ya NO usa esto: sin
+// Ref. ni Cod. la solicitud queda sin inmueble («Por verificar»), porque este
+// emparejamiento por calle y precio era lo que asociaba consultas a pisos que
+// no eran. Lo siguen usando los scripts de mantenimiento
+// idealista-leads-backfill-match.mts e idealista-leads-revalidate-match.mts.
+//
 // Fallback de matching lead ↔ propiedad cuando el hilo no trae referencia
 // (bc386) ni código de anuncio (idealista.com lo omite muy seguido). Usa lo
 // único que sí llega siempre: la dirección/zona y el precio que Idealista

@@ -330,3 +330,23 @@ Las siete comprobaciones nuevas del QA fallaban contra el build anterior (39/46)
 - Fabricio validó la estética en local y confirmó la fusión. PR #386 fusionado en `main` a las 20:40 UTC (commit de fusión `e04e8400`); la CI de `main` sobre ese commit, en verde.
 - A los 30 minutos producción seguía sirviendo el build anterior: su CSS no contenía la capa `.sol-root`. Desde fuera del VPS no se puede saber la causa. Lo más probable es el fallo intermitente de Google Fonts al compilar, el mismo que tumbó la CI de `main` en `4495331f`; tras un build fallido, el cron no reintenta porque `main` ya no trae nada nuevo. Este commit, solo de documentación, relanza el despliegue, como hizo #384.
 - Cómo comprobarlo sin tocar el VPS: la hoja de estilos que sirve `/login` debe contener `--sol-ink`.
+
+## 13. Vínculo exacto con lo publicado por API, caducidad y fotos (0238, 2026-11-02)
+
+Tras ver Solicitudes en producción, Fabricio señaló cuatro cosas: «Por piso» no agrupaba; el flujo tiene que venir de lo publicado por API; el anuncio consultado tiene que ser exactamente el que contactó el cliente (la ficha enseñaba otros pisos); y las fotos se veían mal. Decisiones: solo caducan las solicitudes sin cliente; a los 30 días se ocultan y a los 60 se borran.
+
+**Causa raíz de lo primero y lo tercero.** La extensión solo capturaba el «Cod.» del anuncio si el modal del inmueble estaba abierto en el hilo, y casi nunca lo está. Sin código no hay vínculo exacto; «Por piso» lo manda todo a «Por verificar» (por regla no se agrupa por dirección) y la ficha enseñaba el emparejamiento antiguo por calle y precio, con su aviso. Estaba en los pendientes del PR («captura del identificador exacto en la extensión»).
+
+**Qué cambia**
+
+| Pieza | Cambio |
+|---|---|
+| Extensión 1.14.0 | Al capturar un hilo busca el código en el enlace de la tarjeta del anuncio y, si no está, abre el modal del anuncio, lee «Cod.» y «Ref.» y lo cierra con Escape. Si el modal no aparece en 3 s, la solicitud llega sin código (y se enseña «Por verificar»). No se ha podido probar contra idealista.com desde aquí: **Fabricio debe probarla** (recorrido en `validacion.md`, parte G). |
+| Migración 0238 | `listings_for_code` cruza el «Cod.» también con `api_property_id` y `api_clone_property_id` (Partner API). Columna `idealista_leads.expired_at`; `lead_retention_sweep(30, 60)`: oculta a los 30 días desde la llegada las solicitudes sin cliente y sin seguimiento futuro, y borra a los 60 (con su actividad y sus donantes unificadas; nunca con cliente). La vista `lead_inbox_facts` excluye las caducadas y expone `listing_cover_url` y `listing_ad_code`. Aditiva e idempotente; reversión en `rollback-0238.sql`. |
+| Recepción | Ya no empareja por dirección + precio: sin Ref. ni Cod., la solicitud queda sin inmueble. El «Cod.» se cruza también con los ids de la API. Lanza el barrido de caducidad en cada recepción (no hace falta tocar el crontab del VPS); `/api/cron/api-cleanup` también lo lanza. Una caducada solo revive si el contacto vuelve a escribir (el texto del hilo cambia en una captura de detalle); recapturar el inbox no la revive. |
+| Ficha | Sin vínculo exacto: «Anuncio sin identificar», lo recibido de Idealista como texto, sin foto ni ficha de un piso parecido, y las acciones para identificarlo (vincular con motivo, importar). Con vínculo exacto: «Ver anuncio en Idealista» va a `idealista.com/inmueble/<Cod.>/` (el anuncio exacto); la conversación, aparte. |
+| Fotos | Solo con vínculo exacto, y la portada de nuestra ficha (nítida) antes que la miniatura del inbox, que era lo que se veía borroso y estirado. Sin vínculo exacto, la tarjeta va sin foto. |
+
+**Pendiente de confirmar por Fabricio:** que el `propertyId` que devuelve la Partner API es el mismo número que el «Cod.» del inbox y el de la URL pública (`idealista.com/inmueble/<id>/`). Se comprueba abriendo un anuncio nuestro publicado por API y comparando. Si no coincidiera, el cruce con `api_property_id` no emparejaría y habría que pedir ese dato a la API.
+
+**Verificación.** SQL (`scripts/sql/test-solicitudes-reparto.sh`): 0238 aplicada dos veces, `test-solicitudes-retencion.sql` (cruce con API y clon, portada y código en la vista, barrido: oculta/borra/conserva con cliente o seguimiento futuro, donantes, idempotencia, argumentos inválidos, permisos) y reversión de 0238 y de las dos migraciones con reaplicación. Unitarias: `idealistaAdUrl`. QA visual: seis comprobaciones nuevas (sin vínculo exacto no hay inmueble ni foto; enlace al anuncio exacto por código; anuncio publicado por API con vínculo exacto y grupo propio en «Por piso»; caducada invisible).

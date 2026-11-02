@@ -57,6 +57,9 @@ export async function getIdealistaLeads(): Promise<IdealistaLeadRow[]> {
   let { data, error } = await admin
     .from("idealista_leads")
     .select(`${BASE_SELECT}, contact_status, assigned_to, assigned_at`)
+    // Caducadas (0238) fuera; si la columna no existe aún, el respaldo de
+    // abajo lee sin ella.
+    .is("expired_at", null)
     .order("created_at", { ascending: false })
     .limit(500);
 
