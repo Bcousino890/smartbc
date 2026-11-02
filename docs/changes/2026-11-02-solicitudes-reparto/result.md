@@ -66,7 +66,8 @@ Fabricio puede revocar cualquiera de estas decisiones. Para cada una se indica d
 5. `fe954e9f`: ajustes de la QA visual, generador de datos sintéticos, recorrido de QA y este expediente.
 6. `41e53a99`, `4e3833de` y `9f77030b`: correcciones de las revisiones de Codex (H1, H2, H3, H1b, H1c).
 7. `bc8a1aeb`: recorrido de validación y asesor del cliente solo por reasignación. Se abre el PR #386 en borrador.
-8. Este commit: solicitudes separadas por anuncio, historial de publicaciones, escenario 4 corregido y pruebas con el esquema real (§9).
+8. `b215454e`: solicitudes separadas por anuncio, historial de publicaciones, escenario 4 corregido y pruebas con el esquema real (§9).
+9. `951adb3d`: tres casos nuevos de Codex sobre la unificación y la evidencia (§10).
 
 ## 4. Verificación
 
@@ -77,11 +78,11 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | Lint de migraciones | `python3 scripts/lint-migrations.py` | OK |
 | Tipos | `npx tsc --noEmit` | OK |
 | Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `run:` de `ci.yml` | 35/35 OK |
-| Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 14 bloques OK |
-| Unificación por teléfono, incluida D07 (en la CI) | `npm run test:lead-merge` | OK, con 8 casos D07 nuevos |
+| Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 15 bloques OK |
+| Unificación por teléfono: D07 y los casos 1 y 2 de la quinta ronda, con capturas sucesivas (en la CI) | `npm run test:lead-merge` | OK |
 | Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | Con las **restricciones reales del esquema**: 127 comprobaciones (incluida la de concurrencia), más 5 **defensivas** en una base aparte; 3 ejecuciones seguidas en verde |
 | Build de producción aislado (`.env.production` apartado sin leerse, variables ficticias) | `NEXT_BUILD_DIR=.next.qa npx next build` | OK |
-| QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 (incluida la ficha del cliente) | `scripts/qa/solicitudes-reparto-qa.mts` | 35/35 OK, sin errores de consola |
+| QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 (incluida la ficha del cliente) | `scripts/qa/solicitudes-reparto-qa.mts` | 37/37 OK, sin errores de consola |
 | Recorrido de validación simulado a nivel de base contra el Postgres desechable, con los mismos scripts del entorno de pruebas | `scripts/qa/solicitudes-reparto-pruebas/simular-en-local.sh` | 12/12: escenarios 1, 2, 2b, 3, 4 y 4b, salvaguardas, siembra idempotente y limpieza |
 
 ### Criterios de aceptación de la especificación
