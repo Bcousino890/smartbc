@@ -13,6 +13,7 @@
 // página que pesa mucho y dice poco.
 // ============================================================================
 
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 // ─── Panel ───────────────────────────────────────────────────────────────────
@@ -270,7 +271,70 @@ export function Modal({
   footer?: React.ReactNode;
   wide?: boolean;
 }) {
-  if (!open) return null;
+  return open ? (
+    <ModalShell onClose={onClose} title={title} footer={footer} wide={wide}>
+      {children}
+    </ModalShell>
+  ) : null;
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Teclado: Escape cierra, Tab no se escapa del diálogo y, al cerrar, el foco
+ * vuelve al botón que lo abrió. El foco inicial va al primer campo.
+ */
+function ModalShell({
+  onClose,
+  title,
+  children,
+  footer,
+  wide,
+}: {
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  wide?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const root = ref.current;
+    const first = root?.querySelector<HTMLElement>(
+      "input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
+    );
+    (first ?? root)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !root) return;
+      const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (items.length === 0) return;
+      const a = items[0];
+      const z = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === a) {
+        e.preventDefault();
+        z.focus();
+      } else if (!e.shiftKey && document.activeElement === z) {
+        e.preventDefault();
+        a.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener && document.contains(opener)) opener.focus();
+    };
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 sm:items-center sm:p-6"
@@ -279,6 +343,8 @@ export function Modal({
       }}
     >
       <div
+        ref={ref}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}

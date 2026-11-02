@@ -1,3 +1,5 @@
+import { solicitudesEn, solicitudesEs } from "./solicitudes-strings";
+
 export type Lang = "es" | "en" | "fr" | "de";
 
 export const LANGUAGES: { code: Lang; label: string }[] = [
@@ -6001,4 +6003,10 @@ const de: Strings = {
   "inbox.results.one": "1 Anfrage",
 };
 
-export const dictionary: Record<Lang, Strings> = { es, en, fr, de };
+// Rediseño de Solicitudes y Reparto comercial: en su propio módulo.
+export const dictionary: Record<Lang, Strings> = {
+  es: { ...es, ...solicitudesEs },
+  en: { ...en, ...solicitudesEn },
+  fr,
+  de,
+};
