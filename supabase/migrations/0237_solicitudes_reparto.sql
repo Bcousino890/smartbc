@@ -266,7 +266,10 @@ DECLARE
   v_cur_list text;
   v_prop     uuid;
   v_list     uuid;
-  v_n        integer;
+  e_ref      uuid[];
+  e_code     uuid[];
+  e_sel      uuid[];
+  v_lconf    boolean := false;
 BEGIN
   SELECT * INTO l FROM idealista_leads WHERE id = p_lead FOR UPDATE;
   IF NOT FOUND THEN RETURN NULL; END IF;
@@ -322,32 +325,46 @@ BEGIN
       -- El ANUNCIO lo decide la evidencia recibida, no el que ya estaba: un
       -- mismo inmueble puede tener varios anuncios (republicaciones, venta y
       -- alquiler), y que el guardado sea «de la misma vivienda» no lo valida.
-      SELECT count(*), min(x.id::text)::uuid INTO v_n, v_list
+      --
+      -- Cada evidencia se evalúa POR SEPARADO: una referencia puede repetirse
+      -- entre anuncios del mismo inmueble y el código los distingue. Con las
+      -- dos, el anuncio recibido es el que casa con AMBAS; si señalan anuncios
+      -- distintos, no hay anuncio exacto (conflicto).
+      SELECT COALESCE(array_agg(x.id), '{}') INTO e_ref
         FROM idealista_listings x
-       WHERE x.property_id = v_prop
-         AND ((v_ref IS NOT NULL AND lower(x.reference_code) = v_ref)
-           OR (v_code IS NOT NULL AND x.idealista_property_id = v_code));
-      IF v_n = 0 THEN
-        -- La evidencia es la referencia de la FICHA (bc_reference): identifica
-        -- el inmueble, no un anuncio. El anuncio guardado se conserva solo si
-        -- es de ese inmueble; nada lo contradice.
+       WHERE x.property_id = v_prop AND v_ref IS NOT NULL AND lower(x.reference_code) = v_ref;
+      SELECT COALESCE(array_agg(x.id), '{}') INTO e_code
+        FROM idealista_listings x
+       WHERE x.property_id = v_prop AND v_code IS NOT NULL AND x.idealista_property_id = v_code;
+      IF cardinality(e_ref) > 0 AND cardinality(e_code) > 0 THEN
+        e_sel := ARRAY(SELECT unnest(e_ref) INTERSECT SELECT unnest(e_code));
+        v_lconf := cardinality(e_sel) = 0;
+      ELSE
+        e_sel := e_ref || e_code;   -- una de las dos está vacía
+      END IF;
+
+      IF cardinality(e_sel) = 1 THEN
+        v_list := e_sel[1];
+      ELSIF cardinality(e_sel) = 0 THEN
+        -- Ninguna evidencia señala un anuncio concreto (la referencia es la de
+        -- la FICHA, bc_reference): el inmueble es exacto, el anuncio no. Se
+        -- conserva el guardado solo si es de ese inmueble; nada lo contradice.
         v_list := CASE WHEN v_cur_list = v_home THEN l.matched_listing_id END;
-      ELSIF v_n > 1 THEN
-        -- Varios anuncios del inmueble casan con la evidencia: el guardado
-        -- vale solo si es uno de ellos; si no, ninguno.
-        v_list := CASE WHEN EXISTS (
-          SELECT 1 FROM idealista_listings x
-           WHERE x.id = l.matched_listing_id AND x.property_id = v_prop
-             AND ((v_ref IS NOT NULL AND lower(x.reference_code) = v_ref)
-               OR (v_code IS NOT NULL AND x.idealista_property_id = v_code))
-        ) THEN l.matched_listing_id END;
+      ELSE
+        -- Varios anuncios casan (p. ej. solo una referencia repetida): el
+        -- guardado vale solo si es uno de ellos; si no, ninguno.
+        v_list := CASE WHEN l.matched_listing_id = ANY (e_sel) THEN l.matched_listing_id END;
       END IF;
     ELSE
       v_prop := NULL;
       v_list := substr(v_home, 3)::uuid;
     END IF;
 
-    IF v_cur IS NOT DISTINCT FROM v_home
+    IF v_lconf THEN
+      -- «Ref.» y «Cod.» identifican anuncios DISTINTOS del inmueble: ninguno
+      -- es exacto. No se reescribe ni se da por bueno el guardado.
+      v_method := 'conflict';
+    ELSIF v_cur IS NOT DISTINCT FROM v_home
        AND l.matched_property_id IS NOT DISTINCT FROM v_prop
        AND l.matched_listing_id IS NULL AND v_list IS NOT NULL THEN
       -- Solo falta el anuncio y la evidencia lo identifica: se completa (en

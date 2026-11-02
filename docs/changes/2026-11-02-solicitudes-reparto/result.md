@@ -68,7 +68,7 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | Tipos | `npx tsc --noEmit` | OK |
 | Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `npm run test:*` de `ci.yml` | 34/34 OK |
 | Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 13 bloques OK |
-| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 103 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
+| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 109 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
 | Build de producción aislado (`.env.production` apartado sin leerse, variables ficticias) | `NEXT_BUILD_DIR=.next.qa npx next build` | OK |
 | QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 | `scripts/qa/solicitudes-reparto-qa.mts` | 30/30 OK, sin errores de consola |
 
@@ -88,7 +88,7 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | R10 | SQL: una nueva publicación del mismo piso se resuelve exacta y aplica su regla. |
 | R11 | SQL: reasignar mueve las solicitudes abiertas y las tareas, encola la conversación y conserva el autor de lo anterior. QA: alcance visible antes de confirmar. |
 | R12 | SQL con dos sesiones simultáneas: una sola primera asignación; la segunda solicitud hereda. Además, un reparto y una reasignación administrativa simultáneos del mismo cliente terminan sin interbloqueo (H2). |
-| D01–D05, D11, D12 | SQL: Cod. y Ref. exactos, sin asociación por dirección, ambiguo o en conflicto nunca elige el primero, la evidencia exacta corrige el enlace por dirección y la corrección manual no se pisa. Con dos anuncios del mismo inmueble se enlaza el anuncio que identifica la evidencia (H1). |
+| D01–D05, D11, D12 | SQL: Cod. y Ref. exactos, sin asociación por dirección, ambiguo o en conflicto nunca elige el primero, la evidencia exacta corrige el enlace por dirección y la corrección manual no se pisa. Con dos anuncios del mismo inmueble se enlaza el anuncio que identifica la evidencia (H1); con «Ref.» y «Cod.» juntos, el que casa con los dos, y conflicto si señalan anuncios distintos (H1b). |
 | U01, U02 | SQL: contacto y tarea en una transacción; el doble envío con la misma clave no duplica; completar la tarea no cierra la solicitud. QA: fecha y hora de Madrid visibles antes de guardar. |
 | U03 | La URL conserva filtros, vista y página (ya existía); se restaura el scroll al cerrar la ficha. |
 | U07 | QA: Escape cierra y el foco vuelve; sin scroll horizontal a 390 px. **Lector de pantalla y zoom al 200 % sin probar.** |
@@ -148,9 +148,35 @@ Codex señaló tres problemas en `0237`. Se comprobó cada uno en el código y c
 | H2 | **Orden de bloqueo.** `route_lead` llamaba a `resolve_lead_link` (que bloquea la solicitud) antes de bloquear al cliente; `reassign_client_admin` bloquea cliente → solicitudes. | Sesión A: `ERROR: deadlock detected` | `route_lead` bloquea el cliente **antes** de resolver el vínculo. Orden único en 0237: cliente → solicitud; ninguna función bloquea un cliente después de una solicitud (documentado en la migración). | `test-solicitudes-reparto-lock-*.sql`: un trigger **solo de prueba** pausa 2 s la sesión A dentro de `route_lead` mientras la sesión B reasigna al mismo cliente. Las dos terminan, gana la reasignación y cliente y solicitud quedan con el mismo asesor. |
 | H3 | **Asesor único.** Una solicitud repartida por la regla a A y vinculada después a un cliente de B quedaba en conflicto con dos responsables posibles. | `TEST FAIL: H3 · asignada por regla y vinculada a un cliente con otro asesor` | Si el origen es la regla, una herencia o una asignación anterior a 0237, la solicitud **hereda** el asesor del cliente: auditoría `lead_inherited` con el anterior y el nuevo, nota en el hilo, y la cola de Zinto deja de tener al anterior pendiente. Solo una asignación **manual de un administrador** sigue en conflicto visible. | Regla → hereda B con auditoría; el asesor del cliente no cambia; la cola de Zinto no conserva a A pendiente; la asignación anterior a 0237 también hereda; la asignación manual de un administrador sigue en conflicto (prueba existente, renombrada). |
 
+### Segunda revisión de Codex: H1b, «Ref.» y «Cod.» juntos
+
+La corrección de H1 seguía incompleta cuando llegan las dos evidencias. La selección del anuncio usaba `ref OR code` dentro del inmueble, así que:
+
+- con una referencia repetida entre dos anuncios y un código único, casaban los dos anuncios y se conservaba el guardado (o, sin guardado, no se completaba ninguno);
+- con una referencia y un código de anuncios distintos, se daba por exacto el guardado.
+
+**Antes de corregir.** Se ejecutó una copia temporal de la batería, con aserciones que no se detienen, contra la migración sin cambiar. Fallaron cinco comprobaciones: referencia compartida con código único, referencia y código distintos, ese conflicto repartía, sin guardado no se completaba, y el histórico no marcaba conflicto. La de «solo referencia compartida» ya pasaba.
+
+**Corrección.** Cada evidencia se evalúa por separado dentro del inmueble:
+
+- con las dos, el anuncio es el que casa con ambas;
+- si su intersección está vacía, el vínculo queda en `conflict`, no se reescribe y no reparte;
+- con una sola evidencia que casa con varios anuncios, se conserva el guardado solo si es uno de ellos;
+- si la evidencia es la referencia de la ficha, el inmueble es exacto y el anuncio no se afirma.
+
+**Pruebas nuevas** (inmueble con L51 y L52, que comparten BC-500, y L53 con BC-503), todas en verde:
+
+| Caso | Resultado |
+|---|---|
+| Referencia compartida + código único, con otro anuncio guardado | Se elige el anuncio del código |
+| Referencia y código de anuncios distintos | Conflicto: no reescribe, no da por exacto el guardado y no reparte aunque el inmueble tenga regla |
+| Sin anuncio guardado, referencia compartida + código único | Se completa el anuncio del código |
+| Solo la referencia compartida | Inmueble exacto, ningún anuncio afirmado |
+| Histórico (solo clasificar) con el guardado contradiciendo Ref. + Cod. | Conflicto, sin reescribir |
+
 **Pruebas repetidas tras corregir** (local, datos sintéticos):
 
-- `scripts/sql/test-solicitudes-reparto.sh`: 103 comprobaciones y la de concurrencia, en verde tres veces seguidas.
+- `scripts/sql/test-solicitudes-reparto.sh`: 109 comprobaciones y la de concurrencia, en verde tres veces seguidas (también tras H1b).
 - `npm run test:solicitudes-reparto`, `npx tsc --noEmit` y `scripts/lint-migrations.py`: en verde.
 - No se repitió la QA visual: los cambios son de SQL y de un comentario, y el simulador de la QA visual no ejecuta funciones SQL.
 

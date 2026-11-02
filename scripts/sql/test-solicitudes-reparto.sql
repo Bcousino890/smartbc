@@ -301,6 +301,61 @@ SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = p
   AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('803')) = 'ref',
   'H1 · referencia de la ficha sin anuncio concreto: se conserva el anuncio del mismo inmueble');
 
+-- ═══ Hallazgo 1b · «Ref.» y «Cod.» juntos ══════════════════════════════════
+-- P5 tiene tres anuncios: L51 y L52 comparten la referencia BC-500 (Cod. 551
+-- y 552); L53 lleva BC-503 (Cod. 553). Cada evidencia se evalúa por separado y
+-- el anuncio recibido es el que casa con LAS DOS, no con cualquiera.
+INSERT INTO properties (id, slug, title, country, bc_reference)
+VALUES ('d0000000-0000-0000-0000-000000000005', 'castellana', 'Castellana', 'es', 'bc-5');
+INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id) VALUES
+  ('e0000000-0000-0000-0000-000000000051', 'd0000000-0000-0000-0000-000000000005', 'BC-500', '551'),
+  ('e0000000-0000-0000-0000-000000000052', 'd0000000-0000-0000-0000-000000000005', 'BC-500', '552'),
+  ('e0000000-0000-0000-0000-000000000053', 'd0000000-0000-0000-0000-000000000005', 'BC-503', '553');
+
+-- Referencia compartida + código único, con otro anuncio guardado.
+SELECT pg_temp.lead('804', '+34 611 000 804', 'BC-500', '552',
+  'd0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000051');
+SELECT resolve_lead_link(pg_temp.l('804'), true);
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('804'))
+    = 'e0000000-0000-0000-0000-000000000052'
+  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('804')) IN ('ref', 'code'),
+  'H1b · Ref. compartida y Cod. único: se elige el anuncio del código aunque hubiera otro guardado');
+
+-- Referencia y código de anuncios distintos del mismo inmueble.
+SELECT pg_temp.lead('805', '+34 611 000 805', 'BC-503', '551',
+  'd0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000053');
+SELECT resolve_lead_link(pg_temp.l('805'), true);
+SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('805')) = 'conflict'
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('805')) = 'e0000000-0000-0000-0000-000000000053',
+  'H1b · Ref. y Cod. de anuncios distintos: conflicto, sin dar por exacto el guardado ni reescribirlo');
+SELECT routing_set_rules(:ADM, 'es', :JAIME, '[{"property_id":"d0000000-0000-0000-0000-000000000005","expected_version":0}]');
+SELECT route_lead(pg_temp.l('805'));
+SELECT test_util.ok((SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('805')) = 'link_conflict'
+  AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('805')) IS NULL,
+  'H1b · ese conflicto no reparte aunque el inmueble tenga regla');
+
+-- Sin anuncio guardado: referencia compartida + código único.
+SELECT pg_temp.lead('806', '+34 611 000 806', 'BC-500', '551');
+SELECT resolve_lead_link(pg_temp.l('806'), true);
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('806'))
+    = 'e0000000-0000-0000-0000-000000000051'
+  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('806')) = 'd0000000-0000-0000-0000-000000000005',
+  'H1b · sin anuncio guardado: se completa el anuncio del código');
+
+-- Solo la referencia compartida: el anuncio no está identificado (el inmueble sí).
+SELECT pg_temp.lead('807', '+34 611 000 807', 'BC-500', NULL);
+SELECT resolve_lead_link(pg_temp.l('807'), true);
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('807')) IS NULL
+  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('807')) = 'd0000000-0000-0000-0000-000000000005',
+  'H1b · solo la referencia compartida: inmueble exacto, ningún anuncio afirmado');
+
+-- Histórico (solo clasificar): guardado L51, llegan BC-500 + Cod. 552 → conflicto, sin reescribir.
+SELECT pg_temp.lead('808', '+34 611 000 808', 'BC-500', '552',
+  'd0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000051');
+SELECT test_util.ok(resolve_lead_link(pg_temp.l('808'), false) = 'conflict'
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('808')) = 'e0000000-0000-0000-0000-000000000051',
+  'H1b · histórico: el guardado contradice el anuncio de Ref.+Cod. → conflicto, sin reescribir');
+
 -- ═══ R09 · Z05 · un cliente, un asesor ══════════════════════════════════════
 -- Lucía (cliente verificado de Jaime) consulta Goya, que es de… Jaime ahora;
 -- se pasa Goya a Sofía para que la regla diga otra cosa.
