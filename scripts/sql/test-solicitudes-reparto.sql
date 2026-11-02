@@ -420,6 +420,32 @@ SELECT test_util.ok((SELECT matched_property_id FROM idealista_leads WHERE id = 
 SELECT test_util.expect_error(format('SELECT set_lead_link_manual(%L, %L, %L, %L, %L)',
   :ADM, pg_temp.l('205'), :P2, 'e0000000-0000-0000-0000-000000000001', 'x'), 'link_incoherent');
 
+-- ═══ U01 · U02 · registrar contacto + tarea, una sola vez ══════════════════
+DO $$
+DECLARE r jsonb; k uuid := gen_random_uuid(); n_act int; lead uuid := 'f0000000-0000-0000-0000-000000000204';
+BEGIN
+  PERFORM test_util.expect_error(format('SELECT lead_register_contact(%L, %L, ''call'', NULL, NULL, NULL, NULL, false, NULL)',
+    'b0000000-0000-0000-0000-00000000000a', lead), 'outcome_required');
+  r := lead_register_contact('b0000000-0000-0000-0000-00000000000a', lead, 'call', 'no_answer', 'No contesta',
+    now() + interval '1 day', 'Volver a llamar para confirmar visita', false, k);
+  PERFORM test_util.ok(r->>'outcome' = 'saved', 'U01 · No contesta + tarea: guardado');
+  SELECT count(*) INTO n_act FROM lead_activity WHERE lead_id = lead;
+  r := lead_register_contact('b0000000-0000-0000-0000-00000000000a', lead, 'call', 'no_answer', 'No contesta',
+    now() + interval '1 day', 'Volver a llamar para confirmar visita', false, k);
+  PERFORM test_util.ok(r->>'outcome' = 'duplicate' AND (SELECT count(*) FROM lead_activity WHERE lead_id = lead) = n_act,
+    'U02 · el doble envío no duplica registros');
+  PERFORM test_util.ok((SELECT next_action_note FROM idealista_leads WHERE id = lead) = 'Volver a llamar para confirmar visita'
+    AND EXISTS (SELECT 1 FROM lead_activity WHERE lead_id = lead AND kind = 'follow_up'),
+    'U01 · resultado y recordatorio visibles en actividad');
+  PERFORM test_util.ok((SELECT commercial_state FROM lead_inbox_facts WHERE id = lead) = 'contacted',
+    'U01 · «No contesta» cuenta como intento, no como respuesta');
+  r := lead_register_contact('b0000000-0000-0000-0000-00000000000a', lead, 'call', 'answered', NULL, NULL, NULL, true, gen_random_uuid());
+  PERFORM test_util.ok((SELECT next_action_at FROM idealista_leads WHERE id = lead) IS NULL
+    AND (SELECT commercial_state FROM lead_inbox_facts WHERE id = lead) = 'engaged'
+    AND (SELECT status FROM idealista_leads WHERE id = lead) = 'nuevo',
+    'U01 · completar la tarea retira el recordatorio y no cierra la solicitud');
+END $$;
+
 -- ═══ Auditoría, vista y permisos de las funciones ══════════════════════════
 SELECT test_util.expect_error('UPDATE assignment_events SET reason = ''x''', 'assignment_events_append_only');
 SELECT test_util.expect_error('DELETE FROM assignment_events', 'assignment_events_append_only');

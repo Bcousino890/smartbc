@@ -11,6 +11,8 @@
 // alguien tiene que acordarse de tocar acaba mintiendo; un cálculo, no.
 // ============================================================================
 
+import type { LinkStatus, RoutingStatus } from "./routing";
+
 /** Las seis vistas de la bandeja. Son TRABAJO, no entidades ni fuentes. */
 export type InboxView =
   | "needs-attention"
@@ -162,6 +164,20 @@ export type LeadListItem = {
    *  contacto no tiene foto: ahí Idealista pinta iniciales y nosotros
    *  también. */
   avatarUrl: string | null;
+  /** Primeros caracteres del mensaje, LITERALES (la ficha enseña el entero). */
+  messageExcerpt: string | null;
+  /** Precio tal cual lo pintó Idealista ("2.400 €/mes"). Al consultar. */
+  propertyPrice: string | null;
+  /** Foto del anuncio consultado. Solo se afirma con vínculo exacto: la
+   *  pantalla usa `linkStatus` para decidir si la enseña como «la vivienda». */
+  propertyImageUrl: string | null;
+  /** Evidencia del vínculo con el anuncio (migración 0237). */
+  linkStatus: LinkStatus;
+  routingStatus: RoutingStatus;
+  routingReason: string | null;
+  assignmentSource: string | null;
+  /** Versión de la asignación que se vio: viaja en cada cambio (concurrencia). */
+  assignmentVersion: number;
 };
 
 export type LeadSource = "idealista" | "web" | "visit_request";
@@ -171,6 +187,21 @@ export const LEAD_SOURCES: readonly LeadSource[] = [
   "web",
   "visit_request",
 ] as const;
+
+/**
+ * Las tres maneras de mirar la MISMA bandeja (misma ficha, mismas acciones,
+ * mismos filtros): A · Tarjetas (por defecto), B · Por inmueble, C · Prioridades.
+ */
+export type InboxLayout = "cards" | "property" | "priorities";
+
+export function isInboxLayout(v: unknown): v is InboxLayout {
+  return v === "cards" || v === "property" || v === "priorities";
+}
+
+/** C · Prioridades: una columna por próximo paso. Una solicitud, una columna. */
+export type PriorityColumn = "today" | "awaiting" | "scheduled";
+
+export type PriorityBoard = Record<PriorityColumn, { items: LeadListItem[]; total: number }>;
 
 /** Cómo se agrupa la lista. */
 export type InboxGrouping = "none" | "property";
@@ -234,6 +265,8 @@ export type InboxFilters = {
   international?: boolean;
   unmatchedProperty?: boolean;
   operation?: OperationFilter;
+  /** 'conflict' = solo las que tienen dos responsables posibles. */
+  routing?: "conflict";
   page: number;
   pageSize: number;
   sort: InboxSort;
@@ -267,9 +300,15 @@ export const GROUP_PAGE_SIZE = 12;
  * tirando y cuál no.
  */
 export type LeadGroup = {
+  /** El grupo junta solicitudes con vínculo EXACTO al mismo anuncio y misma
+   *  operación; `unverified` es el cajón de las que no lo tienen (nunca se
+   *  agrupan por dirección ni por título). */
+  kind: "exact" | "unverified";
+  /** Venta / alquiler / ambas / sin determinar del grupo. */
+  leadOperation: LeadOperation | null;
   /**
    * `p:<uuid>` (ficha propia) · `l:<uuid>` (anuncio de Idealista sin ficha) ·
-   * `t:<título>` cuando no hay ni lo uno ni lo otro.
+   * más `|<operación>`; `v:` es el grupo «Por verificar».
    */
   key: string;
   propertyId: string | null;

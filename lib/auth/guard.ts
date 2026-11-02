@@ -163,6 +163,33 @@ export async function requireRoles(
   return { ok: true, profile };
 }
 
+/**
+ * `requireRoles` para server actions: mismo criterio (rol EFECTIVO en
+ * `opts.country`), pero devuelve `{ ok: false, error }` en vez de una Response.
+ *
+ *   const gate = await checkRoles(ADMIN_ROLES, { country });
+ *   if (!gate.ok) return gate;
+ */
+export async function checkRoles(
+  roles: readonly string[],
+  opts?: { country?: string; message?: string },
+): Promise<PermissionCheckResult & { effectiveRole?: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: "No autenticado" };
+  const { effectiveRole } = await getEffectiveRoleAndPermissions(
+    profile.id,
+    profile.role,
+    opts?.country,
+  );
+  if (!roles.includes(effectiveRole)) {
+    return {
+      ok: false,
+      error: opts?.message ?? "Solo un administrador puede hacer esto.",
+    };
+  }
+  return { ok: true, profile, effectiveRole };
+}
+
 /** Resultado de `checkPermission`: o pasa (con el profile) o trae un mensaje listo para mostrar. */
 export type PermissionCheckResult =
   | { ok: true; profile: ProfileRow }

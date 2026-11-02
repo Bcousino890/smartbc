@@ -17,6 +17,7 @@ DROP VIEW IF EXISTS lead_inbox_facts;
 
 DROP FUNCTION IF EXISTS zinto_owner_sync_retry(uuid, uuid);
 DROP FUNCTION IF EXISTS zinto_owner_sync_ack(uuid, integer, boolean, text);
+DROP FUNCTION IF EXISTS lead_register_contact(uuid, uuid, text, text, text, timestamptz, text, boolean, uuid);
 DROP FUNCTION IF EXISTS set_lead_link_manual(uuid, uuid, uuid, uuid, text);
 DROP FUNCTION IF EXISTS routing_clear_rules(uuid, text, jsonb, text);
 DROP FUNCTION IF EXISTS routing_set_rules(uuid, text, uuid, jsonb, text);
@@ -49,6 +50,8 @@ ALTER TABLE idealista_leads
   DROP COLUMN IF EXISTS routing_rule_version,
   DROP COLUMN IF EXISTS assignment_source,
   DROP COLUMN IF EXISTS assignment_version;
+DROP INDEX IF EXISTS uq_lead_activity_client_key;
+ALTER TABLE lead_activity DROP COLUMN IF EXISTS client_key;
 ALTER TABLE profiles
   DROP CONSTRAINT IF EXISTS profiles_advisor_assignment_source_valid,
   DROP COLUMN IF EXISTS advisor_assignment_source,

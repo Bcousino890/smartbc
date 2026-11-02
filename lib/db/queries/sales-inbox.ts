@@ -36,12 +36,22 @@ import {
   type LeadFacts,
 } from "@/lib/sales-inbox/derive";
 import {
+  effectiveRoutingStatus,
+  linkStatus,
+  type LinkStatus,
+  type RoutingStatus,
+  type ZintoSyncInfo,
+} from "@/lib/sales-inbox/routing";
+import { getAssignmentEvents, getZintoSync } from "./routing";
+import { groupKeyFor, priorityColumn } from "@/lib/sales-inbox/views";
+import {
   GROUP_PAGE_SIZE,
   type CommercialState,
   type LeadGroup,
   type LeadOperation,
   type InboxCounts,
   type InboxFilters,
+  type PriorityBoard,
   type LeadListItem,
 } from "@/lib/sales-inbox/types";
 
@@ -84,7 +94,28 @@ const LIST_COLUMNS = [
   "commercial_state",
   "avatar_url",
   "lead_operation",
+  // Tarjeta (A): precio al consultar, foto del anuncio y el principio del
+  // mensaje. El mensaje viaja entero desde la base pero al navegador solo
+  // llega el extracto (`toListItem`).
+  "property_price",
+  "property_image_url",
+  "message",
+  // 0237 · vínculo con evidencia y reparto.
+  "property_link_method",
+  "routing_status",
+  "routing_reason",
+  "assignment_source",
+  "assignment_version",
 ].join(", ");
+
+/** Lo que cabe en una tarjeta. El mensaje original nunca se recorta en la base. */
+const EXCERPT_CHARS = 220;
+
+function excerpt(text: string | null | undefined): string | null {
+  const t = (text ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  return t.length > EXCERPT_CHARS ? `${t.slice(0, EXCERPT_CHARS - 1).trimEnd()}…` : t;
+}
 
 export type InboxScope = {
   restriction: "own_only" | "team" | "all" | "assigned_only" | "none";
@@ -151,6 +182,14 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     score: attentionScore(reasons, r.created_at, now),
     lastActivityAt: deriveLastActivityAt(facts) ?? r.last_activity_at ?? null,
     avatarUrl: r.avatar_url ?? null,
+    messageExcerpt: excerpt(r.message),
+    propertyPrice: r.property_price ?? null,
+    propertyImageUrl: r.property_image_url ?? null,
+    linkStatus: linkStatus(r.property_link_method),
+    routingStatus: effectiveRoutingStatus(r.routing_status, r.assigned_to),
+    routingReason: r.routing_reason ?? null,
+    assignmentSource: r.assignment_source ?? null,
+    assignmentVersion: Number(r.assignment_version ?? 0),
   };
 }
 
@@ -181,6 +220,8 @@ function applyFilters(q: any, f: InboxFilters, userId: string | null) {
   if (f.operation === "unknown") q = q.is("lead_operation", null);
   else if (f.operation === "sale") q = q.in("lead_operation", ["sale", "mixed"]);
   else if (f.operation === "rent") q = q.in("lead_operation", ["rent", "mixed"]);
+
+  if (f.routing === "conflict") q = q.eq("routing_status", "conflict");
 
   if (f.assignedTo === "me" && userId) q = q.eq("assigned_to", userId);
   else if (f.assignedTo === "none") q = q.is("assigned_to", null);
@@ -215,6 +256,10 @@ function applyFilters(q: any, f: InboxFilters, userId: string | null) {
       `property_title.ilike.${like}`,
       `message.ilike.${like}`,
       `idealista_conversation_id.ilike.${like}`,
+      // ID del anuncio (Cod.) y referencia interna (Ref.), que el inventario
+      // pide poder buscar.
+      `idealista_code.ilike.${like}`,
+      `property_ref.ilike.${like}`,
     ];
     if (digits.length >= 3) clauses.push(`phone_digits.ilike.%${digits}%`);
     q = q.or(clauses.join(","));
@@ -392,18 +437,12 @@ async function groupByProperty(
     const item = toListItem(r, now, staffNames);
     if (filters.view === "needs-attention" && !needsAttention(item.reasons)) continue;
 
-    // Ficha propia primero; si no, el ANUNCIO de Idealista (las "inspo", que
-    // en esta cartera son la mayoría y antes caían aquí sin agrupar); y solo
-    // como último recurso el título del anuncio, que es lo único que queda
-    // cuando el lead no está emparejado con nada.
+    // Un grupo por anuncio EXACTO y operación (ficha propia primero, si no el
+    // anuncio de Idealista). Sin vínculo exacto, todas a «Por verificar»:
+    // agrupar por título o dirección juntaba pisos distintos de la misma calle.
     const title = (r.property_title ?? "").trim();
-    const key = r.matched_property_id
-      ? `p:${r.matched_property_id}`
-      : r.matched_listing_id
-        ? `l:${r.matched_listing_id}`
-        : title
-          ? `t:${title.toLowerCase()}`
-          : "t:";
+    const key = groupKeyFor(item);
+    const exact = key !== "v:";
 
     const g = byKey.get(key);
     if (g) {
@@ -415,18 +454,21 @@ async function groupByProperty(
     } else {
       byKey.set(key, {
         key,
-        propertyId: r.matched_property_id ?? null,
-        listingId: r.matched_listing_id ?? null,
+        kind: exact ? "exact" : "unverified",
+        leadOperation: exact ? item.operation : null,
+        propertyId: exact ? (r.matched_property_id ?? null) : null,
+        listingId: exact ? (r.matched_listing_id ?? null) : null,
         slug: null,
-        title: title || null,
+        title: exact ? title || null : null,
         zone: null,
         reference: null,
         price: null,
         operation: null,
         status: null,
         // La foto del anuncio de Idealista, ya realojada en nuestro bucket por
-        // la ingesta. Si la ficha tiene portada propia, la pisa más abajo.
-        coverUrl: r.property_image_url ?? null,
+        // la ingesta. Si la ficha tiene portada propia, la pisa más abajo. El
+        // grupo «Por verificar» no afirma ninguna vivienda: sin foto.
+        coverUrl: exact ? (r.property_image_url ?? null) : null,
         leads: [item],
         count: 1,
         lastLeadAt: item.createdAt,
@@ -436,9 +478,11 @@ async function groupByProperty(
     }
   }
 
-  const ordered = [...byKey.values()].sort(
-    (a, b) => new Date(b.lastLeadAt).getTime() - new Date(a.lastLeadAt).getTime(),
-  );
+  // «Por verificar» va al final: es trabajo de revisión, no un inmueble.
+  const ordered = [...byKey.values()].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "unverified" ? 1 : -1;
+    return new Date(b.lastLeadAt).getTime() - new Date(a.lastLeadAt).getTime();
+  });
 
   const from = (filters.page - 1) * GROUP_PAGE_SIZE;
   const page = ordered.slice(from, from + GROUP_PAGE_SIZE);
@@ -513,6 +557,69 @@ async function groupByProperty(
     attentionMode: false,
   };
 }
+
+/**
+ * C · Prioridades: el MISMO conjunto acotado que el modo atención, repartido en
+ * tres columnas por su próximo paso (`priorityColumn`). Los filtros y el
+ * alcance son los de la bandeja, así que lo que cuenta cada columna es lo que
+ * la persona puede ver.
+ */
+export async function getPriorityBoard(
+  filters: InboxFilters,
+): Promise<PriorityBoard & { unplanned: number }> {
+  const empty = (): PriorityBoard & { unplanned: number } => ({
+    today: { items: [], total: 0 },
+    awaiting: { items: [], total: 0 },
+    scheduled: { items: [], total: 0 },
+    unplanned: 0,
+  });
+  const gate = await checkPermission("solicitudes", "view");
+  if (!gate.ok) return empty();
+  const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
+  const scope: InboxScope = {
+    restriction: scopeRaw.restriction as InboxScope["restriction"],
+    userId: scopeRaw.userId,
+  };
+  if (scope.restriction === "none" || !scope.userId) return empty();
+
+  const now = new Date();
+  const staffNames = await getStaffNames();
+  let q = db()
+    .from(VIEW)
+    .select(LIST_COLUMNS)
+    .not("commercial_state", "in", "(converted,discarded)");
+  q = applyScope(q, scope);
+  q = applyFilters(q, { ...filters, view: filters.view === "needs-attention" ? "all" : filters.view }, scope.userId);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(SCAN_LIMIT);
+  if (error) {
+    console.error("[getPriorityBoard]", error.message);
+    return empty();
+  }
+
+  const board = empty();
+  for (const r of (data ?? []) as any[]) {
+    const item = toListItem(r, now, staffNames);
+    const col = priorityColumn(item, now);
+    if (!col) {
+      board.unplanned += 1;
+      continue;
+    }
+    board[col].items.push(item);
+  }
+  // Hoy: por urgencia (misma puntuación que Atención). Programadas: por fecha.
+  // Esperando: la que lleva más tiempo sin noticias, primero.
+  board.today.items.sort((a, b) => b.score - a.score);
+  board.scheduled.items.sort((a, b) => (a.nextActionAt ?? "").localeCompare(b.nextActionAt ?? ""));
+  board.awaiting.items.sort((a, b) => (a.lastActivityAt ?? a.createdAt).localeCompare(b.lastActivityAt ?? b.createdAt));
+  for (const col of ["today", "awaiting", "scheduled"] as const) {
+    board[col].total = board[col].items.length;
+    board[col].items = board[col].items.slice(0, PRIORITY_COLUMN_LIMIT);
+  }
+  return board;
+}
+
+/** Tarjetas por columna. El resto se ve en Tarjetas con el mismo filtro. */
+const PRIORITY_COLUMN_LIMIT = 40;
 
 /**
  * Las cifras del encabezado. Cinco `count` con `head: true`: no traen filas,
@@ -662,6 +769,31 @@ export type LeadDetail = {
   /** Foto de perfil del contacto en Idealista (`idealista_leads.avatar_url`,
    *  migración 0083; la expone la vista desde la 0159). NULL = sin foto. */
   avatarUrl: string | null;
+
+  // ── 0237 · vínculo y reparto ──
+  /** Evidencia recibida: «Ref.» y «Cod.» tal como llegaron. */
+  propertyRef: string | null;
+  idealistaCode: string | null;
+  linkMethod: string | null;
+  linkStatus: LinkStatus;
+  routingStatus: RoutingStatus;
+  routingReason: string | null;
+  assignmentSource: string | null;
+  assignmentVersion: number;
+  /** «Asesor del cliente»: el responsable vigente si hay cliente vinculado. */
+  clientAdvisor: { id: string | null; name: string | null; version: number; source: string | null } | null;
+  /** Sincronización del responsable con Zinto (cliente si lo hay, si no la solicitud). */
+  zintoSync: ZintoSyncInfo | null;
+  /** Cambios de responsable y de reparto, con autor. */
+  assignmentHistory: Array<{
+    id: string;
+    kind: string;
+    actorName: string | null;
+    occurredAt: string;
+    previousName: string | null;
+    newName: string | null;
+    reason: string | null;
+  }>;
 };
 
 /** El hilo de Idealista de una conversación. Las llamadas perdidas usan CALL_. */
@@ -710,7 +842,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     getStaffNames(),
   ]);
 
-  const [property, linkedClient, duplicates] = await Promise.all([
+  const [property, linkedClient, duplicates, clientRow, zintoSync, history] = await Promise.all([
     // La ficha propia manda; si no la hay, el anuncio de Idealista.
     row.matched_property_id
       ? getPropertyContext(row.matched_property_id)
@@ -719,7 +851,18 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
         : null,
     row.client_id ? getClientRef(row.client_id) : null,
     getDuplicates(id, row.phone_digits ?? ""),
+    row.client_id
+      ? db()
+          .from("profiles")
+          .select("assigned_advisor_id, advisor_assignment_version, advisor_assignment_source")
+          .eq("id", row.client_id)
+          .maybeSingle()
+          .then((r: any) => r.data ?? null)
+      : null,
+    row.client_id ? getZintoSync("client", row.client_id) : getZintoSync("lead", id),
+    getAssignmentEvents(id, row.client_id ?? null),
   ]);
+  const nameOf = (uid: string | null) => (uid ? (staffNames.get(uid) ?? null) : null);
 
   const facts = factsOf(row);
   facts.activity = (acts ?? []).map((a: any) => ({
@@ -775,6 +918,32 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     linkedClient,
     duplicates,
     avatarUrl: row.avatar_url ?? null,
+    propertyRef: row.property_ref ?? null,
+    idealistaCode: row.idealista_code ?? null,
+    linkMethod: row.property_link_method ?? null,
+    linkStatus: linkStatus(row.property_link_method),
+    routingStatus: effectiveRoutingStatus(row.routing_status, row.assigned_to),
+    routingReason: row.routing_reason ?? null,
+    assignmentSource: row.assignment_source ?? null,
+    assignmentVersion: Number(row.assignment_version ?? 0),
+    clientAdvisor: clientRow
+      ? {
+          id: clientRow.assigned_advisor_id ?? null,
+          name: nameOf(clientRow.assigned_advisor_id ?? null),
+          version: Number(clientRow.advisor_assignment_version ?? 0),
+          source: clientRow.advisor_assignment_source ?? null,
+        }
+      : null,
+    zintoSync,
+    assignmentHistory: history.map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      actorName: nameOf(e.actorId),
+      occurredAt: e.occurredAt,
+      previousName: nameOf(e.previousAdvisorId),
+      newName: nameOf(e.newAdvisorId),
+      reason: e.reason,
+    })),
   };
 }
 

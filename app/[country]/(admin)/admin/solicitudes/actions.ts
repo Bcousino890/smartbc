@@ -1,5 +1,6 @@
 "use server";
 
+import { assignLead, matchLeadProperty } from "./inbox-actions";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
@@ -88,66 +89,18 @@ export async function setIdealistaLeadType(
   return { ok: true };
 }
 
+// La bandeja anterior (?legacy=1) pasa por los MISMOS caminos que la nueva:
+// asignar es cosa de administradores (reparto por inmueble, 0237) y corregir
+// el vínculo deja motivo y autor. Antes escribían la columna a pelo.
 export async function assignIdealistaLead(id: string, advisorId: string | null) {
-  await assertPermission("solicitudes", "edit");
-  const session = await createClient();
-  const auth = await requireStaff(session);
-  if (!auth.ok) return { ok: false, error: auth.error };
-  if (!(await canActOnLead(id, "edit"))) {
-    return { ok: false, error: "No tienes acceso a esta solicitud." };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-  const { error } = await supabase
-    .from("idealista_leads")
-    .update({
-      assigned_to: advisorId,
-      assigned_at: advisorId ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-
-  if (error) {
-    console.error("assignIdealistaLead error:", error);
-    return { ok: false, error: error.message };
-  }
-
-  revalidatePath("/es/admin/solicitudes");
-  revalidatePath("/cl/admin/solicitudes");
-  return { ok: true };
+  return assignLead(id, advisorId);
 }
 
-// Vínculo manual a una ficha del sistema cuando el match automático (por
-// Ref./Cód. de Idealista, ver api/extension/idealista-leads/route.ts) no
-// encontró nada — o para corregirlo si emparejó con la propiedad equivocada.
 export async function setIdealistaLeadMatchedProperty(
   id: string,
   propertyId: string | null,
 ) {
-  await assertPermission("solicitudes", "edit");
-  const session = await createClient();
-  const auth = await requireStaff(session);
-  if (!auth.ok) return { ok: false, error: auth.error };
-  if (!(await canActOnLead(id, "edit"))) {
-    return { ok: false, error: "No tienes acceso a esta solicitud." };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-  const { error } = await supabase
-    .from("idealista_leads")
-    .update({ matched_property_id: propertyId, updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (error) {
-    console.error("setIdealistaLeadMatchedProperty error:", error);
-    return { ok: false, error: error.message };
-  }
-
-  revalidatePath("/es/admin/solicitudes");
-  revalidatePath("/cl/admin/solicitudes");
-  return { ok: true };
+  return matchLeadProperty(id, propertyId, "Vínculo elegido a mano en la bandeja anterior");
 }
 
 export async function updateIdealistaLeadContactStatus(

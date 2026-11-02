@@ -18,6 +18,7 @@ import {
   Radio,
   Send,
   Settings,
+  Shuffle,
   Sparkles,
   User,
   UserCog,
@@ -39,6 +40,7 @@ import {
   type EffectivePermissions,
   type PermissionResource,
 } from "@/lib/permissions";
+import { isAdminRole } from "@/lib/sales-inbox/routing";
 import type { AdminUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,9 @@ type NavItem = {
   /** Solo para el dueño de la HOME (BCP-01). Ocultarlo NO protege la página:
    *  la protege requireHomeOwnerPage() en el servidor. */
   ownerOnly?: boolean;
+  /** Solo administradores (owner/admin). Ocultarlo NO protege la página: la
+   *  protege checkRoles() en el servidor. */
+  adminOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -74,6 +79,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "publicacion",  onlyCountry: "es" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
+  { href: "/admin/reparto",            labelKey: "admin.nav.reparto",            icon: Shuffle,       adminOnly: true                     },
   { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "documentacion" },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
@@ -144,8 +150,9 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
   // Filtrar items de nav según permisos y país. Si llegan los permisos efectivos
   // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
-  const visibleItems = navItems.filter(({ permissionResource, onlyCountry, ownerOnly }) => {
+  const visibleItems = navItems.filter(({ permissionResource, onlyCountry, ownerOnly, adminOnly }) => {
     if (ownerOnly && !isHomeOwner) return false;
+    if (adminOnly && !isAdminRole(currentRole)) return false;
     if (onlyCountry && onlyCountry !== country) return false;
     if (!permissionResource) return true;
     if (permissions) {

@@ -28,7 +28,7 @@
 -- vista 0161 restaurada). Efecto irreversible: ninguno sobre datos previos;
 -- se pierden las reglas, la auditoría y la cola creadas después.
 -- Compatibilidad: el código anterior ignora las columnas nuevas (todas con
--- DEFAULT o NULL). La vista conserva todas sus columnas y añade cinco al final.
+-- DEFAULT o NULL). La vista conserva todas sus columnas y añade siete al final.
 -- Idempotente: IF NOT EXISTS / CREATE OR REPLACE en todo; el backfill solo toca
 -- filas con property_link_method NULL. Sin BEGIN/COMMIT propio: cada sentencia
 -- es reejecutable si el runner corta a mitad.
@@ -842,6 +842,59 @@ BEGIN
   RETURN jsonb_build_object('outcome', 'linked');
 END $$;
 
+-- ─── 9b · Registrar contacto (resultado + tarea, una sola vez) ───────────────
+--
+-- «Registrar contacto» guarda el resultado y, si se pide, la próxima tarea en
+-- UNA transacción. p_client_key la genera la pantalla al abrir el formulario:
+-- un doble clic o un reintento tras un corte devuelve 'duplicate' sin escribir
+-- nada más. Abrir Zinto o el teléfono NO pasa por aquí: solo un registro
+-- explícito cuenta como contacto.
+
+ALTER TABLE lead_activity ADD COLUMN IF NOT EXISTS client_key uuid;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_lead_activity_client_key
+  ON lead_activity (client_key) WHERE client_key IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION lead_register_contact(
+  p_actor uuid, p_lead uuid, p_kind text, p_outcome text, p_note text,
+  p_next_at timestamptz, p_next_note text, p_complete_task boolean, p_client_key uuid
+) RETURNS jsonb LANGUAGE plpgsql SET search_path = public AS $$
+DECLARE v_id uuid; l idealista_leads%ROWTYPE;
+BEGIN
+  IF p_kind NOT IN ('call', 'whatsapp', 'email') THEN RAISE EXCEPTION 'invalid_kind'; END IF;
+  IF p_kind = 'call' AND COALESCE(p_outcome, '') NOT IN ('answered', 'no_answer') THEN
+    RAISE EXCEPTION 'outcome_required';
+  END IF;
+  IF p_kind <> 'call' AND p_outcome IS NOT NULL THEN RAISE EXCEPTION 'invalid_outcome'; END IF;
+
+  SELECT * INTO l FROM idealista_leads WHERE id = p_lead FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'not_found'; END IF;
+  IF p_client_key IS NOT NULL AND EXISTS (SELECT 1 FROM lead_activity WHERE client_key = p_client_key) THEN
+    RETURN jsonb_build_object('outcome', 'duplicate');
+  END IF;
+
+  INSERT INTO lead_activity (lead_id, author_id, kind, outcome, body, client_key)
+  VALUES (p_lead, p_actor, p_kind, p_outcome, NULLIF(btrim(COALESCE(p_note, '')), ''), p_client_key)
+  RETURNING id INTO v_id;
+
+  IF p_next_at IS NOT NULL THEN
+    UPDATE idealista_leads
+       SET next_action_at = p_next_at, next_action_note = NULLIF(btrim(COALESCE(p_next_note, '')), ''),
+           updated_at = now()
+     WHERE id = p_lead;
+    INSERT INTO lead_activity (lead_id, author_id, kind, body)
+    VALUES (p_lead, p_actor, 'follow_up', NULLIF(btrim(COALESCE(p_next_note, '')), ''));
+  ELSIF p_complete_task AND l.next_action_at IS NOT NULL THEN
+    -- Completar la tarea no cierra la solicitud: solo retira el recordatorio.
+    UPDATE idealista_leads SET next_action_at = NULL, updated_at = now() WHERE id = p_lead;
+    INSERT INTO lead_activity (lead_id, author_id, kind, body)
+    VALUES (p_lead, p_actor, 'follow_up', 'tarea completada');
+  END IF;
+  RETURN jsonb_build_object('outcome', 'saved', 'activity_id', v_id);
+EXCEPTION WHEN unique_violation THEN
+  -- Dos envíos simultáneos con la misma clave: el segundo no escribe nada.
+  RETURN jsonb_build_object('outcome', 'duplicate');
+END $$;
+
 -- ─── 10 · Zinto: acuses y reintento ──────────────────────────────────────────
 
 -- Lo llamará el trabajador de Zinto cuando exista el contrato. Un acuse de una
@@ -912,6 +965,7 @@ BEGIN
     'routing_set_rules(uuid, text, uuid, jsonb, text)',
     'routing_clear_rules(uuid, text, jsonb, text)',
     'set_lead_link_manual(uuid, uuid, uuid, uuid, text)',
+    'lead_register_contact(uuid, uuid, text, text, text, timestamptz, text, boolean, uuid)',
     'zinto_owner_sync_ack(uuid, integer, boolean, text)',
     'zinto_owner_sync_retry(uuid, uuid)',
     'assignment_events_append_only()'
@@ -937,7 +991,7 @@ END $$;
 
 -- ─── 13 · La vista de la bandeja ─────────────────────────────────────────────
 --
--- Copia literal de 0161 con cinco columnas nuevas AL FINAL (CREATE OR REPLACE
+-- Copia literal de 0161 con siete columnas nuevas AL FINAL (CREATE OR REPLACE
 -- VIEW solo admite añadir columnas al final).
 
 CREATE OR REPLACE VIEW lead_inbox_facts AS
@@ -1081,7 +1135,10 @@ SELECT
   l.routing_status                                              AS routing_status,
   l.routing_reason                                              AS routing_reason,
   l.assignment_source                                           AS assignment_source,
-  l.assignment_version                                          AS assignment_version
+  l.assignment_version                                          AS assignment_version,
+  -- Para buscar por ID del anuncio y por referencia interna.
+  l.idealista_code                                              AS idealista_code,
+  l.property_ref                                                AS property_ref
 FROM idealista_leads l
 LEFT JOIN wa  ON wa.lead_id = l.id::text
 LEFT JOIN act ON act.lead_id = l.id
