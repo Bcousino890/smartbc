@@ -364,3 +364,7 @@ Tras el despliegue de 0238, producción seguía enseñando todo «Por verificar�
 - El cajón «Por verificar» de «Por piso» pasa a ser una fila sencilla que explica por qué están ahí esas solicitudes, sin foto ni precio.
 
 Verificación: unitarias (comparación de versiones; el zip se lista y se comprueba con `unzip`), guarda tipográfica sin fallos, QA visual con la comprobación del aviso y su enlace de descarga.
+
+### Despliegue de #389 (2026-11-02, 23:16 UTC)
+
+Fusionado como `8ef00f80`. Trece minutos después, producción seguía sirviendo el build anterior (los chunks compartidos de `/login` no cambiaron); como con #386, lo más probable es el fallo intermitente de Google Fonts al compilar, tras el cual el cron no reintenta. Este commit relanza el despliegue. Nota: las rutas bajo `/api/admin` responden 401 sin sesión aunque no existan, así que no sirven como señal de build nuevo.
