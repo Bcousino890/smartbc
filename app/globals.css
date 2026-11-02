@@ -1118,55 +1118,54 @@
 }
 
 /* ============================================================================
-   SOLICITUDES · estética del Figma «BCP Solicitudes» (2026-11-02)
+   SOLICITUDES · capa de presentación (2026-11-02)
    ----------------------------------------------------------------------------
-   Solo bajo `.sol-root` (Solicitudes y Reparto comercial). El resto del CRM
-   sigue con el sistema EMAAR. Los colores son los de la hoja D02 del Figma:
-   texto #21332E, acción #175847, selección #E7F1EA, fondo #F6F5F1, por
-   revisar #FFF0D9, error #A13732; tipografía Inter en caja de frase.
+   Solo bajo `.sol-root` (Solicitudes y Reparto comercial). La COMPOSICIÓN es la
+   del Figma «BCP Solicitudes» (tres vistas, tarjetas, ficha a página completa,
+   botones de 44 px, rejilla de 24 px); el LENGUAJE VISUAL es el del CRM
+   (sistema EMAAR: Lato, Optima en mayúsculas, tinta, crema y oro), para no
+   romper la estética del resto del panel. Decisión de Fabricio (2026-11-02):
+   «la estética que tiene el CRM ahora».
 
-   Las variables son canales RGB para que Tailwind pueda aplicar opacidad
+   Las variables son canales RGB para que Tailwind aplique opacidad
    (`bg-sol-action/10`); las utilidades `*-sol-*` están en tailwind.config.ts.
-   En oscuro se redefinen las mismas variables (apariencia por usuario).
+   Beben de las variables del CRM (lib/theme/crm-palette.mjs), así la
+   apariencia oscura por usuario sale sola; donde el CRM no tiene variable se
+   da el valor claro y el oscuro a mano.
 
-   Los componentes compartidos (Button, Pill, Modal, campos) llevan
-   `data-variant`, `data-tone` y `data-crm-modal`: aquí se les da la forma del
-   Figma sin tocar su aspecto en el resto del CRM.
+   Los componentes compartidos (Button, Pill, Modal, Panel, campos) llevan
+   `data-variant`, `data-tone`, `data-crm-modal` y `data-crm-panel`: aquí solo
+   se les da tamaño y anchura; su aspecto es el del CRM.
    ========================================================================== */
 :root {
-  --sol-ink: 33 51 46;
-  --sol-muted: 84 99 94;
-  --sol-faint: 128 139 135;
-  --sol-action: 23 88 71;
-  --sol-action-strong: 17 70 56;
-  --sol-on-action: 255 255 255;
-  --sol-select: 231 241 234;
-  --sol-bg: 246 245 241;
-  --sol-surface: 255 255 255;
-  --sol-column: 238 238 233;
-  --sol-line: 225 223 216;
-  --sol-review: 255 240 217;
-  --sol-review-ink: 150 88 18;
-  --sol-error: 161 55 50;
-  --sol-error-bg: 250 233 231;
-  --sol-info: 231 237 245;
-  --sol-info-ink: 38 66 108;
+  --sol-ink: var(--crm-fg-ink, 10 10 10);
+  --sol-muted: 92 90 86;
+  --sol-faint: 140 137 131;
+  /* Acción = botón principal y segmento activo: la tinta, como en el CRM. */
+  --sol-action: var(--crm-bg-ink, 10 10 10);
+  --sol-action-strong: var(--crm-bg-ink-soft, 26 26 26);
+  --sol-on-action: 251 248 243;
+  /* Acento = enlaces y estados positivos: el oro del CRM. */
+  --sol-accent: var(--crm-fg-gold-text, 133 99 41);
+  --sol-select: 244 236 220;
+  --sol-bg: var(--crm-bg-cream-50, 251 248 243);
+  --sol-surface: var(--crm-bg-white, 255 255 255);
+  --sol-column: var(--crm-bg-cream-100, 245 240 232);
+  --sol-line: 229 226 221;
+  --sol-review: 255 251 235;
+  --sol-review-ink: 180 83 9;
+  --sol-error: 190 18 60;
+  --sol-error-bg: 255 241 242;
+  --sol-info: 239 246 255;
+  --sol-info-ink: 29 78 216;
 }
 @media screen {
   html[data-crm-theme="dark"] {
-    --sol-ink: 226 234 230;
-    --sol-muted: 168 181 176;
-    --sol-faint: 126 139 134;
-    /* En oscuro el verde se aclara para leerse como texto; lo que va encima
-       de él pasa a tinta oscura (contraste > 7:1). */
-    --sol-action: 98 191 152;
-    --sol-action-strong: 124 205 171;
-    --sol-on-action: 10 26 20;
-    --sol-select: 29 52 44;
-    --sol-bg: 17 21 19;
-    --sol-surface: 26 31 29;
-    --sol-column: 22 27 25;
-    --sol-line: 50 59 56;
+    --sol-muted: 185 177 165;
+    --sol-faint: 143 135 124;
+    --sol-accent: var(--crm-fg-gold-text, 214 184 127);
+    --sol-select: 51 45 36;
+    --sol-line: var(--crm-ln-cream-200, 61 56 50);
     --sol-review: 62 45 20;
     --sol-review-ink: 242 192 122;
     --sol-error: 236 128 120;
@@ -1176,74 +1175,27 @@
   }
 }
 
-/* La tinta, el oro y el papel del CRM (lib/theme/crm-palette.mjs) son
-   variables con su color de respaldo: dentro de Solicitudes se reasignan a la
-   paleta del Figma, así los subcomponentes compartidos (actividad, cliente,
-   evidencia…) hablan el mismo idioma sin reescribirlos. */
 .sol-root {
-  --crm-fg-ink: var(--sol-ink);
-  --crm-fg-ink-soft: var(--sol-ink);
-  --crm-ln-ink: var(--sol-ink);
-  --crm-ln-ink-soft: var(--sol-ink);
-  --crm-bg-ink: var(--sol-action);
-  --crm-bg-ink-soft: var(--sol-action-strong);
-  --crm-fg-gold-dark: var(--sol-action);
-  --crm-fg-gold-text: var(--sol-action);
-  --crm-bg-white: var(--sol-surface);
-  --crm-ln-white: var(--sol-surface);
-  --crm-bg-cream: var(--sol-bg);
-  --crm-bg-cream-50: var(--sol-bg);
-  --crm-bg-cream-100: var(--sol-column);
-  --crm-bg-cream-200: var(--sol-column);
-  --crm-ln-cream: var(--sol-line);
-  --crm-ln-cream-50: var(--sol-line);
-  --crm-ln-cream-100: var(--sol-line);
-  --crm-ln-cream-200: var(--sol-line);
-}
-
-/* Botones de tinta sólida de componentes compartidos (p. ej. preparar
-   visitas): su texto claro fijo pasa al color «sobre acción». */
-.sol-root .bg-ink.text-cream-50 { color: rgb(var(--sol-on-action)); }
-
-.sol-root {
-  --crm-font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --crm-font-display: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
   font-family: var(--crm-font-sans);
   color: rgb(var(--sol-ink));
   background-color: rgb(var(--sol-bg));
 }
 
-/* Tipografía: caja de frase, sin espaciado de versalitas. */
-.sol-root .crm-page-title {
-  font-weight: 700;
-  text-transform: none;
-  letter-spacing: -0.01em;
-  font-size: 28px;
-  line-height: 1.2;
-}
-@media (min-width: 768px) {
-  .sol-root .crm-page-title { font-size: 32px; }
-}
-.sol-root .crm-section-title {
-  font-weight: 700;
-  text-transform: none;
-  letter-spacing: -0.005em;
-  font-size: 20px;
-  line-height: 1.3;
-}
-.sol-root .crm-label,
-.sol-root .crm-label-sm {
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.sol-root .crm-label-sm { font-size: 13px; }
+/* Los enlaces y lo «positivo» van en oro; los fondos de acción, en tinta. */
+.sol-root .text-sol-action { color: rgb(var(--sol-accent)); }
+.sol-root .text-sol-on-action { color: rgb(var(--sol-on-action)); }
+.sol-root .border-sol-action { border-color: rgb(var(--sol-accent)); }
+.sol-root .ring-sol-action { --tw-ring-color: rgb(var(--sol-accent)); }
+.sol-root .outline-sol-action { outline-color: rgb(var(--sol-accent)); }
+.sol-root .bg-sol-action.text-sol-on-action,
+.sol-root .border-sol-action.bg-sol-action { border-color: rgb(var(--sol-action)); }
+/* Botones de tinta sólida de componentes compartidos (p. ej. preparar
+   visitas): su texto claro sigue siendo el del CRM. */
+.sol-root .bg-ink.text-cream-50 { color: rgb(var(--sol-on-action)); }
 
-/* Escala del Figma que no está en la del CRM (12/14/16/18/22/28): metadatos
-   13 px, controles 15 px, precio de tablero 17 px y nombre de ficha 28→32 px.
-   Clases propias (no utilidades text-[Npx]) para no esquivar la guarda de
-   scripts/check-crm-typography.mjs y para que tailwind-merge no las confunda
-   con un color. */
+/* Escala que no está en la del CRM (12/14/16/18/22/28): metadatos 13 px,
+   controles 15 px, precio de tablero 17 px y nombre de ficha 28→32 px. Clases
+   propias, no utilidades text-[Npx] (scripts/check-crm-typography.mjs). */
 .sol-root .sol-meta { font-size: 13px; line-height: 1.4; }
 .sol-root .sol-ui { font-size: 15px; line-height: 1.4; }
 .sol-root .sol-price-sm { font-size: 17px; line-height: 1.35; }
@@ -1252,136 +1204,48 @@
   .sol-root .sol-name { font-size: 32px; }
 }
 
-/* Botones */
-.sol-root .crm-button {
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: 0;
-  text-transform: none;
-  border-radius: 12px;
-  min-height: 40px;
-  padding-inline: 16px;
-}
-.sol-root .crm-button[data-size="sm"] {
-  font-size: 14px;
-  min-height: 36px;
-  padding-inline: 12px;
-  border-radius: 10px;
-}
-.sol-root .crm-button[data-variant="primary"] {
-  background-color: rgb(var(--sol-action));
-  color: rgb(var(--sol-on-action));
-  border: 1px solid rgb(var(--sol-action));
-  min-height: 44px;
-}
-.sol-root .crm-button[data-variant="primary"]:not(:disabled):hover {
-  background-color: rgb(var(--sol-action-strong));
-}
-.sol-root .crm-button[data-variant="secondary"] {
-  background-color: rgb(var(--sol-surface));
-  color: rgb(var(--sol-ink));
-  border: 1px solid rgb(var(--sol-line));
-}
-.sol-root .crm-button[data-variant="secondary"]:not(:disabled):hover {
-  border-color: rgb(var(--sol-action) / 0.45);
-  color: rgb(var(--sol-ink));
-}
-.sol-root .crm-button[data-variant="ghost"] {
-  color: rgb(var(--sol-action));
-  padding-inline: 8px;
-}
-.sol-root .crm-button[data-variant="ghost"]:not(:disabled):hover {
-  background-color: rgb(var(--sol-select));
+/* Botones: aspecto del CRM (Lato 700, mayúsculas); solo cambia el tamaño
+   (44 px de alto el principal; 36 px el pequeño) y la anchura en diálogos. */
+.sol-root .crm-button { min-height: 40px; padding-inline: 16px; }
+.sol-root .crm-button[data-size="sm"] { min-height: 36px; padding-inline: 12px; }
+.sol-root .crm-button[data-variant="primary"] { min-height: 44px; }
+/* En oscuro el botón de tinta se funde con la superficie: un filete lo separa. */
+@media screen {
+  html[data-crm-theme="dark"] .sol-root .crm-button[data-variant="primary"],
+  html[data-crm-theme="dark"] .sol-root .bg-sol-action { box-shadow: inset 0 0 0 1px rgb(var(--sol-line)); }
 }
 
-/* Etiquetas de estado */
-.sol-root .crm-badge {
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-  border-radius: 8px;
-  border-color: transparent;
-  padding: 3px 10px;
-}
-.sol-root .crm-badge[data-tone="positive"],
-.sol-root .crm-badge[data-tone="gold"] {
-  background-color: rgb(var(--sol-select));
-  color: rgb(var(--sol-action));
-}
-.sol-root .crm-badge[data-tone="warning"] {
-  background-color: rgb(var(--sol-review));
-  color: rgb(var(--sol-review-ink));
-}
-.sol-root .crm-badge[data-tone="critical"] {
-  background-color: rgb(var(--sol-error-bg));
-  color: rgb(var(--sol-error));
-}
-.sol-root .crm-badge[data-tone="info"] {
-  background-color: rgb(var(--sol-info));
-  color: rgb(var(--sol-info-ink));
-}
-.sol-root .crm-badge[data-tone="neutral"] {
-  background-color: rgb(var(--sol-ink) / 0.06);
-  color: rgb(var(--sol-muted));
-}
-
-/* Campos */
-.sol-root .crm-input {
-  border-radius: 10px;
-  border-color: rgb(var(--sol-line));
-  background-color: rgb(var(--sol-surface));
-  color: rgb(var(--sol-ink));
-  min-height: 44px;
-  padding-block: 10px;
-}
+/* Campos: 44 px de alto para el táctil; el resto, como en el CRM. */
+.sol-root .crm-input { min-height: 44px; }
 .sol-root textarea.crm-input { min-height: 0; }
-.sol-root .crm-input:focus {
-  border-color: rgb(var(--sol-action));
-  box-shadow: 0 0 0 3px rgb(var(--sol-action) / 0.15);
-}
 
-/* Diálogos: ~660 px, esquinas de 16 px y el primario ancho. El velo es la
-   tinta del Figma (no la acción, que es a lo que se reasigna bg-ink). */
+/* Diálogos: ~660 px y el primario ancho; en móvil los botones se apilan. */
 .sol-root [data-crm-overlay] { background-color: rgb(var(--sol-ink) / 0.4); }
-.sol-root [data-crm-modal] {
-  border-radius: 16px 16px 0 0;
-  border-color: rgb(var(--sol-line));
-  background-color: rgb(var(--sol-surface));
-}
 @media (min-width: 640px) {
-  .sol-root [data-crm-modal] { border-radius: 16px; }
   .sol-root [data-crm-modal="default"] { max-width: 660px; }
   .sol-root [data-crm-modal="wide"] { max-width: 820px; }
 }
-.sol-root [data-crm-modal] > header { padding: 20px 24px; border-color: rgb(var(--sol-line)); }
-.sol-root [data-crm-modal] > div { padding: 20px 24px; }
-.sol-root [data-crm-modal] > footer { padding: 16px 24px; border-color: rgb(var(--sol-line)); }
 .sol-root [data-crm-modal] > footer > .crm-button[data-variant="primary"] { min-width: 200px; }
 @media (max-width: 639px) {
   .sol-root [data-crm-modal] > footer { flex-direction: column-reverse; align-items: stretch; }
   .sol-root [data-crm-modal] > footer > .crm-button { width: 100%; min-height: 48px; }
 }
 
-/* Paneles de la ficha: tarjeta blanca de 12 px con el título como encabezado. */
-.sol-root [data-crm-panel] {
-  border-radius: 12px;
-  border-color: rgb(var(--sol-line));
-  background-color: rgb(var(--sol-surface));
-}
-.sol-root [data-crm-panel] > header {
-  border-bottom: 0;
-  padding: 20px 24px 4px;
-}
+/* Paneles de la ficha: tarjeta del CRM con el título de sección (Optima,
+   mayúsculas, 22 px) como encabezado, sin filete. */
+.sol-root [data-crm-panel] { border-color: rgb(var(--sol-line)); }
+.sol-root [data-crm-panel] > header { border-bottom: 0; padding: 20px 24px 4px; }
 .sol-root [data-crm-panel] > header > h2 {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-family: var(--crm-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  font-size: 22px;
+  line-height: 1.35;
   color: rgb(var(--sol-ink));
 }
 .sol-root [data-crm-panel] > div:not([class=""]) { padding: 12px 24px 24px; }
 @media (max-width: 639px) {
   .sol-root [data-crm-panel] > header { padding: 16px 16px 4px; }
-  .sol-root [data-crm-panel] > header > h2 { font-size: 18px; }
   .sol-root [data-crm-panel] > div:not([class=""]) { padding: 12px 16px 16px; }
 }

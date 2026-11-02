@@ -61,7 +61,7 @@ export function LeadGroupBlock({
   const listId = `group-leads-${group.key.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <li className="list-none rounded-xl border border-sol-line bg-sol-surface">
+    <li className="list-none rounded-lg border border-sol-line bg-sol-surface">
       <div className="flex flex-col gap-4 p-2.5 md:flex-row md:gap-6">
         {/* Foto del anuncio */}
         <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-lg bg-sol-column md:aspect-auto md:h-[180px] md:w-[248px]">
@@ -150,7 +150,7 @@ export function LeadGroupBlock({
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls={listId}
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-sol-action px-4 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action"
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-sol-action px-4 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action"
           >
             {open ? t("inbox.group.hideLeads") : t("inbox.group.showLeads")}
             <ChevronDown size={16} strokeWidth={2} className={cn("transition-transform", open && "rotate-180")} />

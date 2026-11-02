@@ -187,6 +187,16 @@ En el esquema actual una **republicación** no crea otro anuncio: el CRM reescri
    - un cambio de reparto vale para lo que llega después de confirmarlo.
 5. El administrador la asigna a mano desde la ficha («Cambiar»).
 
+## G. Extensión 1.14: el código del anuncio en cada solicitud (0238)
+
+Esto no se puede probar desde el repositorio: hace falta la sesión de idealista.com del equipo. Lo hace Fabricio con la extensión recargada (chrome://extensions → «Actualizar»; debe decir 1.14.0).
+
+1. **Un hilo cualquiera del inbox.** Ábrelo. La extensión captura sola; al terminar debe decir «Contacto actualizado en SmartBC». Durante un instante puede verse abrirse y cerrarse el modal del anuncio: es la extensión leyendo el «Cod.».
+2. **En el CRM**, abre esa solicitud: en «Anuncio que consultó» debe salir «Vínculo exacto» y el botón «Ver anuncio en Idealista». Pulsa el botón: tiene que abrir el MISMO anuncio que se ve en el hilo. Si en vez de eso sale «Anuncio sin identificar», la extensión no ha podido leer el código: anota qué hilo era y si el modal se abrió.
+3. **Un anuncio publicado por API.** Abre en idealista.com un anuncio nuestro publicado por la API en tiempo real y copia el número de la URL (`idealista.com/inmueble/<número>/`). En Fichas guardadas, en esa ficha, compara con el id de la API. Si son el mismo número, el cruce con la API funciona; si no, dímelo: habrá que pedir ese dato a la API.
+4. **«Capturar todas».** Lánzalo sobre la primera página del inbox. Al terminar, en Solicitudes → «Por piso» deben aparecer grupos por anuncio con sus solicitudes, en vez de todo en «Por verificar». Las conversaciones anteriores a la 1.14 siguen sin código: es lo esperado, y desaparecen a los 30 días si no tienen cliente.
+5. **Caducidad.** Tras cualquier captura, el contador de «Todas» debe bajar si había solicitudes de más de 30 días sin cliente. No se borra nada hasta los 60 días; si alguna se ocultó por error, con cambiar su `expired_at` a NULL vuelve (`rollback-0238.sql` quita la columna entera).
+
 ## D. Limpieza del entorno de pruebas
 
 ```sh

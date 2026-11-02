@@ -992,8 +992,8 @@ concluir que la integración funciona.
 
 ## Solicitudes / Sales Inbox — venta·alquiler y cobertura
 
-**⚠️ La vista `lead_inbox_facts` está definida ENTERA en CUATRO migraciones:
-0142, 0159, 0160 y 0161. Solo vale la ÚLTIMA.** Cada una la reescribe con
+**⚠️ La vista `lead_inbox_facts` está definida ENTERA en SEIS migraciones:
+0142, 0159, 0160, 0161, 0237 y 0238. Solo vale la ÚLTIMA.** Cada una la reescribe con
 `CREATE OR REPLACE VIEW` añadiendo columnas al final, que es lo único que
 Postgres permite sin un `DROP … CASCADE` (que se llevaría los permisos).
 

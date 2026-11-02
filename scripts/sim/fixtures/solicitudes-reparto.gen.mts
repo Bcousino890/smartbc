@@ -37,6 +37,8 @@ const listings = [
   })),
   { id: id("001", 10), property_id: null, reference_code: "BC-9010", idealista_property_id: "900210", inspo_title: "Ático en Castelló", address_street: "Calle de Castelló", address_city: "Madrid", operation: "rent", price: 0, total_rental_price: 5400, idealista_state: "published", archived_at: null },
   { id: id("001", 11), property_id: null, reference_code: "BC-9011", idealista_property_id: "900211", inspo_title: "Piso en Goya", address_street: "Calle de Goya", address_city: "Madrid", operation: "sale", price: 2900000, total_rental_price: null, idealista_state: "published", archived_at: null },
+  // Publicado por la API en tiempo real: sin idealista_property_id, con api_property_id (0238).
+  { id: id("001", 12), property_id: null, reference_code: "BC-9012", idealista_property_id: null, api_property_id: 777001, api_clone_property_id: null, photo_ids: [`${SIM}/img/foto-9.jpg?api=12`], inspo_title: "Piso API en Velázquez", address_street: "Calle de Velázquez", address_city: "Madrid", operation: "rent", price: 0, total_rental_price: 3900, idealista_state: "published", archived_at: null },
 ];
 
 // ── Reglas: Castelló y la ficha 1 a la asesora; Goya a la compañera ──
@@ -64,7 +66,7 @@ function add(n: number, o: {
   name: string; msg: string; listing?: number | null; property?: number | null; method: string; title: string; price: string;
   img?: number | null; assigned?: string | null; routing?: string | null; reason?: string | null; source?: string | null;
   created: string; next?: string | null; nextNote?: string | null; state?: string; waOut?: number; waIn?: number; client?: string | null;
-  ref?: string | null; code?: string | null; op?: string | null;
+  ref?: string | null; code?: string | null; op?: string | null; expired?: boolean;
 }) {
   const lid = id("003", n);
   const phone = `+34 600 ${String(100 + n).padStart(3, "0")} ${String(200 + n).padStart(3, "0")}`;
@@ -78,12 +80,18 @@ function add(n: number, o: {
     legacy_contact_status: "ninguno", assigned_to: o.assigned ?? null, assigned_at: o.assigned ? o.created : null,
     client_id: o.client ?? null, converted_at: o.client ? o.created : null, converted_by: null, next_action_at: o.next ?? null,
     next_action_note: o.nextNote ?? null, country: "es", created_at: o.created, updated_at: o.created, avatar_url: null,
+    // 0238 · caducada: sigue en la tabla pero la vista no la enseña.
+    expired_at: o.expired ? ago(1) : null,
   };
   leads.push({ ...base, profile: { bullets: ["Pareja", "Estancia larga", "Entrada: diciembre"], presentacion: "Somos una pareja y buscamos una estancia larga." }, properties: [{ title: o.title, price: o.price, imageUrl: base.property_image_url }] });
   const waOut = o.waOut ?? 0;
   const waIn = o.waIn ?? 0;
-  facts.push({
+  const exactLink = o.method === "ref" || o.method === "code" || o.method === "manual";
+  if (!o.expired) facts.push({
     ...base,
+    // 0238 · portada y código público del anuncio identificado.
+    listing_cover_url: exactLink && o.img ? `${SIM}/img/foto-${o.img}.jpg?c=${n}` : null,
+    listing_ad_code: exactLink ? (listing?.idealista_property_id ?? ((listing as { api_property_id?: number } | null)?.api_property_id?.toString() ?? null)) : null,
     wa_conversation_id: waOut || waIn ? id("004", n) : null, wa_outbound: waOut, wa_inbound: waIn,
     wa_first_outbound_at: waOut ? ago(20) : null, wa_last_message_at: waOut || waIn ? ago(waIn ? 2 : 20) : null,
     wa_awaiting_reply: waIn > 0 && n % 2 === 0, activity_entries: 1, activity_last_at: o.created, activity_has_touch: o.state === "contacted",
@@ -112,6 +120,11 @@ add(9, { name: people[8], msg: msgs[2], method: "conflict", title: "Jorge Juan �
 add(10, { name: people[9], msg: msgs[3], listing: 2, method: "code", title: String(props[1].title), price: "3.200 €/mes", img: 6, assigned: ADVISOR, source: "manual_admin", created: ago(90), waOut: 1, state: "contacted", op: "rent", code: "900101" });
 add(11, { name: people[10], msg: msgs[4], method: "unverified", property: 2, title: "Serrano · Salamanca", price: "4.100 €/mes", img: 7, assigned: null, reason: "possible_existing_client", created: ago(5), op: "rent" });
 add(12, { name: people[11], msg: msgs[0], listing: 10, method: "ref", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: ADVISOR, source: "rule", created: ago(400), state: "discarded", op: "rent", ref: "BC-9010" });
+
+// 0238 · «Cod.» de un anuncio publicado por API → vínculo exacto.
+add(14, { name: "Nuria Prueba", msg: msgs[4], listing: 12, method: "code", title: "Velázquez · Salamanca", price: "3.900 €/mes", img: 9, assigned: null, reason: "no_rule", created: ago(4), code: "777001", op: "rent" });
+// 0238 · caducada (más de 30 días sin cliente): no sale en la bandeja.
+add(15, { name: "Caducada Prueba", msg: msgs[5], method: "none", title: "Hola, me interesa este inmueble", price: "", img: null, assigned: null, reason: "link_unverified", created: ago(1200), expired: true });
 
 // Un cliente verificado (para «Reasignar cliente») con asesora la compañera.
 const clientProfile = {

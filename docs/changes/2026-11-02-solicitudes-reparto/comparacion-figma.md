@@ -140,3 +140,19 @@ Decisiones §4 resueltas: **(1)** paleta verde e Inter del Figma en Solicitudes 
 - La tarjeta no muestra dormitorios ni m²: la solicitud no los trae y no se inventan. En su lugar va la operación.
 - «Ver anuncio original» se llama «Ver en Idealista»: el enlace que tenemos es la conversación de Idealista, no el anuncio.
 - La fecha del diálogo sigue con el selector nativo (§5).
+
+## 7. Vuelta al lenguaje visual del CRM (decisión de Fabricio, 2026-11-02, tras ver §6 en producción)
+
+«Que se adapte la estética que tiene el CRM ahora, para no romper la estética actual.» Se conserva la **composición** del Figma (tres vistas, tarjetas, ficha a página completa con dos columnas, botones de 44 px, rejilla de 24 px, acciones fijas en móvil) y se cambia el **lenguaje visual** al del CRM:
+
+| | §6 (Figma) | Ahora (CRM) |
+|---|---|---|
+| Tipografía | Inter, títulos en caja de frase | Lato; títulos de página y de panel en Optima, mayúsculas (sistema EMAAR) |
+| Botón principal y segmento activo | Verde #175847 | Tinta (negro) con texto crema, como en el resto del panel |
+| Enlaces y estados positivos | Verde | Oro del CRM |
+| Pastillas de estado | Caja de frase, sin borde, radio 8 px | Las del CRM (mayúsculas, borde fino) |
+| Esquinas | 12–16 px | 6–8 px (`rounded-md` / `rounded-lg`) |
+| Fondo | #F6F5F1 | Crema del CRM |
+| Oscuro | Variante propia | La del CRM, por sus variables |
+
+Todo vive en la capa `.sol-root` (`app/globals.css`, bloque «SOLICITUDES · capa de presentación»), que ahora bebe de las variables del CRM (`lib/theme/crm-palette.mjs`); los componentes no cambian salvo los radios. Ninguna regla ni función cambia.

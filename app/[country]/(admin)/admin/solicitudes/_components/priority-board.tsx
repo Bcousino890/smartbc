@@ -38,7 +38,7 @@ export function PriorityBoardView({
     <div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {COLUMNS.map((col) => (
-          <section key={col} aria-labelledby={`col-${col}`} className="flex min-w-0 flex-col rounded-2xl bg-sol-column p-2.5">
+          <section key={col} aria-labelledby={`col-${col}`} className="flex min-w-0 flex-col rounded-lg bg-sol-column p-2.5">
             <header className="flex items-center justify-between gap-2 px-1.5 pb-3 pt-2">
               <h2 id={`col-${col}`} className="text-xl font-semibold text-sol-ink">{t(`inbox.board.${col}`)}</h2>
               <span className="min-w-[32px] rounded-lg bg-sol-surface px-2 py-0.5 text-center sol-meta font-semibold tabular-nums text-sol-ink">
@@ -46,7 +46,7 @@ export function PriorityBoardView({
               </span>
             </header>
             {board[col].items.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-sol-line bg-sol-surface/60 px-4 py-6 text-center text-sm text-sol-muted">
+              <p className="rounded-lg border border-dashed border-sol-line bg-sol-surface/60 px-4 py-6 text-center text-sm text-sol-muted">
                 {t(`inbox.board.empty.${col}`)}
               </p>
             ) : (
@@ -103,7 +103,7 @@ function BoardCard({
         aria-current={active ? "true" : undefined}
         data-lead-id={lead.id}
         className={cn(
-          "group flex w-full flex-col rounded-xl border bg-sol-surface p-2.5 text-left transition",
+          "group flex w-full flex-col rounded-lg border bg-sol-surface p-2.5 text-left transition",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action",
           active ? "border-sol-action" : "border-sol-line hover:border-sol-action/40 hover:shadow-sm",
         )}

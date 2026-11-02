@@ -51,9 +51,15 @@ export async function POST(req: Request) {
       .select("id");
     if (idempotencyError) throw idempotencyError;
 
+    // Solicitudes (0238): ocultar a los 30 días y borrar a los 60 las que no
+    // tienen cliente. Lo mismo que lanza la recepción de la extensión.
+    const { data: leadRetention, error: sweepError } = await db.rpc("lead_retention_sweep");
+    if (sweepError) throw sweepError;
+
     return Response.json({
       ok: true,
       retention_days: retentionDays,
+      lead_retention: leadRetention ?? null,
       deleted_requests: (deletedRequests ?? []).length,
       deleted_idempotency: (deletedIdempotency ?? []).length,
     });

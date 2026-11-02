@@ -122,6 +122,17 @@ export type ZintoSyncInfo = {
   updatedAt: string;
 };
 
+// ─── Enlace al anuncio ───────────────────────────────────────────────────────
+
+/**
+ * Enlace público del anuncio en idealista.com a partir de su código («Cod.»).
+ * Solo se construye con un código numérico: con cualquier otra cosa, null.
+ */
+export function idealistaAdUrl(code: string | null | undefined): string | null {
+  const c = (code ?? "").trim();
+  return /^[0-9]{5,18}$/.test(c) ? `https://www.idealista.com/inmueble/${c}/` : null;
+}
+
 // ─── Publicación anterior ────────────────────────────────────────────────────
 
 /**

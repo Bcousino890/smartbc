@@ -155,6 +155,32 @@ async function shot(page: Page, name: string) {
   // Vínculo por verificar: no se ofrece preparar visita
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(5)}`, { waitUntil: "networkidle" });
   check("Vínculo sin verificar · visita bloqueada", (await page.getByText("Para preparar una visita, confirma antes el anuncio.").count()) > 0);
+  // 0238 · sin vínculo exacto no se enseña ningún inmueble «parecido».
+  check("0238 · sin vínculo exacto: «Anuncio sin identificar», sin foto ni ficha",
+    (await page.getByText("Anuncio sin identificar").count()) > 0
+      && (await page.getByRole("link", { name: /Abrir ficha/ }).count()) === 0
+      && (await page.getByRole("link", { name: /Ver anuncio en Idealista/ }).count()) === 0);
+  // 0238 · con vínculo exacto, enlace al anuncio EXACTO por su código.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(1)}`, { waitUntil: "networkidle" });
+  const adLink = page.getByRole("link", { name: /Ver anuncio en Idealista/ });
+  check("0238 · vínculo exacto: «Ver anuncio en Idealista» va al código del anuncio",
+    (await adLink.count()) > 0 && /\/inmueble\/900210\//.test((await adLink.first().getAttribute("href")) ?? ""));
+  // 0238 · «Cod.» de un anuncio publicado por API → exacto, con su enlace.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(14)}`, { waitUntil: "networkidle" });
+  const apiLink = page.getByRole("link", { name: /Ver anuncio en Idealista/ });
+  check("0238 · anuncio publicado por API: vínculo exacto y enlace a su código",
+    (await page.getByText("Vínculo exacto").count()) > 0 && /\/inmueble\/777001\//.test((await apiLink.first().getAttribute("href").catch(() => "")) ?? ""));
+  // 0238 · caducada: la bandeja y la ficha no la enseñan.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(15)}`, { waitUntil: "networkidle" });
+  check("0238 · caducada: no aparece ni en la bandeja ni por URL",
+    (await page.getByText("Caducada Prueba").count()) === 0 && (await page.locator(`[data-lead-id="${LEAD(15)}"]`).count()) === 0);
+  // 0238 · tarjeta sin vínculo exacto: sin foto.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all`, { waitUntil: "networkidle" });
+  check("0238 · tarjeta sin vínculo exacto: sin foto", (await page.locator(`[data-lead-id="${LEAD(5)}"] img`).count()) === 0
+    && (await page.locator(`[data-lead-id="${LEAD(1)}"] img`).count()) === 1);
+  // 0238 · Por piso agrupa también el anuncio publicado por API.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&mode=property`, { waitUntil: "networkidle" });
+  check("0238 · Por piso: el anuncio publicado por API tiene su grupo", (await page.getByText("Piso API en Velázquez").count()) > 0);
   await shot(page, "08-vinculo-por-verificar");
 
   // B y C

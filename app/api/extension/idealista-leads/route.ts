@@ -3,10 +3,6 @@ import { createAdminClient } from "@/lib/db/admin";
 import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
-import {
-  matchPropertyByAddress,
-  type AddressMatchCandidate,
-} from "@/lib/services/idealista/lead-property-match";
 import { autoMergeLeadsByPhone } from "@/lib/sales-inbox/auto-merge";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
@@ -109,39 +105,6 @@ function asProperties(value: unknown): NormalizedProperty[] {
     .slice(0, 30);
 }
 
-/**
- * Empareja mirando TODAS las propiedades del hilo, no solo la principal.
- *
- * Un mismo contacto puede preguntar por varios pisos en la misma conversación
- * (por eso existe `properties`), pero hasta ahora solo se intentaba con
- * `property_title`: si el piso que sí es ficha nuestra era el segundo de la
- * lista, el lead se quedaba huérfano y no contaba para ninguna ficha.
- *
- * La principal se prueba PRIMERO, así que para un hilo de una sola tarjeta
- * —el caso normal— el resultado es exactamente el de antes. El emparejamiento
- * sigue siendo uno solo: gana la primera que case.
- */
-function matchAnyEnquiry(
-  primaryTitle: string | null,
-  primaryPrice: string | null,
-  cards: NormalizedProperty[],
-  candidates: AddressMatchCandidate[],
-): string | null {
-  if (candidates.length === 0) return null;
-  const seen = new Set<string>();
-  const attempts: Array<[string | null, string | null]> = [[primaryTitle, primaryPrice]];
-  for (const c of cards) attempts.push([c.title, c.price]);
-
-  for (const [title, price] of attempts) {
-    if (!title) continue;
-    const key = `${title}|${price ?? ""}`;
-    if (seen.has(key)) continue; // la principal suele repetirse en las tarjetas
-    seen.add(key);
-    const hit = matchPropertyByAddress(title, price, candidates);
-    if (hit) return hit;
-  }
-  return null;
-}
 
 function propertyKey(p: NormalizedProperty): string {
   return p.title || p.imageUrl || "";
@@ -255,15 +218,18 @@ export async function POST(req: Request) {
   if (refs.length > 0 || codes.length > 0) {
     const { data: listings } = await db
       .from("idealista_listings")
-      .select("id, property_id, reference_code, idealista_property_id");
+      .select("id, property_id, reference_code, idealista_property_id, api_property_id, api_clone_property_id");
     for (const l of listings ?? []) {
       if (l.reference_code) {
         const code = String(l.reference_code).toLowerCase();
         if (refs.includes(code) && !listingIdByRef.has(code)) listingIdByRef.set(code, l.id);
         if (l.property_id && refs.includes(code) && !propertyIdByRef.has(code)) propertyIdByRef.set(code, l.property_id);
       }
-      if (l.idealista_property_id) {
-        const id = String(l.idealista_property_id);
+      // Códigos públicos del anuncio: el que dejó la extensión al publicar y
+      // los que devuelve la Partner API (el del anuncio y el de su clon).
+      for (const raw of [l.idealista_property_id, l.api_property_id, l.api_clone_property_id]) {
+        if (raw === null || raw === undefined || raw === "") continue;
+        const id = String(raw);
         if (codes.includes(id) && !listingIdByCode.has(id)) listingIdByCode.set(id, l.id);
         if (l.property_id && codes.includes(id) && !propertyIdByCode.has(id)) propertyIdByCode.set(id, l.property_id);
       }
@@ -275,53 +241,11 @@ export async function POST(req: Request) {
     }
   }
 
-  // Fallback por dirección + precio: muchos hilos de Idealista no traen ni
-  // referencia ni código de anuncio (solo aparecen si se abrió el detalle).
-  // Se arman dos listas de candidatas una sola vez y solo si hace falta: las
-  // propiedades propias (properties) y las fichas de Idealista (idealista_
-  // listings), que tienen su propia dirección/precio independientemente de
-  // si están linkeadas a una fila de properties.
-  const needsAddressFallback = [...incoming.values()].some(
-    (l) =>
-      !l.property_ref &&
-      !l.idealista_code &&
-      (l.property_title || l.properties.some((p) => p.title)),
-  );
-  let addressCandidates: AddressMatchCandidate[] = [];
-  let listingAddressCandidates: AddressMatchCandidate[] = [];
-  if (needsAddressFallback) {
-    // Aquí había un `.not("bc_reference", "is", null)` que parecía acotar el
-    // catálogo pero no acotaba nada: `bc_reference` es NOT NULL con default
-    // desde la migración 0011, así que la condición se cumplía siempre. Se
-    // quita para que no siga leyéndose como un filtro que no existe.
-    const { data: ownProps } = await db
-      .from("properties")
-      .select("id, address, zone, price, rent_price")
-      .is("archived_at", null);
-    addressCandidates = (ownProps ?? []).map((p: any) => ({
-      id: p.id,
-      street: p.address ?? null,
-      zone: p.zone ?? null,
-      // Las dos: una propiedad en venta Y alquiler tiene dos precios, y el
-      // lead solo mira uno.
-      prices: [p.price, p.rent_price],
-    }));
-
-    const { data: ownListings } = await db
-      .from("idealista_listings")
-      .select("id, address_street, address_city, operation, price, total_rental_price")
-      .is("archived_at", null);
-    listingAddressCandidates = (ownListings ?? []).map((l: any) => ({
-      id: l.id,
-      street: l.address_street ?? null,
-      zone: l.address_city ?? null,
-      // Los dos, sin mirar `operation`: esa columna tiene DEFAULT 'rent' desde
-      // la migración 0059 y nunca se backfilleó, así que una ficha de venta
-      // mal etiquetada aportaba un precio de alquiler a 0 y dejaba huérfanos a
-      // todos sus leads. Es el sesgo de venta que se venía notando.
-      prices: [l.price, l.total_rental_price],
-    }));
-  }
+  // Sin Ref. ni Cod. NO se empareja: antes se caía a dirección + precio
+  // (±8 %), que es justo lo que asociaba consultas a pisos que no eran. Desde
+  // 0238 la evidencia sale del «Cod.» que captura la extensión en cada hilo;
+  // sin ella la solicitud queda «Por verificar» y nunca se le pone la foto de
+  // una ficha «parecida».
 
   const now = new Date().toISOString();
   const rows: any[] = [];
@@ -422,22 +346,16 @@ export async function POST(req: Request) {
       merged.suggestion_keywords = existing?.suggestion_keywords ?? [];
     }
 
-    // Match de propiedad (solo si aún no hay match): primero por referencia
-    // de agencia, luego por código de anuncio de idealista.com, y si tampoco
-    // hay eso (lo más común: la mayoría de hilos no traen ni ref ni código),
-    // por dirección + precio del propio inbox.
+    // Match de propiedad (solo si aún no hay match): por referencia de
+    // agencia o por código de anuncio de idealista.com. Nada más: la
+    // clasificación con evidencia la remata route_leads (0237/0238).
     const ref = (merged.property_ref as string | null)?.toLowerCase();
     const code = merged.idealista_code as string | null;
     merged.matched_property_id =
       existing?.matched_property_id ??
       (ref ? propertyIdByRef.get(ref) : undefined) ??
       (code ? propertyIdByCode.get(code) : undefined) ??
-      matchAnyEnquiry(
-        merged.property_title as string | null,
-        merged.property_price as string | null,
-        mergedProperties,
-        addressCandidates,
-      );
+      null;
 
     // Igual pero contra la ficha de Idealista directamente (ver comentario
     // más arriba): cubre las fichas "inspo" sin property_id, que son la
@@ -446,12 +364,15 @@ export async function POST(req: Request) {
       existing?.matched_listing_id ??
       (ref ? listingIdByRef.get(ref) : undefined) ??
       (code ? listingIdByCode.get(code) : undefined) ??
-      matchAnyEnquiry(
-        merged.property_title as string | null,
-        merged.property_price as string | null,
-        mergedProperties,
-        listingAddressCandidates,
-      );
+      null;
+
+    // Caducidad (0238): una conversación caducada solo revive si el contacto
+    // vuelve a escribir (el texto del hilo cambia en una captura de detalle).
+    // Recapturar el inbox entero no la revive.
+    if (existing?.expired_at) {
+      const newText = isDetail && typeof lead.message === "string" && lead.message !== (existing.message ?? null);
+      merged.expired_at = newText ? null : existing.expired_at;
+    }
 
     rows.push(merged);
     results.push({ conversationId: lead.conversation_id, action: existing ? "updated" : "inserted" });
@@ -514,6 +435,16 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("idealista-leads reconcile error:", err);
   }
+  // Caducidad (0238): oculta a los 30 días y borra a los 60 las solicitudes sin
+  // cliente. Se lanza aquí porque la recepción ocurre a diario y no hace falta
+  // tocar el crontab del VPS; también lo lanza /api/cron/api-cleanup.
+  let retention: unknown = null;
+  {
+    const { data, error: sweepError } = await db.rpc("lead_retention_sweep");
+    if (sweepError) console.error("idealista-leads lead_retention_sweep:", sweepError.message);
+    else retention = data ?? null;
+  }
+
 
   return Response.json(
     {
@@ -527,6 +458,7 @@ export async function POST(req: Request) {
       // Cuántas se repartieron solas y cuántas quedan para un administrador.
       routedAssigned: routing.assigned,
       routedPending: routing.pending,
+      retention,
       results,
     },
     { headers: corsHeaders() },
