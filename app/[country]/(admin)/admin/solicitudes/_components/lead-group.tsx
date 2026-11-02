@@ -60,6 +60,54 @@ export function LeadGroupBlock({
   const exact = group.kind === "exact";
   const listId = `group-leads-${group.key.replace(/[^a-z0-9]/gi, "")}`;
 
+  // El cajón «Por verificar» no es un anuncio: sin foto ni precio, solo qué
+  // son esas solicitudes, por qué están ahí y cómo abrirlas.
+  if (!exact) {
+    return (
+      <li className="list-none rounded-lg border border-dashed border-sol-line bg-sol-surface">
+        <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <h3 className="text-xl font-semibold leading-tight text-sol-ink">{t("inbox.group.unverified")}</h3>
+            <p className="mt-1.5 max-w-2xl text-sm text-sol-muted">{t("inbox.group.unverifiedWhy")}</p>
+            <p className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-sol-ink/[0.06] px-2.5 py-1 sol-meta font-semibold text-sol-muted">
+                {tn("inbox.group.leads", group.count)}
+              </span>
+              {group.newCount > 0 && (
+                <span className="rounded-md bg-sol-review px-2.5 py-1 sol-meta font-semibold text-sol-review-ink">
+                  {t("inbox.group.uncontacted", { count: group.newCount })}
+                </span>
+              )}
+              {selectable && (
+                <label className="inline-flex items-center gap-2 sol-meta text-sol-muted">
+                  <input type="checkbox" checked={allSelected} onChange={(e) => onToggleGroup(ids, e.target.checked)} className="h-5 w-5 accent-sol-action" />
+                  {t("inbox.bulk.selectAll")}
+                </label>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={listId}
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-md border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40"
+          >
+            {open ? t("inbox.group.hideLeads") : t("inbox.group.showUnverified")}
+            <ChevronDown size={16} strokeWidth={2} className={cn("transition-transform", open && "rotate-180")} />
+          </button>
+        </div>
+        {open && (
+          <ul id={listId} className="border-t border-sol-line">
+            {group.leads.map((lead) => (
+              <LeadRow key={lead.id} lead={lead} active={lead.id === activeLeadId} selected={selected.has(lead.id)} selectable={selectable} locale={config.locale} grouped onOpen={() => onOpen(lead.id)} onToggleSelect={(checked) => onToggleSelect(lead.id, checked)} />
+            ))}
+          </ul>
+        )}
+      </li>
+    );
+  }
+
   return (
     <li className="list-none rounded-lg border border-sol-line bg-sol-surface">
       <div className="flex flex-col gap-4 p-2.5 md:flex-row md:gap-6">

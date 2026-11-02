@@ -28,6 +28,10 @@ import {
 } from "../lib/sales-inbox/routing.ts";
 import { effectiveSort, fichaActions, groupKeyFor, orderLabelKey, priorityColumn } from "../lib/sales-inbox/views.ts";
 import { idealistaAdUrl } from "../lib/sales-inbox/routing.ts";
+import { buildStoredZip, compareVersions, crc32, extensionFiles, isExtensionOutdated } from "../lib/services/idealista/extension-package.ts";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { INBOX_SORTS } from "../lib/sales-inbox/types.ts";
 import { solicitudesEn, solicitudesEs } from "../lib/i18n/solicitudes-strings.ts";
 import { NO_WHATSAPP, type LeadListItem } from "../lib/sales-inbox/types.ts";
@@ -238,6 +242,32 @@ t("Enlace al anuncio · solo con un código numérico de idealista.com", () => {
   assert.equal(idealistaAdUrl(""), null);
   assert.equal(idealistaAdUrl(null), null);
   assert.equal(idealistaAdUrl("1234"), null);
+});
+
+t("Extensión · versión atrasada = sin versión o anterior a la exigida", () => {
+  assert.equal(isExtensionOutdated(null), true);
+  assert.equal(isExtensionOutdated(""), true);
+  assert.equal(isExtensionOutdated("1.13.0"), true);
+  assert.equal(isExtensionOutdated("1.14.0"), false);
+  assert.equal(isExtensionOutdated("1.14.1"), false);
+  assert.equal(isExtensionOutdated("2.0"), false);
+  assert.equal(compareVersions("1.10.0", "1.9.9"), 1);
+  assert.equal(compareVersions("1.14", "1.14.0"), 0);
+});
+
+t("Extensión · el paquete es un zip válido con el manifest", () => {
+  assert.equal(crc32(Buffer.from("123456789")), 0xcbf43926);
+  const files = extensionFiles();
+  assert.ok(files.some((f) => f.name === "chrome-extension/manifest.json"), "manifest en el paquete");
+  assert.ok(files.some((f) => f.name === "chrome-extension/inbox-leads.js"), "inbox-leads en el paquete");
+  const zip = buildStoredZip(files);
+  const dir = mkdtempSync(join(tmpdir(), "smartbc-ext-"));
+  const path = join(dir, "ext.zip");
+  writeFileSync(path, zip);
+  const listing = execFileSync("unzip", ["-l", path], { encoding: "utf8" });
+  assert.match(listing, /chrome-extension\/manifest\.json/);
+  assert.match(listing, new RegExp(`${files.length} files`));
+  execFileSync("unzip", ["-tq", path], { encoding: "utf8" });
 });
 
 // ─── 3 · R02 en la aplicación ────────────────────────────────────────────────

@@ -26,6 +26,10 @@ cierra**. Si el modal no aparece en 3 segundos se sigue sin él: la solicitud
 llega igual, marcada «Por verificar». Los hilos ya capturados antes de la 1.14
 no tienen código; el CRM los oculta a los 30 días si no tienen cliente.
 
+Desde la 1.14.1 la extensión manda su versión en cada envío y **Solicitudes
+avisa cuando la que captura el inbox se ha quedado atrás**, con el paquete al
+día para descargar (administradores) y los pasos para cargarlo.
+
 ## Filtros extra en los listados (1.13)
 
 Se filtra en el navegador, sobre los anuncios de la página, y se recuerda entre
