@@ -388,9 +388,12 @@ export function InboxShell({
             </div>
           )}
 
-          {/* Resultados · venta o alquiler · vista */}
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+          {/* Resultados · venta o alquiler · vista. El conmutador de vista
+              SIEMPRE ocupa el mismo sitio (a la derecha en escritorio, en su
+              fila en móvil): lo que haya a la izquierda se ajusta en su hueco
+              y nunca lo desplaza, para que no «baile» al cambiar de vista. */}
+          <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 lg:min-h-[40px] lg:flex-1">
               {canEdit && selectMode && layout !== "priorities" && (
                 <input
                   type="checkbox"
@@ -454,7 +457,7 @@ export function InboxShell({
             </div>
             {/* Tres maneras de mirar la MISMA bandeja: mismos filtros, misma
                 ficha y mismas acciones. */}
-            <div role="group" aria-label={t("inbox.layout.label")} className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
+            <div role="group" aria-label={t("inbox.layout.label")} className="grid w-full shrink-0 grid-cols-3 gap-2 sm:flex sm:w-auto lg:ms-6">
               {(["cards", "property", "priorities"] as InboxLayout[]).map((l) => (
                 <button
                   key={l}
