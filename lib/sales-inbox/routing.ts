@@ -122,6 +122,27 @@ export type ZintoSyncInfo = {
   updatedAt: string;
 };
 
+// ─── Publicación anterior ────────────────────────────────────────────────────
+
+/**
+ * Código vigente que se enseña como «Publicación anterior», o null.
+ *
+ * Que el «Cod.» recibido sea distinto del vigente del anuncio guardado NO
+ * demuestra que fuera una publicación anterior: puede ser un código
+ * desconocido enlazado a otro anuncio. Solo cuenta si figura CERRADO en el
+ * historial de ese mismo anuncio (`idealista_listing_codes`, 0237).
+ */
+export function previousPublicationCode(
+  currentCode: string | null | undefined,
+  receivedCode: string | null | undefined,
+  receivedInListingHistory: boolean,
+): string | null {
+  const current = (currentCode ?? "").trim();
+  const received = (receivedCode ?? "").trim();
+  if (!current || !received || current === received) return null;
+  return receivedInListingHistory ? current : null;
+}
+
 // ─── Errores de la base ──────────────────────────────────────────────────────
 
 /** Códigos que lanzan las funciones de 0237 (RAISE EXCEPTION '<código>'). */

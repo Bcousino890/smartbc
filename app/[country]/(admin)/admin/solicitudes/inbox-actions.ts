@@ -23,7 +23,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canActOnLead, canActOnLeads, LEADS_COUNTRY } from "@/lib/db/queries/view-scope";
 import { getClientReassignScope, type ClientReassignScope } from "@/lib/db/queries/routing";
 import { ADMIN_ROLES, isExactLink, routingErrorMessage } from "@/lib/sales-inbox/routing";
-import { adsDiffer } from "@/lib/sales-inbox/merge";
+import { planGroupMerge } from "@/lib/sales-inbox/merge";
 import { confirmPrepareVisits, lookupPrepareVisits } from "./prepare-visits-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -333,19 +333,26 @@ export async function mergeSamePhoneLeads(leadId: string): Promise<MergeResult> 
   if (group.some((r) => !allowed.has(r.id))) return { ok: false, error: NO_ACCESS };
 
   // Solo se une la MISMA consulta (mismo anuncio, o sin datos del anuncio,
-  // como una llamada). Las consultas de otros anuncios son solicitudes
-  // propias aunque sean de la misma persona (especificación D07): se quedan
-  // a la vista y comparten cliente y asesor al vincularlas al cliente.
-  const asAd = (r: any) => ({
-    id: r.id, name: null, phoneDigits: r.phone_digits, createdAt: r.created_at,
-    ad: { code: r.idealista_code ?? null, ref: r.property_ref ?? null, title: r.property_title ?? null },
-  });
-  const [survivor, ...others] = group;
-  const rest = others.filter((r) => !adsDiffer(asAd(survivor), asAd(r)));
-  const keptSeparate = others.length - rest.length;
-  if (rest.length === 0) {
+  // como una llamada), y el grupo es el de la solicitud desde la que se
+  // pulsa «Unir»: si hay una de otro anuncio más antigua, no se toca. Las
+  // consultas de otros anuncios son solicitudes propias aunque sean de la
+  // misma persona (especificación D07): se quedan a la vista y comparten
+  // cliente y asesor al vincularlas al cliente. Misma regla que la ingesta
+  // (planGroupMerge); el botón solo se salta la revisión por NOMBRE.
+  const byId = new Map<string, any>(group.map((r) => [r.id, r]));
+  const plan = planGroupMerge(
+    group.map((r) => ({
+      id: r.id, name: null, phoneDigits: r.phone_digits, createdAt: r.created_at,
+      ad: { code: r.idealista_code ?? null, ref: r.property_ref ?? null, title: r.property_title ?? null },
+    })),
+    leadId,
+  );
+  if (!plan || plan.absorb.length === 0) {
     return { ok: false, error: "Las demás solicitudes de este teléfono son de otros anuncios: se mantienen separadas." };
   }
+  const survivor = byId.get(plan.survivor.id);
+  const rest = plan.absorb.map((c) => byId.get(c.id));
+  const keptSeparate = plan.blocked.length;
   const ids = rest.map((r) => r.id);
 
   // Historial primero: si se corta entre las dos escrituras quedan dos leads

@@ -101,6 +101,9 @@ add(2, { name: people[1], msg: msgs[1], listing: 1, method: "code", title: Strin
 add(3, { name: people[2], msg: msgs[2], listing: 11, method: "ref", title: "Goya · Recoletos", price: "2.900.000 €", img: 3, assigned: COLLEAGUE, source: "rule", created: ago(20), next: ago(3), nextNote: "Llamar para confirmar visita", state: "contacted", ref: "BC-9011", op: "sale" });
 // Llegó por una publicación ANTERIOR del anuncio (código 900199; el vigente es 900210).
 add(4, { name: people[3], msg: msgs[3], listing: 10, method: "code", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: ADVISOR, source: "inherited", created: ago(26), waOut: 2, waIn: 1, op: "rent", ref: "BC-9010", code: "900199" });
+// Caso 3 de Codex: «Cod.» DESCONOCIDO (900777 no está en ningún historial) con
+// OTRO anuncio guardado (el de Castelló). NO es una publicación anterior.
+add(13, { name: "Rosa Ejemplo", msg: msgs[5], listing: 10, method: "code_unresolved", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: null, reason: "link_code_unresolved", created: ago(8), ref: "BC-9010", code: "900777", op: "rent" });
 add(5, { name: people[4], msg: msgs[4], property: 1, method: "unverified", title: "Príncipe de Vergara", price: "1.100.000 €", img: 4, assigned: null, reason: "link_unverified", created: ago(30), op: "sale" });
 add(6, { name: people[5], msg: msgs[5], method: "none", title: "Hola, me interesa este inmueble", price: "", img: null, assigned: null, reason: "link_unverified", created: ago(31) });
 add(7, { name: people[6], msg: msgs[0], listing: 10, method: "ref", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: ADVISOR, source: "rule", created: ago(50), next: ahead(20), nextNote: "Enviar dossier", state: "contacted", op: "rent", ref: "BC-9010" });
@@ -136,6 +139,12 @@ d.lead_inbox_facts = facts;
 d.lead_activity = activity;
 d.assignment_events = events;
 d.zinto_owner_sync = sync;
+// Historial de publicaciones (0237): el anuncio de Castelló tuvo el 900199
+// antes del 900210. El 900777 (solicitud 13) no figura en ningún historial.
+d.idealista_listing_codes = [
+  { id: id("009", 1), listing_id: id("001", 10), idealista_property_id: "900199", reference_code: "BC-9010", property_id: null, valid_from: ago(800), valid_to: ago(400), source: "inicial" },
+  { id: id("009", 2), listing_id: id("001", 10), idealista_property_id: "900210", reference_code: "BC-9010", property_id: null, valid_from: ago(400), valid_to: null, source: "catalogo" },
+];
 d.zinto_conversations = [{ id: id("004", 99), phone_number: "34600108208", lead_id: id("003", 8), country: "es" }];
 writeFileSync(OUT, JSON.stringify(d));
 console.log(`solicitudes-reparto: ${facts.length} solicitudes, ${rules.length} reglas → ${OUT}`);

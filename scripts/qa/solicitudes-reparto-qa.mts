@@ -115,6 +115,11 @@ async function shot(page: Page, name: string) {
   await page.getByRole("tab", { name: /Cliente y datos/ }).click();
   check("Evidencia · consulta por una publicación anterior del anuncio", (await page.getByText(/Publicación anterior: el anuncio se republicó con el código 900210/).count()) === 1);
   await shot(page, "05b-publicacion-anterior");
+  // Caso 3 de Codex: código desconocido con otro anuncio guardado → sin «Publicación anterior».
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(13)}`, { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Cliente y datos/ }).click();
+  check("Evidencia · «Cod.» desconocido con otro anuncio guardado: sin «Publicación anterior»", (await page.getByText(/Publicación anterior/).count()) === 0
+    && (await page.getByText("900777").count()) > 0);
 
   // Asignar una pendiente (sin cliente)
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(2)}`, { waitUntil: "networkidle" });

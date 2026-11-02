@@ -38,6 +38,7 @@ import {
 import {
   effectiveRoutingStatus,
   linkStatus,
+  previousPublicationCode,
   type LinkStatus,
   type RoutingStatus,
   type ZintoSyncInfo,
@@ -774,9 +775,13 @@ export type LeadDetail = {
   /** Evidencia recibida: «Ref.» y «Cod.» tal como llegaron. */
   propertyRef: string | null;
   idealistaCode: string | null;
-  /** Código VIGENTE del anuncio enlazado. Si difiere de `idealistaCode`, la
-   *  consulta llegó por una publicación anterior (historial, 0237). */
-  listingCurrentCode: string | null;
+  /**
+   * Código vigente del anuncio enlazado SOLO cuando la consulta llegó por una
+   * publicación anterior de ESE anuncio, comprobado en el historial
+   * (idealista_listing_codes, 0237). Un «Cod.» desconocido con otro anuncio
+   * guardado no es una publicación anterior: aquí va null.
+   */
+  previousPublicationCode: string | null;
   linkMethod: string | null;
   linkStatus: LinkStatus;
   routingStatus: RoutingStatus;
@@ -864,14 +869,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
       : null,
     row.client_id ? getZintoSync("client", row.client_id) : getZintoSync("lead", id),
     getAssignmentEvents(id, row.client_id ?? null),
-    row.matched_listing_id
-      ? db()
-          .from("idealista_listings")
-          .select("idealista_property_id")
-          .eq("id", row.matched_listing_id)
-          .maybeSingle()
-          .then((r: any) => (r.data?.idealista_property_id as string | null) ?? null)
-      : null,
+    getPreviousPublicationCode(row.matched_listing_id ?? null, row.idealista_code ?? null),
   ]);
   const nameOf = (uid: string | null) => (uid ? (staffNames.get(uid) ?? null) : null);
 
@@ -931,7 +929,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     avatarUrl: row.avatar_url ?? null,
     propertyRef: row.property_ref ?? null,
     idealistaCode: row.idealista_code ?? null,
-    listingCurrentCode: listingCode,
+    previousPublicationCode: listingCode,
     linkMethod: row.property_link_method ?? null,
     linkStatus: linkStatus(row.property_link_method),
     routingStatus: effectiveRoutingStatus(row.routing_status, row.assigned_to),
@@ -957,6 +955,39 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
       reason: e.reason,
     })),
   };
+}
+
+/**
+ * Si la consulta llegó con un código ANTERIOR del anuncio al que está
+ * enlazada, devuelve el código vigente; si no, null. Se exige que el código
+ * recibido figure en el historial de ESE anuncio: que sea distinto del
+ * vigente no demuestra nada (puede ser un código desconocido).
+ */
+async function getPreviousPublicationCode(
+  listingId: string | null,
+  receivedCode: string | null,
+): Promise<string | null> {
+  const code = (receivedCode ?? "").trim();
+  if (!listingId || !code) return null;
+  try {
+    const [{ data: listing }, { data: hist }] = await Promise.all([
+      db().from("idealista_listings").select("idealista_property_id").eq("id", listingId).maybeSingle(),
+      db()
+        .from("idealista_listing_codes")
+        .select("id")
+        .eq("listing_id", listingId)
+        .eq("idealista_property_id", code)
+        .not("valid_to", "is", null)
+        .limit(1),
+    ]);
+    return previousPublicationCode(
+      (listing?.idealista_property_id as string | null) ?? null,
+      code,
+      Array.isArray(hist) && hist.length > 0,
+    );
+  } catch {
+    return null;
+  }
 }
 
 async function getPropertyContext(propertyId: string): Promise<LeadPropertyContext | null> {

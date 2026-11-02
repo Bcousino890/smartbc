@@ -114,5 +114,69 @@ check("D07: en un grupo, la llamada se une y la consulta de otro anuncio se qued
   plan07 && { survivor: plan07.survivor.id, absorb: plan07.absorb.map((l) => l.id), blocked: plan07.blocked.map((b) => [b.lead.id, b.reason]) },
   { survivor: "primera", absorb: ["llamada"], blocked: [["otro-anuncio", "different_ads"]] });
 
+// ── Caso 1 · la más antigua es una llamada sin anuncio ──────────────────────
+// La llamada no contradice a nadie, pero las consultas de 111 y 222 SÍ se
+// contradicen entre ellas: solo una puede unirse a la llamada. Las dos
+// juntas serían un lead con dos anuncios distintos escondidos dentro.
+const planLlamada = planGroupMerge([
+  withAd("llamada", {}, "2026-01-01T00:00:00Z"),
+  withAd("c111", { code: "111" }, "2026-01-02T00:00:00Z"),
+  withAd("c222", { code: "222" }, "2026-01-03T00:00:00Z"),
+]);
+check("Caso 1: llamada antigua + 111 + 222 → absorbe solo la primera consulta; 222 queda a la vista",
+  planLlamada && { survivor: planLlamada.survivor.id, absorb: planLlamada.absorb.map((l) => l.id), blocked: planLlamada.blocked.map((b) => [b.lead.id, b.reason]) },
+  { survivor: "llamada", absorb: ["c111"], blocked: [["c222", "different_ads"]] });
+// Capturas sucesivas: en la primera tanda solo existe la llamada y 111 (se
+// unen); en la segunda llega 222 y el superviviente ya "es" la consulta 111.
+const tanda1 = planGroupMerge([
+  withAd("llamada", {}, "2026-01-01T00:00:00Z"),
+  withAd("c111", { code: "111" }, "2026-01-02T00:00:00Z"),
+]);
+check("Caso 1 · tanda 1: la llamada absorbe la consulta 111",
+  tanda1 && tanda1.absorb.map((l) => l.id), ["c111"]);
+const tanda2 = planGroupMerge([
+  // El superviviente lleva ya el anuncio de lo que absorbió (ver auto-merge).
+  withAd("llamada", { code: "111" }, "2026-01-01T00:00:00Z"),
+  withAd("c222", { code: "222" }, "2026-01-03T00:00:00Z"),
+]);
+check("Caso 1 · tanda 2: 222 no se une al superviviente que ya es de 111",
+  tanda2 && { absorb: tanda2.absorb.map((l) => l.id), blocked: tanda2.blocked.map((b) => b.lead.id) },
+  { absorb: [], blocked: ["c222"] });
+// Dos llamadas y una consulta: las llamadas se unen entre sí y con la consulta.
+const planDosLlamadas = planGroupMerge([
+  withAd("llamada1", {}, "2026-01-01T00:00:00Z"),
+  withAd("c111", { code: "111" }, "2026-01-02T00:00:00Z"),
+  withAd("llamada2", {}, "2026-01-03T00:00:00Z"),
+]);
+check("Caso 1: dos llamadas + una consulta → todo en uno",
+  planDosLlamadas && planDosLlamadas.absorb.map((l) => l.id), ["c111", "llamada2"]);
+
+// ── Caso 2 · «Unir» desde una solicitud concreta ────────────────────────────
+// A es la más antigua; desde una de las dos de B, se unen SOLO las de B, y
+// sobrevive la más antigua de B, no A.
+const planDesdeB = planGroupMerge([
+  withAd("a", { code: "AAA" }, "2026-01-01T00:00:00Z"),
+  withAd("b1", { code: "BBB" }, "2026-01-02T00:00:00Z"),
+  withAd("b2", { code: "BBB" }, "2026-01-03T00:00:00Z"),
+], "b2");
+check("Caso 2: unir desde B → sobrevive b1, absorbe b2, A se queda a la vista",
+  planDesdeB && { survivor: planDesdeB.survivor.id, absorb: planDesdeB.absorb.map((l) => l.id), blocked: planDesdeB.blocked.map((b) => b.lead.id) },
+  { survivor: "b1", absorb: ["b2"], blocked: ["a"] });
+const planDesdeA = planGroupMerge([
+  withAd("a", { code: "AAA" }, "2026-01-01T00:00:00Z"),
+  withAd("b1", { code: "BBB" }, "2026-01-02T00:00:00Z"),
+  withAd("llamada", {}, "2026-01-04T00:00:00Z"),
+], "a");
+check("Caso 2: unir desde A → solo la llamada sin anuncio se une a A",
+  planDesdeA && { survivor: planDesdeA.survivor.id, absorb: planDesdeA.absorb.map((l) => l.id) },
+  { survivor: "a", absorb: ["llamada"] });
+check("Caso 2: unir desde una llamada → se une con la consulta más antigua y nada más",
+  (() => { const p = planGroupMerge([
+    withAd("a", { code: "AAA" }, "2026-01-01T00:00:00Z"),
+    withAd("b1", { code: "BBB" }, "2026-01-02T00:00:00Z"),
+    withAd("llamada", {}, "2026-01-04T00:00:00Z"),
+  ], "llamada"); return p && { survivor: p.survivor.id, absorb: p.absorb.map((l) => l.id) }; })(),
+  { survivor: "a", absorb: ["llamada"] });
+
 console.log(failed === 0 ? "\n✅ Regla de unificación OK" : `\n❌ ${failed} fallo(s)`);
 process.exit(failed === 0 ? 0 : 1);

@@ -498,9 +498,9 @@ function Evidence({ lead }: { lead: LeadDetail }) {
         <dt className="text-ink/45">{t("inbox.evidence.code")}</dt>
         <dd className="text-ink/80">
           {lead.idealistaCode ?? t("inbox.evidence.notReceived")}
-          {lead.idealistaCode && lead.listingCurrentCode && lead.idealistaCode !== lead.listingCurrentCode && (
+          {lead.previousPublicationCode && (
             <span className="block text-ink/50">
-              {t("inbox.evidence.previousPublication", { code: lead.listingCurrentCode })}
+              {t("inbox.evidence.previousPublication", { code: lead.previousPublicationCode })}
             </span>
           )}
         </dd>

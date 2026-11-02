@@ -22,6 +22,7 @@ import {
   linkStatus,
   parseRuleOutcomes,
   parseSubjectKey,
+  previousPublicationCode,
   routingErrorMessage,
   subjectKey,
 } from "../lib/sales-inbox/routing.ts";
@@ -226,6 +227,20 @@ t("R02 · las acciones de reparto exigen administrador antes de tocar la base", 
   // La bandeja anterior ya no escribe el responsable a pelo.
   const legacy = readFileSync(new URL("../app/[country]/(admin)/admin/solicitudes/actions.ts", import.meta.url), "utf8");
   assert.doesNotMatch(legacy, /assigned_to:/, "la bandeja anterior no asigna sin pasar por el reparto");
+});
+
+t("evidencia · «Publicación anterior» solo con el código en el historial del anuncio", () => {
+  // Caso 3 de Codex: código desconocido con otro anuncio guardado. Antes se
+  // mostraba por el mero hecho de ser distinto del vigente.
+  // Reproducción del defecto: la regla anterior era «distinto del vigente».
+  const reglaAnterior = (current: string, received: string) => (received !== current ? current : null);
+  assert.equal(reglaAnterior("900210", "900777"), "900210", "la regla anterior sí lo mostraba para un código desconocido");
+  assert.equal(previousPublicationCode("900210", "900777", false), null, "código desconocido: nada");
+  assert.equal(previousPublicationCode("900210", "900199", true), "900210", "código anterior del mismo anuncio");
+  assert.equal(previousPublicationCode("900210", "900210", true), null, "el vigente no es anterior");
+  assert.equal(previousPublicationCode("900210", null, true), null, "sin código recibido");
+  assert.equal(previousPublicationCode(null, "900199", true), null, "anuncio sin código vigente");
+  assert.equal(previousPublicationCode(" 900210 ", "900199 ", true), "900210", "espacios");
 });
 
 t("R02 · el asesor de un cliente existente solo cambia por la reasignación auditada", () => {
