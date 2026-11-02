@@ -17,6 +17,14 @@ const bg = family("bg");
 const fg = family("fg");
 const ln = family("ln");
 
+// Solicitudes · estética del Figma (app/globals.css, bloque «SOLICITUDES»).
+// Variables propias con su oscuro; fuera de `.sol-root` nadie las usa.
+const SOL_NAMES = [
+  "ink", "muted", "faint", "action", "action-strong", "on-action", "select", "bg",
+  "surface", "column", "line", "review", "review-ink", "error", "error-bg", "info", "info-ink",
+] as const;
+const SOL = Object.fromEntries(SOL_NAMES.map((n) => [n, `rgb(var(--sol-${n}) / <alpha-value>)`]));
+
 const darkVars = darkDeclarations();
 const shellVars = (s: typeof SHELL.dark) => ({
   "--crm-shell-wash-from": s.washFrom,
@@ -53,19 +61,19 @@ const config: Config = {
     "./lib/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    backgroundColor: bg,
+    backgroundColor: { ...bg, sol: SOL },
     gradientColorStops: bg,
-    textColor: fg,
+    textColor: { ...fg, sol: SOL },
     fill: { none: "none", ...fg },
     stroke: { none: "none", ...fg },
-    placeholderColor: fg,
+    placeholderColor: { ...fg, sol: SOL },
     caretColor: fg,
     textDecorationColor: fg,
-    accentColor: { ...fg, auto: "auto" },
-    borderColor: { ...ln, DEFAULT: DEFAULT_BORDER },
-    divideColor: { ...ln, DEFAULT: DEFAULT_BORDER },
-    outlineColor: ln,
-    ringColor: { ...ln, DEFAULT: "#3b82f6" },
+    accentColor: { ...fg, auto: "auto", sol: SOL },
+    borderColor: { ...ln, sol: SOL, DEFAULT: DEFAULT_BORDER },
+    divideColor: { ...ln, sol: SOL, DEFAULT: DEFAULT_BORDER },
+    outlineColor: { ...ln, sol: SOL },
+    ringColor: { ...ln, sol: SOL, DEFAULT: "#3b82f6" },
     ringOffsetColor: ln,
     extend: {
       colors: {

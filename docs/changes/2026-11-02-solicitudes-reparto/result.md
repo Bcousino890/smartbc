@@ -308,3 +308,9 @@ Las correcciones anteriores no cambian. Los tres casos proceden; cada uno tiene 
 
 **Límite.** La unión automática solo «dona» el anuncio al superviviente cuando este no tenía ni «Cod.» ni «Ref.»; una llamada antigua a la que ya se le hubiera unido algo **antes** de este cambio sigue sin anuncio hasta que se le una otra consulta o alguien revise el vínculo.
 
+
+## 11. Estética del Figma (2026-11-02)
+
+Fabricio decidió adoptar la estética del Figma en Solicitudes y Reparto comercial, adaptada al CRM. El detalle (cómo está hecho, qué cambia por pantalla, qué se conserva y qué diferencias quedan) está en [comparacion-figma.md §6](comparacion-figma.md), y las capturas en `comparacion-figma/despues/`. Es un cambio de presentación: no toca la migración, las funciones SQL ni las acciones del servidor, salvo `listingRef`, un campo de solo lectura (Ref. o Cod.) que se añade a la fila de la lista para enseñarlo en la tarjeta.
+
+Verificación: `tsc` limpio; `test:solicitudes-reparto`, `test:lead-merge`, `test:sales-inbox`, `test:crm-appearance` y `test:lead-scope-identity` en verde; `test:typography` sin violaciones en estas pantallas (falla por 27 casos previos de otras pantallas y no está en CI); QA visual 37/37 sobre `next start` + simulador, con la comprobación de «volver» en móvil adaptada a «Volver a tarjetas»; sin desbordamiento horizontal a 390 px en las tres vistas ni en la ficha; sin errores de consola.

@@ -50,26 +50,31 @@ export function OwnerControl({
     lead.clientAdvisor && lead.clientAdvisor.id && lead.clientAdvisor.id !== lead.assignedTo;
 
   return (
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="crm-label-sm text-ink/45">{t("inbox.owner.label")}</span>
+    <div className="min-w-0 rounded-xl border border-sol-line bg-sol-surface px-4 py-2.5 sm:min-w-[264px] lg:max-w-[340px]">
+      <p className="sol-meta text-sol-muted">{t("inbox.owner.label")}</p>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
         {lead.routingStatus === "conflict" ? (
           <Pill tone="critical">{t("inbox.routing.conflict")}</Pill>
         ) : lead.assignedTo ? (
-          <span className="text-sm font-medium text-ink">{lead.assignedName ?? t("inbox.row.assigned")}</span>
+          <span className="sol-ui font-semibold text-sol-ink">{lead.assignedName ?? t("inbox.row.assigned")}</span>
         ) : (
           <Pill tone="warning">{t("inbox.routing.pending")}</Pill>
         )}
         {isAdmin ? (
-          <Button size="sm" variant="ghost" onClick={() => setOpen(true)} className="min-h-[36px]">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex min-h-[32px] items-center sol-ui font-semibold text-sol-action underline-offset-2 hover:underline"
+          >
+            <span aria-hidden className="me-2 font-normal text-sol-faint">·</span>
             {lead.clientId ? t("inbox.owner.reassignClient") : t("inbox.owner.change")}
-          </Button>
+          </button>
         ) : (
-          <span className="text-xs text-ink/40">{t("inbox.owner.adminOnly")}</span>
+          <span className="text-xs text-sol-faint">{t("inbox.owner.adminOnly")}</span>
         )}
       </div>
 
-      <p className="mt-0.5 text-xs text-ink/50">
+      <p className="mt-0.5 text-xs text-sol-muted">
         {lead.routingStatus !== "assigned" && lead.routingReason
           ? t(`inbox.routing.reason.${lead.routingReason}`)
           : lead.assignmentSource
@@ -81,12 +86,12 @@ export function OwnerControl({
       </p>
 
       {/* Zinto: estado propio, separado del responsable. */}
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
         <Pill tone={ZINTO_TONE[syncState]}>{t(`inbox.zintoSync.${syncState}`)}</Pill>
         {sync?.blockedReason === "contract_missing" && syncState === "pending" && (
-          <span className="text-ink/45">{t("inbox.zintoSync.contractMissing")}</span>
+          <span className="text-sol-muted">{t("inbox.zintoSync.contractMissing")}</span>
         )}
-        {sync?.state === "error" && sync.lastError && <span className="text-rose-700">{sync.lastError}</span>}
+        {sync?.state === "error" && sync.lastError && <span className="text-sol-error">{sync.lastError}</span>}
         {isAdmin && sync && sync.state === "error" && (
           <Button
             size="sm"
@@ -105,7 +110,7 @@ export function OwnerControl({
           </Button>
         )}
       </div>
-      {error && <p role="alert" className="mt-1 text-xs text-rose-700">{error}</p>}
+      {error && <p role="alert" className="mt-1 text-xs text-sol-error">{error}</p>}
 
       {open && isAdmin && (lead.clientId ? (
         <ReassignClientDialog clientId={lead.clientId} staff={staff} onClose={() => setOpen(false)} />

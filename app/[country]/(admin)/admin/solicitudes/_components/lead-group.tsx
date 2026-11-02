@@ -14,13 +14,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, ChevronDown, ImageOff } from "lucide-react";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
 import type { LeadGroup } from "@/lib/sales-inbox/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import { useTn } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/plural";
 import { cn } from "@/lib/utils";
-import { Pill } from "@/components/admin/ui/primitives";
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { LeadRow } from "./lead-row";
 
@@ -47,123 +46,121 @@ export function LeadGroupBlock({
   const t = useT();
   const tn = useTn();
   const config = getCountryConfig(country);
-  // Un piso con el trabajo hecho arranca plegado: lo que se busca al abrir la
-  // bandeja es lo que falta.
-  const [open, setOpen] = useState(group.attentionCount > 0 || group.count <= 3);
+  // Como en el Figma (B01), cada anuncio es una tarjeta y sus solicitudes se
+  // despliegan a demanda. Al volver de una ficha, el anuncio de esa solicitud
+  // sigue abierto.
+  const [open, setOpen] = useState(() => group.leads.some((l) => l.id === activeLeadId));
 
   const ids = group.leads.map((l) => l.id);
   const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+  const latest = group.leads.reduce<(typeof group.leads)[number] | null>(
+    (acc, l) => (!acc || l.createdAt > acc.createdAt ? l : acc),
+    null,
+  );
+  const exact = group.kind === "exact";
+  const listId = `group-leads-${group.key.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <li className="border-b-2 border-ink/10">
-      {/* ── El piso ── */}
-      {/* Pegajosa: un piso con sesenta y una consultas se recorre entero sin
-          perder de vista de cuál se está hablando. */}
-      <div
-        className={cn(
-          "sticky top-0 z-10 flex items-start gap-2.5 border-b border-ink/8 px-3 py-2 backdrop-blur-sm",
-          group.attentionCount > 0 ? "bg-cream-100/95" : "bg-cream-50/95",
-        )}
-      >
-        {selectable && (
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={(e) => onToggleGroup(ids, e.target.checked)}
-            aria-label={t("inbox.group.selectAll", { property: group.title ?? "" })}
-            className="mt-1.5 h-3.5 w-3.5 shrink-0 accent-[#8a6d3b]"
-          />
-        )}
+    <li className="list-none rounded-xl border border-sol-line bg-sol-surface">
+      <div className="flex flex-col gap-4 p-2.5 md:flex-row md:gap-6">
+        {/* Foto del anuncio */}
+        <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-lg bg-sol-column md:aspect-auto md:h-[180px] md:w-[248px]">
+          {group.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={group.coverUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <span className="absolute inset-0 flex items-center p-4 sol-ui text-sol-muted">
+              {exact ? t("inbox.card.noImage") : t("inbox.card.noVerifiedImage")}
+            </span>
+          )}
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={(e) => onToggleGroup(ids, e.target.checked)}
+              aria-label={t("inbox.group.selectAll", { property: group.title ?? "" })}
+              className="absolute left-3 top-3 h-5 w-5 accent-sol-action"
+            />
+          )}
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-        >
-          <span className="mt-0.5 flex h-11 w-14 shrink-0 items-center justify-center overflow-hidden rounded bg-ink/[0.06]">
-            {group.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={group.coverUrl}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
+        {/* El anuncio */}
+        <div className="min-w-0 flex-1 px-1 md:py-2">
+          <h3 className="truncate text-2xl font-semibold leading-tight text-sol-ink">
+            {exact ? (group.title ?? t("inbox.group.noProperty")) : t("inbox.group.unverified")}
+          </h3>
+          {group.price !== null && (
+            <p className="mt-2 text-[22px] font-semibold leading-tight tabular-nums text-sol-ink">
+              {config.formatPrice(group.price, null, group.operation)}
+            </p>
+          )}
+          <p className={cn("mt-2.5 flex flex-wrap gap-x-1.5 text-sm font-semibold", exact ? "text-sol-action" : "text-sol-review-ink")}>
+            {exact ? (
+              <>
+                <span>{group.reference ?? t("inbox.card.noRef")}</span>
+                <span aria-hidden>·</span>
+                <span>{t("inbox.link.exact")}</span>
+                {group.zone && <span className="font-normal text-sol-muted">· {group.zone}</span>}
+              </>
             ) : (
-              <ImageOff size={14} strokeWidth={1.6} className="text-ink/25" />
+              <span>{t("inbox.group.unverifiedHint")}</span>
             )}
-          </span>
-
-          <span className="min-w-0 flex-1">
-            <span className="flex items-baseline gap-2">
-              <span className="min-w-0 truncate text-sm font-semibold text-ink">
-                {group.kind === "unverified"
-                  ? t("inbox.group.unverified")
-                  : (group.title ?? t("inbox.group.noProperty"))}
-              </span>
-              <span className="ms-auto shrink-0 text-xs text-ink/35">
-                <RelativeTime at={group.lastLeadAt} locale={config.locale} />
-              </span>
+          </p>
+          <p className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-lg bg-sol-select px-2.5 py-1 sol-meta font-semibold text-sol-action">
+              {tn("inbox.group.leads", group.count)}
             </span>
-
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/45">
-              <span className="font-medium text-ink/60">
-                {tn("inbox.group.count", group.count)}
+            {group.newCount > 0 && (
+              <span className="rounded-lg bg-sol-review px-2.5 py-1 sol-meta font-semibold text-sol-review-ink">
+                {t("inbox.group.uncontacted", { count: group.newCount })}
               </span>
-              {group.newCount > 0 && (
-                <span className="text-amber-700">
-                  {tn("inbox.group.newCount", group.newCount)}
-                </span>
-              )}
-              {group.reference && <span>{group.reference}</span>}
-              {group.price !== null && (
-                <span>{config.formatPrice(group.price, null, group.operation)}</span>
-              )}
-              {group.zone && <span>{group.zone}</span>}
-              {group.kind === "exact" ? (
-                <>
-                  <Pill tone="positive">{t("inbox.link.exact")}</Pill>
-                  <Pill tone="neutral">{t(`inbox.operation.${group.leadOperation ?? "unknown"}`)}</Pill>
-                </>
-              ) : (
-                <Pill tone="warning">{t("inbox.group.unverifiedHint")}</Pill>
-              )}
-            </span>
-          </span>
-
-          <ChevronDown
-            size={14}
-            strokeWidth={1.9}
-            className={cn(
-              "mt-1 shrink-0 text-ink/30 transition-transform",
-              open && "rotate-180",
             )}
-          />
-        </button>
+            {exact && (
+              <span className="rounded-lg bg-sol-ink/[0.06] px-2.5 py-1 sol-meta font-semibold text-sol-muted">
+                {t(`inbox.operation.${group.leadOperation ?? "unknown"}`)}
+              </span>
+            )}
+          </p>
+          {/* La ficha propia se abre por SLUG (`/propiedades/[slug]`); un
+              anuncio de Idealista sin ficha propia vive en /idealista. */}
+          {exact && (group.slug || group.listingId) && (
+            <Link
+              href={group.slug ? `${config.prefix}/propiedades/${group.slug}` : `${config.prefix}/idealista`}
+              className="mt-3 inline-flex items-center gap-1 sol-meta font-medium text-sol-muted hover:text-sol-action"
+            >
+              {t("inbox.group.openProperty")}
+              <ArrowUpRight size={13} strokeWidth={2} />
+            </Link>
+          )}
+        </div>
 
-        {/* La ficha propia se abre por SLUG: `/propiedades/[slug]` resuelve por
-            `slug`, así que con el uuid este enlace daba 404. Un anuncio de
-            Idealista sin ficha propia se abre donde vive, que es /idealista. */}
-        {(group.slug || group.listingId) && (
-          <Link
-            href={
-              group.slug
-                ? `${config.prefix}/propiedades/${group.slug}`
-                : `${config.prefix}/idealista`
-            }
-            onClick={(e) => e.stopPropagation()}
-            aria-label={t("inbox.property.open")}
-            className="mt-1 shrink-0 rounded p-1 text-ink/35 transition hover:text-ink"
+        {/* Última consulta y acceso a la demanda */}
+        <div className="flex shrink-0 flex-col justify-between gap-4 px-1 pb-1 md:w-[300px] md:py-3 md:pe-4 xl:w-[370px]">
+          <div>
+            <p className="sol-meta text-sol-muted">{t("inbox.group.lastEnquiry")}</p>
+            <p className="mt-1 truncate text-lg font-semibold text-sol-ink">
+              {latest?.name?.trim() || t("inbox.row.noName")}
+            </p>
+            <p className="mt-0.5 sol-meta text-sol-muted">
+              <RelativeTime at={group.lastLeadAt} locale={config.locale} />
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={listId}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-sol-action px-4 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action"
           >
-            <ArrowUpRight size={13} strokeWidth={2} />
-          </Link>
-        )}
+            {open ? t("inbox.group.hideLeads") : t("inbox.group.showLeads")}
+            <ChevronDown size={16} strokeWidth={2} className={cn("transition-transform", open && "rotate-180")} />
+          </button>
+        </div>
       </div>
 
       {/* ── Quién ha preguntado por él ── */}
       {open && (
-        <ul>
+        <ul id={listId} className="border-t border-sol-line">
           {group.leads.map((lead) => (
             <LeadRow
               key={lead.id}

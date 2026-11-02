@@ -107,6 +107,9 @@ const LIST_COLUMNS = [
   "routing_reason",
   "assignment_source",
   "assignment_version",
+  // Identificador del anuncio que trajo la solicitud (Ref. o Cod.).
+  "property_ref",
+  "idealista_code",
 ].join(", ");
 
 /** Lo que cabe en una tarjeta. El mensaje original nunca se recorta en la base. */
@@ -191,6 +194,7 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     routingReason: r.routing_reason ?? null,
     assignmentSource: r.assignment_source ?? null,
     assignmentVersion: Number(r.assignment_version ?? 0),
+    listingRef: r.property_ref ?? r.idealista_code ?? null,
   };
 }
 

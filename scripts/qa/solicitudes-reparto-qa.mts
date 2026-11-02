@@ -211,7 +211,8 @@ async function shot(page: Page, name: string) {
   await page.locator(`[data-lead-id="${LEAD(3)}"]`).first().click();
   await page.waitForURL(/lead=/);
   await page.waitForLoadState("networkidle");
-  check("Móvil · ficha a pantalla completa con «volver»", (await page.getByText("Volver a la lista").count()) + (await page.getByRole("button", { name: /lista/i }).count()) > 0);
+  // La ficha es una página propia (Figma A02/D01): «Volver a tarjetas».
+  check("Móvil · ficha a pantalla completa con «volver»", (await page.getByRole("button", { name: /Volver a (tarjetas|por piso|prioridades)/ }).count()) > 0);
   await shot(page, "16-movil-ficha");
   await page.goto(`${BASE}/es/admin/reparto`, { waitUntil: "networkidle" });
   const overflowR = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

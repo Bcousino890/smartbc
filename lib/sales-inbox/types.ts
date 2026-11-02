@@ -178,6 +178,8 @@ export type LeadListItem = {
   assignmentSource: string | null;
   /** Versión de la asignación que se vio: viaja en cada cambio (concurrencia). */
   assignmentVersion: number;
+  /** Ref. o Cod. del anuncio tal como llegó con la solicitud (o null). */
+  listingRef: string | null;
 };
 
 export type LeadSource = "idealista" | "web" | "visit_request";

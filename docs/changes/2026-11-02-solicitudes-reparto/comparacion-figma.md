@@ -112,3 +112,31 @@ Con cualquiera de las dos opciones de paleta, estos cambios son solo de presenta
 - Móvil: ocultar la cabecera de la bandeja al abrir una ficha; foto a ancho completo; botones fijos abajo.
 
 Lo que **no** debe copiarse del mockup por chocar con reglas ya confirmadas: el desplegable/lista de asesores visible para cualquiera (solo administradores), «Abrir conversación en Zinto» como sincronización (Zinto sigue pendiente), y cualquier texto que sugiera que unir por teléfono junta anuncios distintos.
+
+## 6. Aplicado (decisión de Fabricio, 2 nov 2026: «la estética del Figma, adaptada al CRM»)
+
+Decisiones §4 resueltas: **(1)** paleta verde e Inter del Figma en Solicitudes y Reparto comercial; **(2)** la ficha pasa a ser una página propia; **(3)** la barra lateral del CRM no se toca. §4.4 (A05 con URL/ID) y §4.5 (B02 como pantalla propia) siguen pendientes. Capturas a 1440 y 390 en `comparacion-figma/despues/`, sobre el mismo simulador con datos sintéticos (fotos de muestra generadas solo para la captura).
+
+**Cómo está hecho.** Una capa `.sol-root` (`app/globals.css`, bloque «SOLICITUDES») con los tokens de D02 como variables y su variante oscura, y utilidades `*-sol-*` en `tailwind.config.ts`. Dentro de esa capa la tinta, el oro y el papel del CRM se reasignan a la paleta del Figma. Los componentes compartidos (`Button`, `Pill`, `Modal`, `Panel`, campos) llevan atributos `data-variant`, `data-tone`, `data-crm-modal` y `data-crm-panel`, con los que la capa les da radio de 12 px, caja de frase, botón principal verde de 44 px y diálogos de 660 px. Fuera de Solicitudes y Reparto el CRM se ve exactamente igual. La escala del Figma que no está en la del CRM (13, 15, 17 y 32 px) va en clases propias (`sol-meta`, `sol-ui`, `sol-price-sm`, `sol-name`), no como `text-[Npx]`, así que `test:typography` no tiene ninguna violación en estas pantallas.
+
+| Pantalla | Qué cambia |
+|---|---|
+| Cabecera | Miga, título 32 px, subtítulo según la vista, buscador y «Filtros +» a la derecha; los seis segmentos como botones de 44 px con contador (el activo, en verde); línea «N solicitudes · orden» con el filtro de operación y el conmutador Tarjetas / Por piso / Prioridades. |
+| A01 Tarjetas | Rejilla de 1, 2 o 3 columnas con separación de 24 px; foto con el estado arriba a la izquierda; dirección a 18 px y precio a 22 px; Ref. o Cod. junto al estado real del vínculo; persona a 18 px; mensaje; responsable o «Pendiente de reparto»; hora; «Abrir solicitud». |
+| B01 Por piso | Una tarjeta grande por anuncio: foto de 248 × 180, título a 24 px, precio, Ref. · Vínculo exacto, «N solicitudes», «N sin contactar», última consulta y «Ver solicitudes del anuncio», que despliega las filas. Se mantiene la agrupación exacta y el grupo «Por verificar». |
+| C01 Prioridades | Columnas sobre gris claro con contador; tarjetas con foto, nombre, dirección, precio, estado de color, responsable y «Ver siguiente paso». |
+| A02 Ficha | Página propia con miga y «Volver a tarjetas» (o a la vista de origen); nombre a 32 px y su estado; caja del responsable («Nombre · Cambiar», origen y Zinto: pendiente); «Abrir conversación en Zinto»; pestañas en pastilla; dos columnas. A la izquierda, «Lo que preguntó» a 18–20 px, «Anuncio que consultó» con foto grande y «Datos del cliente». A la derecha, «Siguiente paso» con «Registrar contacto» a todo el ancho, «Llamar» y «Más acciones», y después «Actividad reciente» con «Ver historial completo». |
+| A03 / A06 diálogos | 660 px, título en caja de frase, campos de 44 px y botón principal ancho y verde. |
+| D01 Móvil | Una columna, el anuncio antes del mensaje y «Registrar contacto» y «Abrir Zinto» fijos abajo; sin desbordamiento horizontal en las tres vistas ni en la ficha. |
+| Reparto | Misma capa: tipografía, colores, radios y botones del Figma. |
+| Oscuro | No está en el Figma: la apariencia por usuario del CRM se respeta con una variante de los tokens; el verde se aclara y el texto sobre él pasa a oscuro. |
+
+**Conservado sin cambios de comportamiento:** solo un administrador asigna o reasigna, con motivo y versión; un asesor por cliente; una solicitud por anuncio; la foto de nuestra ficha y «Preparar visita» solo con vínculo exacto; abrir Zinto o llamar no registra contacto; Zinto, «pendiente»; los filtros, la página y la posición se conservan al volver de la ficha (la bandeja sigue montada, oculta, y se restaura el scroll de la ventana); ↑/↓ recorren la cola solo dentro de una ficha (con la bandeja a la vista, las flechas desplazan la página).
+
+**Diferencias que quedan, y por qué:**
+- La barra lateral y el pie del prototipo: §4.3.
+- Se mantienen seis segmentos, no cuatro: «Mías» y «Pendiente de reparto» son funcionalidad.
+- El filtro de operación sigue a la vista: es una decisión de trabajo constante.
+- La tarjeta no muestra dormitorios ni m²: la solicitud no los trae y no se inventan. En su lugar va la operación.
+- «Ver anuncio original» se llama «Ver en Idealista»: el enlace que tenemos es la conversación de Idealista, no el anuncio.
+- La fecha del diálogo sigue con el selector nativo (§5).

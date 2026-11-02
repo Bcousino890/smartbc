@@ -58,10 +58,12 @@ export function RepartoClient(props: {
   const t = useT();
   if (props.denied || !props.page || !props.advisors) {
     return (
-      <div className="mx-auto max-w-[1100px] px-6 pb-10 lg:px-10">
-        <AdminPageHeader titleKey="reparto.title" subtitleKey="reparto.subtitle" />
-        <div className="mt-8">
-          <Empty>{t("reparto.denied")}</Empty>
+      <div className="sol-root min-h-screen">
+        <div className="mx-auto max-w-[1100px] px-6 pb-10 lg:px-10">
+          <AdminPageHeader titleKey="reparto.title" subtitleKey="reparto.subtitle" welcome={false} />
+          <div className="mt-8">
+            <Empty>{t("reparto.denied")}</Empty>
+          </div>
         </div>
       </div>
     );
@@ -129,13 +131,14 @@ function RepartoTable({
   const pages = Math.max(1, Math.ceil(page.total / page.pageSize));
 
   return (
+    <div className="sol-root min-h-screen">
     <div className="mx-auto max-w-[1200px] px-4 pb-10 sm:px-6 lg:px-10">
-      <AdminPageHeader titleKey="reparto.title" subtitleKey="reparto.subtitle" />
+      <AdminPageHeader titleKey="reparto.title" subtitleKey="reparto.subtitle" welcome={false} />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Stat label={t("reparto.stat.withRule")} value={page.withRule} />
         <Stat label={t("reparto.stat.withoutRule")} value={page.withoutRule} />
-        <div className="rounded-lg border border-ink/10 bg-white px-4 py-3">
+        <div className="rounded-xl border border-ink/10 bg-white px-4 py-3">
           <p className="crm-label-sm text-ink/50">{t("reparto.stat.pending")}</p>
           <p className="crm-number mt-1 text-2xl text-ink">{pendingLeads}</p>
           {inboxHref && pendingLeads > 0 && (
@@ -186,7 +189,7 @@ function RepartoTable({
       </form>
 
       {/* Tabla */}
-      <div className={cn("mt-4 overflow-hidden rounded-lg border border-ink/10 bg-white", navPending && "opacity-60")}>
+      <div className={cn("mt-4 overflow-hidden rounded-xl border border-ink/10 bg-white", navPending && "opacity-60")}>
         {page.items.length === 0 ? (
           <div className="p-4">
             <Empty
@@ -303,7 +306,7 @@ function RepartoTable({
       {picked.size > 0 && (
         // Pegada al pie DEL CONTENIDO (no de la ventana): no se mete bajo el menú
         // lateral ni tapa la última fila.
-        <div className="sticky bottom-3 z-30 mt-4 rounded-lg border border-ink/10 bg-white/95 px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+        <div className="sticky bottom-3 z-30 mt-4 rounded-xl border border-ink/10 bg-white/95 px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-ink" aria-live="polite">
               {t("reparto.selected", { count: picked.size })}
@@ -347,12 +350,13 @@ function RepartoTable({
         />
       )}
     </div>
+    </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-ink/10 bg-white px-4 py-3">
+    <div className="rounded-xl border border-ink/10 bg-white px-4 py-3">
       <p className="crm-label-sm text-ink/50">{label}</p>
       <p className="crm-number mt-1 text-2xl text-ink">{value}</p>
     </div>
