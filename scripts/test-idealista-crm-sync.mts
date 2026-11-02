@@ -140,6 +140,13 @@ console.log("· Fallos locales tras una confirmación");
   });
   ok(crmFail.outcome.ok === true && crmFail.outcome.crmSync?.ok === false && /RESERVADO/.test(crmFail.outcome.crmSync?.message ?? ""),
      "fallo del CRM (sin etiqueta) → Idealista ok, CRM con su aviso");
+  // Modificación de un anuncio ya dado de baja: no hay nada que reflejar (0236).
+  const nothing = await runScenario(publish, SCENARIOS[0], {
+    rpc: (() => { const d = defaultRpc(); return async (fn: string) => (fn === "apply_idealista_crm_sync" ? { data: { status: "pending", reason: "nothing_confirmed" }, error: null } : d(fn)); })(),
+  });
+  ok(nothing.outcome.crmSync?.ok === true && /Nada que reflejar/.test(nothing.outcome.crmSync?.message ?? "")
+       && !nothing.outcome.local?.some((l: any) => l.step === "crm_sync"),
+     "nada que reflejar en el CRM → sin aviso local");
 }
 
 // ── 5. El reintento no llama a Idealista ────────────────────────────────────

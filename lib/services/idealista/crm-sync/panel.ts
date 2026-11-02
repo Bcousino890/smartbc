@@ -11,7 +11,7 @@ export async function loadCrmSyncStates(db: any, listingIds: string[]): Promise<
     for (let i = 0; i < listingIds.length; i += 200) {
       const { data, error } = await db
         .from("idealista_crm_sync")
-        .select("listing_id, environment, status, property_id, property_origin, smartlink_path, review_reason, review_candidates, last_error, last_error_code")
+        .select("listing_id, environment, status, property_id, property_origin, smartlink_path, review_reason, review_candidates, last_error, last_error_code, last_attempt_at")
         .in("listing_id", listingIds.slice(i, i + 200));
       if (error) return {};
       rows.push(...(data ?? []));
@@ -37,6 +37,9 @@ export async function loadCrmSyncStates(db: any, listingIds: string[]): Promise<
           .filter(Boolean),
         lastError: r.last_error ?? null,
         lastErrorCode: r.last_error_code ?? null,
+        // «pending» sin ficha tras un intento = el registro no tenía nada confirmado que
+        // reflejar (un fallo al aplicar no deja last_attempt_at: se deshace entero).
+        nothingToReflect: r.status === "pending" && !r.property_id && !!r.last_attempt_at,
       };
     }
   } catch {

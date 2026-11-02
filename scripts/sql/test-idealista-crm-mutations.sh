@@ -10,7 +10,7 @@ fails=0
 mutate() {  # nombre, archivo, suite, script de python que recibe el texto en s
   name="$1"; file="$2"; suite="$3"; py="$4"
   rm -rf "$TMPD/m"; mkdir -p "$TMPD/m"
-  cp supabase/migrations/019[2-6]_*.sql supabase/migrations/0232_*.sql supabase/migrations/0233_*.sql supabase/migrations/0234_*.sql "$TMPD/m/"
+  cp supabase/migrations/019[2-6]_*.sql supabase/migrations/0232_*.sql supabase/migrations/0233_*.sql supabase/migrations/0234_*.sql supabase/migrations/0236_*.sql "$TMPD/m/"
   python3 - "$TMPD/m/$file" "$py" <<'PY'
 import sys
 p, code = sys.argv[1], sys.argv[2]
@@ -29,6 +29,8 @@ PY
 }
 A=0233_idealista_crm_sync.sql
 B=0232_idealista_reference_boundary.sql
+# idealista_crm_target vive ahora en 0236 (redefinida sobre la de 0233).
+T=0236_idealista_crm_target_sin_decisiva.sql
 mutate "aceptar un seq ya superado (sin comprobar el esperado)" $A comportamiento \
   "s = s.replace(\"IF p_expected_seq IS DISTINCT FROM v_seq THEN\", \"IF false THEN\")"
 mutate "clasificar por property_id antes que por la asociación" $A comportamiento \
@@ -37,10 +39,12 @@ mutate "aceptar la etiqueta de otro país" $A comportamiento \
   "s = s.replace(\"WHERE country = v_country AND lower(btrim(name)) = 'reservado'\", \"WHERE lower(btrim(name)) = 'reservado'\")"
 mutate "archivar también las existentes" $A comportamiento \
   "s = s.replace(\"ELSIF v_c->>'kind' = 'existing' THEN\n        v_note := 'existing_untouched';\", \"ELSIF false THEN\n        v_note := 'existing_untouched';\")"
-mutate "aplicar aunque haya una operación abierta" $A comportamiento \
+mutate "aplicar aunque haya una operación abierta" $T comportamiento \
   "s = s.replace(\"RETURN jsonb_build_object('state', 'uncertain', 'reason', 'open_operation');\", \"NULL;\")"
-mutate "ignorar los solapes" $A comportamiento \
+mutate "ignorar los solapes" $T comportamiento \
   "s = s.replace(\"RETURN jsonb_build_object('state', 'uncertain', 'reason', 'overlap', 'seq', v_dec.seq);\", \"NULL;\")"
+mutate "volver a leer v_dec.seq sin decisiva (fallo de 0233)" $T comportamiento \
+  "s = s.replace(\"AND (v_dec_seq IS NULL OR t.seq > v_dec_seq)) THEN\", \"AND (NOT v_has_dec OR t.seq > v_dec.seq)) THEN\")"
 mutate "permitir UPDATE del registro" $A comportamiento \
   "s = s.replace(\"BEFORE UPDATE OR DELETE ON %I\", \"BEFORE DELETE ON %I\")"
 # (Quitar los bloqueos de apply_idealista_crm_sync NO rompe ninguna prueba: el

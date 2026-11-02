@@ -16,7 +16,7 @@ fails=0
 base() { $R reset; $R sql $BASE >/dev/null 2>&1; }
 migrated() {
   base
-  $R sql $M/0232_idealista_reference_boundary.sql $M/0233_idealista_crm_sync.sql >/dev/null 2>&1
+  $R sql $M/0232_idealista_reference_boundary.sql $M/0233_idealista_crm_sync.sql $M/0236_idealista_crm_target_sin_decisiva.sql >/dev/null 2>&1
   printf "%s\n" "INSERT INTO schema_migrations VALUES ('0232_idealista_reference_boundary.sql'),('0233_idealista_crm_sync.sql');" \
     "INSERT INTO property_tags (country, name) VALUES ('es', 'RESERVADO');" > "$TMP/m.sql"
   $R sql "$TMP/m.sql" >/dev/null

@@ -195,10 +195,14 @@ const MESSAGES: Record<string, string> = {
   failed: "No se pudo sincronizar la ficha del CRM.",
   pending: "Sincronización pendiente.",
 };
+// El registro no tiene nada confirmado que reflejar (p. ej. una modificación
+// de un anuncio que ya estaba de baja): no es un fallo.
+const NOTHING_CONFIRMED = "Nada que reflejar en el CRM: el anuncio no consta como publicado por la API.";
 
 function toResult(r: any): CrmSyncResult {
   const status = String(r?.status ?? "failed");
-  const ok = status === "synced" || status === "disabled" || status === "sandbox";
+  const nothing = r?.reason === "nothing_confirmed";
+  const ok = nothing || status === "synced" || status === "disabled" || status === "sandbox";
   const code = r?.error_code ? String(r.error_code) : undefined;
   return {
     ok,
@@ -208,7 +212,7 @@ function toResult(r: any): CrmSyncResult {
     propertyId: r?.property_id ?? undefined,
     origin: r?.origin ?? undefined,
     smartlinkPath: r?.smartlink_path ?? undefined,
-    message: code === "tag_missing"
+    message: nothing ? NOTHING_CONFIRMED : code === "tag_missing"
       ? "Falta la etiqueta «RESERVADO» de este país: no se ha creado nada. Créala y reintenta."
       : (MESSAGES[status] ?? status) + (code && code !== "tag_missing" ? ` (${code})` : ""),
   };
