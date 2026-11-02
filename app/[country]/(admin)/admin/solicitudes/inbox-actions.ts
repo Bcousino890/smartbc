@@ -73,8 +73,14 @@ async function log(
 
 const ADMIN_ONLY = "Solo un administrador puede asignar o reasignar. Las solicitudes nuevas se reparten solas por inmueble.";
 
-async function adminGate() {
-  return checkRoles(ADMIN_ROLES, { country: LEADS_COUNTRY, message: ADMIN_ONLY });
+async function adminGate(country: string = LEADS_COUNTRY) {
+  return checkRoles(ADMIN_ROLES, { country, message: ADMIN_ONLY });
+}
+
+/** País del cliente: el rol de administrador se comprueba en SU país (igual que la base). */
+async function clientCountry(clientId: string): Promise<string> {
+  const { data } = await db().from("profiles").select("country").eq("id", clientId).maybeSingle();
+  return data?.country === "cl" ? "cl" : "es";
 }
 
 /**
@@ -124,7 +130,7 @@ export async function assignLeadToMe(leadId: string, expectedVersion?: number): 
 export async function getReassignScope(
   clientId: string,
 ): Promise<{ ok: true; scope: ClientReassignScope } | { ok: false; error: string }> {
-  const gate = await adminGate();
+  const gate = await adminGate(await clientCountry(clientId));
   if (!gate.ok) return gate;
   const scope = await getClientReassignScope(clientId);
   if (!scope) return { ok: false, error: "Cliente no encontrado." };
@@ -146,7 +152,7 @@ export async function reassignClient(input: {
   reason: string;
   expectedVersion: number;
 }): Promise<ReassignResult> {
-  const gate = await adminGate();
+  const gate = await adminGate(await clientCountry(input.clientId));
   if (!gate.ok) return gate;
   const { data, error } = await db().rpc("reassign_client_admin", {
     p_actor: gate.profile.id,

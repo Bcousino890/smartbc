@@ -29,6 +29,7 @@
 | Lecturas puras: vínculo, reparto, errores, vistas B y C, hora de Madrid | `lib/sales-inbox/routing.ts`, `views.ts`, `time.ts` |
 | Acciones de servidor (solo administradores donde corresponde) | `solicitudes/inbox-actions.ts`, `reparto/actions.ts`, `checkRoles` en `lib/auth/guard.ts` |
 | Ingesta: vínculo exacto y reparto tras guardar | `app/api/extension/idealista-leads/route.ts` (`route_leads`) |
+| Ficha del cliente: el desplegable de asesor se sustituye por «Reasignar cliente», solo para administradores | `clientes/[id]/_components/command-header.tsx` y `clientes/[id]/actions.ts` |
 | Pantalla «Reparto comercial» (Administración) | `app/[country]/(admin)/admin/reparto/` |
 | Solicitudes: Tarjetas, Por inmueble, Prioridades, ficha nueva y diálogos | `solicitudes/_components/*` |
 
@@ -48,6 +49,7 @@ Fabricio puede revocar cualquiera de estas decisiones. Para cada una se indica d
 | D8 | Cuando una solicitud se vincula a un cliente que ya tiene **otro** asesor, hay dos casos. Si la había asignado el reparto automático (o se asignó antes de 0237), **hereda el asesor del cliente**, con auditoría del anterior y del nuevo. Si la asignó a mano un administrador, queda en **conflicto visible** y decide un administrador reasignando al cliente. *(Corregido tras la revisión de Codex; antes era conflicto en los dos casos. Ver §8.)* | Un cliente tiene un único asesor; una decisión explícita de un administrador no se deshace en silencio. |
 | D9 | Zinto: el cambio de responsable se guarda en una cola recuperable (`zinto_owner_sync`, en estado «pendiente · falta contrato»). **No se envía nada.** | El repo no tiene contrato de asignación (ver §5). |
 | D10 | Paleta y tipografía: se usan los tokens actuales del CRM (incluido el modo oscuro), no la paleta propuesta en Figma. | El propio diseño la marca «pendiente de validar con la marca». |
+| D12 | El asesor de un cliente **existente** solo cambia con «Reasignar cliente»: administrador, motivo, versión, auditoría y traslado de sus solicitudes abiertas y tareas. Incluye la ficha del cliente, que antes lo cambiaba con un desplegable para cualquiera con «Editar» en Clientes. Las **altas** de clientes nuevos siguen fijando el asesor inicial como hasta ahora (al crearlo; no es una reasignación). | Política confirmada: solo administradores asignan o reasignan. |
 | D11 | Textos nuevos en español e inglés. Francés y alemán muestran el español hasta que se traduzcan. | Es el mecanismo que ya tiene el diccionario para cualquier clave sin traducir. |
 
 ## 3. Etapas y commits
@@ -66,11 +68,12 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 |---|---|---|
 | Lint de migraciones | `python3 scripts/lint-migrations.py` | OK |
 | Tipos | `npx tsc --noEmit` | OK |
-| Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `npm run test:*` de `ci.yml` | 34/34 OK |
+| Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `run:` de `ci.yml` | 35/35 OK |
 | Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 13 bloques OK |
 | Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 119 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
 | Build de producción aislado (`.env.production` apartado sin leerse, variables ficticias) | `NEXT_BUILD_DIR=.next.qa npx next build` | OK |
-| QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 | `scripts/qa/solicitudes-reparto-qa.mts` | 30/30 OK, sin errores de consola |
+| QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 (incluida la ficha del cliente) | `scripts/qa/solicitudes-reparto-qa.mts` | 35/35 OK, sin errores de consola |
+| Scripts del recorrido de validación, ejecutados contra el Postgres desechable con los 4 escenarios simulados a nivel de base | `scripts/qa/solicitudes-reparto-pruebas/*` | Salvaguardas, siembra idempotente, 4 escenarios, comprobaciones de solo lectura y limpieza: OK |
 
 ### Criterios de aceptación de la especificación
 
@@ -116,6 +119,9 @@ Cuando estén, falta un trabajador que lea `zinto_owner_sync` (pendientes), llam
 - **Histórico.** La migración solo **clasifica** el vínculo de las solicitudes existentes y no cambia ningún enlace ni ningún responsable. Donde la evidencia contradice lo guardado, el vínculo queda en «conflicto». La especificación pide revisar una muestra de solicitudes reales antes de confiar en la nueva lectura; no se ha hecho con datos reales.
 - **Accesibilidad.** No se han probado lector de pantalla, zoom al 200 % ni contraste medido.
 - **Fase 0 del plan.** No se ha hecho la prueba con ejecutivos ni la validación de dirección. Este trabajo implementa la propuesta tal como está especificada.
+- **Un inmueble, un anuncio (esquema actual).** En las migraciones, `idealista_listings.property_id` sigue siendo único (desde 0017), así que una ficha propia solo tiene un anuncio. Una republicación que **reescriba** el código del anuncio dejará las consultas anteriores con un código que ya no está en el catálogo (`code_unresolved`, «Por verificar»). Es lo prudente, pero falta el registro histórico de publicaciones que pide la especificación. Los casos de dos anuncios por inmueble (H1/H1b) se cubren en el código y en las pruebas locales, que no tienen esa unicidad; en el esquema real no se pueden dar con fichas propias.
+- **Unificación por teléfono frente a D07.** La ingesta une automáticamente las consultas con el mismo teléfono y un nombre compatible (`autoMergeLeadsByPhone`, ya existía). La especificación pide «dos solicitudes separadas» (D07). No se ha tocado: es una decisión aparte.
+- **Versión de Postgres del VPS.** No está comprobada. El repositorio apunta a la 15.8 (imagen de `scripts/sql-tests`). La revisión estática no encuentra nada exclusivo de la 16, y la batería se puede repetir con otra versión (`BCP_PGBIN`, ver `validacion.md` §A).
 - **Fuera de alcance.** No se ha implementado la relación «Propiedad propuesta» (alternativas) ni el registro histórico de publicaciones por anuncio. El vínculo usa los anuncios que existen hoy en `idealista_listings`.
 
 ## 6. Migración `0237`
@@ -125,7 +131,11 @@ Cuando estén, falta un trabajador que lea `zinto_owner_sync` (pendientes), llam
 - **Transacciones.** No hay `BEGIN`/`COMMIT` propio y todo es idempotente (`IF NOT EXISTS` / `CREATE OR REPLACE`). La clasificación del histórico solo toca filas sin clasificar.
 - **Acceso.** Tablas con RLS sin políticas y funciones con `REVOKE` a `PUBLIC`/`anon`/`authenticated`: solo `service_role` puede usarlas.
 
-## 7. Cómo reproducir la QA visual
+## 7. Recorrido de validación en un entorno de pruebas
+
+Está en `validacion.md`: compatibilidad con la versión de Postgres del VPS, reparto por inmueble, cliente que conserva su asesor, reasignación administrativa, anuncio pendiente que se resuelve al catalogarse, limpieza y una tabla para registrar los resultados. Usa solo datos sintéticos y los scripts de `scripts/qa/solicitudes-reparto-pruebas/`, que se niegan a correr sin `entorno=pruebas` o contra los dominios de producción.
+
+## 7b. Cómo reproducir la QA visual
 
 ```sh
 node --experimental-strip-types scripts/sim/fixtures/crm-01-admin.gen.mts <scratch>/base.json <scratch>/img
@@ -214,5 +224,14 @@ Con una «Ref.» válida y un «Cod.» que todavía no existe en `idealista_list
 - H2 demuestra la intercalación concreta que causaba el interbloqueo (reparto dentro, reasignación entrando). No es una prueba exhaustiva de todas las intercalaciones posibles. La regla de orden es lo que la generaliza.
 - El trigger de pausa existe solo en la base temporal de prueba y se borra al terminar.
 - Postgres local 16 frente a la versión real del VPS, sin comprobar.
+
+### Ajuste antes del PR: el asesor del cliente desde su ficha
+
+La ficha del cliente tenía su propio selector de asesor (`assignClientAdvisor`), anterior a esta política, ligado al permiso «Editar» de Clientes. Para que haya un único camino coherente con la regla confirmada (un único asesor por cliente, que solo cambia un administrador), ahora delega en `reassignClient`: administrador (por rol en el país del cliente), motivo, versión, auditoría y traslado de solicitudes abiertas, tareas y cola de Zinto. La ficha muestra el nombre del asesor y, a los administradores, «Reasignar cliente» con el mismo diálogo de alcance.
+
+Pruebas:
+
+- Una prueba estática comprueba que `assignClientAdvisor` delega en la reasignación y que `assigned_advisor_id` solo se escribe en las altas de clientes.
+- La QA visual comprueba que la administradora ve «Reasignar cliente» con su alcance y que el asesor ve la ficha sin el control.
 
 La revisión de Codex se hizo en solo lectura. No se ha hecho la QA visual de Fabricio. Zinto sigue **pendiente**: la cola guarda el responsable vigente, pero no se envía nada hasta tener el contrato (§5).

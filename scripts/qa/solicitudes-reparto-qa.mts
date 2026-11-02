@@ -19,6 +19,7 @@ mkdirSync(OUT, { recursive: true });
 
 const OWNER = "sim-token-owner-crm01";
 const ADVISOR = "sim-token-advisor-crm01";
+const CLIENT = "00000000-0000-4000-9006-000000000001";
 const LEAD = (n: number) => `00000000-0000-4000-9003-${String(n).padStart(12, "0")}`;
 
 const results: Array<{ ok: boolean; name: string; detail?: string }> = [];
@@ -153,6 +154,16 @@ async function shot(page: Page, name: string) {
   await shot(page, "11-reparto-asignar");
   await page.keyboard.press("Escape");
   await shot(page, "12-reparto-tabla");
+
+  // Ficha del cliente: el asesor solo se cambia con «Reasignar cliente».
+  await page.goto(`${BASE}/es/admin/clientes/${CLIENT}`, { waitUntil: "networkidle" });
+  check("Cliente · administradora ve «Reasignar cliente»", (await page.getByRole("button", { name: "Reasignar cliente" }).count()) === 1);
+  check("Cliente · ya no hay desplegable de asesor", (await page.locator("header select").count()) === 0);
+  await page.getByRole("button", { name: "Reasignar cliente" }).click();
+  await page.getByText("Qué se traslada").waitFor({ timeout: 5000 }).catch(() => {});
+  check("Cliente · reasignar muestra el alcance", (await page.getByText(/solicitudes abiertas/i).count()) > 0);
+  await shot(page, "12b-cliente-reasignar");
+  await page.keyboard.press("Escape");
   await browser.close();
 }
 
@@ -170,6 +181,10 @@ async function shot(page: Page, name: string) {
   check("R02 · asesor: se le explica por qué", (await page.getByText("Solo un administrador puede cambiarlo").count()) > 0);
   check("R02 · asesor: sin entrada de menú «Reparto comercial»", (await page.getByRole("link", { name: "Reparto comercial" }).count()) === 0);
   await shot(page, "14-ficha-asesor");
+  await page.goto(`${BASE}/es/admin/clientes/${CLIENT}`, { waitUntil: "networkidle" });
+  check("R02 · asesor: la ficha del cliente se carga (no es una redirección)", (await page.getByRole("heading", { name: "Pedro Ficticio" }).count()) > 0);
+  check("R02 · asesor: en la ficha del cliente no puede reasignar", (await page.getByRole("button", { name: "Reasignar cliente" }).count()) === 0
+    && (await page.locator("header select").count()) === 0);
   await browser.close();
 }
 

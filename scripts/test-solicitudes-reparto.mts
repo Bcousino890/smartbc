@@ -13,6 +13,7 @@
  *     scripts/test-solicitudes-reparto.mts
  */
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   effectiveRoutingStatus,
@@ -206,10 +207,12 @@ t("R02 · las acciones de reparto exigen administrador antes de tocar la base", 
   const inbox = "app/[country]/(admin)/admin/solicitudes/inbox-actions.ts";
   for (const fn of ["assignLead", "bulkAssign", "reassignClient", "retryZintoSync", "getReassignScope"]) {
     const b = body(inbox, fn);
-    const gate = b.indexOf("adminGate()");
-    const firstDb = Math.min(...["db()", "rpc("].map((k) => b.indexOf(k)).filter((x) => x >= 0));
+    const gate = b.indexOf("adminGate(");
+    // Antes del gate solo se permite LEER (p. ej. el país del cliente para
+    // comprobar el rol en su país); ninguna escritura.
+    const firstWrite = Math.min(...["rpc(", ".update(", ".insert(", ".delete("].map((k) => b.indexOf(k)).filter((x) => x >= 0));
     assert.ok(gate >= 0, `${fn} sin gate de administrador`);
-    assert.ok(!Number.isFinite(firstDb) || gate < firstDb, `${fn}: el gate va antes de la base`);
+    assert.ok(!Number.isFinite(firstWrite) || gate < firstWrite, `${fn}: el gate va antes de cualquier escritura`);
   }
   // «Asignarme» delega en assignLead (mismo gate).
   assert.match(body(inbox, "assignLeadToMe"), /return assignLead\(/);
@@ -223,6 +226,25 @@ t("R02 · las acciones de reparto exigen administrador antes de tocar la base", 
   // La bandeja anterior ya no escribe el responsable a pelo.
   const legacy = readFileSync(new URL("../app/[country]/(admin)/admin/solicitudes/actions.ts", import.meta.url), "utf8");
   assert.doesNotMatch(legacy, /assigned_to:/, "la bandeja anterior no asigna sin pasar por el reparto");
+});
+
+t("R02 · el asesor de un cliente existente solo cambia por la reasignación auditada", () => {
+  // La ficha del cliente delega en reassignClient (admin + motivo + versión).
+  const ficha = body("app/[country]/(admin)/admin/clientes/[id]/actions.ts", "assignClientAdvisor");
+  assert.match(ficha, /reassignClient\(/);
+  assert.doesNotMatch(ficha, /assigned_advisor_id:/);
+  // Nadie más escribe assigned_advisor_id salvo las ALTAS de clientes nuevos
+  // (asesor inicial al crearlos), que no son una reasignación.
+  const out = execFileSync("git", ["grep", "-nE", "assigned_advisor_id\\s*[:=]", "--", "app", "lib", "components"], { encoding: "utf8" });
+  const writers = out.split("\n").filter(Boolean)
+    .filter((l) => !/select\(|\.eq\(|\.is\(|\?\?|: string|lib\/types|^\S+:\d+:\s*(\/\/|\*)/.test(l));
+  const allowed = [
+    "app/(admin)/admin/clientes/actions.ts",            // alta: asignar al asesor que crea
+    "app/api/admin/usuarios/create-with-password/route.ts", // alta de cliente
+    "app/api/admin/usuarios/create/route.ts",            // alta de cliente
+  ];
+  const unexpected = writers.filter((l) => !allowed.some((f) => l.startsWith(f + ":")));
+  assert.deepEqual(unexpected, [], "escrituras inesperadas del asesor del cliente");
 });
 
 t("R02 · la base revoca las funciones a anon y authenticated", () => {

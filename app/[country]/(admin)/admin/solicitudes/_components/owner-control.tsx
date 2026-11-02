@@ -108,7 +108,7 @@ export function OwnerControl({
       {error && <p role="alert" className="mt-1 text-xs text-rose-700">{error}</p>}
 
       {open && isAdmin && (lead.clientId ? (
-        <ReassignClientDialog lead={lead} staff={staff} onClose={() => setOpen(false)} />
+        <ReassignClientDialog clientId={lead.clientId} staff={staff} onClose={() => setOpen(false)} />
       ) : (
         <AssignLeadDialog lead={lead} staff={staff} onClose={() => setOpen(false)} />
       ))}
@@ -175,8 +175,11 @@ function AssignLeadDialog({ lead, staff, onClose }: { lead: LeadDetail; staff: S
   );
 }
 
-/** Cliente vinculado: se reasigna el cliente completo, con alcance previo. */
-function ReassignClientDialog({ lead, staff, onClose }: { lead: LeadDetail; staff: StaffRef[]; onClose: () => void }) {
+/**
+ * Se reasigna el cliente completo, con alcance previo. Lo usan la ficha de la
+ * solicitud y la ficha del cliente: es el único camino para cambiar su asesor.
+ */
+export function ReassignClientDialog({ clientId, staff, onClose }: { clientId: string; staff: StaffRef[]; onClose: () => void }) {
   const t = useT();
   const router = useRouter();
   const [scope, setScope] = useState<ClientReassignScope | null>(null);
@@ -190,7 +193,7 @@ function ReassignClientDialog({ lead, staff, onClose }: { lead: LeadDetail; staf
 
   useEffect(() => {
     let cancelled = false;
-    getReassignScope(lead.clientId as string).then((r) => {
+    getReassignScope(clientId).then((r) => {
       if (cancelled) return;
       if (r.ok) setScope(r.scope);
       else setLoadError(r.error);
@@ -198,7 +201,7 @@ function ReassignClientDialog({ lead, staff, onClose }: { lead: LeadDetail; staf
     return () => {
       cancelled = true;
     };
-  }, [lead.clientId]);
+  }, [clientId]);
 
   const submit = () =>
     scope &&

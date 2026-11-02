@@ -14,7 +14,7 @@
 // ============================================================================
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState } from "react";
 import { ArrowLeft, Mail, MapPin, Phone, Pencil, SlidersHorizontal } from "lucide-react";
 import type { ClientStage } from "@/lib/client-command-center/types";
 import type { LastActivity } from "@/lib/client-command-center/derive";
@@ -25,7 +25,7 @@ import { useT } from "@/lib/i18n/provider";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 import { PROFILE_TYPE_BY_TAG, realEmail } from "@/lib/clients/display";
-import { assignClientAdvisor } from "../actions";
+import { ReassignClientDialog } from "@/app/[country]/(admin)/admin/solicitudes/_components/owner-control";
 import { RelativeTime } from "./relative-time";
 import { StageRail } from "./stage-rail";
 import { Button, Pill } from "./ui";
@@ -41,6 +41,7 @@ export function CommandHeader({
   staff,
   lastActivity,
   canEdit,
+  canReassign = false,
   onEditClient,
   onEditPreferences,
 }: {
@@ -52,12 +53,14 @@ export function CommandHeader({
   staff: StaffRef[];
   lastActivity: LastActivity;
   canEdit: boolean;
+  /** Solo administradores reasignan el asesor del cliente (0237). */
+  canReassign?: boolean;
   onEditClient: () => void;
   onEditPreferences: () => void;
 }) {
   const t = useT();
   const config = getCountryConfig(country);
-  const [saving, startSave] = useTransition();
+  const [reassigning, setReassigning] = useState(false);
 
   const fullName = `${client.firstName} ${client.lastName}`.trim();
   const email = realEmail(client.email);
@@ -151,35 +154,24 @@ export function CommandHeader({
             <span className="crm-label-sm text-ink/40">
               {t("cc.advisor.label")}
             </span>
-            {canEdit ? (
-              <select
-                value={advisor?.id ?? ""}
-                disabled={saving}
-                onChange={(e) => {
-                  const next = e.target.value || null;
-                  startSave(async () => {
-                    const r = await assignClientAdvisor(client.id, next);
-                    if (!r.ok) alert(r.error);
-                  });
-                }}
-                className={cn(
-                  "crm-input max-w-[190px] truncate rounded-md border px-2 py-1 outline-none transition",
-                  advisor
-                    ? "border-ink/15 bg-white text-ink"
-                    : "border-amber-300 bg-amber-50 text-amber-800",
-                )}
-              >
-                <option value="">{t("cc.advisor.unassigned")}</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-xs font-medium text-ink">
-                {advisor?.name ?? t("cc.advisor.unassigned")}
-              </span>
+            {/* Un cliente tiene un único asesor y solo un administrador lo
+                cambia: con motivo, viendo antes qué se traslada (sus
+                solicitudes abiertas, tareas y la conversación de Zinto). */}
+            <span
+              className={cn(
+                "text-xs font-medium",
+                advisor ? "text-ink" : "rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-amber-800",
+              )}
+            >
+              {advisor?.name ?? t("cc.advisor.unassigned")}
+            </span>
+            {canReassign && (
+              <Button size="sm" variant="ghost" onClick={() => setReassigning(true)}>
+                {t("inbox.owner.reassignClient")}
+              </Button>
+            )}
+            {reassigning && (
+              <ReassignClientDialog clientId={client.id} staff={staff} onClose={() => setReassigning(false)} />
             )}
           </div>
         </div>

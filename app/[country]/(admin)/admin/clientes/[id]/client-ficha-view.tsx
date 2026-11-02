@@ -115,6 +115,8 @@ export type CommandCenterProps = {
   /** Anuncios de portales (extensión o pegados), contados en el servidor. */
   portalSummary: PortalLinkSummary;
   canEditClient: boolean;
+  /** Solo administradores reasignan el asesor del cliente. */
+  canReassignAdvisor?: boolean;
 };
 
 export function ClientFichaView({
@@ -241,6 +243,7 @@ export function ClientFichaView({
         staff={cc.staff}
         lastActivity={cc.lastActivity}
         canEdit={cc.canEditClient}
+        canReassign={cc.canReassignAdvisor ?? false}
         onEditClient={() => setEditClient(true)}
         onEditPreferences={() => setEditPrefs(true)}
       />

@@ -15,10 +15,16 @@
 #   … reset            (borra y crea de nuevo la base bcp_test)
 #   … sql f1.sql f2…   (aplica ficheros en orden; se para en el primer error)
 #   … stop | clean     (clean = stop + borrar SOLO esa carpeta)
+#   BCP_PGBIN=<carpeta bin de otra versión> … (opcional; por defecto Postgres 16)
 # ============================================================================
 set -eu
 
-PGBIN=/opt/homebrew/opt/postgresql@16/bin
+# BCP_PGBIN permite repetir las pruebas con OTRA versión de Postgres instalada
+# en local (p. ej. la del VPS): debe ser una carpeta con initdb, pg_ctl y psql.
+PGBIN="${BCP_PGBIN:-/opt/homebrew/opt/postgresql@16/bin}"
+for b in initdb pg_ctl psql; do
+  [ -x "$PGBIN/$b" ] || { echo "run-local: falta $PGBIN/$b" >&2; exit 2; }
+done
 DIR="${BCP_PG_DIR:-}"
 PORT="${BCP_PG_PORT:-54329}"
 case "$PORT" in

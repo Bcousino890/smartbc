@@ -6,6 +6,7 @@
 -- ============================================================================
 \set ON_ERROR_STOP 1
 SET client_min_messages = notice;
+SELECT 'Postgres ' || current_setting('server_version') AS servidor;
 
 -- ─── Personas ────────────────────────────────────────────────────────────────
 INSERT INTO auth.users (id, email) VALUES
