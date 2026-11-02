@@ -637,7 +637,8 @@ export async function bulkAssign(
   return { ok: true, results };
 }
 
-export async function bulkDiscard(leadIds: string[]): Promise<ActionResult> {
+/** Descartar en lote: reversible (Recuperar) y con el motivo en el hilo. */
+export async function bulkDiscard(leadIds: string[], reason?: string): Promise<ActionResult> {
   try {
     await assertPermission("solicitudes", "edit");
   } catch (e) {
@@ -657,7 +658,12 @@ export async function bulkDiscard(leadIds: string[]): Promise<ActionResult> {
   await db()
     .from("lead_activity")
     .insert(
-      ids.map((id) => ({ lead_id: id, author_id: profile?.id ?? null, kind: "discarded" })),
+      ids.map((id) => ({
+        lead_id: id,
+        author_id: profile?.id ?? null,
+        kind: "discarded",
+        body: reason?.trim() || null,
+      })),
     );
   refresh();
   return { ok: true };

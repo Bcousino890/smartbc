@@ -98,7 +98,9 @@ export function LeadGroupBlock({
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline gap-2">
               <span className="min-w-0 truncate text-sm font-semibold text-ink">
-                {group.title ?? t("inbox.group.noProperty")}
+                {group.kind === "unverified"
+                  ? t("inbox.group.unverified")
+                  : (group.title ?? t("inbox.group.noProperty"))}
               </span>
               <span className="ms-auto shrink-0 text-xs text-ink/35">
                 <RelativeTime at={group.lastLeadAt} locale={config.locale} />
@@ -119,8 +121,13 @@ export function LeadGroupBlock({
                 <span>{config.formatPrice(group.price, null, group.operation)}</span>
               )}
               {group.zone && <span>{group.zone}</span>}
-              {!group.propertyId && !group.listingId && (
-                <Pill tone="warning">{t("inbox.group.noFile")}</Pill>
+              {group.kind === "exact" ? (
+                <>
+                  <Pill tone="positive">{t("inbox.link.exact")}</Pill>
+                  <Pill tone="neutral">{t(`inbox.operation.${group.leadOperation ?? "unknown"}`)}</Pill>
+                </>
+              ) : (
+                <Pill tone="warning">{t("inbox.group.unverifiedHint")}</Pill>
               )}
             </span>
           </span>

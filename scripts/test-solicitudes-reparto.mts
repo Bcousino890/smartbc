@@ -26,6 +26,7 @@ import {
 } from "../lib/sales-inbox/routing.ts";
 import { groupKeyFor, priorityColumn } from "../lib/sales-inbox/views.ts";
 import { NO_WHATSAPP, type LeadListItem } from "../lib/sales-inbox/types.ts";
+import { madridDatePlus, madridParts, madridToIso } from "../lib/sales-inbox/time.ts";
 
 let n = 0;
 function t(name: string, fn: () => void) {
@@ -170,6 +171,23 @@ t("C · cerradas y nuevas viejas sin tarea no se inventan un paso", () => {
   assert.equal(priorityColumn(lead({ state: "converted" }), NOW), null);
   assert.equal(priorityColumn(lead({ state: "discarded", reasons: ["follow_up_overdue"] }), NOW), null);
   assert.equal(priorityColumn(lead({ state: "new" }), NOW), null);
+});
+
+t("tareas · hora de Madrid, también en los cambios de hora", () => {
+  // Invierno (UTC+1) y verano (UTC+2).
+  assert.equal(madridToIso("2026-11-03", "10:00"), "2026-11-03T09:00:00.000Z");
+  assert.equal(madridToIso("2026-07-15", "10:00"), "2026-07-15T08:00:00.000Z");
+  // Último domingo de octubre: a las 03:00 vuelven a ser las 02:00.
+  assert.equal(madridToIso("2026-10-25", "10:00"), "2026-10-25T09:00:00.000Z");
+  assert.equal(madridToIso("2026-10-24", "10:00"), "2026-10-24T08:00:00.000Z");
+  // Último domingo de marzo: la hora 02:xx no existe.
+  assert.equal(madridToIso("2026-03-29", "12:00"), "2026-03-29T10:00:00.000Z");
+  assert.equal(madridToIso("2026-02-31", "10:00"), null);
+  assert.equal(madridToIso("2026-11-03", "25:00"), null);
+  assert.equal(madridToIso("ayer", "10:00"), null);
+  assert.deepEqual(madridParts(new Date("2026-11-02T23:30:00Z")), { date: "2026-11-03", time: "00:30" });
+  assert.equal(madridDatePlus(new Date("2026-11-02T23:30:00Z"), 1), "2026-11-04", "«mañana» cuenta desde el día de Madrid");
+  assert.equal(madridDatePlus(new Date("2026-12-31T10:00:00Z"), 1), "2027-01-01");
 });
 
 // ─── 3 · R02 en la aplicación ────────────────────────────────────────────────

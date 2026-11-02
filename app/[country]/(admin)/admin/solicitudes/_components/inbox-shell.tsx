@@ -23,11 +23,13 @@ import type {
   CommercialState,
   InboxCounts,
   InboxGrouping,
+  InboxLayout,
   InboxSort,
   InboxView,
   LeadGroup,
   LeadListItem,
   OperationFilter,
+  PriorityBoard,
 } from "@/lib/sales-inbox/types";
 import { COMMERCIAL_STATES, INBOX_VIEWS } from "@/lib/sales-inbox/types";
 import type { StaffRef } from "@/lib/portal-links/types";
@@ -35,11 +37,12 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import { useTn } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/plural";
 import { cn } from "@/lib/utils";
-import { Button, Empty, Select } from "@/components/admin/ui/primitives";
+import { Button, Empty, Labeled, Modal, Pill, Select, TextArea } from "@/components/admin/ui/primitives";
+import { LeadCard } from "./lead-card";
 import { LeadGroupBlock } from "./lead-group";
-import { LeadRow } from "./lead-row";
 import { LeadWorkspace } from "./lead-workspace";
-import { bulkAssign, bulkDiscard, bulkSetFollowUp } from "../inbox-actions";
+import { PriorityBoardView } from "./priority-board";
+import { bulkAssign, bulkDiscard, bulkSetFollowUp, type BulkItemResult } from "../inbox-actions";
 
 /**
  * Las claves que cambian QUÉ FILAS hay. Tocar una invalida la página actual
@@ -61,6 +64,8 @@ const RESULT_SET_KEYS = new Set([
   "unmatched",
   "op",
   "group",
+  "mode",
+  "routing",
   // Reordenar sí cambia qué hay en la página 3, así que también resetea.
   "sort",
 ]);
@@ -87,6 +92,9 @@ export function InboxShell({
   staff,
   country,
   canEdit,
+  isAdmin = false,
+  layout = "cards",
+  board = null,
 }: {
   view: InboxView;
   counts: InboxCounts;
@@ -100,6 +108,10 @@ export function InboxShell({
   staff: StaffRef[];
   country: Country;
   canEdit: boolean;
+  isAdmin?: boolean;
+  /** A · Tarjetas · B · Por inmueble · C · Prioridades. Misma bandeja. */
+  layout?: InboxLayout;
+  board?: (PriorityBoard & { unplanned: number }) | null;
 }) {
   const t = useT();
   const tn = useTn();
@@ -111,9 +123,28 @@ export function InboxShell({
   const [search, setSearch] = useState(params?.get("q") ?? "");
   const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const listRef = useRef<HTMLUListElement>(null);
+  // Selección EXPLÍCITA: las casillas solo aparecen al pedirlo, para no
+  // ocupar cada tarjeta con un control que casi nunca se usa.
+  const [selectMode, setSelectMode] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const savedScroll = useRef(0);
 
   const selectedId = params?.get("lead") ?? null;
+
+  // Volver a la lista conserva la posición: al abrir una ficha se guarda el
+  // scroll y al cerrarla se restaura (en móvil la lista se oculta entera).
+  useEffect(() => {
+    if (!selectedId && listRef.current) {
+      const top = savedScroll.current;
+      requestAnimationFrame(() => {
+        if (listRef.current) listRef.current.scrollTop = top;
+      });
+    }
+  }, [selectedId]);
+  const openLead = (id: string) => {
+    if (listRef.current && !selectedId) savedScroll.current = listRef.current.scrollTop;
+    setParams({ lead: id });
+  };
 
   const setParams = useCallback(
     (patch: Record<string, string | null>, opts: { replace?: boolean } = {}) => {
@@ -244,19 +275,21 @@ export function InboxShell({
             {/* 332 consultas son 27 pisos: agruparlas cambia por completo
                 cómo se lee la bandeja, así que el conmutador va a la vista, no
                 escondido en los filtros. */}
-            <div className="flex items-center gap-0.5 rounded-md border border-ink/12 p-0.5">
-              {(["none", "property"] as InboxGrouping[]).map((g) => (
+            {/* Tres maneras de mirar la MISMA bandeja: mismos filtros,
+                misma ficha y mismas acciones. */}
+            <div role="group" aria-label={t("inbox.layout.label")} className="flex items-center gap-0.5 rounded-md border border-ink/12 p-0.5">
+              {(["cards", "property", "priorities"] as InboxLayout[]).map((l) => (
                 <button
-                  key={g}
+                  key={l}
                   type="button"
-                  onClick={() => setParams({ group: g === "none" ? null : g })}
-                  aria-pressed={grouping === g}
+                  onClick={() => setParams({ mode: l === "cards" ? null : l, group: null })}
+                  aria-pressed={layout === l}
                   className={cn(
-                    "whitespace-nowrap rounded px-2 py-1 text-xs font-medium transition",
-                    grouping === g ? "bg-ink text-cream-50" : "text-ink/50 hover:text-ink",
+                    "min-h-[32px] whitespace-nowrap rounded px-2 py-1 text-xs font-medium transition",
+                    layout === l ? "bg-ink text-cream-50" : "text-ink/50 hover:text-ink",
                   )}
                 >
-                  {t(`inbox.group.by.${g}`)}
+                  {t(`inbox.layout.${l}`)}
                 </button>
               ))}
             </div>
@@ -401,98 +434,150 @@ export function InboxShell({
         )}
       </header>
 
-      {/* ── Cuerpo: lista + workspace ── */}
+      {/* ── Cuerpo: bandeja + ficha ── */}
+      {/* Sin ficha abierta la bandeja ocupa todo el ancho (galería de 1, 2 o 3
+          columnas); con una ficha abierta se estrecha a una columna y la
+          ficha ocupa el resto. En móvil, una cosa o la otra. */}
       <div className="flex min-h-0 flex-1">
-        {/* Lista */}
         <section
           className={cn(
             "flex min-h-0 min-w-0 flex-col border-e border-ink/10 bg-white",
-            "w-full lg:w-[430px] lg:shrink-0 xl:w-[480px]",
-            selectedId && "hidden lg:flex",
+            selectedId ? "hidden lg:flex lg:w-[430px] lg:shrink-0 xl:w-[480px]" : "w-full",
           )}
         >
-          {canEdit && (
+          {layout !== "priorities" && (
             <div className="flex shrink-0 items-center gap-2 border-b border-ink/8 px-3 py-1.5">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={(e) =>
-                  setSelected(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())
-                }
-                disabled={items.length === 0}
-                aria-label={t("inbox.bulk.selectAll")}
-                className="h-3.5 w-3.5 accent-[#8a6d3b]"
-              />
-              <span className="text-xs text-ink/45">
+              {canEdit && selectMode && (
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(e) =>
+                    setSelected(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())
+                  }
+                  disabled={items.length === 0}
+                  aria-label={t("inbox.bulk.selectAll")}
+                  className="h-4 w-4 accent-[#8a6d3b]"
+                />
+              )}
+              <span className="text-xs text-ink/45" aria-live="polite">
                 {selected.size > 0
                   ? t("inbox.bulk.selected", { count: selected.size })
-                  : grouping === "property"
+                  : layout === "property"
                     ? tn("inbox.resultsGrouped", total)
                     : tn("inbox.results", total)}
               </span>
-              {pending && <span className="ms-auto text-xs text-ink/35">…</span>}
+              {pending && <span className="text-xs text-ink/35">…</span>}
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ms-auto"
+                  aria-pressed={selectMode}
+                  onClick={() => {
+                    setSelectMode((v) => !v);
+                    setSelected(new Set());
+                  }}
+                >
+                  {selectMode ? t("inbox.bulk.exitSelect") : t("inbox.bulk.select")}
+                </Button>
+              )}
             </div>
           )}
 
-          <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
-            {items.length === 0 ? (
-              <li className="p-4">
-                <Empty>{t(`inbox.empty.${view}`)}</Empty>
-              </li>
-            ) : grouping === "property" ? (
-              groups.map((g) => (
-                <LeadGroupBlock
-                  key={g.key}
-                  group={g}
-                  country={country}
-                  activeLeadId={selectedId}
-                  selected={selected}
-                  selectable={canEdit}
-                  onOpen={(id) => setParams({ lead: id })}
-                  onToggleSelect={(id, checked) =>
-                    setSelected((prev) => {
-                      const next = new Set(prev);
-                      if (checked) next.add(id);
-                      else next.delete(id);
-                      return next;
-                    })
+          <div ref={listRef} className={cn("min-h-0 flex-1 overflow-y-auto", pending && "opacity-70")}>
+            {layout === "priorities" && board ? (
+              <PriorityBoardView
+                board={board}
+                activeLeadId={selectedId}
+                locale={config.locale}
+                compact={!!selectedId}
+                onOpen={openLead}
+                onShowCards={() => setParams({ mode: null })}
+              />
+            ) : items.length === 0 ? (
+              <div className="p-4">
+                <Empty
+                  action={
+                    activeFilters > 0 || params?.get("q") ? (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSearch("");
+                          setParams({ q: null, state: null, assigned: null, type: null, intl: null, unmatched: null, op: null, routing: null });
+                        }}
+                      >
+                        {t("inbox.clearFilters")}
+                      </Button>
+                    ) : undefined
                   }
-                  onToggleGroup={(ids, checked) =>
-                    setSelected((prev) => {
-                      const next = new Set(prev);
-                      for (const id of ids) {
+                >
+                  {t(`inbox.empty.${view}`)}
+                </Empty>
+              </div>
+            ) : layout === "property" ? (
+              <ul>
+                {groups.map((g) => (
+                  <LeadGroupBlock
+                    key={g.key}
+                    group={g}
+                    country={country}
+                    activeLeadId={selectedId}
+                    selected={selected}
+                    selectable={canEdit && selectMode}
+                    onOpen={openLead}
+                    onToggleSelect={(id, checked) =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
                         if (checked) next.add(id);
                         else next.delete(id);
-                      }
-                      return next;
-                    })
-                  }
-                />
-              ))
+                        return next;
+                      })
+                    }
+                    onToggleGroup={(ids, checked) =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        for (const id of ids) {
+                          if (checked) next.add(id);
+                          else next.delete(id);
+                        }
+                        return next;
+                      })
+                    }
+                  />
+                ))}
+                <li className="px-3 py-2 text-xs text-ink/45">{t("inbox.group.rule")}</li>
+              </ul>
             ) : (
-              items.map((lead) => (
-                <LeadRow
-                  key={lead.id}
-                  lead={lead}
-                  active={lead.id === selectedId}
-                  selected={selected.has(lead.id)}
-                  selectable={canEdit}
-                  locale={config.locale}
-                  onOpen={() => setParams({ lead: lead.id })}
-                  onToggleSelect={(checked) =>
-                    setSelected((prev) => {
-                      const next = new Set(prev);
-                      if (checked) next.add(lead.id);
-                      else next.delete(lead.id);
-                      return next;
-                    })
-                  }
-                />
-              ))
+              <ul
+                className={cn(
+                  "grid gap-3 p-3",
+                  selectedId ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
+                )}
+              >
+                {items.map((lead) => (
+                  <LeadCard
+                    key={lead.id}
+                    lead={lead}
+                    active={lead.id === selectedId}
+                    locale={config.locale}
+                    selectMode={canEdit && selectMode}
+                    selected={selected.has(lead.id)}
+                    onOpen={() => openLead(lead.id)}
+                    onToggleSelect={(checked) =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(lead.id);
+                        else next.delete(lead.id);
+                        return next;
+                      })
+                    }
+                  />
+                ))}
+              </ul>
             )}
-          </ul>
+          </div>
 
-          {totalPages > 1 && (
+          {layout !== "priorities" && totalPages > 1 && (
             <nav
               aria-label={t("inbox.pagination")}
               className="flex shrink-0 items-center justify-between gap-2 border-t border-ink/8 px-3 py-2"
@@ -501,6 +586,7 @@ export function InboxShell({
                 size="sm"
                 disabled={page <= 1}
                 onClick={() => setParams({ page: String(page - 1) })}
+                aria-label={t("reparto.prev")}
               >
                 <ChevronLeft size={12} />
               </Button>
@@ -511,6 +597,7 @@ export function InboxShell({
                 size="sm"
                 disabled={page >= totalPages}
                 onClick={() => setParams({ page: String(page + 1) })}
+                aria-label={t("reparto.next")}
               >
                 <ChevronRight size={12} />
               </Button>
@@ -518,42 +605,39 @@ export function InboxShell({
           )}
         </section>
 
-        {/* Workspace */}
-        <section
-          className={cn(
-            "min-h-0 min-w-0 flex-1 bg-cream-100/30",
-            !selectedId && "hidden lg:block",
-          )}
-        >
-          {selectedLead ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setParams({ lead: null })}
-                className="flex w-full items-center gap-1.5 border-b border-ink/10 px-4 py-2 text-xs text-ink/60 lg:hidden"
-              >
-                <ArrowLeft size={14} strokeWidth={1.9} />
-                {t("inbox.backToList")}
-              </button>
-              {/* `key` por lead: sin él React reutiliza el panel al cambiar de
-                  solicitud y arrastra su estado local (el formulario de
-                  cliente con el teléfono anterior, la traducción, las notas). */}
-              <LeadWorkspace
-                key={selectedLead.id}
-                lead={selectedLead}
-                staff={staff}
-                country={country}
-                canEdit={canEdit}
-              />
-            </>
-          ) : (
-            <div className="flex h-full items-center justify-center p-8">
-              <p className="max-w-xs text-center text-xs text-ink/35">
-                {t("inbox.pickOne")}
-              </p>
-            </div>
-          )}
-        </section>
+        {/* Ficha */}
+        {selectedId && (
+          <section className="min-h-0 min-w-0 flex-1 bg-cream-100/30">
+            {selectedLead ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setParams({ lead: null })}
+                  className="flex min-h-[44px] w-full items-center gap-1.5 border-b border-ink/10 px-4 py-2 text-xs text-ink/60 lg:hidden"
+                >
+                  <ArrowLeft size={14} strokeWidth={1.9} />
+                  {t("inbox.backToList")}
+                </button>
+                {/* `key` por lead: sin él React reutiliza el panel al cambiar de
+                    solicitud y arrastra su estado local (el formulario de
+                    cliente con el teléfono anterior, la traducción, las notas). */}
+                <LeadWorkspace
+                  key={selectedLead.id}
+                  lead={selectedLead}
+                  staff={staff}
+                  country={country}
+                  canEdit={canEdit}
+                  isAdmin={isAdmin}
+                  onClose={() => setParams({ lead: null })}
+                />
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center p-8">
+                <p className="max-w-xs text-center text-xs text-ink/35">{t("inbox.pickOne")}</p>
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {/* ── Barra de lote ── */}
@@ -561,6 +645,7 @@ export function InboxShell({
         <BulkBar
           ids={[...selected]}
           staff={staff}
+          isAdmin={isAdmin}
           onDone={() => {
             setSelected(new Set());
             router.refresh();
@@ -602,25 +687,29 @@ function FilterToggle({
  * una bandeja con cientos de leads y un botón de "escribir a todos" es una
  * forma rápida de quemar la cuenta. El lote ordena el trabajo; no hace
  * campañas.
+ *
+ * Asignar en lote es de administradores y devuelve el resultado de CADA
+ * solicitud (las que tienen cliente vinculado se reasignan desde su ficha).
+ * Descartar pide motivo y confirma el alcance.
  */
 function BulkBar({
   ids,
   staff,
+  isAdmin,
   onDone,
 }: {
   ids: string[];
   staff: StaffRef[];
+  isAdmin: boolean;
   onDone: () => void;
 }) {
   const t = useT();
   const [pending, start] = useTransition();
-
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
-    start(async () => {
-      const r = await fn();
-      if (!r.ok && r.error) alert(r.error);
-      onDone();
-    });
+  const [dialog, setDialog] = useState<null | "assign" | "discard">(null);
+  const [advisor, setAdvisor] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<BulkItemResult[] | null>(null);
 
   const tomorrow = () => {
     const d = new Date();
@@ -629,39 +718,141 @@ function BulkBar({
     return d.toISOString();
   };
 
+  const close = () => {
+    setDialog(null);
+    setResults(null);
+    setError(null);
+  };
+
   return (
     <div className="shrink-0 border-t border-ink/10 bg-ink px-4 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-cream-50">
           {t("inbox.bulk.selected", { count: ids.length })}
         </span>
-        <Select
-          defaultValue=""
+        {isAdmin && (
+          <Button size="sm" disabled={pending} onClick={() => setDialog("assign")}>
+            {t("inbox.bulk.assign")}
+          </Button>
+        )}
+        <Button
+          size="sm"
           disabled={pending}
-          aria-label={t("inbox.bulk.assign")}
-          onChange={(e) => {
-            if (!e.target.value) return;
-            run(() => bulkAssign(ids, e.target.value));
-          }}
-          className="w-auto py-1 text-xs"
+          onClick={() =>
+            start(async () => {
+              const r = await bulkSetFollowUp(ids, tomorrow());
+              if (!r.ok) setError(r.error);
+              else onDone();
+            })
+          }
         >
-          <option value="">{t("inbox.bulk.assign")}</option>
-          {staff.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
-        <Button size="sm" disabled={pending} onClick={() => run(() => bulkSetFollowUp(ids, tomorrow()))}>
           {t("inbox.bulk.followUpTomorrow")}
         </Button>
-        <Button size="sm" disabled={pending} onClick={() => run(() => bulkDiscard(ids))}>
+        <Button size="sm" disabled={pending} onClick={() => setDialog("discard")}>
           {t("inbox.bulk.discard")}
         </Button>
         <Button size="sm" variant="ghost" onClick={onDone} className="ms-auto text-cream-50/70">
           {t("cc.cancel")}
         </Button>
       </div>
+      {error && !dialog && <p role="alert" className="mt-1 text-xs text-rose-200">{error}</p>}
+
+      {dialog === "assign" && (
+        <Modal
+          open
+          onClose={close}
+          title={t("inbox.bulk.assignTitle", { count: ids.length })}
+          footer={
+            results ? (
+              <Button variant="primary" onClick={() => { close(); onDone(); }}>{t("reparto.result.close")}</Button>
+            ) : (
+              <>
+                <Button onClick={close} disabled={pending}>{t("common.cancel")}</Button>
+                <Button
+                  variant="primary"
+                  disabled={pending || !advisor}
+                  onClick={() =>
+                    start(async () => {
+                      setError(null);
+                      const r = await bulkAssign(ids, advisor);
+                      if (!r.ok) setError(r.error);
+                      else setResults(r.results);
+                    })
+                  }
+                >
+                  {pending ? t("cc.saving") : t("inbox.assignDialog.confirm")}
+                </Button>
+              </>
+            )
+          }
+        >
+          {results ? (
+            <>
+              <p role="status" className="text-sm text-ink/70">
+                {t("reparto.result.summary", {
+                  ok: results.filter((r) => r.ok).length,
+                  conflicts: results.filter((r) => !r.ok).length,
+                })}
+              </p>
+              <ul className="mt-2 max-h-64 divide-y divide-ink/6 overflow-y-auto text-xs">
+                {results.filter((r) => !r.ok).map((r) => (
+                  <li key={r.id} className="py-1.5 text-rose-700">{r.error}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-ink/65">{t("inbox.bulk.assignIntro")}</p>
+              <Labeled label={t("inbox.assignDialog.advisor")} className="mt-3">
+                <Select value={advisor} onChange={(e) => setAdvisor(e.target.value)}>
+                  <option value="">{t("reparto.dialog.chooseAdvisor")}</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </Select>
+              </Labeled>
+              {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
+            </>
+          )}
+        </Modal>
+      )}
+
+      {dialog === "discard" && (
+        <Modal
+          open
+          onClose={close}
+          title={t("inbox.bulk.discardTitle", { count: ids.length })}
+          footer={
+            <>
+              <Button onClick={close} disabled={pending}>{t("common.cancel")}</Button>
+              <Button
+                variant="primary"
+                disabled={pending || !reason.trim()}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const r = await bulkDiscard(ids, reason.trim());
+                    if (!r.ok) setError(r.error);
+                    else {
+                      close();
+                      onDone();
+                    }
+                  })
+                }
+              >
+                {t("inbox.discard")}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink/65">{t("inbox.discardDialog.intro")}</p>
+          <Pill tone="warning" className="mt-2">{t("inbox.bulk.selected", { count: ids.length })}</Pill>
+          <Labeled label={t("inbox.discardDialog.reason")} className="mt-3">
+            <TextArea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Labeled>
+          {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
+        </Modal>
+      )}
     </div>
   );
 }

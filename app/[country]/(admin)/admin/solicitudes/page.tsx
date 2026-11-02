@@ -1,7 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { checkPermission, guardPage } from "@/lib/auth/guard";
-import { getInboxCounts, getInboxPage, getLeadDetail } from "@/lib/db/queries/sales-inbox";
+import { checkPermission, checkRoles, guardPage } from "@/lib/auth/guard";
+import {
+  getInboxCounts,
+  getInboxPage,
+  getLeadDetail,
+  getPriorityBoard,
+} from "@/lib/db/queries/sales-inbox";
+import { ADMIN_ROLES } from "@/lib/sales-inbox/routing";
 import { getAssignableStaff } from "@/lib/db/queries/portal-links";
 import {
   getVisitRequests,
@@ -15,6 +21,7 @@ import {
   GROUP_PAGE_SIZE,
   isCommercialState,
   isInboxGrouping,
+  isInboxLayout,
   isInboxSort,
   isInboxView,
   isOperationFilter,
@@ -47,7 +54,10 @@ export default async function SalesInboxPage({
   // usa el mismo gate que el resto del panel (rol + overrides + rol
   // personalizado + país).
   await guardPage("solicitudes", country);
-  const editGate = await checkPermission("solicitudes", "edit", { country });
+  const [editGate, adminGate] = await Promise.all([
+    checkPermission("solicitudes", "edit", { country }),
+    checkRoles(ADMIN_ROLES, { country }),
+  ]);
 
   // ── Superficie heredada ──
   //
@@ -90,7 +100,15 @@ export default async function SalesInboxPage({
   const groupParam = one(sp.group);
   const opParam = one(sp.op);
   const view = isInboxView(viewParam) ? viewParam : "needs-attention";
-  const grouping = isInboxGrouping(groupParam) ? groupParam : "none";
+  // A · Tarjetas (por defecto) · B · Por inmueble · C · Prioridades. El viejo
+  // `?group=property` sigue abriendo B: los enlaces guardados no se rompen.
+  const modeParam = one(sp.mode);
+  const layout = isInboxLayout(modeParam)
+    ? modeParam
+    : isInboxGrouping(groupParam) && groupParam === "property"
+      ? "property"
+      : "cards";
+  const grouping = layout === "property" ? "property" : "none";
 
   // El orden por prioridad es lo que necesita la cola de atención; en el resto
   // de vistas lo que se espera es una bandeja: lo más reciente arriba.
@@ -110,6 +128,7 @@ export default async function SalesInboxPage({
     international: one(sp.intl) === "1" ? true : undefined,
     unmatchedProperty: one(sp.unmatched) === "1",
     operation: isOperationFilter(opParam) ? opParam : undefined,
+    routing: one(sp.routing) === "conflict" ? "conflict" : undefined,
     page: Math.max(1, Number(one(sp.page) ?? 1) || 1),
     pageSize: grouping === "property" ? GROUP_PAGE_SIZE : DEFAULT_PAGE_SIZE,
     sort,
@@ -117,9 +136,14 @@ export default async function SalesInboxPage({
 
   const leadId = one(sp.lead) ?? null;
 
-  const [counts, pageData, staff, selectedLead] = await Promise.all([
+  const [counts, pageData, board, staff, selectedLead] = await Promise.all([
     getInboxCounts(),
-    getInboxPage(filters),
+    // El tablero de prioridades recorre su propio conjunto; la lista paginada
+    // no hace falta en ese modo.
+    layout === "priorities"
+      ? Promise.resolve({ items: [], groups: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false })
+      : getInboxPage(filters),
+    layout === "priorities" ? getPriorityBoard(filters) : Promise.resolve(null),
     getAssignableStaff(),
     leadId ? getLeadDetail(leadId) : Promise.resolve(null),
   ]);
@@ -149,6 +173,9 @@ export default async function SalesInboxPage({
       staff={staff}
       country={country}
       canEdit={editGate.ok}
+      isAdmin={adminGate.ok}
+      layout={layout}
+      board={board}
     />
   );
 }

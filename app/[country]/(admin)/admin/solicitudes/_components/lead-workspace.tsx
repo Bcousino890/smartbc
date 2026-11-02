@@ -19,15 +19,18 @@ import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
   Check,
+  ClipboardCheck,
   Copy,
   ExternalLink,
   Globe,
   Languages,
+  MoreHorizontal,
   Phone,
   Search,
   UserPlus,
   X,
 } from "lucide-react";
+import { REASON_PRIORITY } from "@/lib/sales-inbox/types";
 import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -37,20 +40,22 @@ import { PrepareVisitsButton } from "@/components/admin/viewing-collections/prep
 import {
   Button,
   Empty,
+  Labeled,
+  Modal,
   Panel,
   Pill,
-  Select,
   TextArea,
   TextInput,
   type Tone,
 } from "@/components/admin/ui/primitives";
 import { LeadAvatar } from "./lead-avatar";
+import { LinkBadge } from "./lead-card";
+import { OwnerControl } from "./owner-control";
+import { RegisterContactDialog } from "./register-contact-dialog";
 import { formatDate, formatDateTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/format";
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { translateLeadMessage } from "../actions";
 import {
-  assignLead,
-  assignLeadToMe,
   convertLeadToClient,
   findClientCandidates,
   logContact,
@@ -60,7 +65,6 @@ import {
   setFollowUp,
   setLeadDiscarded,
   snoozeFollowUp,
-  type CallOutcome,
 } from "../inbox-actions";
 import { WhatsAppLeadButton } from "../whatsapp-lead-button";
 
@@ -72,17 +76,21 @@ const STATE_TONE: Record<string, Tone> = {
   discarded: "neutral",
 };
 
+export type WorkspaceTab = "summary" | "activity" | "client";
+
 export function LeadWorkspace({
   lead,
   staff,
   country,
   canEdit,
+  isAdmin = false,
   onClose,
 }: {
   lead: LeadDetail;
   staff: StaffRef[];
   country: Country;
   canEdit: boolean;
+  isAdmin?: boolean;
   onClose?: () => void;
 }) {
   const t = useT();
@@ -90,6 +98,9 @@ export function LeadWorkspace({
   const config = getCountryConfig(country);
   const [busy, startBusy] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<WorkspaceTab>("summary");
+  const [contactOpen, setContactOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setError(null);
@@ -100,19 +111,21 @@ export function LeadWorkspace({
     });
   };
 
+  const TABS: Array<{ id: WorkspaceTab; label: string; count?: number }> = [
+    { id: "summary", label: t("inbox.tab.summary") },
+    { id: "activity", label: t("inbox.tab.activity"), count: lead.activity.length },
+    { id: "client", label: t("inbox.tab.client") },
+  ];
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* ── Cabecera ── */}
+      {/* ── Cabecera: cliente y responsable ── */}
       <header className="shrink-0 border-b border-ink/10 bg-cream-50/50 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           {/* La foto va DENTRO del bloque de identidad, no como tercer hijo
               del flex: con justify-between, un tercer hijo empujaría el
               nombre al centro en vez de dejarlo pegado a la foto. */}
           <div className="flex min-w-0 items-start gap-3">
-            {/* Foto de perfil que la extensión saca del inbox de Idealista.
-                Solo se pinta si existe: quien no tiene foto sale con
-                iniciales en Idealista, y un icono genérico aquí no aportaría
-                nada. */}
             {lead.avatarUrl && (
               <LeadAvatar
                 src={lead.avatarUrl}
@@ -121,71 +134,53 @@ export function LeadWorkspace({
               />
             )}
             <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-[22px] font-bold leading-tight text-ink">
-                {lead.name?.trim() || t("inbox.row.noName")}
-              </h2>
-              {lead.isInternational && (
-                <Globe size={13} strokeWidth={1.8} className="shrink-0 text-ink/35" />
-              )}
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink/50">
-              <Pill tone={STATE_TONE[lead.state] ?? "neutral"}>
-                {t(`inbox.state.${lead.state}`)}
-              </Pill>
-              <span>{t("inbox.source.idealista")}</span>
-              <span aria-hidden>·</span>
-              <RelativeTime at={lead.createdAt} locale={config.locale} />
-              {lead.suggestedType && !lead.leadType && (
-                <Pill tone="neutral">
-                  {t("inbox.type.suggested", { type: t(`inbox.type.${lead.suggestedType}`) })}
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-[22px] font-bold leading-tight text-ink">
+                  {lead.name?.trim() || t("inbox.row.noName")}
+                </h2>
+                {lead.isInternational && (
+                  <Globe size={13} strokeWidth={1.8} className="shrink-0 text-ink/35" aria-label={t("inbox.filter.international")} />
+                )}
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink/50">
+                <Pill tone={STATE_TONE[lead.state] ?? "neutral"}>
+                  {t(`inbox.state.${lead.state}`)}
                 </Pill>
-              )}
-              {lead.leadType && <Pill tone="neutral">{t(`inbox.type.${lead.leadType}`)}</Pill>}
-            </div>
+                <span>{t("inbox.source.idealista")}</span>
+                <span aria-hidden>·</span>
+                <RelativeTime at={lead.createdAt} locale={config.locale} />
+                {lead.suggestedType && !lead.leadType && (
+                  <Pill tone="neutral">
+                    {t("inbox.type.suggested", { type: t(`inbox.type.${lead.suggestedType}`) })}
+                  </Pill>
+                )}
+                {lead.leadType && <Pill tone="neutral">{t(`inbox.type.${lead.leadType}`)}</Pill>}
+              </div>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            {canEdit && (
-              <Select
-                value={lead.assignedTo ?? ""}
-                disabled={busy}
-                onChange={(e) => run(() => assignLead(lead.id, e.target.value || null))}
-                aria-label={t("inbox.assign.label")}
-                className={cn(
-                  "max-w-[170px] py-1 text-xs",
-                  !lead.assignedTo && "border-amber-300 bg-amber-50 text-amber-800",
-                )}
-              >
-                <option value="">{t("inbox.assign.none")}</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-            {onClose && (
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("cc.cancel")}>
-                <X size={14} />
-              </Button>
-            )}
-          </div>
+          {onClose && (
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("cc.cancel")}>
+              <X size={14} />
+            </Button>
+          )}
         </div>
 
-        {/* Contacto directo, siempre a mano */}
+        <div className="mt-2.5 border-t border-ink/8 pt-2.5">
+          <OwnerControl lead={lead} staff={staff} isAdmin={isAdmin} />
+        </div>
+
+        {/* Acciones persistentes. Abrir Zinto o llamar NO registra contacto:
+            eso solo lo hace «Registrar contacto». */}
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <Button variant="primary" onClick={() => setContactOpen(true)} className="min-h-[40px]">
+              <ClipboardCheck size={13} strokeWidth={2} />
+              {t("inbox.contact.open")}
+            </Button>
+          )}
           {lead.phone ? (
             <>
-              <a
-                href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/50 hover:text-ink"
-              >
-                <Phone size={11} strokeWidth={2} className="text-gold" />
-                {lead.phone}
-              </a>
-              <CopyPhoneButton phone={lead.phone} />
               <WhatsAppLeadButton
                 phone={lead.phone}
                 name={lead.name}
@@ -193,102 +188,354 @@ export function LeadWorkspace({
                 propertyTitle={lead.propertyTitle}
                 leadId={lead.id}
               />
-              <ZintoStatus
-                lead={lead}
-                locale={config.locale}
-                canEdit={canEdit}
-                busy={busy}
-                onRun={run}
-              />
+              <a
+                href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/50 hover:text-ink"
+              >
+                <Phone size={11} strokeWidth={2} className="text-gold" />
+                {t("inbox.call")} · {lead.phone}
+              </a>
+              <CopyPhoneButton phone={lead.phone} />
             </>
           ) : (
             <Pill tone="warning">{t("inbox.reason.missing_contact")}</Pill>
           )}
-          <a
-            href={lead.idealistaThreadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-ink/45 transition hover:text-ink"
-          >
-            {t("inbox.openThread")}
-            <ExternalLink size={10} strokeWidth={2} />
-          </a>
-          {canEdit && (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => run(() => setLeadDiscarded(lead.id, lead.state !== "discarded"))}
-              className="ms-auto"
-            >
-              {lead.state === "discarded" ? t("inbox.restore") : t("inbox.discard")}
-            </Button>
-          )}
+          <MoreActions
+            lead={lead}
+            canEdit={canEdit}
+            busy={busy}
+            onDiscard={() => setDiscardOpen(true)}
+            onRestore={() => run(() => setLeadDiscarded(lead.id, false))}
+          />
         </div>
-
-        {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
-      </header>
-
-      {/* ── Cuerpo ── */}
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        {lead.duplicates.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-            <p className="text-xs font-medium text-amber-800">
-              {t("inbox.duplicate.title", { count: lead.duplicates.length })}
-            </p>
-            <p className="mt-0.5 text-xs leading-relaxed text-amber-800/70">
-              {t("inbox.duplicate.hint")}
-            </p>
-            <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900/80">
-              {lead.duplicates.map((d) => (
-                <li key={d.id} className="truncate">
-                  {d.name?.trim() || t("inbox.row.noName")}
-                  {d.propertyTitle ? ` · ${d.propertyTitle}` : ""}
-                </li>
-              ))}
-            </ul>
-            {canEdit && (
-              <Button
-                size="sm"
-                className="mt-2"
-                disabled={busy}
-                onClick={() =>
-                  startBusy(async () => {
-                    setError(null);
-                    const r = await mergeSamePhoneLeads(lead.id);
-                    if (!r.ok) {
-                      setError(r.error);
-                      return;
-                    }
-                    // La unida puede ser esta misma: se abre la que sobrevive.
-                    const qs = new URLSearchParams(window.location.search);
-                    qs.set("lead", r.survivorId);
-                    router.replace(`?${qs.toString()}`, { scroll: false });
-                    router.refresh();
-                  })
-                }
-              >
-                {t("inbox.duplicate.merge", { count: lead.duplicates.length + 1 })}
-              </Button>
-            )}
+        {lead.phone && (
+          <div className="mt-1.5">
+            <ZintoStatus lead={lead} locale={config.locale} canEdit={canEdit} busy={busy} onRun={run} />
           </div>
         )}
 
-        <Enquiry lead={lead} />
+        {error && <p role="alert" className="mt-2 text-xs text-rose-600">{error}</p>}
 
-        <PropertyContext lead={lead} country={country} canEdit={canEdit} onRun={run} busy={busy} />
+        {/* Pestañas */}
+        <div role="tablist" aria-label={t("inbox.tab.label")} className="-mb-3 mt-3 flex gap-1">
+          {TABS.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              role="tab"
+              id={`ws-tab-${x.id}`}
+              aria-selected={tab === x.id}
+              aria-controls={`ws-panel-${x.id}`}
+              onClick={() => setTab(x.id)}
+              className={cn(
+                "relative px-3 py-2 text-xs font-medium transition-colors",
+                tab === x.id ? "text-ink" : "text-ink/45 hover:text-ink/75",
+              )}
+            >
+              {x.label}
+              {x.count ? <span className="ms-1 text-ink/40">{x.count}</span> : null}
+              <span
+                aria-hidden
+                className={cn("absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-ink", tab === x.id ? "opacity-100" : "opacity-0")}
+              />
+            </button>
+          ))}
+        </div>
+      </header>
 
-        <OtherEnquiries lead={lead} />
+      {/* ── Cuerpo ── */}
+      <div
+        role="tabpanel"
+        id={`ws-panel-${tab}`}
+        aria-labelledby={`ws-tab-${tab}`}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4"
+      >
+        {tab === "summary" && (
+          <>
+            <NextStep lead={lead} locale={config.locale} canEdit={canEdit} onRegister={() => setContactOpen(true)} />
+            <Enquiry lead={lead} />
+            <PropertyContext lead={lead} country={country} canEdit={canEdit} onRun={run} busy={busy} />
+            <OtherEnquiries lead={lead} />
+          </>
+        )}
 
-        <ClientSection lead={lead} country={country} canEdit={canEdit} />
+        {tab === "activity" && (
+          <>
+            {canEdit && <FollowUp lead={lead} locale={config.locale} onRun={run} busy={busy} />}
+            {canEdit && <ContactLog lead={lead} onRun={run} busy={busy} />}
+            <Activity lead={lead} locale={config.locale} />
+            <AssignmentHistory lead={lead} locale={config.locale} />
+          </>
+        )}
 
-        {canEdit && <ContactLog lead={lead} onRun={run} busy={busy} />}
-
-        {canEdit && <FollowUp lead={lead} locale={config.locale} onRun={run} busy={busy} />}
-
-        <Activity lead={lead} locale={config.locale} />
+        {tab === "client" && (
+          <>
+            {lead.duplicates.length > 0 && (
+              <Duplicates lead={lead} canEdit={canEdit} busy={busy} onError={setError} startBusy={startBusy} />
+            )}
+            <ClientSection lead={lead} country={country} canEdit={canEdit} />
+            <Evidence lead={lead} />
+          </>
+        )}
       </div>
+
+      {contactOpen && (
+        <RegisterContactDialog lead={lead} locale={config.locale} onClose={() => setContactOpen(false)} />
+      )}
+      {discardOpen && (
+        <DiscardDialog
+          onClose={() => setDiscardOpen(false)}
+          onConfirm={(reason) => {
+            setDiscardOpen(false);
+            run(() => setLeadDiscarded(lead.id, true, reason));
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Siguiente paso ──────────────────────────────────────────────────────────
+
+/** UN siguiente paso, con su porqué. Las pistas de calidad van debajo. */
+function NextStep({
+  lead,
+  locale,
+  canEdit,
+  onRegister,
+}: {
+  lead: LeadDetail;
+  locale: string;
+  canEdit: boolean;
+  onRegister: () => void;
+}) {
+  const t = useT();
+  const sorted = lead.reasons.slice().sort((a, b) => REASON_PRIORITY[a] - REASON_PRIORITY[b]);
+  const top = sorted.find((r) => REASON_PRIORITY[r] <= 2);
+  const hints = sorted.filter((r) => REASON_PRIORITY[r] === 3);
+  const closed = lead.state === "converted" || lead.state === "discarded";
+
+  return (
+    <Panel title={t("inbox.next.title")}>
+      {closed ? (
+        <p className="text-sm text-ink/60">{t(`inbox.next.closed.${lead.state}`)}</p>
+      ) : top ? (
+        <p className="text-sm font-medium text-ink">{t(`inbox.next.do.${top}`)}</p>
+      ) : lead.nextActionAt ? (
+        <p className="text-sm text-ink/75">
+          {t("inbox.next.scheduled", { when: formatDateTime(lead.nextActionAt, locale) })}
+          {lead.nextActionNote ? ` · ${lead.nextActionNote}` : ""}
+        </p>
+      ) : (
+        <p className="text-sm text-ink/60">{t("inbox.next.none")}</p>
+      )}
+      {top && lead.nextActionAt && (
+        <p className="mt-1 text-xs text-ink/55">
+          {formatDateTime(lead.nextActionAt, locale)}
+          {lead.nextActionNote ? ` · ${lead.nextActionNote}` : ""}
+        </p>
+      )}
+      {canEdit && !closed && (
+        <Button size="sm" className="mt-2" onClick={onRegister}>
+          {t("inbox.contact.open")}
+        </Button>
+      )}
+      <p className="mt-2 text-xs text-ink/45">{t("inbox.contact.notByOpening")}</p>
+      {hints.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-1.5 border-t border-ink/8 pt-2">
+          {hints.map((h) => (
+            <li key={h}><Pill tone="neutral">{t(`inbox.reason.${h}`)}</Pill></li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+// ─── Más acciones ────────────────────────────────────────────────────────────
+
+/** Lo infrecuente, fuera de la vista: anuncio original y descartar. */
+function MoreActions({
+  lead,
+  canEdit,
+  busy,
+  onDiscard,
+  onRestore,
+}: {
+  lead: LeadDetail;
+  canEdit: boolean;
+  busy: boolean;
+  onDiscard: () => void;
+  onRestore: () => void;
+}) {
+  const t = useT();
+  return (
+    <details className="relative ms-auto">
+      <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/70 hover:border-gold/50 [&::-webkit-details-marker]:hidden">
+        <MoreHorizontal size={13} /> {t("inbox.more")}
+      </summary>
+      <div className="absolute end-0 z-20 mt-1 w-56 rounded-md border border-ink/10 bg-white p-1 shadow-lg">
+        <a
+          href={lead.idealistaThreadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between gap-2 rounded px-2.5 py-2 text-xs text-ink/75 hover:bg-ink/[0.04]"
+        >
+          {t("inbox.openThread")}
+          <ExternalLink size={11} strokeWidth={2} />
+        </a>
+        {canEdit && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={lead.state === "discarded" ? onRestore : onDiscard}
+            className="flex w-full items-center rounded px-2.5 py-2 text-left text-xs text-ink/75 hover:bg-ink/[0.04] disabled:opacity-50"
+          >
+            {lead.state === "discarded" ? t("inbox.restore") : t("inbox.discardWithReason")}
+          </button>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function DiscardDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (reason: string) => void }) {
+  const t = useT();
+  const [reason, setReason] = useState("");
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t("inbox.discardDialog.title")}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("common.cancel")}</Button>
+          <Button variant="primary" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+            {t("inbox.discard")}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-ink/65">{t("inbox.discardDialog.intro")}</p>
+      <Labeled label={t("inbox.discardDialog.reason")} className="mt-3">
+        <TextArea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} required />
+      </Labeled>
+    </Modal>
+  );
+}
+
+// ─── Duplicados ──────────────────────────────────────────────────────────────
+
+function Duplicates({
+  lead,
+  canEdit,
+  busy,
+  onError,
+  startBusy,
+}: {
+  lead: LeadDetail;
+  canEdit: boolean;
+  busy: boolean;
+  onError: (e: string | null) => void;
+  startBusy: (fn: () => Promise<void>) => void;
+}) {
+  const t = useT();
+  const router = useRouter();
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+      <p className="text-xs font-medium text-amber-800">
+        {t("inbox.duplicate.title", { count: lead.duplicates.length })}
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed text-amber-800/70">{t("inbox.duplicate.hint")}</p>
+      <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900/80">
+        {lead.duplicates.map((d) => (
+          <li key={d.id} className="truncate">
+            {d.name?.trim() || t("inbox.row.noName")}
+            {d.propertyTitle ? ` · ${d.propertyTitle}` : ""}
+          </li>
+        ))}
+      </ul>
+      {canEdit && (
+        <Button
+          size="sm"
+          className="mt-2"
+          disabled={busy}
+          onClick={() =>
+            startBusy(async () => {
+              onError(null);
+              const r = await mergeSamePhoneLeads(lead.id);
+              if (!r.ok) {
+                onError(r.error);
+                return;
+              }
+              // La unida puede ser esta misma: se abre la que sobrevive.
+              const qs = new URLSearchParams(window.location.search);
+              qs.set("lead", r.survivorId);
+              router.replace(`?${qs.toString()}`, { scroll: false });
+              router.refresh();
+            })
+          }
+        >
+          {t("inbox.duplicate.merge", { count: lead.duplicates.length + 1 })}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── Evidencia del origen ────────────────────────────────────────────────────
+
+/** Lo que llegó de Idealista, tal cual. Es lo que permite revisar un vínculo. */
+function Evidence({ lead }: { lead: LeadDetail }) {
+  const t = useT();
+  return (
+    <Panel title={t("inbox.evidence.title")}>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <dt className="text-ink/45">{t("inbox.evidence.source")}</dt>
+        <dd className="text-ink/80">Idealista</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.ref")}</dt>
+        <dd className="text-ink/80">{lead.propertyRef ?? t("inbox.evidence.notReceived")}</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.code")}</dt>
+        <dd className="text-ink/80">{lead.idealistaCode ?? t("inbox.evidence.notReceived")}</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.atEnquiry")}</dt>
+        <dd className="text-ink/80">{[lead.propertyTitle, lead.propertyPrice].filter(Boolean).join(" · ") || "—"}</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.link")}</dt>
+        <dd><LinkBadge status={lead.linkStatus} /></dd>
+        <dt className="text-ink/45">{t("inbox.evidence.thread")}</dt>
+        <dd>
+          <a href={lead.idealistaThreadUrl} target="_blank" rel="noopener noreferrer" className="text-gold-dark underline-offset-2 hover:underline">
+            {t("inbox.openThread")}
+          </a>
+        </dd>
+      </dl>
+    </Panel>
+  );
+}
+
+// ─── Historial de responsable ────────────────────────────────────────────────
+
+function AssignmentHistory({ lead, locale }: { lead: LeadDetail; locale: string }) {
+  const t = useT();
+  if (lead.assignmentHistory.length === 0) return null;
+  return (
+    <Panel title={t("inbox.history.title")} count={lead.assignmentHistory.length}>
+      <ul className="space-y-2">
+        {lead.assignmentHistory.map((e) => (
+          <li key={e.id} className="text-xs">
+            <p className="text-ink/80">
+              {t(`inbox.history.kind.${e.kind}`)}
+              {(e.previousName || e.newName) && (
+                <span className="text-ink/55"> · {e.previousName ?? "—"} → {e.newName ?? "—"}</span>
+              )}
+              {e.reason && <span className="text-ink/50"> · {e.reason}</span>}
+            </p>
+            <p className="text-ink/40">
+              {formatDateTime(e.occurredAt, locale)} · {e.actorName ?? t("inbox.history.system")}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -433,6 +680,8 @@ function PropertyContext({
   const config = getCountryConfig(country);
   const [matching, setMatching] = useState(false);
 
+  const exact = lead.linkStatus === "exact";
+
   if (lead.property) {
     const p = lead.property;
     // Una ficha propia se abre en /propiedades/[slug]; un anuncio de Idealista
@@ -447,13 +696,18 @@ function PropertyContext({
         action={
           canEdit ? (
             <Button size="sm" variant="ghost" onClick={() => setMatching((v) => !v)}>
-              {t("inbox.property.change")}
+              {t("inbox.property.review")}
             </Button>
           ) : null
         }
       >
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <LinkBadge status={lead.linkStatus} />
+          {!exact && <span className="text-xs text-amber-800">{t("inbox.property.unverifiedHint")}</span>}
+        </div>
         <div className="flex gap-3">
-          {p.coverUrl && (
+          {/* La foto de NUESTRA ficha solo se afirma con vínculo exacto. */}
+          {exact && p.coverUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={p.coverUrl}
@@ -492,7 +746,13 @@ function PropertyContext({
                 {t("inbox.property.open")}
                 <ArrowUpRight size={10} strokeWidth={2} />
               </Link>
-              <PrepareVisitsButton source="idealista" sourceId={lead.id} compact />
+              {/* Preparar visita exige el inmueble CONFIRMADO: con un vínculo
+                  sin evidencia sería organizar la visita a un piso supuesto. */}
+              {exact ? (
+                <PrepareVisitsButton source="idealista" sourceId={lead.id} compact />
+              ) : (
+                <span className="self-center text-xs text-ink/45">{t("inbox.property.visitNeedsExact")}</span>
+              )}
             </div>
           </div>
         </div>
@@ -524,7 +784,10 @@ function PropertyContext({
           {lead.propertyPrice && (
             <p className="text-xs text-ink/45">{lead.propertyPrice}</p>
           )}
-          <p className="mt-1 text-xs text-amber-700">{t("inbox.property.unmatched")}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-amber-700">
+            <LinkBadge status={lead.linkStatus} />
+            {t("inbox.property.unmatched")}
+          </p>
           {canEdit && (
             <div className="mt-2 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => setMatching((v) => !v)}>
@@ -560,6 +823,7 @@ function PropertyPicker({
 }) {
   const t = useT();
   const [q, setQ] = useState("");
+  const [reason, setReason] = useState("");
   const [results, setResults] = useState<
     Array<{ id: string; title: string; reference: string | null }>
   >([]);
@@ -580,26 +844,33 @@ function PropertyPicker({
     };
   }, [q]);
 
+  // «Revisar vínculo» es una corrección con evidencia: sin motivo no se
+  // puede elegir. El anuncio consultado queda en el historial (auditoría).
   return (
-    <div className="mt-3 border-t border-ink/8 pt-3">
+    <div className="mt-3 space-y-2 border-t border-ink/8 pt-3">
+      <p className="text-xs text-ink/55">{t("inbox.property.reviewHint")}</p>
+      <Labeled label={t("inbox.property.reviewReason")}>
+        <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("inbox.property.reviewReasonPlaceholder")} />
+      </Labeled>
       <TextInput
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={t("inbox.property.searchPlaceholder")}
-        autoFocus
+        aria-label={t("inbox.property.searchPlaceholder")}
       />
-      {searching && <p className="mt-1.5 text-xs text-ink/40">{t("inbox.searching")}</p>}
+      {searching && <p className="text-xs text-ink/40">{t("inbox.searching")}</p>}
       {results.length > 0 && (
-        <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+        <ul className="max-h-52 space-y-1 overflow-y-auto">
           {results.map((p) => (
             <li key={p.id}>
               <button
                 type="button"
+                disabled={!reason.trim()}
                 onClick={() => {
-                  onRun(() => matchLeadProperty(leadId, p.id));
+                  onRun(() => matchLeadProperty(leadId, p.id, reason));
                   onDone();
                 }}
-                className="flex w-full items-center justify-between gap-2 rounded border border-ink/8 px-2.5 py-1.5 text-left text-xs transition hover:border-gold/45"
+                className="flex w-full items-center justify-between gap-2 rounded border border-ink/8 px-2.5 py-1.5 text-left text-xs transition hover:border-gold/45 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="min-w-0 truncate text-ink">{p.title}</span>
                 {p.reference && (
@@ -609,6 +880,9 @@ function PropertyPicker({
             </li>
           ))}
         </ul>
+      )}
+      {!reason.trim() && results.length > 0 && (
+        <p className="text-xs text-amber-700">{t("inbox.property.reasonFirst")}</p>
       )}
     </div>
   );
@@ -961,6 +1235,10 @@ function ZintoStatus({
 
 // ─── Registro de contacto ────────────────────────────────────────────────────
 
+/**
+ * Notas sueltas desde Actividad. Los resultados de contacto (habló, no
+ * contesta, email…) se registran con «Registrar contacto», con su tarea.
+ */
 function ContactLog({
   lead,
   onRun,
@@ -973,38 +1251,14 @@ function ContactLog({
   const t = useT();
   const [note, setNote] = useState("");
 
-  const outcomes: CallOutcome[] = ["answered", "no_answer", "callback"];
-
   return (
-    <Panel title={t("inbox.log.title")}>
-      {/* Abrir `tel:` no marca nada: que suene el teléfono no es haber
-          hablado, y de esa diferencia depende el estado del lead. */}
-      <p className="text-xs text-ink/45">{t("inbox.log.callHint")}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {outcomes.map((o) => (
-          <Button
-            key={o}
-            size="sm"
-            disabled={busy}
-            onClick={() => onRun(() => logContact(lead.id, "call", { outcome: o }))}
-          >
-            {t(`inbox.log.call.${o}`)}
-          </Button>
-        ))}
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={() => onRun(() => logContact(lead.id, "email"))}
-        >
-          {t("inbox.log.email")}
-        </Button>
-      </div>
-
-      <div className="mt-3 flex gap-2">
+    <Panel title={t("inbox.notes.title")}>
+      <div className="flex gap-2">
         <TextInput
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={t("inbox.log.notePlaceholder")}
+          aria-label={t("inbox.notes.title")}
         />
         <Button
           size="sm"
