@@ -457,7 +457,10 @@ export async function POST(req: Request) {
     results.push({ conversationId: lead.conversation_id, action: existing ? "updated" : "inserted" });
   }
 
-  const { error: upsertError } = await db.from("idealista_leads").upsert(rows, { onConflict: "conversation_id" });
+  const { data: upserted, error: upsertError } = await db
+    .from("idealista_leads")
+    .upsert(rows, { onConflict: "conversation_id" })
+    .select("id");
   if (upsertError) {
     console.error("idealista-leads upsert error:", upsertError);
     return Response.json(
@@ -482,6 +485,36 @@ export async function POST(req: Request) {
     console.error("idealista-leads auto-merge error:", err);
   }
 
+  // Vínculo exacto + reparto por inmueble (route_leads, migración 0237).
+  // Va DESPUÉS de unificar: una absorbida no se reparte (route_lead la salta)
+  // y la superviviente ya lleva el responsable que tuviera. Reprocesar el
+  // mismo lead no duplica nada. Best-effort: si falla, la solicitud queda sin
+  // responsable y se ve en «Pendiente de reparto», como cualquier otra.
+  const routing = { assigned: 0, pending: 0 };
+  try {
+    const ids = ((upserted ?? []) as Array<{ id: string }>).map((r) => r.id);
+    if (ids.length > 0) {
+      const { data: routed, error: routeError } = await db.rpc("route_leads", { p_leads: ids });
+      if (routeError) throw routeError;
+      for (const r of (routed ?? []) as Array<{ outcome?: string }>) {
+        if (r.outcome === "rule" || r.outcome === "inherited") routing.assigned += 1;
+        else if (r.outcome === "pending" || r.outcome === "conflict") routing.pending += 1;
+      }
+    }
+  } catch (err) {
+    console.error("idealista-leads routing error:", err);
+  }
+
+  // Consultas que llegaron con un «Cod.» que entonces no estaba en el
+  // catálogo y que ahora sí (publicación recibida tarde): se reprocesan para
+  // resolver el anuncio exacto y repartirlas. Acotado y best-effort.
+  try {
+    const { error: reconcileError } = await db.rpc("reconcile_unresolved_code_leads", { p_limit: 50 });
+    if (reconcileError) throw reconcileError;
+  } catch (err) {
+    console.error("idealista-leads reconcile error:", err);
+  }
+
   return Response.json(
     {
       ok: true,
@@ -491,6 +524,9 @@ export async function POST(req: Request) {
       // que quede rastro en los logs de qué se fusionó y qué se bloqueó.
       mergedLeads: mergeSummary.merged,
       mergeBlocked: mergeSummary.blocked,
+      // Cuántas se repartieron solas y cuántas quedan para un administrador.
+      routedAssigned: routing.assigned,
+      routedPending: routing.pending,
       results,
     },
     { headers: corsHeaders() },

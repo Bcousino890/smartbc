@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================================
-// LEAD WORKSPACE — el panel derecho.
+// LEAD WORKSPACE — la ficha de una solicitud (página propia, Figma A02).
 //
 // Todo lo que hace falta para trabajar un lead, sin abrir un modal por acción y
 // sin salir de la pantalla. El orden responde a cómo se trabaja de verdad:
@@ -19,15 +19,19 @@ import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
   Check,
+  ChevronLeft,
+  ClipboardCheck,
   Copy,
   ExternalLink,
   Globe,
   Languages,
+  MoreHorizontal,
   Phone,
   Search,
   UserPlus,
-  X,
 } from "lucide-react";
+import { REASON_PRIORITY } from "@/lib/sales-inbox/types";
+import { fichaActions } from "@/lib/sales-inbox/views";
 import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -37,20 +41,22 @@ import { PrepareVisitsButton } from "@/components/admin/viewing-collections/prep
 import {
   Button,
   Empty,
+  Labeled,
+  Modal,
   Panel,
   Pill,
-  Select,
   TextArea,
   TextInput,
   type Tone,
 } from "@/components/admin/ui/primitives";
 import { LeadAvatar } from "./lead-avatar";
+import { LinkBadge } from "./lead-card";
+import { OwnerControl } from "./owner-control";
+import { RegisterContactDialog } from "./register-contact-dialog";
 import { formatDate, formatDateTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/format";
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { translateLeadMessage } from "../actions";
 import {
-  assignLead,
-  assignLeadToMe,
   convertLeadToClient,
   findClientCandidates,
   logContact,
@@ -60,7 +66,6 @@ import {
   setFollowUp,
   setLeadDiscarded,
   snoozeFollowUp,
-  type CallOutcome,
 } from "../inbox-actions";
 import { WhatsAppLeadButton } from "../whatsapp-lead-button";
 
@@ -72,17 +77,24 @@ const STATE_TONE: Record<string, Tone> = {
   discarded: "neutral",
 };
 
+export type WorkspaceTab = "summary" | "activity" | "client";
+
 export function LeadWorkspace({
   lead,
   staff,
   country,
   canEdit,
+  isAdmin = false,
+  backLabel,
   onClose,
 }: {
   lead: LeadDetail;
   staff: StaffRef[];
   country: Country;
   canEdit: boolean;
+  isAdmin?: boolean;
+  /** «Volver a tarjetas» / «Volver a por piso» / «Volver a prioridades». */
+  backLabel?: string;
   onClose?: () => void;
 }) {
   const t = useT();
@@ -90,6 +102,9 @@ export function LeadWorkspace({
   const config = getCountryConfig(country);
   const [busy, startBusy] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<WorkspaceTab>("summary");
+  const [contactOpen, setContactOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setError(null);
@@ -100,195 +115,562 @@ export function LeadWorkspace({
     });
   };
 
+  const TABS: Array<{ id: WorkspaceTab; label: string; count?: number }> = [
+    { id: "summary", label: t("inbox.tab.summary") },
+    { id: "activity", label: t("inbox.tab.activity"), count: lead.activity.length },
+    { id: "client", label: t("inbox.tab.client") },
+  ];
+  const name = lead.name?.trim() || t("inbox.row.noName");
+  const back = backLabel ?? t("inbox.backToList");
+  const listingRef = lead.propertyRef ?? lead.idealistaCode;
+  // Las acciones de trabajo no dependen del estado (cliente vinculado o
+  // descartada siguen pudiendo contactarse): ver `fichaActions`.
+  const actions = fichaActions(lead, canEdit);
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* ── Cabecera ── */}
-      <header className="shrink-0 border-b border-ink/10 bg-cream-50/50 px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
-          {/* La foto va DENTRO del bloque de identidad, no como tercer hijo
-              del flex: con justify-between, un tercer hijo empujaría el
-              nombre al centro en vez de dejarlo pegado a la foto. */}
-          <div className="flex min-w-0 items-start gap-3">
-            {/* Foto de perfil que la extensión saca del inbox de Idealista.
-                Solo se pinta si existe: quien no tiene foto sale con
-                iniciales en Idealista, y un icono genérico aquí no aportaría
-                nada. */}
-            {lead.avatarUrl && (
-              <LeadAvatar
-                src={lead.avatarUrl}
-                name={lead.name}
-                className="mt-0.5 h-11 w-11 rounded-full object-cover ring-1 ring-ink/10"
-              />
-            )}
-            <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-[22px] font-bold leading-tight text-ink">
-                {lead.name?.trim() || t("inbox.row.noName")}
-              </h2>
+    <div className="mx-auto max-w-[1400px]">
+      {/* ── Miga y vuelta ── */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="hidden min-w-0 truncate text-sm text-sol-muted sm:block">
+          {onClose ? (
+            <button type="button" onClick={onClose} className="hover:text-sol-action hover:underline">
+              {t("inbox.title")}
+            </button>
+          ) : (
+            t("inbox.title")
+          )}
+          <span aria-hidden> / </span>
+          {name}
+        </p>
+        {onClose && (
+          <>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex min-h-[44px] items-center gap-1 sol-ui font-semibold text-sol-action sm:hidden"
+            >
+              <ChevronLeft size={18} strokeWidth={2.2} /> {back}
+            </button>
+            <Button onClick={onClose} className="hidden shrink-0 sm:inline-flex sm:min-w-[200px]">
+              {back}
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* ── Cabecera: persona, responsable y conversación ── */}
+      <header className="mt-3 flex flex-col gap-5 border-b border-sol-line pb-6 lg:flex-row lg:items-start lg:justify-between">
+        {/* La foto va DENTRO del bloque de identidad: con justify-between, un
+            tercer hijo empujaría el nombre al centro. */}
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          {lead.avatarUrl && (
+            <LeadAvatar
+              src={lead.avatarUrl}
+              name={lead.name}
+              className="mt-1 h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-sol-line"
+            />
+          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <h1 className="min-w-0 break-words sol-name font-bold leading-tight text-sol-ink">{name}</h1>
+              <Pill tone={STATE_TONE[lead.state] ?? "neutral"}>{t(`inbox.state.${lead.state}`)}</Pill>
               {lead.isInternational && (
-                <Globe size={13} strokeWidth={1.8} className="shrink-0 text-ink/35" />
+                <Globe size={16} strokeWidth={1.8} className="shrink-0 text-sol-faint" aria-label={t("inbox.filter.international")} />
               )}
             </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink/50">
-              <Pill tone={STATE_TONE[lead.state] ?? "neutral"}>
-                {t(`inbox.state.${lead.state}`)}
-              </Pill>
+            <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 sol-ui text-sol-muted">
               <span>{t("inbox.source.idealista")}</span>
               <span aria-hidden>·</span>
               <RelativeTime at={lead.createdAt} locale={config.locale} />
+              {listingRef && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{listingRef}</span>
+                </>
+              )}
               {lead.suggestedType && !lead.leadType && (
-                <Pill tone="neutral">
+                <Pill tone="neutral" className="ms-1">
                   {t("inbox.type.suggested", { type: t(`inbox.type.${lead.suggestedType}`) })}
                 </Pill>
               )}
-              {lead.leadType && <Pill tone="neutral">{t(`inbox.type.${lead.leadType}`)}</Pill>}
-            </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            {canEdit && (
-              <Select
-                value={lead.assignedTo ?? ""}
-                disabled={busy}
-                onChange={(e) => run(() => assignLead(lead.id, e.target.value || null))}
-                aria-label={t("inbox.assign.label")}
-                className={cn(
-                  "max-w-[170px] py-1 text-xs",
-                  !lead.assignedTo && "border-amber-300 bg-amber-50 text-amber-800",
-                )}
-              >
-                <option value="">{t("inbox.assign.none")}</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-            {onClose && (
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("cc.cancel")}>
-                <X size={14} />
-              </Button>
-            )}
+              {lead.leadType && <Pill tone="neutral" className="ms-1">{t(`inbox.type.${lead.leadType}`)}</Pill>}
+            </p>
           </div>
         </div>
 
-        {/* Contacto directo, siempre a mano */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          {lead.phone ? (
-            <>
-              <a
-                href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/50 hover:text-ink"
-              >
-                <Phone size={11} strokeWidth={2} className="text-gold" />
-                {lead.phone}
-              </a>
-              <CopyPhoneButton phone={lead.phone} />
-              <WhatsAppLeadButton
-                phone={lead.phone}
-                name={lead.name}
-                message={lead.message}
-                propertyTitle={lead.propertyTitle}
-                leadId={lead.id}
-              />
-              <ZintoStatus
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start lg:w-auto lg:shrink-0">
+          <OwnerControl lead={lead} staff={staff} isAdmin={isAdmin} />
+          {/* Abrir Zinto NO registra contacto: eso solo lo hace «Registrar
+              contacto». */}
+          {actions.openZinto && lead.phone && (
+            <WhatsAppLeadButton
+              phone={lead.phone}
+              name={lead.name}
+              message={lead.message}
+              propertyTitle={lead.propertyTitle}
+              leadId={lead.id}
+              size={16}
+              label={t("inbox.zinto.open")}
+              className="hidden min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-sol-action px-6 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong disabled:opacity-50 lg:inline-flex xl:min-w-[300px]"
+            />
+          )}
+        </div>
+      </header>
+
+      {error && (
+        <p role="alert" className="mt-4 rounded-xl border border-sol-error/30 bg-sol-error-bg px-4 py-3 text-sm text-sol-error">
+          {error}
+        </p>
+      )}
+
+      {/* Pestañas */}
+      <div role="tablist" aria-label={t("inbox.tab.label")} className="-mx-4 mt-6 flex gap-3 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
+        {TABS.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            role="tab"
+            id={`ws-tab-${x.id}`}
+            aria-selected={tab === x.id}
+            aria-controls={`ws-panel-${x.id}`}
+            onClick={() => setTab(x.id)}
+            className={cn(
+              "inline-flex min-h-[40px] shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-6 sol-ui font-semibold transition",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action",
+              tab === x.id
+                ? "border-sol-action bg-sol-action text-sol-on-action"
+                : "border-sol-line bg-sol-surface text-sol-ink hover:border-sol-action/40",
+            )}
+          >
+            {x.label}
+            {x.count ? <span className={tab === x.id ? "opacity-80" : "text-sol-muted"}>{x.count}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Cuerpo ── */}
+      <div
+        role="tabpanel"
+        id={`ws-panel-${tab}`}
+        aria-labelledby={`ws-tab-${tab}`}
+        className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,486px)]"
+      >
+        {tab === "summary" && (
+          <>
+            <div className="flex min-w-0 flex-col gap-6">
+              <Enquiry lead={lead} />
+              {/* En móvil, el anuncio va antes que el mensaje (Figma D01). */}
+              <div className="max-lg:order-first">
+                <PropertyContext lead={lead} country={country} canEdit={canEdit} onRun={run} busy={busy} />
+              </div>
+              <OtherEnquiries lead={lead} />
+              <ClientSummary lead={lead} onOpen={() => setTab("client")} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-6">
+              <NextStep
                 lead={lead}
                 locale={config.locale}
                 canEdit={canEdit}
                 busy={busy}
+                onRegister={() => setContactOpen(true)}
+                onDiscard={() => setDiscardOpen(true)}
+                onRestore={() => run(() => setLeadDiscarded(lead.id, false))}
                 onRun={run}
               />
-            </>
-          ) : (
-            <Pill tone="warning">{t("inbox.reason.missing_contact")}</Pill>
-          )}
-          <a
-            href={lead.idealistaThreadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-ink/45 transition hover:text-ink"
-          >
-            {t("inbox.openThread")}
-            <ExternalLink size={10} strokeWidth={2} />
-          </a>
-          {canEdit && (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => run(() => setLeadDiscarded(lead.id, lead.state !== "discarded"))}
-              className="ms-auto"
-            >
-              {lead.state === "discarded" ? t("inbox.restore") : t("inbox.discard")}
-            </Button>
-          )}
-        </div>
-
-        {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
-      </header>
-
-      {/* ── Cuerpo ── */}
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        {lead.duplicates.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-            <p className="text-xs font-medium text-amber-800">
-              {t("inbox.duplicate.title", { count: lead.duplicates.length })}
-            </p>
-            <p className="mt-0.5 text-xs leading-relaxed text-amber-800/70">
-              {t("inbox.duplicate.hint")}
-            </p>
-            <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900/80">
-              {lead.duplicates.map((d) => (
-                <li key={d.id} className="truncate">
-                  {d.name?.trim() || t("inbox.row.noName")}
-                  {d.propertyTitle ? ` · ${d.propertyTitle}` : ""}
-                </li>
-              ))}
-            </ul>
-            {canEdit && (
-              <Button
-                size="sm"
-                className="mt-2"
-                disabled={busy}
-                onClick={() =>
-                  startBusy(async () => {
-                    setError(null);
-                    const r = await mergeSamePhoneLeads(lead.id);
-                    if (!r.ok) {
-                      setError(r.error);
-                      return;
-                    }
-                    // La unida puede ser esta misma: se abre la que sobrevive.
-                    const qs = new URLSearchParams(window.location.search);
-                    qs.set("lead", r.survivorId);
-                    router.replace(`?${qs.toString()}`, { scroll: false });
-                    router.refresh();
-                  })
-                }
-              >
-                {t("inbox.duplicate.merge", { count: lead.duplicates.length + 1 })}
-              </Button>
-            )}
-          </div>
+              <Activity lead={lead} locale={config.locale} recent onSeeAll={() => setTab("activity")} />
+            </div>
+          </>
         )}
 
-        <Enquiry lead={lead} />
+        {tab === "activity" && (
+          <>
+            <div className="flex min-w-0 flex-col gap-6">
+              {canEdit && <FollowUp lead={lead} locale={config.locale} onRun={run} busy={busy} />}
+              {canEdit && <ContactLog lead={lead} onRun={run} busy={busy} />}
+              {!canEdit && <Activity lead={lead} locale={config.locale} />}
+            </div>
+            <div className="flex min-w-0 flex-col gap-6">
+              {canEdit && <Activity lead={lead} locale={config.locale} />}
+              <AssignmentHistory lead={lead} locale={config.locale} />
+            </div>
+          </>
+        )}
 
-        <PropertyContext lead={lead} country={country} canEdit={canEdit} onRun={run} busy={busy} />
-
-        <OtherEnquiries lead={lead} />
-
-        <ClientSection lead={lead} country={country} canEdit={canEdit} />
-
-        {canEdit && <ContactLog lead={lead} onRun={run} busy={busy} />}
-
-        {canEdit && <FollowUp lead={lead} locale={config.locale} onRun={run} busy={busy} />}
-
-        <Activity lead={lead} locale={config.locale} />
+        {tab === "client" && (
+          <>
+            <div className="flex min-w-0 flex-col gap-6">
+              {lead.duplicates.length > 0 && (
+                <Duplicates lead={lead} canEdit={canEdit} busy={busy} onError={setError} startBusy={startBusy} />
+              )}
+              <ClientSection lead={lead} country={country} canEdit={canEdit} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-6">
+              <Evidence lead={lead} />
+            </div>
+          </>
+        )}
       </div>
+
+      {/* Móvil: la acción principal siempre a mano (Figma D01). */}
+      {(actions.registerContact || actions.openZinto) && (
+        <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col gap-2 border-t border-sol-line bg-sol-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] lg:hidden">
+          {actions.registerContact && (
+            <Button variant="primary" onClick={() => setContactOpen(true)} className="w-full">
+              {t("inbox.contact.open")}
+            </Button>
+          )}
+          {actions.openZinto && lead.phone && (
+            <WhatsAppLeadButton
+              phone={lead.phone}
+              name={lead.name}
+              message={lead.message}
+              propertyTitle={lead.propertyTitle}
+              leadId={lead.id}
+              size={16}
+              label={t("inbox.zinto.openShort")}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink disabled:opacity-50"
+            />
+          )}
+        </div>
+      )}
+
+      {contactOpen && (
+        <RegisterContactDialog lead={lead} locale={config.locale} onClose={() => setContactOpen(false)} />
+      )}
+      {discardOpen && (
+        <DiscardDialog
+          onClose={() => setDiscardOpen(false)}
+          onConfirm={(reason) => {
+            setDiscardOpen(false);
+            run(() => setLeadDiscarded(lead.id, true, reason));
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Siguiente paso ──────────────────────────────────────────────────────────
+
+/**
+ * UN siguiente paso, con su porqué, y las acciones de trabajo: registrar el
+ * contacto (la única que lo da por hecho), llamar y lo infrecuente.
+ */
+function NextStep({
+  lead,
+  locale,
+  canEdit,
+  busy,
+  onRegister,
+  onDiscard,
+  onRestore,
+  onRun,
+}: {
+  lead: LeadDetail;
+  locale: string;
+  canEdit: boolean;
+  busy: boolean;
+  onRegister: () => void;
+  onDiscard: () => void;
+  onRestore: () => void;
+  onRun: (fn: () => Promise<{ ok: boolean; error?: string }>) => void;
+}) {
+  const t = useT();
+  const sorted = lead.reasons.slice().sort((a, b) => REASON_PRIORITY[a] - REASON_PRIORITY[b]);
+  const top = sorted.find((r) => REASON_PRIORITY[r] <= 2);
+  const hints = sorted.filter((r) => REASON_PRIORITY[r] === 3);
+  const closed = lead.state === "converted" || lead.state === "discarded";
+
+  return (
+    <Panel title={t("inbox.next.title")}>
+      {top && !closed && (
+        <Pill tone={REASON_PRIORITY[top] === 1 ? "critical" : "warning"} className="mb-3">
+          {t(`inbox.reason.${top}`)}
+        </Pill>
+      )}
+      {closed ? (
+        <p className="text-lg leading-relaxed text-sol-muted">{t(`inbox.next.closed.${lead.state}`)}</p>
+      ) : top ? (
+        <p className="text-lg leading-relaxed text-sol-ink">{t(`inbox.next.do.${top}`)}</p>
+      ) : lead.nextActionAt ? (
+        <p className="text-lg leading-relaxed text-sol-ink">
+          {t("inbox.next.scheduled", { when: formatDateTime(lead.nextActionAt, locale) })}
+          {lead.nextActionNote ? ` · ${lead.nextActionNote}` : ""}
+        </p>
+      ) : (
+        <p className="text-lg leading-relaxed text-sol-muted">{t("inbox.next.none")}</p>
+      )}
+      {top && lead.nextActionAt && (
+        <p className="mt-1 text-sm text-sol-muted">
+          {formatDateTime(lead.nextActionAt, locale)}
+          {lead.nextActionNote ? ` · ${lead.nextActionNote}` : ""}
+        </p>
+      )}
+
+      <div className="mt-6 space-y-3">
+        {fichaActions(lead, canEdit).registerContact && (
+          <Button variant="primary" onClick={onRegister} className="w-full !min-h-[48px]">
+            <ClipboardCheck size={16} strokeWidth={2} />
+            {t("inbox.contact.open")}
+          </Button>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          {lead.phone ? (
+            <a
+              href={`tel:${lead.phone.replace(/\s/g, "")}`}
+              title={lead.phone}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-3 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40"
+            >
+              <Phone size={15} strokeWidth={2} className="text-sol-action" />
+              {t("inbox.call")}
+            </a>
+          ) : (
+            <span className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-sol-review px-3 text-center text-sm font-semibold text-sol-review-ink">
+              {t("inbox.reason.missing_contact")}
+            </span>
+          )}
+          <MoreActions
+            lead={lead}
+            canEdit={canEdit}
+            busy={busy}
+            onDiscard={onDiscard}
+            onRestore={onRestore}
+          />
+        </div>
+      </div>
+      <p className="mt-3 sol-meta text-sol-muted">{t("inbox.contact.notByOpening")}</p>
+
+      {lead.phone && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-sol-line pt-4">
+          <span className="font-mono text-sm text-sol-ink">{lead.phone}</span>
+          <CopyPhoneButton phone={lead.phone} />
+          <ZintoStatus lead={lead} locale={locale} canEdit={canEdit} busy={busy} onRun={onRun} />
+        </div>
+      )}
+      {hints.length > 0 && (
+        <ul className="mt-4 flex flex-wrap gap-2 border-t border-sol-line pt-4">
+          {hints.map((h) => (
+            <li key={h}><Pill tone="neutral">{t(`inbox.reason.${h}`)}</Pill></li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+// ─── Datos del cliente (resumen) ─────────────────────────────────────────────
+
+function ClientSummary({ lead, onOpen }: { lead: LeadDetail; onOpen: () => void }) {
+  const t = useT();
+  return (
+    <Panel title={t("inbox.clientCard.title")}>
+      <p className="text-base text-sol-ink">
+        {lead.linkedClient
+          ? t("inbox.clientCard.linked", { name: lead.linkedClient.fullName })
+          : t("inbox.clientCard.none")}
+      </p>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-4 text-left sol-ui font-semibold text-sol-action underline-offset-2 hover:underline"
+      >
+        {t("inbox.clientCard.more")}
+      </button>
+    </Panel>
+  );
+}
+
+// ─── Más acciones ────────────────────────────────────────────────────────────
+
+/** Lo infrecuente, fuera de la vista: anuncio original y descartar. */
+function MoreActions({
+  lead,
+  canEdit,
+  busy,
+  onDiscard,
+  onRestore,
+}: {
+  lead: LeadDetail;
+  canEdit: boolean;
+  busy: boolean;
+  onDiscard: () => void;
+  onRestore: () => void;
+}) {
+  const t = useT();
+  return (
+    <details className="relative">
+      <summary className="inline-flex min-h-[44px] w-full cursor-pointer list-none items-center justify-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-3 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40 [&::-webkit-details-marker]:hidden">
+        <MoreHorizontal size={16} /> {t("inbox.more")}
+      </summary>
+      <div className="absolute end-0 z-20 mt-2 w-64 rounded-xl border border-sol-line bg-sol-surface p-1.5 shadow-lg">
+        <a
+          href={lead.idealistaThreadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-h-[44px] items-center justify-between gap-2 rounded-lg px-3 text-sm text-sol-ink hover:bg-sol-select"
+        >
+          {t("inbox.openThread")}
+          <ExternalLink size={11} strokeWidth={2} />
+        </a>
+        {canEdit && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={lead.state === "discarded" ? onRestore : onDiscard}
+            className="flex min-h-[44px] w-full items-center rounded-lg px-3 text-left text-sm text-sol-ink hover:bg-sol-select disabled:opacity-50"
+          >
+            {lead.state === "discarded" ? t("inbox.restore") : t("inbox.discardWithReason")}
+          </button>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function DiscardDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (reason: string) => void }) {
+  const t = useT();
+  const [reason, setReason] = useState("");
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t("inbox.discardDialog.title")}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("common.cancel")}</Button>
+          <Button variant="primary" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+            {t("inbox.discard")}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-ink/65">{t("inbox.discardDialog.intro")}</p>
+      <Labeled label={t("inbox.discardDialog.reason")} className="mt-3">
+        <TextArea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} required />
+      </Labeled>
+    </Modal>
+  );
+}
+
+// ─── Duplicados ──────────────────────────────────────────────────────────────
+
+function Duplicates({
+  lead,
+  canEdit,
+  busy,
+  onError,
+  startBusy,
+}: {
+  lead: LeadDetail;
+  canEdit: boolean;
+  busy: boolean;
+  onError: (e: string | null) => void;
+  startBusy: (fn: () => Promise<void>) => void;
+}) {
+  const t = useT();
+  const router = useRouter();
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+      <p className="text-xs font-medium text-amber-800">
+        {t("inbox.duplicate.title", { count: lead.duplicates.length })}
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed text-amber-800/70">{t("inbox.duplicate.hint")}</p>
+      <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900/80">
+        {lead.duplicates.map((d) => (
+          <li key={d.id} className="truncate">
+            {d.name?.trim() || t("inbox.row.noName")}
+            {d.propertyTitle ? ` · ${d.propertyTitle}` : ""}
+          </li>
+        ))}
+      </ul>
+      {canEdit && (
+        <Button
+          size="sm"
+          className="mt-2"
+          disabled={busy}
+          onClick={() =>
+            startBusy(async () => {
+              onError(null);
+              const r = await mergeSamePhoneLeads(lead.id);
+              if (!r.ok) {
+                onError(r.error);
+                return;
+              }
+              // La unida puede ser esta misma: se abre la que sobrevive.
+              const qs = new URLSearchParams(window.location.search);
+              qs.set("lead", r.survivorId);
+              router.replace(`?${qs.toString()}`, { scroll: false });
+              router.refresh();
+            })
+          }
+        >
+          {t("inbox.duplicate.merge", { count: lead.duplicates.length + 1 })}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── Evidencia del origen ────────────────────────────────────────────────────
+
+/** Lo que llegó de Idealista, tal cual. Es lo que permite revisar un vínculo. */
+function Evidence({ lead }: { lead: LeadDetail }) {
+  const t = useT();
+  return (
+    <Panel title={t("inbox.evidence.title")}>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <dt className="text-ink/45">{t("inbox.evidence.source")}</dt>
+        <dd className="text-ink/80">Idealista</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.ref")}</dt>
+        <dd className="text-ink/80">{lead.propertyRef ?? t("inbox.evidence.notReceived")}</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.code")}</dt>
+        <dd className="text-ink/80">
+          {lead.idealistaCode ?? t("inbox.evidence.notReceived")}
+          {lead.previousPublicationCode && (
+            <span className="block text-ink/50">
+              {t("inbox.evidence.previousPublication", { code: lead.previousPublicationCode })}
+            </span>
+          )}
+        </dd>
+        <dt className="text-ink/45">{t("inbox.evidence.atEnquiry")}</dt>
+        <dd className="text-ink/80">{[lead.propertyTitle, lead.propertyPrice].filter(Boolean).join(" · ") || "—"}</dd>
+        <dt className="text-ink/45">{t("inbox.evidence.link")}</dt>
+        <dd><LinkBadge status={lead.linkStatus} /></dd>
+        <dt className="text-ink/45">{t("inbox.evidence.thread")}</dt>
+        <dd>
+          <a href={lead.idealistaThreadUrl} target="_blank" rel="noopener noreferrer" className="text-gold-dark underline-offset-2 hover:underline">
+            {t("inbox.openThread")}
+          </a>
+        </dd>
+      </dl>
+    </Panel>
+  );
+}
+
+// ─── Historial de responsable ────────────────────────────────────────────────
+
+function AssignmentHistory({ lead, locale }: { lead: LeadDetail; locale: string }) {
+  const t = useT();
+  if (lead.assignmentHistory.length === 0) return null;
+  return (
+    <Panel title={t("inbox.history.title")} count={lead.assignmentHistory.length}>
+      <ul className="space-y-2">
+        {lead.assignmentHistory.map((e) => (
+          <li key={e.id} className="text-xs">
+            <p className="text-ink/80">
+              {t(`inbox.history.kind.${e.kind}`)}
+              {(e.previousName || e.newName) && (
+                <span className="text-ink/55"> · {e.previousName ?? "—"} → {e.newName ?? "—"}</span>
+              )}
+              {e.reason && <span className="text-ink/50"> · {e.reason}</span>}
+            </p>
+            <p className="text-ink/40">
+              {formatDateTime(e.occurredAt, locale)} · {e.actorName ?? t("inbox.history.system")}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -311,7 +693,6 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
         lead.message ? (
           <Button
             size="sm"
-            variant="ghost"
             disabled={pending}
             onClick={() => {
               if (translated) {
@@ -337,7 +718,7 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
       }
     >
       {lead.message && (
-        <p className="whitespace-pre-line text-sm leading-relaxed text-ink/80">
+        <p className="whitespace-pre-line text-lg leading-relaxed text-sol-ink md:text-xl">
           {translated && !showOriginal ? translated : lead.message}
         </p>
       )}
@@ -347,18 +728,18 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
       {/* La extensión separa la presentación del resto de viñetas del perfil;
           `getLeadDetail` ya la bajaba pero aquí nunca se pintaba. */}
       {lead.profilePresentation && (
-        <div className="mt-3 border-t border-ink/8 pt-3">
-          <p className="crm-label-sm text-ink/45">{t("inbox.enquiry.presentation")}</p>
-          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink/80">
+        <div className="mt-6">
+          <p className="crm-label-sm text-sol-muted">{t("inbox.enquiry.presentation")}</p>
+          <p className="mt-1.5 whitespace-pre-line text-base leading-relaxed text-sol-ink">
             {lead.profilePresentation}
           </p>
         </div>
       )}
       {lead.profileBullets.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-1.5 border-t border-ink/8 pt-3">
+        <ul className="mt-3 flex flex-wrap gap-2">
           {lead.profileBullets.map((b, i) => (
             <li key={i}>
-              <Pill tone="neutral">{b}</Pill>
+              <Pill tone="positive">{b}</Pill>
             </li>
           ))}
         </ul>
@@ -433,67 +814,95 @@ function PropertyContext({
   const config = getCountryConfig(country);
   const [matching, setMatching] = useState(false);
 
+  const exact = lead.linkStatus === "exact";
+
+  // Identificadores recibidos: «Idealista: Cod. | Ref.» como en el Figma.
+  const ids = [lead.idealistaCode && `${t("inbox.source.idealista")}: ${lead.idealistaCode}`, lead.propertyRef]
+    .filter(Boolean)
+    .join("  |  ");
+  const btn =
+    "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40";
+  const photo = (src: string | null | undefined, dim = false) => (
+    <div className="relative aspect-[4/3] w-full shrink-0 self-start overflow-hidden rounded-lg bg-sol-column sm:w-[212px]">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+          className={cn("absolute inset-0 h-full w-full object-cover", dim && "opacity-85")}
+        />
+      ) : (
+        <span className="absolute inset-0 flex items-center p-4 text-sm text-sol-muted">
+          {exact ? t("inbox.card.noImage") : t("inbox.card.noVerifiedImage")}
+        </span>
+      )}
+    </div>
+  );
+
   if (lead.property) {
     const p = lead.property;
     // Una ficha propia se abre en /propiedades/[slug]; un anuncio de Idealista
-    // sin ficha propia (las "inspo") vive en /idealista, y hasta ahora la
-    // bandeja lo daba directamente por inexistente.
+    // sin ficha propia (las "inspo") vive en /idealista.
     const href = p.slug
       ? `${config.prefix}/propiedades/${p.slug}`
       : `${config.prefix}/idealista`;
     return (
-      <Panel
-        title={t("inbox.property.title")}
-        action={
-          canEdit ? (
-            <Button size="sm" variant="ghost" onClick={() => setMatching((v) => !v)}>
-              {t("inbox.property.change")}
-            </Button>
-          ) : null
-        }
-      >
-        <div className="flex gap-3">
-          {p.coverUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={p.coverUrl}
-              alt=""
-              className="h-16 w-24 shrink-0 rounded object-cover"
-              loading="lazy"
-            />
-          )}
+      <Panel title={t("inbox.property.title")} action={<LinkBadge status={lead.linkStatus} />}>
+        {!exact && <p className="mb-3 text-sm text-sol-review-ink">{t("inbox.property.unverifiedHint")}</p>}
+        <div className="flex flex-col gap-5 sm:flex-row">
+          {/* La foto de NUESTRA ficha solo se afirma con vínculo exacto; sin
+              él, la que la persona vio en Idealista. */}
+          {photo(exact && p.coverUrl ? p.coverUrl : lead.propertyImageUrl, !exact)}
           <div className="min-w-0 flex-1">
-            <Link
-              href={href}
-              className="block truncate text-sm font-medium text-ink hover:underline"
-            >
+            <Link href={href} className="block text-[22px] font-semibold leading-snug text-sol-ink hover:underline">
               {p.title ?? "—"}
             </Link>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink/50">
-              {p.reference && <span>{p.reference}</span>}
-              {p.price !== null && (
-                <span>{config.formatPrice(p.price, null, p.operation)}</span>
-              )}
+            {p.price !== null && (
+              <p className="mt-1 text-[22px] font-semibold leading-snug tabular-nums text-sol-ink">
+                {config.formatPrice(p.price, null, p.operation)}
+              </p>
+            )}
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sol-ui text-sol-muted">
               {p.zone && <span>{p.zone}</span>}
+              {p.reference && <span>· {p.reference}</span>}
               {p.status && (
                 <Pill tone={p.status === "available" ? "positive" : "warning"}>
                   {t(`inbox.property.status.${p.status}`)}
                 </Pill>
               )}
-              {p.source === "listing" && (
-                <Pill tone="info">{t("inbox.property.fromListing")}</Pill>
-              )}
+              {p.source === "listing" && <Pill tone="info">{t("inbox.property.fromListing")}</Pill>}
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Link
-                href={href}
-                className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1 text-xs font-medium text-ink/70 transition hover:border-gold/50"
-              >
+            {ids && <p className="mt-2 text-sm font-semibold text-sol-action">{ids}</p>}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <a href={lead.idealistaThreadUrl} target="_blank" rel="noopener noreferrer" className={btn}>
+                {t("inbox.openThread")}
+                <ExternalLink size={13} strokeWidth={2} />
+              </a>
+              {/* Preparar visita exige el inmueble CONFIRMADO: con un vínculo
+                  sin evidencia sería organizar la visita a un piso supuesto. */}
+              {exact ? (
+                <PrepareVisitsButton source="idealista" sourceId={lead.id} compact />
+              ) : (
+                <span className="self-center text-sm text-sol-muted">{t("inbox.property.visitNeedsExact")}</span>
+              )}
+              <Link href={href} className="inline-flex min-h-[40px] items-center gap-1 px-1 text-sm font-semibold text-sol-action hover:underline">
                 {t("inbox.property.open")}
-                <ArrowUpRight size={10} strokeWidth={2} />
+                <ArrowUpRight size={13} strokeWidth={2} />
               </Link>
-              <PrepareVisitsButton source="idealista" sourceId={lead.id} compact />
             </div>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setMatching((v) => !v)}
+                className="mt-3 text-sm font-semibold text-sol-muted underline-offset-2 hover:text-sol-action hover:underline"
+              >
+                {t("inbox.property.review")}
+              </button>
+            )}
           </div>
         </div>
         {matching && canEdit && (
@@ -503,43 +912,39 @@ function PropertyContext({
     );
   }
 
-  // Sin ficha propia: 190 de 322 leads están así. No se construye otro
-  // importador — se enlaza el que ya existe, con la URL del anuncio si la hay.
+  // Sin ficha propia: no se construye otro importador — se enlaza el que ya
+  // existe, con la URL del anuncio si la hay.
   return (
-    <Panel title={t("inbox.property.title")}>
-      <div className="flex gap-3">
-        {lead.propertyImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={lead.propertyImageUrl}
-            alt=""
-            className="h-16 w-24 shrink-0 rounded object-cover opacity-80"
-            loading="lazy"
-          />
-        )}
+    <Panel title={t("inbox.property.title")} action={<LinkBadge status={lead.linkStatus} />}>
+      <div className="flex flex-col gap-5 sm:flex-row">
+        {photo(lead.propertyImageUrl, true)}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-ink/75">
+          <p className="text-[22px] font-semibold leading-snug text-sol-ink">
             {lead.propertyTitle ?? t("inbox.row.noProperty")}
           </p>
-          {lead.propertyPrice && (
-            <p className="text-xs text-ink/45">{lead.propertyPrice}</p>
-          )}
-          <p className="mt-1 text-xs text-amber-700">{t("inbox.property.unmatched")}</p>
-          {canEdit && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => setMatching((v) => !v)}>
-                <Search size={11} strokeWidth={2} />
-                {t("inbox.property.match")}
-              </Button>
-              <Link
-                href={`${config.prefix}/propiedades/importar`}
-                className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/70 transition hover:border-gold/50"
-              >
-                {t("inbox.property.import")}
-                <ArrowUpRight size={10} strokeWidth={2} />
-              </Link>
-            </div>
-          )}
+          <p className="mt-1 text-[22px] font-semibold leading-snug tabular-nums text-sol-ink">
+            {lead.propertyPrice ?? t("inbox.card.noPrice")}
+          </p>
+          {ids && <p className="mt-2 text-sm font-semibold text-sol-review-ink">{ids}</p>}
+          <p className="mt-2 text-sm text-sol-review-ink">{t("inbox.property.unmatched")}</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a href={lead.idealistaThreadUrl} target="_blank" rel="noopener noreferrer" className={btn}>
+              {t("inbox.openThread")}
+              <ExternalLink size={13} strokeWidth={2} />
+            </a>
+            {canEdit && (
+              <>
+                <button type="button" className={btn} onClick={() => setMatching((v) => !v)}>
+                  <Search size={14} strokeWidth={2} />
+                  {t("inbox.property.match")}
+                </button>
+                <Link href={`${config.prefix}/propiedades/importar`} className={btn}>
+                  {t("inbox.property.import")}
+                  <ArrowUpRight size={13} strokeWidth={2} />
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </div>
       {matching && canEdit && (
@@ -560,6 +965,7 @@ function PropertyPicker({
 }) {
   const t = useT();
   const [q, setQ] = useState("");
+  const [reason, setReason] = useState("");
   const [results, setResults] = useState<
     Array<{ id: string; title: string; reference: string | null }>
   >([]);
@@ -580,26 +986,33 @@ function PropertyPicker({
     };
   }, [q]);
 
+  // «Revisar vínculo» es una corrección con evidencia: sin motivo no se
+  // puede elegir. El anuncio consultado queda en el historial (auditoría).
   return (
-    <div className="mt-3 border-t border-ink/8 pt-3">
+    <div className="mt-3 space-y-2 border-t border-ink/8 pt-3">
+      <p className="text-xs text-ink/55">{t("inbox.property.reviewHint")}</p>
+      <Labeled label={t("inbox.property.reviewReason")}>
+        <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("inbox.property.reviewReasonPlaceholder")} />
+      </Labeled>
       <TextInput
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={t("inbox.property.searchPlaceholder")}
-        autoFocus
+        aria-label={t("inbox.property.searchPlaceholder")}
       />
-      {searching && <p className="mt-1.5 text-xs text-ink/40">{t("inbox.searching")}</p>}
+      {searching && <p className="text-xs text-ink/40">{t("inbox.searching")}</p>}
       {results.length > 0 && (
-        <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+        <ul className="max-h-52 space-y-1 overflow-y-auto">
           {results.map((p) => (
             <li key={p.id}>
               <button
                 type="button"
+                disabled={!reason.trim()}
                 onClick={() => {
-                  onRun(() => matchLeadProperty(leadId, p.id));
+                  onRun(() => matchLeadProperty(leadId, p.id, reason));
                   onDone();
                 }}
-                className="flex w-full items-center justify-between gap-2 rounded border border-ink/8 px-2.5 py-1.5 text-left text-xs transition hover:border-gold/45"
+                className="flex w-full items-center justify-between gap-2 rounded border border-ink/8 px-2.5 py-1.5 text-left text-xs transition hover:border-gold/45 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="min-w-0 truncate text-ink">{p.title}</span>
                 {p.reference && (
@@ -609,6 +1022,9 @@ function PropertyPicker({
             </li>
           ))}
         </ul>
+      )}
+      {!reason.trim() && results.length > 0 && (
+        <p className="text-xs text-amber-700">{t("inbox.property.reasonFirst")}</p>
       )}
     </div>
   );
@@ -961,6 +1377,10 @@ function ZintoStatus({
 
 // ─── Registro de contacto ────────────────────────────────────────────────────
 
+/**
+ * Notas sueltas desde Actividad. Los resultados de contacto (habló, no
+ * contesta, email…) se registran con «Registrar contacto», con su tarea.
+ */
 function ContactLog({
   lead,
   onRun,
@@ -973,38 +1393,14 @@ function ContactLog({
   const t = useT();
   const [note, setNote] = useState("");
 
-  const outcomes: CallOutcome[] = ["answered", "no_answer", "callback"];
-
   return (
-    <Panel title={t("inbox.log.title")}>
-      {/* Abrir `tel:` no marca nada: que suene el teléfono no es haber
-          hablado, y de esa diferencia depende el estado del lead. */}
-      <p className="text-xs text-ink/45">{t("inbox.log.callHint")}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {outcomes.map((o) => (
-          <Button
-            key={o}
-            size="sm"
-            disabled={busy}
-            onClick={() => onRun(() => logContact(lead.id, "call", { outcome: o }))}
-          >
-            {t(`inbox.log.call.${o}`)}
-          </Button>
-        ))}
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={() => onRun(() => logContact(lead.id, "email"))}
-        >
-          {t("inbox.log.email")}
-        </Button>
-      </div>
-
-      <div className="mt-3 flex gap-2">
+    <Panel title={t("inbox.notes.title")}>
+      <div className="flex gap-2">
         <TextInput
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={t("inbox.log.notePlaceholder")}
+          aria-label={t("inbox.notes.title")}
         />
         <Button
           size="sm"
@@ -1105,64 +1501,89 @@ function FollowUp({
 
 // ─── Actividad ───────────────────────────────────────────────────────────────
 
-function Activity({ lead, locale }: { lead: LeadDetail; locale: string }) {
+/** Lo que ha pasado. `recent`: las tres últimas, con acceso al historial. */
+function Activity({
+  lead,
+  locale,
+  recent = false,
+  onSeeAll,
+}: {
+  lead: LeadDetail;
+  locale: string;
+  recent?: boolean;
+  onSeeAll?: () => void;
+}) {
   const t = useT();
 
   // El hilo de WhatsApp se resume en UNA línea con enlace al chat: volcar
   // treinta mensajes aquí taparía los cuatro hechos que importan.
   const wa = lead.whatsapp;
+  const items = recent ? lead.activity.slice(0, 3) : lead.activity;
+  const dot = "mt-2 h-2 w-2 shrink-0 rounded-full";
 
   return (
-    <Panel title={t("inbox.activity.title")} count={lead.activity.length}>
-      <ul className="space-y-2">
+    <Panel
+      title={recent ? t("inbox.recent.title") : t("inbox.activity.title")}
+      count={recent ? null : lead.activity.length}
+    >
+      <ul className="space-y-5">
         {wa.conversationId && (
-          <li className="flex gap-2.5">
-            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#25D366]" />
+          <li className="flex gap-3">
+            <span className={cn(dot, "bg-[#25D366]")} />
             <div className="min-w-0">
-              <p className="text-xs text-ink/80">
+              {wa.lastMessageAt && (
+                <p className="sol-meta text-sol-muted">
+                  <RelativeTime at={wa.lastMessageAt} locale={locale} />
+                </p>
+              )}
+              <p className="mt-1 sol-ui text-sol-ink">
                 {wa.outbound > 0
                   ? t("inbox.activity.waSummary", { sent: wa.outbound, received: wa.inbound })
                   : t("inbox.activity.waOpenedOnly")}
               </p>
-              {wa.lastMessageAt && (
-                <p className="text-xs text-ink/35">
-                  <RelativeTime at={wa.lastMessageAt} locale={locale} />
-                </p>
-              )}
             </div>
           </li>
         )}
 
-        {lead.activity.map((a) => (
-          <li key={a.id} className="flex gap-2.5">
-            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/20" />
+        {items.map((a) => (
+          <li key={a.id} className="flex gap-3">
+            <span className={cn(dot, "bg-sol-action")} />
             <div className="min-w-0">
-              <p className="text-xs text-ink/80">
-                {t(`inbox.activity.kind.${a.kind}`)}
-                {a.outcome && ` · ${t(`inbox.log.call.${a.outcome}`)}`}
-                {a.body && <span className="text-ink/50"> · {a.body}</span>}
-              </p>
-              <p className="text-xs text-ink/35">
+              <p className="sol-meta text-sol-muted">
                 <RelativeTime at={a.createdAt} locale={locale} />
                 {a.authorName ? ` · ${a.authorName}` : ""}
+              </p>
+              <p className="mt-1 sol-ui text-sol-ink">
+                {t(`inbox.activity.kind.${a.kind}`)}
+                {a.outcome && ` · ${t(`inbox.log.call.${a.outcome}`)}`}
+                {a.body && <span className="text-sol-muted"> · {a.body}</span>}
               </p>
             </div>
           </li>
         ))}
 
-        <li className="flex gap-2.5">
-          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-gold/50" />
+        <li className="flex gap-3">
+          <span className={cn(dot, "bg-sol-action")} />
           <div>
-            <p className="text-xs text-ink/80">{t("inbox.activity.received")}</p>
-            <p className="text-xs text-ink/35">
-              {formatDateTime(lead.createdAt, locale)}
-            </p>
+            <p className="sol-meta text-sol-muted">{formatDateTime(lead.createdAt, locale)}</p>
+            <p className="mt-1 sol-ui text-sol-ink">{t("inbox.activity.received")}</p>
           </div>
         </li>
       </ul>
 
-      {lead.activity.length === 0 && !wa.conversationId && (
-        <Empty>{t("inbox.activity.empty")}</Empty>
+      {!recent && lead.activity.length === 0 && !wa.conversationId && (
+        <div className="mt-4">
+          <Empty>{t("inbox.activity.empty")}</Empty>
+        </div>
+      )}
+      {recent && onSeeAll && (
+        <button
+          type="button"
+          onClick={onSeeAll}
+          className="mt-6 sol-ui font-semibold text-sol-action underline-offset-2 hover:underline"
+        >
+          {t("inbox.recent.all")}
+        </button>
       )}
     </Panel>
   );

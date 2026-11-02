@@ -4,7 +4,8 @@ import { clientRowToAdminClient } from "@/lib/db/adapters";
 import { getClientById } from "@/lib/db/queries/clients";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { getClientCatalogFeedback } from "@/lib/catalogs/client-links";
-import { checkPermission, guardPage } from "@/lib/auth/guard";
+import { checkPermission, checkRoles, guardPage } from "@/lib/auth/guard";
+import { ADMIN_ROLES } from "@/lib/sales-inbox/routing";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
 import {
@@ -73,10 +74,12 @@ export default async function ClientCommandCenterPage({
 
   // Viewing Collections. El feature flag y los permisos deciden si los bloques
   // aparecen; el scope (own/team/all) decide si este agente ve a este cliente.
-  const [vcSettings, profile, editGate] = await Promise.all([
+  const [vcSettings, profile, editGate, adminGate] = await Promise.all([
     getViewingCollectionsSettings(),
     getCurrentProfile(),
     checkPermission("clientes", "edit", { country }),
+    // Cambiar el asesor del cliente es una reasignación: solo administradores.
+    checkRoles(ADMIN_ROLES, { country }),
   ]);
 
   const perms = profile
@@ -354,6 +357,7 @@ export default async function ClientCommandCenterPage({
         origin,
         portalSummary,
         canEditClient: editGate.ok,
+        canReassignAdvisor: adminGate.ok,
       }}
     />
   );

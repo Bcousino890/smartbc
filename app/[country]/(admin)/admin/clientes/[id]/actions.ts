@@ -15,6 +15,7 @@
 // preferible que el campo esté bloqueado a que mienta.
 // ============================================================================
 
+import { reassignClient } from "../../solicitudes/inbox-actions";
 import { revalidatePath } from "next/cache";
 import { assertPermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
@@ -90,44 +91,31 @@ export async function updateClientIdentity(
 // ─── Asesor ──────────────────────────────────────────────────────────────────
 
 /**
- * `assigned_advisor_id` existía desde el principio y estaba a NULL en los siete
- * clientes, porque no había ninguna pantalla que lo escribiera. Los listados sí
- * lo usan para acotar por cartera (`resolveViewScope`), así que asignarlo tiene
- * efecto inmediato en quién ve a quién.
+ * Cambiar el asesor de un cliente es una REASIGNACIÓN: solo un administrador,
+ * con motivo, versión y auditoría, y arrastrando sus solicitudes abiertas y
+ * tareas y la cola de Zinto (reassign_client_admin, migración 0237). Es el
+ * mismo camino que «Reasignar cliente» en Solicitudes: un único asesor por
+ * cliente, que gestionan los administradores. Un cliente no se deja sin
+ * asesor desde aquí.
  */
 export async function assignClientAdvisor(
   clientId: string,
   advisorId: string | null,
+  opts: { reason?: string; expectedVersion?: number } = {},
 ): Promise<ActionResult> {
-  try {
-    await assertPermission("clientes", "edit");
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-  if (!(await canActOnClient(clientId, "clientes", "edit"))) {
-    return { ok: false, error: "No tienes acceso a este cliente." };
-  }
-
-  if (advisorId) {
-    const { data: advisor } = await db()
+  if (!advisorId) return { ok: false, error: "Elige el asesor que llevará al cliente." };
+  if (!opts.reason?.trim()) return { ok: false, error: "Indica el motivo del cambio." };
+  let expected = opts.expectedVersion;
+  if (expected === undefined) {
+    const { data } = await db()
       .from("profiles")
-      .select("id, role")
-      .eq("id", advisorId)
+      .select("advisor_assignment_version")
+      .eq("id", clientId)
       .maybeSingle();
-    // Asignar a alguien que no es del equipo dejaría al cliente sin dueño real
-    // y, de paso, fuera del alcance de todos los filtros por cartera.
-    if (!advisor || advisor.role === "client") {
-      return { ok: false, error: "Ese usuario no puede ser asesor." };
-    }
+    expected = Number(data?.advisor_assignment_version ?? 0);
   }
-
-  const { error } = await db()
-    .from("profiles")
-    .update({ assigned_advisor_id: advisorId, updated_at: new Date().toISOString() })
-    .eq("id", clientId)
-    .eq("role", "client");
-
-  if (error) return { ok: false, error: error.message };
+  const r = await reassignClient({ clientId, advisorId, reason: opts.reason, expectedVersion: expected });
+  if (!r.ok) return r;
   refresh(clientId);
   return { ok: true };
 }

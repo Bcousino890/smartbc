@@ -17,6 +17,8 @@ export function WhatsAppLeadButton({
   propertyTitle,
   leadId,
   size = 11,
+  label = "WhatsApp",
+  className,
 }: {
   phone: string;
   name?: string | null;
@@ -24,6 +26,10 @@ export function WhatsAppLeadButton({
   propertyTitle?: string | null;
   leadId?: string | null;
   size?: number;
+  /** Texto del botón (Solicitudes: «Abrir conversación en Zinto»). */
+  label?: string;
+  /** Sustituye el aspecto por defecto (pastilla verde de WhatsApp). */
+  className?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(false);
@@ -56,14 +62,17 @@ export function WhatsAppLeadButton({
       onClick={handleClick}
       disabled={pending}
       title={error ? "No se pudo abrir el chat" : "Escribir por WhatsApp"}
-      className="inline-flex items-center gap-1 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 px-1.5 py-0.5 text-xs font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+      className={
+        className ??
+        "inline-flex items-center gap-1 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 px-1.5 py-0.5 text-xs font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+      }
     >
       {pending ? (
         <Loader2 size={size} strokeWidth={2} className="animate-spin" />
       ) : (
         <MessageCircle size={size} strokeWidth={2} />
       )}
-      WhatsApp
+      {label}
     </button>
   );
 }

@@ -2,6 +2,9 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { planGroupMerge, phoneTail, type MergeCandidate } from "./merge";
 
+const hasAnyAd = (c: MergeCandidate) =>
+  !!((c.ad?.code ?? "").trim() || (c.ad?.ref ?? "").trim() || (c.ad?.title ?? "").trim());
+
 /**
  * Aplica la unificación automática a los leads que acaban de entrar.
  *
@@ -35,7 +38,7 @@ export async function autoMergeLeadsByPhone(phoneDigitsTouched: string[]): Promi
     try {
       const { data, error } = await db
         .from("idealista_leads")
-        .select("id, name, phone_digits, created_at")
+        .select("id, name, phone_digits, created_at, idealista_code, property_ref, property_title")
         .like("phone_digits", `%${tail}`)
         .is("merged_into_id", null)
         .order("created_at", { ascending: true })
@@ -51,6 +54,7 @@ export async function autoMergeLeadsByPhone(phoneDigitsTouched: string[]): Promi
           name: (r.name ?? null) as string | null,
           phoneDigits: (r.phone_digits ?? null) as string | null,
           createdAt: r.created_at as string,
+          ad: { code: r.idealista_code ?? null, ref: r.property_ref ?? null, title: r.property_title ?? null },
         }))
         .filter((c) => phoneTail(c.phoneDigits) === tail);
 
@@ -78,6 +82,27 @@ export async function autoMergeLeadsByPhone(phoneDigitsTouched: string[]): Promi
         continue;
       }
       merged += ids.length;
+
+      // Si el superviviente era una llamada sin anuncio, pasa a SER la
+      // consulta que absorbió: toma su «Cod.», «Ref.» y título. Así, en la
+      // siguiente captura, una consulta de otro anuncio ya no puede unirse a
+      // él (la llamada sola no contradecía a nadie).
+      if (!hasAnyAd(plan.survivor)) {
+        const donor = plan.absorb.find(hasAnyAd);
+        if (donor) {
+          await db
+            .from("idealista_leads")
+            .update({
+              idealista_code: donor.ad?.code ?? null,
+              property_ref: donor.ad?.ref ?? null,
+              property_title: donor.ad?.title ?? null,
+              updated_at: now,
+            })
+            .eq("id", plan.survivor.id)
+            .is("idealista_code", null)
+            .is("property_ref", null);
+        }
+      }
     } catch (err) {
       console.error("[auto-merge] fallo con el teléfono", tail, err);
     }

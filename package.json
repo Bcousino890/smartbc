@@ -71,6 +71,7 @@
 
     "test:captaciones": "npm run test:captaciones-map && npm run test:captaciones-panels && npm run test:captaciones-capture && npm run test:captaciones-ai && npm run test:captaciones-scores",
     "test:lead-merge": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-lead-merge.mts",
+    "test:solicitudes-reparto": "node --experimental-strip-types --no-warnings --import ./scripts/node-ts-loader.mjs scripts/test-solicitudes-reparto.mts",
     "test:sales-inbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-sales-inbox.mts",
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
     "fotocasa:zones": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/fotocasa-zones-dump.mts",
