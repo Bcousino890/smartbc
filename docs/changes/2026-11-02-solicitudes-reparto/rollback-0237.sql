@@ -23,6 +23,7 @@ DROP FUNCTION IF EXISTS routing_clear_rules(uuid, text, jsonb, text);
 DROP FUNCTION IF EXISTS routing_set_rules(uuid, text, uuid, jsonb, text);
 DROP FUNCTION IF EXISTS reassign_client_admin(uuid, uuid, uuid, text, integer);
 DROP FUNCTION IF EXISTS assign_lead_admin(uuid, uuid, uuid, text, integer);
+DROP FUNCTION IF EXISTS reconcile_unresolved_code_leads(integer);
 DROP FUNCTION IF EXISTS route_leads(uuid[]);
 DROP FUNCTION IF EXISTS route_lead(uuid);
 DROP FUNCTION IF EXISTS routing_set_pending(uuid, text, text, jsonb);
@@ -39,6 +40,7 @@ DROP FUNCTION IF EXISTS assignment_events_append_only();
 DROP TABLE IF EXISTS property_routing_rules;
 
 DROP INDEX IF EXISTS idx_leads_routing_pending;
+DROP INDEX IF EXISTS idx_leads_code_unresolved;
 ALTER TABLE idealista_leads
   DROP CONSTRAINT IF EXISTS il_property_link_method_valid,
   DROP CONSTRAINT IF EXISTS il_routing_status_valid,

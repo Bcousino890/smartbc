@@ -68,7 +68,7 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | Tipos | `npx tsc --noEmit` | OK |
 | Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `npm run test:*` de `ci.yml` | 34/34 OK |
 | Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 13 bloques OK |
-| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 109 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
+| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 119 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
 | Build de producción aislado (`.env.production` apartado sin leerse, variables ficticias) | `NEXT_BUILD_DIR=.next.qa npx next build` | OK |
 | QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 | `scripts/qa/solicitudes-reparto-qa.mts` | 30/30 OK, sin errores de consola |
 
@@ -88,7 +88,7 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | R10 | SQL: una nueva publicación del mismo piso se resuelve exacta y aplica su regla. |
 | R11 | SQL: reasignar mueve las solicitudes abiertas y las tareas, encola la conversación y conserva el autor de lo anterior. QA: alcance visible antes de confirmar. |
 | R12 | SQL con dos sesiones simultáneas: una sola primera asignación; la segunda solicitud hereda. Además, un reparto y una reasignación administrativa simultáneos del mismo cliente terminan sin interbloqueo (H2). |
-| D01–D05, D11, D12 | SQL: Cod. y Ref. exactos, sin asociación por dirección, ambiguo o en conflicto nunca elige el primero, la evidencia exacta corrige el enlace por dirección y la corrección manual no se pisa. Con dos anuncios del mismo inmueble se enlaza el anuncio que identifica la evidencia (H1); con «Ref.» y «Cod.» juntos, el que casa con los dos, y conflicto si señalan anuncios distintos (H1b). |
+| D01–D05, D11, D12 | SQL: Cod. y Ref. exactos, sin asociación por dirección, ambiguo o en conflicto nunca elige el primero, la evidencia exacta corrige el enlace por dirección y la corrección manual no se pisa. Con dos anuncios del mismo inmueble se enlaza el anuncio que identifica la evidencia (H1); con «Ref.» y «Cod.» juntos, el que casa con los dos, y conflicto si señalan anuncios distintos (H1b); un «Cod.» recibido que aún no está en el catálogo no se suple con la «Ref.» y se reprocesa cuando llega (H1c). |
 | U01, U02 | SQL: contacto y tarea en una transacción; el doble envío con la misma clave no duplica; completar la tarea no cierra la solicitud. QA: fecha y hora de Madrid visibles antes de guardar. |
 | U03 | La URL conserva filtros, vista y página (ya existía); se restaura el scroll al cerrar la ficha. |
 | U07 | QA: Escape cierra y el foco vuelve; sin scroll horizontal a 390 px. **Lector de pantalla y zoom al 200 % sin probar.** |
@@ -174,9 +174,38 @@ La corrección de H1 seguía incompleta cuando llegan las dos evidencias. La sel
 | Solo la referencia compartida | Inmueble exacto, ningún anuncio afirmado |
 | Histórico (solo clasificar) con el guardado contradiciendo Ref. + Cod. | Conflicto, sin reescribir |
 
+### Tercera revisión de Codex: H1c, «Cod.» recibido que aún no está en el catálogo
+
+Con una «Ref.» válida y un «Cod.» que todavía no existe en `idealista_listings`, el código sin resultados se ignoraba y la referencia bastaba para confirmar el anuncio y repartir. Eso podía confirmar un anuncio distinto del consultado; por ejemplo, una republicación aún no catalogada con la misma referencia.
+
+**Antes de corregir.** Con la copia temporal de la batería sobre la migración sin cambiar, la consulta con Ref. y un Cod. desconocido se confirmaba y se repartía por la regla del inmueble de la referencia. Fallaron 8 de las 10 comprobaciones nuevas; las 2 que pasaban no demostraban la corrección.
+
+**Corrección:**
+
+- **Nuevo método `code_unresolved`.** Distingue «código recibido sin resolver» de «código no recibido». Si llega un «Cod.» que no está en el catálogo, no se confirma ningún anuncio ni inmueble, no se reescribe el enlace guardado y se muestra como «Por verificar».
+- **Motivo de reparto pendiente `link_code_unresolved`.** Tiene su texto en la ficha, en español e inglés.
+- **Reprocesado.** `reconcile_unresolved_code_leads(p_limit)` reprocesa solo las consultas en `code_unresolved` cuyo código ya está en el catálogo, con un índice parcial propio. La ingesta la llama al terminar cada lote (máximo 50; si falla, la ingesta no se interrumpe). Es idempotente.
+- **Reversión y permisos.** El script de reversión y la lista de permisos (solo `service_role`) incluyen la función y el índice nuevos.
+
+**Pruebas nuevas.** Inmueble Almagro con regla a Jaime y anuncio L61 (BC-600, Cod. 661). Llega «BC-600 + Cod. 669» y el 669 no existe. Todas en verde:
+
+| Caso | Resultado |
+|---|---|
+| Sin anuncio guardado | `code_unresolved`, sin anuncio ni inmueble confirmados y **sin reparto** (`link_code_unresolved`) aunque el inmueble de la referencia tenga regla |
+| Con el anuncio de la referencia guardado (L61) | No se confirma, no se reescribe y no se reparte |
+| Solo el «Cod.» sin resolver | `code_unresolved`, distinto de «sin datos» |
+| Histórico (solo clasificar) | `code_unresolved`, no exacto |
+| Se cataloga L62 (BC-600, Cod. 669) y se reprocesa | Solo se procesan las consultas cuyo código ya existe (3) |
+| Reprocesado sin guardado | Se resuelve a L62 y se reparte a Jaime |
+| Reprocesado con guardado | Se corrige de L61 a L62, auditado, y se reparte |
+| Un código que sigue sin catalogar | Sigue pendiente |
+| Repetir el reprocesado | No procesa nada ni duplica auditoría ni actividad |
+
+**Límite.** El reprocesado automático corre cuando la extensión envía un lote. Si se cataloga un anuncio y no llegan capturas, las consultas pendientes esperan al siguiente lote. También puede lanzarlo una persona con `select reconcile_unresolved_code_leads();`; nunca un agente. No hay cron propio.
+
 **Pruebas repetidas tras corregir** (local, datos sintéticos):
 
-- `scripts/sql/test-solicitudes-reparto.sh`: 109 comprobaciones y la de concurrencia, en verde tres veces seguidas (también tras H1b).
+- `scripts/sql/test-solicitudes-reparto.sh`: 119 comprobaciones y la de concurrencia, en verde tres veces seguidas (tras H1b y tras H1c).
 - `npm run test:solicitudes-reparto`, `npx tsc --noEmit` y `scripts/lint-migrations.py`: en verde.
 - No se repitió la QA visual: los cambios son de SQL y de un comentario, y el simulador de la QA visual no ejecuta funciones SQL.
 

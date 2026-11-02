@@ -44,6 +44,8 @@ t("vínculo: solo ref/code/manual son exactos", () => {
   assert.equal(linkStatus("ambiguous"), "conflict");
   assert.equal(linkStatus("conflict"), "conflict");
   assert.equal(linkStatus("none"), "no_data");
+  assert.equal(linkStatus("code_unresolved"), "unverified", "Cod. recibido sin resolver: nunca exacto");
+  assert.equal(isExactLink("code_unresolved"), false);
   assert.equal(isExactLink("unverified"), false);
   assert.equal(isExactLink("code"), true);
 });

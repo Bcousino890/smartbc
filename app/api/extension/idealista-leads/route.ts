@@ -505,6 +505,16 @@ export async function POST(req: Request) {
     console.error("idealista-leads routing error:", err);
   }
 
+  // Consultas que llegaron con un «Cod.» que entonces no estaba en el
+  // catálogo y que ahora sí (publicación recibida tarde): se reprocesan para
+  // resolver el anuncio exacto y repartirlas. Acotado y best-effort.
+  try {
+    const { error: reconcileError } = await db.rpc("reconcile_unresolved_code_leads", { p_limit: 50 });
+    if (reconcileError) throw reconcileError;
+  } catch (err) {
+    console.error("idealista-leads reconcile error:", err);
+  }
+
   return Response.json(
     {
       ok: true,

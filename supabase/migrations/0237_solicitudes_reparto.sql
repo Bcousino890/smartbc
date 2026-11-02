@@ -48,7 +48,7 @@ ALTER TABLE idealista_leads
 DO $$ BEGIN
   ALTER TABLE idealista_leads ADD CONSTRAINT il_property_link_method_valid CHECK (
     property_link_method IS NULL OR property_link_method IN
-      ('ref', 'code', 'manual', 'unverified', 'ambiguous', 'conflict', 'none'));
+      ('ref', 'code', 'manual', 'unverified', 'ambiguous', 'conflict', 'code_unresolved', 'none'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE idealista_leads ADD CONSTRAINT il_routing_status_valid CHECK (
@@ -60,7 +60,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 COMMENT ON COLUMN idealista_leads.property_link_method IS
-  'Evidencia del enlace con el anuncio: ref/code (identificador único), manual (corrección autorizada), unverified (enlace sin evidencia: calle+precio o histórico), ambiguous, conflict, none. NULL = sin clasificar.';
+  'Evidencia del enlace con el anuncio: ref/code (identificador único), manual (corrección autorizada), unverified (enlace sin evidencia: calle+precio o histórico), ambiguous, conflict, code_unresolved (llegó un Cod. que aún no está en el catálogo), none. NULL = sin clasificar.';
 
 ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS advisor_assignment_source  text,
@@ -73,6 +73,9 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS idx_leads_routing_pending
   ON idealista_leads (created_at DESC) WHERE routing_status IN ('pending', 'conflict');
+-- Para reprocesar las consultas cuyo «Cod.» llega al catálogo más tarde.
+CREATE INDEX IF NOT EXISTS idx_leads_code_unresolved
+  ON idealista_leads (idealista_code) WHERE property_link_method = 'code_unresolved';
 
 -- ─── 2 · Reglas de reparto («Asesor del piso») ───────────────────────────────
 --
@@ -293,7 +296,14 @@ BEGIN
       FROM idealista_listings x WHERE x.idealista_property_id = v_code;
   END IF;
 
-  IF cardinality(r_homes) = 0 AND cardinality(c_homes) = 0 THEN
+  IF v_code IS NOT NULL AND cardinality(c_homes) = 0 THEN
+    -- Se RECIBIÓ un «Cod.» que aún no está en el catálogo (p. ej. una
+    -- republicación que todavía no tenemos). No es lo mismo que no recibirlo:
+    -- el código identifica el anuncio consultado, y la «Ref.» sola podría
+    -- llevar a otro anuncio o a otro inmueble. Ni se confirma ni se reescribe
+    -- nada; reconcile_unresolved_code_leads lo resuelve cuando el código llegue.
+    v_method := 'code_unresolved';
+  ELSIF cardinality(r_homes) = 0 AND cardinality(c_homes) = 0 THEN
     v_method := CASE WHEN l.matched_property_id IS NOT NULL OR l.matched_listing_id IS NOT NULL
                      THEN 'unverified' ELSE 'none' END;
   ELSIF cardinality(r_homes) = 1 AND cardinality(c_homes) = 0 THEN
@@ -558,6 +568,7 @@ BEGIN
     RETURN routing_set_pending(p_lead, 'pending', CASE l.property_link_method
       WHEN 'conflict'  THEN 'link_conflict'
       WHEN 'ambiguous' THEN 'link_ambiguous'
+      WHEN 'code_unresolved' THEN 'link_code_unresolved'
       ELSE 'link_unverified' END);
   END IF;
 
@@ -619,6 +630,29 @@ BEGIN
     v_out := v_out || jsonb_build_array(jsonb_build_object('lead_id', v_id) || route_lead(v_id));
   END LOOP;
   RETURN v_out;
+END $$;
+
+-- Reprocesa las consultas que llegaron con un «Cod.» que entonces no estaba en
+-- el catálogo y que ahora sí está (publicación recibida tarde). Solo esas: las
+-- demás no se tocan. Reejecutarla no duplica nada (route_lead es idempotente).
+-- La llama la ingesta al terminar cada lote; también puede lanzarse a mano.
+CREATE OR REPLACE FUNCTION reconcile_unresolved_code_leads(p_limit integer DEFAULT 200)
+RETURNS jsonb LANGUAGE plpgsql SET search_path = public AS $$
+DECLARE v_id uuid; v_n integer := 0;
+BEGIN
+  FOR v_id IN
+    SELECT l.id FROM idealista_leads l
+     WHERE l.property_link_method = 'code_unresolved'
+       AND l.merged_into_id IS NULL
+       AND EXISTS (SELECT 1 FROM idealista_listings x
+                    WHERE x.idealista_property_id = btrim(l.idealista_code))
+     ORDER BY l.created_at
+     LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 200), 1000))
+  LOOP
+    PERFORM route_lead(v_id);
+    v_n := v_n + 1;
+  END LOOP;
+  RETURN jsonb_build_object('processed', v_n);
 END $$;
 
 -- ─── 9 · Acciones de administrador ───────────────────────────────────────────
@@ -1021,6 +1055,7 @@ BEGIN
     'routing_set_pending(uuid, text, text, jsonb)',
     'route_lead(uuid)',
     'route_leads(uuid[])',
+    'reconcile_unresolved_code_leads(integer)',
     'assign_lead_admin(uuid, uuid, uuid, text, integer)',
     'reassign_client_admin(uuid, uuid, uuid, text, integer)',
     'routing_set_rules(uuid, text, uuid, jsonb, text)',

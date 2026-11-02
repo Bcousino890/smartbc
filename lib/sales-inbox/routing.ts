@@ -28,6 +28,8 @@ export type LinkMethod =
   | "unverified"
   | "ambiguous"
   | "conflict"
+  /** Llegó un «Cod.» que aún no está en el catálogo: no se confirma nada. */
+  | "code_unresolved"
   | "none";
 
 /** Lo que se enseña: los cuatro estados del vínculo de la especificación. */
@@ -45,8 +47,9 @@ export function linkStatus(method: string | null | undefined): LinkStatus {
     case "none":
       return "no_data";
     default:
-      // 'unverified' y NULL (histórico sin clasificar): hay un enlace, pero
-      // nada demuestra que sea el anuncio que consultó.
+      // 'unverified', 'code_unresolved' (el código recibido aún no está en el
+      // catálogo) y NULL (histórico sin clasificar): nada demuestra todavía
+      // cuál es el anuncio que consultó.
       return "unverified";
   }
 }
@@ -63,6 +66,7 @@ export type RoutingReason =
   | "link_unverified"
   | "link_ambiguous"
   | "link_conflict"
+  | "link_code_unresolved"
   | "no_rule"
   | "rule_ambiguous"
   | "advisor_inactive"
@@ -75,6 +79,7 @@ export const ROUTING_REASONS: readonly RoutingReason[] = [
   "link_unverified",
   "link_ambiguous",
   "link_conflict",
+  "link_code_unresolved",
   "no_rule",
   "rule_ambiguous",
   "advisor_inactive",
