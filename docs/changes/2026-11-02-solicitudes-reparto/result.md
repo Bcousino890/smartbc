@@ -313,4 +313,14 @@ Las correcciones anteriores no cambian. Los tres casos proceden; cada uno tiene 
 
 Fabricio decidió adoptar la estética del Figma en Solicitudes y Reparto comercial, adaptada al CRM. El detalle (cómo está hecho, qué cambia por pantalla, qué se conserva y qué diferencias quedan) está en [comparacion-figma.md §6](comparacion-figma.md), y las capturas en `comparacion-figma/despues/`. Es un cambio de presentación: no toca la migración, las funciones SQL ni las acciones del servidor, salvo `listingRef`, un campo de solo lectura (Ref. o Cod.) que se añade a la fila de la lista para enseñarlo en la tarjeta.
 
-Verificación: `tsc` limpio; `test:solicitudes-reparto`, `test:lead-merge`, `test:sales-inbox`, `test:crm-appearance` y `test:lead-scope-identity` en verde; `test:typography` sin violaciones en estas pantallas (falla por 27 casos previos de otras pantallas y no está en CI); QA visual 37/37 sobre `next start` + simulador, con la comprobación de «volver» en móvil adaptada a «Volver a tarjetas»; sin desbordamiento horizontal a 390 px en las tres vistas ni en la ficha; sin errores de consola.
+Verificación: `tsc` limpio; `test:solicitudes-reparto` (18 bloques), `test:lead-merge`, `test:sales-inbox`, `test:crm-appearance` y `test:lead-scope-identity` en verde; `test:typography` sin violaciones en estas pantallas (falla por 27 casos previos de otras pantallas y no está en CI); QA visual 46/46 sobre `next start` + simulador, con la comprobación de «volver» en móvil adaptada a «Volver a tarjetas»; sin desbordamiento horizontal a 390 px en las tres vistas ni en la ficha; sin errores de consola.
+
+### Revisión de Codex del cambio visual (3 hallazgos, corregidos)
+
+| # | Hallazgo | Causa | Corrección | Comprobación |
+|---|---|---|---|---|
+| 1 | «Registrar contacto» desaparecía en las solicitudes con cliente vinculado | La ficha nueva lo condicionaba a que no estuviera cerrada, y una solicitud con cliente cuenta como «converted». Antes dependía solo del permiso de edición. | `fichaActions` (`lib/sales-inbox/views.ts`): depende solo de `canEdit`, también en las descartadas, como antes. | Prueba unitaria por estado; QA: ficha con cliente en escritorio y barra fija en móvil. |
+| 2 | En móvil no había Zinto en las convertidas ni en las descartadas | La barra fija solo salía si se podía editar y no estaba cerrada, y el botón de la cabecera está oculto en móvil. | La barra sale si hay alguna acción: Zinto siempre que haya teléfono, igual que en escritorio. El permiso de mensajes lo sigue comprobando el servidor al abrir la conversación. | Prueba unitaria; QA en móvil con la solicitud con cliente y con la descartada. |
+| 3 | El texto de orden no seguía al filtro | Solo distinguía «atención» de «el resto», así que «Más antiguas» seguía diciendo «más recientes». | `effectiveSort` lo usan la página y la bandeja, y `orderLabelKey` da un texto por orden (es/en). | Prueba unitaria; QA con el orden por defecto, «Más antiguas» y «Última actividad». |
+
+Las siete comprobaciones nuevas del QA fallaban contra el build anterior (39/46) y pasan con la corrección (46/46).

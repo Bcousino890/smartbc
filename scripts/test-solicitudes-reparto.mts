@@ -26,7 +26,9 @@ import {
   routingErrorMessage,
   subjectKey,
 } from "../lib/sales-inbox/routing.ts";
-import { groupKeyFor, priorityColumn } from "../lib/sales-inbox/views.ts";
+import { effectiveSort, fichaActions, groupKeyFor, orderLabelKey, priorityColumn } from "../lib/sales-inbox/views.ts";
+import { INBOX_SORTS } from "../lib/sales-inbox/types.ts";
+import { solicitudesEn, solicitudesEs } from "../lib/i18n/solicitudes-strings.ts";
 import { NO_WHATSAPP, type LeadListItem } from "../lib/sales-inbox/types.ts";
 import { madridDatePlus, madridParts, madridToIso } from "../lib/sales-inbox/time.ts";
 
@@ -192,6 +194,40 @@ t("tareas · hora de Madrid, también en los cambios de hora", () => {
   assert.deepEqual(madridParts(new Date("2026-11-02T23:30:00Z")), { date: "2026-11-03", time: "00:30" });
   assert.equal(madridDatePlus(new Date("2026-11-02T23:30:00Z"), 1), "2026-11-04", "«mañana» cuenta desde el día de Madrid");
   assert.equal(madridDatePlus(new Date("2026-12-31T10:00:00Z"), 1), "2027-01-01");
+});
+
+
+// ─── 2b · Ficha y orden (revisión de Codex sobre la estética del Figma) ─────
+
+t("Ficha · «Registrar contacto» depende solo del permiso, también con cliente o descartada", () => {
+  for (const state of ["new", "contacted", "engaged", "converted", "discarded"] as const) {
+    assert.equal(fichaActions({ phone: "600000001", state }, true).registerContact, true, `editor · ${state}`);
+    assert.equal(fichaActions({ phone: "600000001", state }, false).registerContact, false, `sin edición · ${state}`);
+  }
+});
+
+t("Ficha · Zinto a mano con teléfono en cualquier estado; sin teléfono, no", () => {
+  for (const state of ["new", "converted", "discarded"] as const) {
+    for (const canEdit of [true, false]) {
+      // El permiso de mensajes lo comprueba el servidor al abrir la conversación.
+      assert.equal(fichaActions({ phone: "+34 600 108 208", state }, canEdit).openZinto, true, `${state} · ${canEdit}`);
+    }
+    assert.equal(fichaActions({ phone: null, state }, true).openZinto, false);
+    assert.equal(fichaActions({ phone: "  ", state }, true).openZinto, false);
+  }
+});
+
+t("Orden · el texto sigue al orden efectivo, el elegido o el de la vista", () => {
+  assert.equal(effectiveSort(undefined, "needs-attention"), "attention");
+  assert.equal(effectiveSort(undefined, "all"), "newest");
+  assert.equal(effectiveSort("oldest", "needs-attention"), "oldest");
+  assert.equal(effectiveSort("inventado", "all"), "newest");
+  for (const s of INBOX_SORTS) {
+    const key = orderLabelKey(s);
+    assert.ok(solicitudesEs[key], `es: ${key}`);
+    assert.ok(solicitudesEn[key], `en: ${key}`);
+  }
+  assert.notEqual(solicitudesEs[orderLabelKey("oldest")], solicitudesEs[orderLabelKey("newest")]);
 });
 
 // ─── 3 · R02 en la aplicación ────────────────────────────────────────────────

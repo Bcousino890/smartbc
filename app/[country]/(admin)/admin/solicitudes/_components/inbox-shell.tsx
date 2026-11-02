@@ -33,6 +33,7 @@ import type {
   PriorityBoard,
 } from "@/lib/sales-inbox/types";
 import { COMMERCIAL_STATES, INBOX_VIEWS } from "@/lib/sales-inbox/types";
+import { orderLabelKey } from "@/lib/sales-inbox/views";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
@@ -95,6 +96,7 @@ export function InboxShell({
   canEdit,
   isAdmin = false,
   layout = "cards",
+  sort = "newest",
   board = null,
 }: {
   view: InboxView;
@@ -112,6 +114,8 @@ export function InboxShell({
   isAdmin?: boolean;
   /** A · Tarjetas · B · Por inmueble · C · Prioridades. Misma bandeja. */
   layout?: InboxLayout;
+  /** Orden efectivo de la lista (el elegido o el de la vista). */
+  sort?: InboxSort;
   board?: (PriorityBoard & { unplanned: number }) | null;
 }) {
   const t = useT();
@@ -231,10 +235,9 @@ export function InboxShell({
         ? "border-sol-action bg-sol-action text-sol-on-action"
         : "border-sol-line bg-sol-surface text-sol-ink hover:border-sol-action/40",
     );
-  const orderText =
-    (params?.get("sort") ?? (view === "needs-attention" ? "attention" : "newest")) === "attention"
-      ? t("inbox.order.attention")
-      : t("inbox.order.newest");
+  // El orden lo resuelve el servidor (`effectiveSort`): el texto dice el que
+  // de verdad se está aplicando, no una suposición.
+  const orderText = t(orderLabelKey(sort));
 
   return (
     <div className="sol-root min-h-screen">

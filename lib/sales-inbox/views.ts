@@ -8,7 +8,8 @@
 // ============================================================================
 
 import { deriveFollowUpState, needsAttention } from "./derive";
-import type { LeadListItem, LeadOperation, PriorityColumn } from "./types";
+import type { CommercialState, InboxSort, InboxView, LeadListItem, LeadOperation, PriorityColumn } from "./types";
+import { isInboxSort } from "./types";
 
 /**
  * B · Por inmueble. Un grupo = un anuncio (o ficha) EXACTO + una operación.
@@ -59,4 +60,35 @@ export function priorityColumn(lead: LeadListItem, now: Date = new Date()): Prio
   if (deriveFollowUpState(lead.nextActionAt, now) === "later") return "scheduled";
   if (lead.state === "contacted" || lead.state === "engaged") return "awaiting";
   return null;
+}
+
+// ─── Ficha y orden ───────────────────────────────────────────────────────────
+
+/**
+ * Acciones de trabajo de la ficha. NO dependen del estado comercial:
+ *   · «Registrar contacto» solo exige poder editar. Una solicitud con cliente
+ *     vinculado cuenta como «converted» y se sigue trabajando; una descartada
+ *     se puede volver a contactar.
+ *   · Zinto se ofrece siempre que haya teléfono: el permiso de mensajes lo
+ *     comprueba el servidor al abrir la conversación.
+ */
+export function fichaActions(
+  lead: { phone: string | null; state?: CommercialState },
+  canEdit: boolean,
+): { registerContact: boolean; openZinto: boolean } {
+  return { registerContact: canEdit, openZinto: !!lead.phone?.trim() };
+}
+
+/**
+ * Orden efectivo de la bandeja: el elegido si es válido; si no, el de la
+ * vista (la cola de atención por prioridad; el resto, lo más reciente arriba).
+ */
+export function effectiveSort(param: string | null | undefined, view: InboxView): InboxSort {
+  if (isInboxSort(param)) return param;
+  return view === "needs-attention" ? "attention" : "newest";
+}
+
+/** Texto «Primero …» del orden efectivo. */
+export function orderLabelKey(sort: InboxSort): string {
+  return `inbox.order.${sort}`;
 }

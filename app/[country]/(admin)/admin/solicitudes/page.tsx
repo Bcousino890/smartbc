@@ -22,11 +22,11 @@ import {
   isCommercialState,
   isInboxGrouping,
   isInboxLayout,
-  isInboxSort,
   isInboxView,
   isOperationFilter,
   type InboxFilters,
 } from "@/lib/sales-inbox/types";
+import { effectiveSort } from "@/lib/sales-inbox/views";
 import { getCountryConfig, isCountry, type Country } from "@/lib/country-config";
 import { PageFooter } from "@/components/ui/page-footer";
 import { InboxShell } from "./_components/inbox-shell";
@@ -112,11 +112,7 @@ export default async function SalesInboxPage({
 
   // El orden por prioridad es lo que necesita la cola de atención; en el resto
   // de vistas lo que se espera es una bandeja: lo más reciente arriba.
-  const sort = isInboxSort(sortParam)
-    ? sortParam
-    : view === "needs-attention"
-      ? "attention"
-      : "newest";
+  const sort = effectiveSort(sortParam, view);
 
   const filters: InboxFilters = {
     view,
@@ -175,6 +171,7 @@ export default async function SalesInboxPage({
       canEdit={editGate.ok}
       isAdmin={adminGate.ok}
       layout={layout}
+      sort={sort}
       board={board}
     />
   );

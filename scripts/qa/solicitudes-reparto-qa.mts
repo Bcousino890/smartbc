@@ -78,6 +78,20 @@ async function shot(page: Page, name: string) {
   const cards = await page.locator("[data-lead-id]").count();
   check("A · Tarjetas: se pintan las solicitudes", cards >= 10, `${cards} tarjetas`);
   check("A · vínculo visible en la tarjeta", (await page.getByText("Vínculo exacto").count()) > 0 && (await page.getByText("Por verificar").count()) > 0);
+  // El texto de orden dice el orden que de verdad se aplica.
+  const orderText = async (q: string) => {
+    await page.goto(`${BASE}/es/admin/solicitudes?${q}`, { waitUntil: "networkidle" });
+    return page.getByText(/Primero /).first().textContent();
+  };
+  check("Orden · «Todas» sin elegir: más recientes", /más recientes/.test((await orderText("view=all")) ?? ""));
+  check("Orden · «Más antiguas» elegido: el texto lo dice", /más antiguas/.test((await orderText("view=all&sort=oldest")) ?? ""));
+  check("Orden · cola de atención: pendientes de atención", /pendientes de atención/.test((await orderText("")) ?? ""));
+  check("Orden · «Última actividad» en la cola de atención", /actividad más reciente/.test((await orderText("sort=activity")) ?? ""));
+  // Solicitud con cliente vinculado (cuenta como «converted»): se sigue
+  // pudiendo registrar el contacto.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(8)}`, { waitUntil: "networkidle" });
+  check("Ficha con cliente vinculado · «Registrar contacto» disponible", (await page.getByRole("button", { name: "Registrar contacto" }).count()) > 0);
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all`, { waitUntil: "networkidle" });
   check("A · pendiente de reparto visible", (await page.getByText("Pendiente de reparto").count()) > 0);
   await shot(page, "01-tarjetas-escritorio");
 
@@ -213,6 +227,17 @@ async function shot(page: Page, name: string) {
   await page.waitForLoadState("networkidle");
   // La ficha es una página propia (Figma A02/D01): «Volver a tarjetas».
   check("Móvil · ficha a pantalla completa con «volver»", (await page.getByRole("button", { name: /Volver a (tarjetas|por piso|prioridades)/ }).count()) > 0);
+  // Zinto y «Registrar contacto» a mano también con cliente vinculado y en
+  // una descartada.
+  for (const [n, label] of [[8, "con cliente vinculado"], [12, "descartada"]] as const) {
+    await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(n)}`, { waitUntil: "networkidle" });
+    // La barra fija de abajo (D01), no el panel «Siguiente paso».
+    const bar = page.locator("div.fixed.bottom-0");
+    const zinto = bar.getByRole("button", { name: "Abrir Zinto" });
+    const reg = bar.getByRole("button", { name: "Registrar contacto" });
+    check(`Móvil · ${label}: «Abrir Zinto» en la barra fija`, (await zinto.count()) > 0 && (await zinto.first().isVisible()));
+    check(`Móvil · ${label}: «Registrar contacto» en la barra fija`, (await reg.count()) > 0 && (await reg.first().isVisible()));
+  }
   await shot(page, "16-movil-ficha");
   await page.goto(`${BASE}/es/admin/reparto`, { waitUntil: "networkidle" });
   const overflowR = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

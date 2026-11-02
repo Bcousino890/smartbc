@@ -31,6 +31,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { REASON_PRIORITY } from "@/lib/sales-inbox/types";
+import { fichaActions } from "@/lib/sales-inbox/views";
 import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -122,7 +123,9 @@ export function LeadWorkspace({
   const name = lead.name?.trim() || t("inbox.row.noName");
   const back = backLabel ?? t("inbox.backToList");
   const listingRef = lead.propertyRef ?? lead.idealistaCode;
-  const closed = lead.state === "converted" || lead.state === "discarded";
+  // Las acciones de trabajo no dependen del estado (cliente vinculado o
+  // descartada siguen pudiendo contactarse): ver `fichaActions`.
+  const actions = fichaActions(lead, canEdit);
 
   return (
     <div className="mx-auto max-w-[1400px]">
@@ -199,7 +202,7 @@ export function LeadWorkspace({
           <OwnerControl lead={lead} staff={staff} isAdmin={isAdmin} />
           {/* Abrir Zinto NO registra contacto: eso solo lo hace «Registrar
               contacto». */}
-          {lead.phone && (
+          {actions.openZinto && lead.phone && (
             <WhatsAppLeadButton
               phone={lead.phone}
               name={lead.name}
@@ -309,12 +312,14 @@ export function LeadWorkspace({
       </div>
 
       {/* Móvil: la acción principal siempre a mano (Figma D01). */}
-      {canEdit && !closed && (
+      {(actions.registerContact || actions.openZinto) && (
         <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col gap-2 border-t border-sol-line bg-sol-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] lg:hidden">
-          <Button variant="primary" onClick={() => setContactOpen(true)} className="w-full">
-            {t("inbox.contact.open")}
-          </Button>
-          {lead.phone && (
+          {actions.registerContact && (
+            <Button variant="primary" onClick={() => setContactOpen(true)} className="w-full">
+              {t("inbox.contact.open")}
+            </Button>
+          )}
+          {actions.openZinto && lead.phone && (
             <WhatsAppLeadButton
               phone={lead.phone}
               name={lead.name}
@@ -403,7 +408,7 @@ function NextStep({
       )}
 
       <div className="mt-6 space-y-3">
-        {canEdit && !closed && (
+        {fichaActions(lead, canEdit).registerContact && (
           <Button variant="primary" onClick={onRegister} className="w-full !min-h-[48px]">
             <ClipboardCheck size={16} strokeWidth={2} />
             {t("inbox.contact.open")}
