@@ -324,3 +324,9 @@ Verificación: `tsc` limpio; `test:solicitudes-reparto` (18 bloques), `test:lead
 | 3 | El texto de orden no seguía al filtro | Solo distinguía «atención» de «el resto», así que «Más antiguas» seguía diciendo «más recientes». | `effectiveSort` lo usan la página y la bandeja, y `orderLabelKey` da un texto por orden (es/en). | Prueba unitaria; QA con el orden por defecto, «Más antiguas» y «Última actividad». |
 
 Las siete comprobaciones nuevas del QA fallaban contra el build anterior (39/46) y pasan con la corrección (46/46).
+
+## 12. Fusión y despliegue (2026-11-02)
+
+- Fabricio validó la estética en local y confirmó la fusión. PR #386 fusionado en `main` a las 20:40 UTC (commit de fusión `e04e8400`); la CI de `main` sobre ese commit, en verde.
+- A los 30 minutos producción seguía sirviendo el build anterior: su CSS no contenía la capa `.sol-root`. Desde fuera del VPS no se puede saber la causa. Lo más probable es el fallo intermitente de Google Fonts al compilar, el mismo que tumbó la CI de `main` en `4495331f`; tras un build fallido, el cron no reintenta porque `main` ya no trae nada nuevo. Este commit, solo de documentación, relanza el despliegue, como hizo #384.
+- Cómo comprobarlo sin tocar el VPS: la hoja de estilos que sirve `/login` debe contener `--sol-ink`.
