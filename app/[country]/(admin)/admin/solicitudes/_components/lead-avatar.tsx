@@ -78,7 +78,7 @@ export function LeadAvatar({
               // Clic en la foto NO cierra: solo el fondo. Si no, arrastrar
               // para verla o pulsar sin querer la cierra en la cara.
               onClick={(e) => e.stopPropagation()}
-              className="max-h-[80vh] max-w-[80vw] rounded-xl object-contain shadow-2xl"
+              className="max-h-[80vh] max-w-[80vw] rounded-lg object-contain shadow-2xl"
             />
             <button
               type="button"

@@ -50,7 +50,7 @@ export function OwnerControl({
     lead.clientAdvisor && lead.clientAdvisor.id && lead.clientAdvisor.id !== lead.assignedTo;
 
   return (
-    <div className="min-w-0 rounded-xl border border-sol-line bg-sol-surface px-4 py-2.5 sm:min-w-[264px] lg:max-w-[340px]">
+    <div className="min-w-0 rounded-lg border border-sol-line bg-sol-surface px-4 py-2.5 sm:min-w-[264px] lg:max-w-[340px]">
       <p className="sol-meta text-sol-muted">{t("inbox.owner.label")}</p>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
         {lead.routingStatus === "conflict" ? (

@@ -211,14 +211,14 @@ export function LeadWorkspace({
               leadId={lead.id}
               size={16}
               label={t("inbox.zinto.open")}
-              className="hidden min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-sol-action px-6 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong disabled:opacity-50 lg:inline-flex xl:min-w-[300px]"
+              className="hidden min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-sol-action px-6 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong disabled:opacity-50 lg:inline-flex xl:min-w-[300px]"
             />
           )}
         </div>
       </header>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-xl border border-sol-error/30 bg-sol-error-bg px-4 py-3 text-sm text-sol-error">
+        <p role="alert" className="mt-4 rounded-lg border border-sol-error/30 bg-sol-error-bg px-4 py-3 text-sm text-sol-error">
           {error}
         </p>
       )}
@@ -235,7 +235,7 @@ export function LeadWorkspace({
             aria-controls={`ws-panel-${x.id}`}
             onClick={() => setTab(x.id)}
             className={cn(
-              "inline-flex min-h-[40px] shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-6 sol-ui font-semibold transition",
+              "inline-flex min-h-[40px] shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-6 sol-ui font-semibold transition",
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action",
               tab === x.id
                 ? "border-sol-action bg-sol-action text-sol-on-action"
@@ -328,7 +328,7 @@ export function LeadWorkspace({
               leadId={lead.id}
               size={16}
               label={t("inbox.zinto.openShort")}
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink disabled:opacity-50"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink disabled:opacity-50"
             />
           )}
         </div>
@@ -419,13 +419,13 @@ function NextStep({
             <a
               href={`tel:${lead.phone.replace(/\s/g, "")}`}
               title={lead.phone}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-3 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-sol-line bg-sol-surface px-3 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40"
             >
               <Phone size={15} strokeWidth={2} className="text-sol-action" />
               {t("inbox.call")}
             </a>
           ) : (
-            <span className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-sol-review px-3 text-center text-sm font-semibold text-sol-review-ink">
+            <span className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-sol-review px-3 text-center text-sm font-semibold text-sol-review-ink">
               {t("inbox.reason.missing_contact")}
             </span>
           )}
@@ -499,10 +499,10 @@ function MoreActions({
   const t = useT();
   return (
     <details className="relative">
-      <summary className="inline-flex min-h-[44px] w-full cursor-pointer list-none items-center justify-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-3 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40 [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-[44px] w-full cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-sol-line bg-sol-surface px-3 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40 [&::-webkit-details-marker]:hidden">
         <MoreHorizontal size={16} /> {t("inbox.more")}
       </summary>
-      <div className="absolute end-0 z-20 mt-2 w-64 rounded-xl border border-sol-line bg-sol-surface p-1.5 shadow-lg">
+      <div className="absolute end-0 z-20 mt-2 w-64 rounded-lg border border-sol-line bg-sol-surface p-1.5 shadow-lg">
         <a
           href={lead.idealistaThreadUrl}
           target="_blank"
@@ -820,9 +820,9 @@ function PropertyContext({
     .filter(Boolean)
     .join("  |  ");
   const btn =
-    "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40";
+    "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-sol-line bg-sol-surface px-4 sol-ui font-semibold text-sol-ink transition hover:border-sol-action/40";
   const primaryBtn =
-    "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-sol-action px-4 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong";
+    "inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-sol-action px-4 sol-ui font-semibold text-sol-on-action transition hover:bg-sol-action-strong";
 
   // Sin vínculo exacto NO se enseña ningún inmueble: ni foto ni ficha de un
   // piso «parecido». Solo lo que llegó de Idealista, tal cual, y la manera de

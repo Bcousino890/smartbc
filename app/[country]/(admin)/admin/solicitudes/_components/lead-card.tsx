@@ -153,7 +153,7 @@ export function LeadCard({
         aria-current={active ? "true" : undefined}
         data-lead-id={lead.id}
         className={cn(
-          "group flex h-full w-full flex-col rounded-xl border bg-sol-surface p-2 text-left transition",
+          "group flex h-full w-full flex-col rounded-lg border bg-sol-surface p-2 text-left transition",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action",
           active ? "border-sol-action ring-1 ring-sol-action" : "border-sol-line hover:border-sol-action/40 hover:shadow-sm",
           selected && "border-sol-action bg-sol-select/40",

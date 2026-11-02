@@ -229,7 +229,7 @@ export function InboxShell({
 
   const segBtn = (on: boolean) =>
     cn(
-      "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-5 sol-ui font-semibold transition",
+      "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-5 sol-ui font-semibold transition",
       "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action",
       on
         ? "border-sol-action bg-sol-action text-sol-on-action"
@@ -253,7 +253,7 @@ export function InboxShell({
               <p className="mt-1.5 text-base text-sol-muted">{t(`inbox.subtitle.${layout}`)}</p>
             </div>
             <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-              <label className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-xl border border-sol-line bg-sol-surface px-3.5 focus-within:border-sol-action focus-within:ring-2 focus-within:ring-sol-action/15 sm:w-[300px] sm:flex-none">
+              <label className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg border border-sol-line bg-sol-surface px-3.5 focus-within:border-sol-action focus-within:ring-2 focus-within:ring-sol-action/15 sm:w-[300px] sm:flex-none">
                 <Search size={16} strokeWidth={2} className="shrink-0 text-sol-muted" />
                 <input
                   type="search"
@@ -318,7 +318,7 @@ export function InboxShell({
           </nav>
 
           {showFilters && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-sol-line bg-sol-surface p-3">
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-sol-line bg-sol-surface p-3">
               <Select
                 value={params?.get("state") ?? ""}
                 onChange={(e) => setParams({ state: e.target.value || null })}
@@ -419,7 +419,7 @@ export function InboxShell({
               </p>
               {/* Venta o alquiler es una decisión de trabajo constante: vive a
                   la vista. «Sin determinar» es un segmento más, no un residuo. */}
-              <div className="flex items-center gap-0.5 rounded-xl border border-sol-line bg-sol-surface p-0.5">
+              <div className="flex items-center gap-0.5 rounded-lg border border-sol-line bg-sol-surface p-0.5">
                 {([null, "sale", "rent", "unknown"] as (OperationFilter | null)[]).map((o) => {
                   const on = (params?.get("op") ?? null) === o;
                   return (
@@ -429,7 +429,7 @@ export function InboxShell({
                       onClick={() => setParams({ op: o })}
                       aria-pressed={on}
                       className={cn(
-                        "min-h-[32px] whitespace-nowrap rounded-[10px] px-2.5 sol-meta font-semibold transition",
+                        "min-h-[32px] whitespace-nowrap rounded-md px-2.5 sol-meta font-semibold transition",
                         on ? "bg-sol-select text-sol-action" : "text-sol-muted hover:text-sol-ink",
                       )}
                     >
@@ -643,7 +643,7 @@ function FilterToggle({
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "min-h-[44px] rounded-[10px] border px-3.5 text-sm font-semibold transition",
+        "min-h-[44px] rounded-md border px-3.5 text-sm font-semibold transition",
         on
           ? "border-sol-action bg-sol-select text-sol-action"
           : "border-sol-line bg-sol-surface text-sol-ink hover:border-sol-action/40",
