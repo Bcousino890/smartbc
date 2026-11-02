@@ -526,9 +526,10 @@ export async function convertLeadToClient(input: {
   }
 
   // Un asesor por cliente (route_lead, 0237): si el cliente ya tenía asesor,
-  // la solicitud lo hereda; si no lo tenía, el cliente toma el de la
-  // solicitud; si los dos tienen y difieren, queda en conflicto visible para
-  // un administrador. Nunca se cambia en silencio.
+  // la solicitud lo hereda (también si la había repartido la regla del piso,
+  // con auditoría); si no lo tenía, el cliente toma el de la solicitud. Solo
+  // cuando un ADMINISTRADOR asignó la solicitud a otra persona queda en
+  // conflicto visible, para que decida un administrador.
   const { error: routeError } = await db().rpc("route_lead", { p_lead: input.leadId });
   if (routeError) console.error("[convertLeadToClient] route_lead", routeError.message);
 

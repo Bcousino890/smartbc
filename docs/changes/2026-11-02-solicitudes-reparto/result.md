@@ -45,7 +45,7 @@ Fabricio puede revocar cualquiera de estas decisiones. Para cada una se indica d
 | D5 | Un cambio de regla vale para las solicitudes que llegan **después** de confirmarlo. Las anteriores que siguen pendientes las asigna un administrador. | Regla 5 de la especificación: el histórico no se reasigna de forma implícita. |
 | D6 | **Asignar** (incluido «Asignarme» y el lote) pasa a ser solo de administradores (owner/admin, por rol efectivo en el país). | R02 y la política confirmada. **Es un cambio de flujo para quien se asignaba solicitudes sin ser administrador.** |
 | D7 | Una solicitud con cliente vinculado no se asigna suelta: se usa «Reasignar cliente», que mueve también sus solicitudes abiertas y sus tareas. | Un único asesor por cliente. |
-| D8 | Si al vincular un cliente su asesor no coincide con el responsable de la solicitud, la solicitud queda en **conflicto visible**. No se elige ninguno en silencio. | Evita dos responsables y cambios silenciosos. |
+| D8 | Cuando una solicitud se vincula a un cliente que ya tiene **otro** asesor, hay dos casos. Si la había asignado el reparto automático (o se asignó antes de 0237), **hereda el asesor del cliente**, con auditoría del anterior y del nuevo. Si la asignó a mano un administrador, queda en **conflicto visible** y decide un administrador reasignando al cliente. *(Corregido tras la revisión de Codex; antes era conflicto en los dos casos. Ver §8.)* | Un cliente tiene un único asesor; una decisión explícita de un administrador no se deshace en silencio. |
 | D9 | Zinto: el cambio de responsable se guarda en una cola recuperable (`zinto_owner_sync`, en estado «pendiente · falta contrato»). **No se envía nada.** | El repo no tiene contrato de asignación (ver §5). |
 | D10 | Paleta y tipografía: se usan los tokens actuales del CRM (incluido el modo oscuro), no la paleta propuesta en Figma. | El propio diseño la marca «pendiente de validar con la marca». |
 | D11 | Textos nuevos en español e inglés. Francés y alemán muestran el español hasta que se traduzcan. | Es el mecanismo que ya tiene el diccionario para cualquier clave sin traducir. |
@@ -68,7 +68,7 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | Tipos | `npx tsc --noEmit` | OK |
 | Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `npm run test:*` de `ci.yml` | 34/34 OK |
 | Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 13 bloques OK |
-| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 90 comprobaciones OK |
+| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 103 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
 | Build de producción aislado (`.env.production` apartado sin leerse, variables ficticias) | `NEXT_BUILD_DIR=.next.qa npx next build` | OK |
 | QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 | `scripts/qa/solicitudes-reparto-qa.mts` | 30/30 OK, sin errores de consola |
 
@@ -87,8 +87,8 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | R09, Z05 | SQL: conserva el asesor del cliente; con el mismo teléfono sin verificar no hereda ni crea un segundo asesor. |
 | R10 | SQL: una nueva publicación del mismo piso se resuelve exacta y aplica su regla. |
 | R11 | SQL: reasignar mueve las solicitudes abiertas y las tareas, encola la conversación y conserva el autor de lo anterior. QA: alcance visible antes de confirmar. |
-| R12 | SQL con dos sesiones simultáneas: una sola primera asignación; la segunda solicitud hereda. |
-| D01–D05, D11, D12 | SQL: Cod. y Ref. exactos, sin asociación por dirección, ambiguo o en conflicto nunca elige el primero, la evidencia exacta corrige el enlace por dirección y la corrección manual no se pisa. |
+| R12 | SQL con dos sesiones simultáneas: una sola primera asignación; la segunda solicitud hereda. Además, un reparto y una reasignación administrativa simultáneos del mismo cliente terminan sin interbloqueo (H2). |
+| D01–D05, D11, D12 | SQL: Cod. y Ref. exactos, sin asociación por dirección, ambiguo o en conflicto nunca elige el primero, la evidencia exacta corrige el enlace por dirección y la corrección manual no se pisa. Con dos anuncios del mismo inmueble se enlaza el anuncio que identifica la evidencia (H1). |
 | U01, U02 | SQL: contacto y tarea en una transacción; el doble envío con la misma clave no duplica; completar la tarea no cierra la solicitud. QA: fecha y hora de Madrid visibles antes de guardar. |
 | U03 | La URL conserva filtros, vista y página (ya existía); se restaura el scroll al cerrar la ficha. |
 | U07 | QA: Escape cierra y el foco vuelve; sin scroll horizontal a 390 px. **Lector de pantalla y zoom al 200 % sin probar.** |
@@ -138,6 +138,26 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54381 NEXT_PUBLIC_SUPABASE_ANON_KEY=du
 BASE=http://127.0.0.1:3281 OUT_DIR=<scratch>/shots node --experimental-strip-types scripts/qa/solicitudes-reparto-qa.mts
 ```
 
-## 8. Revisión
+## 8. Revisión de Codex (2026-11-02, solo lectura)
 
-No se ha hecho la revisión de Codex ni la QA visual de Fabricio.
+Codex señaló tres problemas en `0237`. Se comprobó cada uno en el código y con una prueba que **falló antes de corregir**. Esas pruebas se ejecutaron contra la migración sin cambios, con una copia temporal de la batería fuera del repositorio. Las tres proceden.
+
+| # | Hallazgo | Reproducción antes de corregir | Corrección | Pruebas nuevas, ahora en verde |
+|---|---|---|---|---|
+| H1 | **Anuncio exacto.** `resolve_lead_link` conservaba el anuncio guardado si era del mismo inmueble, aunque el «Cod.» recibido fuera de otro anuncio de ese inmueble. | `TEST FAIL: H1 · llega el Cod. del otro anuncio del mismo inmueble` | El anuncio lo decide la evidencia: el único anuncio del inmueble que casa con «Ref.» o «Cod.». Si casan varios, se conserva el guardado solo si es uno de ellos; si no, ninguno. Si la evidencia es la referencia de la ficha (identifica el inmueble, no un anuncio), se conserva el guardado de ese inmueble. Completar un anuncio que faltaba no se trata como corrección ni como conflicto. | Se enlaza el anuncio del «Cod.» recibido, con auditoría del anterior. En el histórico, un anuncio guardado distinto del «Cod.» queda en conflicto sin reescribirse. Con solo la referencia de la ficha se conserva el anuncio. |
+| H2 | **Orden de bloqueo.** `route_lead` llamaba a `resolve_lead_link` (que bloquea la solicitud) antes de bloquear al cliente; `reassign_client_admin` bloquea cliente → solicitudes. | Sesión A: `ERROR: deadlock detected` | `route_lead` bloquea el cliente **antes** de resolver el vínculo. Orden único en 0237: cliente → solicitud; ninguna función bloquea un cliente después de una solicitud (documentado en la migración). | `test-solicitudes-reparto-lock-*.sql`: un trigger **solo de prueba** pausa 2 s la sesión A dentro de `route_lead` mientras la sesión B reasigna al mismo cliente. Las dos terminan, gana la reasignación y cliente y solicitud quedan con el mismo asesor. |
+| H3 | **Asesor único.** Una solicitud repartida por la regla a A y vinculada después a un cliente de B quedaba en conflicto con dos responsables posibles. | `TEST FAIL: H3 · asignada por regla y vinculada a un cliente con otro asesor` | Si el origen es la regla, una herencia o una asignación anterior a 0237, la solicitud **hereda** el asesor del cliente: auditoría `lead_inherited` con el anterior y el nuevo, nota en el hilo, y la cola de Zinto deja de tener al anterior pendiente. Solo una asignación **manual de un administrador** sigue en conflicto visible. | Regla → hereda B con auditoría; el asesor del cliente no cambia; la cola de Zinto no conserva a A pendiente; la asignación anterior a 0237 también hereda; la asignación manual de un administrador sigue en conflicto (prueba existente, renombrada). |
+
+**Pruebas repetidas tras corregir** (local, datos sintéticos):
+
+- `scripts/sql/test-solicitudes-reparto.sh`: 103 comprobaciones y la de concurrencia, en verde tres veces seguidas.
+- `npm run test:solicitudes-reparto`, `npx tsc --noEmit` y `scripts/lint-migrations.py`: en verde.
+- No se repitió la QA visual: los cambios son de SQL y de un comentario, y el simulador de la QA visual no ejecuta funciones SQL.
+
+**Límites de estas pruebas:**
+
+- H2 demuestra la intercalación concreta que causaba el interbloqueo (reparto dentro, reasignación entrando). No es una prueba exhaustiva de todas las intercalaciones posibles. La regla de orden es lo que la generaliza.
+- El trigger de pausa existe solo en la base temporal de prueba y se borra al terminar.
+- Postgres local 16 frente a la versión real del VPS, sin comprobar.
+
+La revisión de Codex se hizo en solo lectura. No se ha hecho la QA visual de Fabricio. Zinto sigue **pendiente**: la cola guarda el responsable vigente, pero no se envía nada hasta tener el contrato (§5).

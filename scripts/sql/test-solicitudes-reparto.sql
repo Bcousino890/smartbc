@@ -270,6 +270,37 @@ SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = p
   OR (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('103')) <> 'e0000000-0000-0000-0000-000000000011',
   'D11 · las solicitudes anteriores mantienen su origen');
 
+-- ═══ Hallazgo 1 · dos anuncios del mismo inmueble ══════════════════════════
+-- P1 tiene dos anuncios: L1 (Cod. 111) y su republicación L11 (Cod. 112).
+-- Se valida el ANUNCIO recibido, no solo el inmueble.
+SELECT pg_temp.lead('801', '+34 611 000 801', NULL, NULL,
+  'd0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001');
+UPDATE idealista_leads SET idealista_code = '112' WHERE id = pg_temp.l('801');
+SELECT resolve_lead_link(pg_temp.l('801'), true);
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('801'))
+    = 'e0000000-0000-0000-0000-000000000011'
+  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('801')) = :P1
+  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('801')) = 'code',
+  'H1 · llega el Cod. del otro anuncio del mismo inmueble: se enlaza ESE anuncio');
+SELECT test_util.ok(EXISTS (SELECT 1 FROM assignment_events WHERE kind = 'lead_link_fixed'
+  AND lead_id = pg_temp.l('801') AND details->>'previous_listing_id' = 'e0000000-0000-0000-0000-000000000001'),
+  'H1 · la sustitución del anuncio queda auditada');
+-- Clasificar el histórico: el anuncio guardado contradice el Cod. → conflicto, sin reescribir.
+SELECT pg_temp.lead('802', '+34 611 000 802', NULL, '111',
+  'd0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000011');
+SELECT test_util.ok(resolve_lead_link(pg_temp.l('802'), false) = 'conflict'
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('802')) = 'e0000000-0000-0000-0000-000000000011',
+  'H1 · histórico: anuncio guardado distinto del Cod. recibido = conflicto, sin reescribir');
+-- Solo referencia interna de la ficha (no identifica anuncio): se conserva el
+-- anuncio guardado de ese mismo inmueble.
+SELECT pg_temp.lead('803', '+34 611 000 803', 'bc-1', NULL,
+  'd0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000011');
+SELECT resolve_lead_link(pg_temp.l('803'), true);
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('803'))
+    = 'e0000000-0000-0000-0000-000000000011'
+  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('803')) = 'ref',
+  'H1 · referencia de la ficha sin anuncio concreto: se conserva el anuncio del mismo inmueble');
+
 -- ═══ R09 · Z05 · un cliente, un asesor ══════════════════════════════════════
 -- Lucía (cliente verificado de Jaime) consulta Goya, que es de… Jaime ahora;
 -- se pasa Goya a Sofía para que la regla diga otra cosa.
@@ -296,7 +327,7 @@ UPDATE idealista_leads SET client_id = :LUCIA, converted_at = now() WHERE id = p
 SELECT route_lead(pg_temp.l('503'));
 SELECT test_util.ok((SELECT routing_status FROM idealista_leads WHERE id = pg_temp.l('503')) = 'conflict'
   AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('503')) = :SOFIA,
-  'R09 · dos responsables posibles: conflicto visible, nada cambia en silencio');
+  'H3 · asignación MANUAL de un administrador frente al asesor del cliente: conflicto visible, nada cambia en silencio');
 SELECT test_util.expect_error(format('SELECT assign_lead_admin(%L, %L, %L, %L, 1)',
   :ADM, pg_temp.l('503'), :JAIME, 'x'), 'client_linked');
 
@@ -308,6 +339,35 @@ SELECT route_lead(pg_temp.l('504'));
 SELECT test_util.ok((SELECT assigned_advisor_id FROM profiles WHERE id = :MARTA) = :SOFIA
   AND (SELECT advisor_assignment_source FROM profiles WHERE id = :MARTA) = 'lead',
   'R09 · el cliente sin asesor toma el de su primera solicitud');
+
+-- ═══ Hallazgo 3 · la regla no deja dos responsables ═══════════════════════
+-- 510 se reparte por la regla de Castelló (Jaime); después se vincula a Marta,
+-- cuyo asesor es Sofía → hereda a Sofía, con auditoría. No es conflicto.
+SELECT pg_temp.lead('510', '+34 633 000 510', 'BC-100', NULL);
+SELECT route_lead(pg_temp.l('510'));
+SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('510')) = :JAIME
+  AND (SELECT assignment_source FROM idealista_leads WHERE id = pg_temp.l('510')) = 'rule',
+  'H3 · preparación: asignada por la regla del piso');
+UPDATE idealista_leads SET client_id = :MARTA, converted_at = now() WHERE id = pg_temp.l('510');
+SELECT route_lead(pg_temp.l('510'));
+SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('510')) = :SOFIA
+  AND (SELECT assignment_source FROM idealista_leads WHERE id = pg_temp.l('510')) = 'inherited'
+  AND (SELECT routing_status FROM idealista_leads WHERE id = pg_temp.l('510')) = 'assigned',
+  'H3 · asignada por regla y vinculada a un cliente con otro asesor: hereda el del cliente');
+SELECT test_util.ok(EXISTS (SELECT 1 FROM assignment_events WHERE kind = 'lead_inherited'
+  AND lead_id = pg_temp.l('510') AND previous_advisor_id = :JAIME AND new_advisor_id = :SOFIA),
+  'H3 · el cambio queda auditado con responsable anterior y nuevo');
+SELECT test_util.ok((SELECT assigned_advisor_id FROM profiles WHERE id = :MARTA) = :SOFIA,
+  'H3 · el asesor del cliente no cambia');
+SELECT test_util.ok(NOT EXISTS (SELECT 1 FROM zinto_owner_sync WHERE subject_kind = 'lead'
+  AND subject_id = pg_temp.l('510') AND advisor_id = :JAIME AND status = 'pending'),
+  'H3 · Zinto no se queda con el responsable anterior pendiente de enviar');
+-- Asignación previa a 0237 (sin origen): se trata igual que la de la regla.
+SELECT pg_temp.lead('511', '+34 633 000 511', NULL, NULL);
+UPDATE idealista_leads SET assigned_to = :JAIME, client_id = :MARTA, converted_at = now() WHERE id = pg_temp.l('511');
+SELECT route_lead(pg_temp.l('511'));
+SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('511')) = :SOFIA,
+  'H3 · una asignación anterior sin origen también hereda el asesor del cliente');
 
 -- ═══ R11 · reasignar un cliente con varias consultas ════════════════════════
 SELECT pg_temp.lead('601', '+34 600 000 001', 'BC-100', NULL);

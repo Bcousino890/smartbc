@@ -319,24 +319,43 @@ BEGIN
 
     IF v_home LIKE 'p:%' THEN
       v_prop := substr(v_home, 3)::uuid;
-      -- El anuncio: el que ya estaba si es de esta vivienda; si no, el único
-      -- anuncio de esta vivienda que casa con la evidencia.
-      IF v_cur_list = v_home THEN
-        v_list := l.matched_listing_id;
-      ELSE
-        SELECT count(*), min(x.id::text)::uuid INTO v_n, v_list
-          FROM idealista_listings x
-         WHERE x.property_id = v_prop
-           AND ((v_ref IS NOT NULL AND lower(x.reference_code) = v_ref)
-             OR (v_code IS NOT NULL AND x.idealista_property_id = v_code));
-        IF v_n <> 1 THEN v_list := NULL; END IF;
+      -- El ANUNCIO lo decide la evidencia recibida, no el que ya estaba: un
+      -- mismo inmueble puede tener varios anuncios (republicaciones, venta y
+      -- alquiler), y que el guardado sea «de la misma vivienda» no lo valida.
+      SELECT count(*), min(x.id::text)::uuid INTO v_n, v_list
+        FROM idealista_listings x
+       WHERE x.property_id = v_prop
+         AND ((v_ref IS NOT NULL AND lower(x.reference_code) = v_ref)
+           OR (v_code IS NOT NULL AND x.idealista_property_id = v_code));
+      IF v_n = 0 THEN
+        -- La evidencia es la referencia de la FICHA (bc_reference): identifica
+        -- el inmueble, no un anuncio. El anuncio guardado se conserva solo si
+        -- es de ese inmueble; nada lo contradice.
+        v_list := CASE WHEN v_cur_list = v_home THEN l.matched_listing_id END;
+      ELSIF v_n > 1 THEN
+        -- Varios anuncios del inmueble casan con la evidencia: el guardado
+        -- vale solo si es uno de ellos; si no, ninguno.
+        v_list := CASE WHEN EXISTS (
+          SELECT 1 FROM idealista_listings x
+           WHERE x.id = l.matched_listing_id AND x.property_id = v_prop
+             AND ((v_ref IS NOT NULL AND lower(x.reference_code) = v_ref)
+               OR (v_code IS NOT NULL AND x.idealista_property_id = v_code))
+        ) THEN l.matched_listing_id END;
       END IF;
     ELSE
       v_prop := NULL;
       v_list := substr(v_home, 3)::uuid;
     END IF;
 
-    IF v_cur IS DISTINCT FROM v_home
+    IF v_cur IS NOT DISTINCT FROM v_home
+       AND l.matched_property_id IS NOT DISTINCT FROM v_prop
+       AND l.matched_listing_id IS NULL AND v_list IS NOT NULL THEN
+      -- Solo falta el anuncio y la evidencia lo identifica: se completa (en
+      -- la ingesta). No contradice nada, así que no es conflicto ni corrección.
+      IF p_fix THEN
+        UPDATE idealista_leads SET matched_listing_id = v_list, updated_at = now() WHERE id = p_lead;
+      END IF;
+    ELSIF v_cur IS DISTINCT FROM v_home
        OR l.matched_property_id IS DISTINCT FROM v_prop
        OR (l.matched_listing_id IS NOT NULL AND l.matched_listing_id IS DISTINCT FROM v_list) THEN
       IF NOT p_fix THEN
@@ -357,7 +376,7 @@ BEGIN
         INSERT INTO lead_activity (lead_id, author_id, kind, body)
         VALUES (p_lead, NULL, 'note',
           'Anuncio identificado por ' || CASE v_method WHEN 'code' THEN 'código de Idealista' ELSE 'referencia' END
-          || ' exacta; sustituye al enlace sin evidencia.');
+          || ' exacta; sustituye al enlace anterior.');
       END IF;
     END IF;
   END IF;
@@ -373,8 +392,12 @@ END $$;
 -- Se llama al recibir o actualizar una solicitud y al vincularla a un cliente.
 -- Reejecutarla no duplica nada: si ya está resuelta, no cambia.
 --
--- Orden de bloqueo: CLIENTE → SOLICITUD (el mismo que reassign_client_admin)
--- para que las dos no se bloqueen mutuamente.
+-- Orden de bloqueo, el MISMO en todas las funciones de 0237: CLIENTE →
+-- SOLICITUD. reassign_client_admin bloquea el cliente y después sus
+-- solicitudes; route_lead bloquea el cliente ANTES de tocar la solicitud
+-- (incluido resolve_lead_link, que la bloquea). Ninguna función bloquea un
+-- cliente después de una solicitud: así un reparto y una reasignación
+-- simultáneos se esperan en vez de interbloquearse.
 
 CREATE OR REPLACE FUNCTION routing_set_pending(p_lead uuid, p_status text, p_reason text, p_hint jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SET search_path = public AS $$
@@ -404,14 +427,15 @@ DECLARE
   v_op       uuid := gen_random_uuid();
   v_version  integer;
 BEGIN
-  PERFORM resolve_lead_link(p_lead, true);
-
-  -- 1. Cliente primero (orden de bloqueo), solicitud después.
+  -- 1. Cliente primero (orden de bloqueo), solicitud después. El vínculo se
+  --    resuelve ya con el cliente bloqueado: resolve_lead_link bloquea la
+  --    solicitud y no debe hacerlo antes que el cliente.
   SELECT client_id INTO v_client FROM idealista_leads WHERE id = p_lead;
   IF NOT FOUND THEN RETURN jsonb_build_object('outcome', 'missing'); END IF;
   IF v_client IS NOT NULL THEN
     SELECT * INTO c FROM profiles WHERE id = v_client FOR UPDATE;
   END IF;
+  PERFORM resolve_lead_link(p_lead, true);
   SELECT * INTO l FROM idealista_leads WHERE id = p_lead FOR UPDATE;
   IF l.client_id IS DISTINCT FROM v_client THEN
     -- Alguien lo vinculó entre las dos lecturas: no se decide con datos viejos.
@@ -440,11 +464,31 @@ BEGIN
         UPDATE idealista_leads SET routing_status = 'assigned', routing_reason = 'client_owner' WHERE id = p_lead;
       END IF;
       RETURN jsonb_build_object('outcome', 'unchanged', 'advisor_id', l.assigned_to);
-    ELSE
-      -- Dos responsables posibles: no se elige en silencio. Lo resuelve un
-      -- administrador reasignando al cliente.
+    ELSIF l.assignment_source = 'manual_admin' THEN
+      -- Un administrador asignó ESTA solicitud a otra persona de forma
+      -- explícita: ni la solicitud ni el cliente cambian en silencio. Lo
+      -- decide un administrador reasignando al cliente.
       RETURN routing_set_pending(p_lead, 'conflict', 'client_owner_differs',
         jsonb_build_object('client_advisor_id', c.assigned_advisor_id, 'lead_advisor_id', l.assigned_to));
+    ELSE
+      -- Reparto automático (o asignación anterior a 0237) frente al asesor del
+      -- cliente verificado: manda el cliente, que tiene un único asesor. La
+      -- solicitud lo hereda y queda auditado quién la tenía.
+      v_version := l.assignment_version + 1;
+      UPDATE idealista_leads
+         SET assigned_to = c.assigned_advisor_id, assigned_at = now(), assignment_source = 'inherited',
+             assignment_version = v_version, routing_status = 'assigned', routing_reason = 'client_owner',
+             updated_at = now()
+       WHERE id = p_lead;
+      PERFORM routing_audit(v_op, 'lead_inherited', NULL, p_lead, l.client_id, l.assigned_to,
+        c.assigned_advisor_id, 'client_owner', v_version, NULL, NULL, NULL, NULL,
+        jsonb_build_object('previous_source', l.assignment_source));
+      INSERT INTO lead_activity (lead_id, author_id, kind, body)
+      VALUES (p_lead, NULL, 'assignment', 'Asignada al asesor del cliente (antes la tenía otra persona por el reparto)');
+      -- La cola de Zinto no puede quedarse con el responsable anterior.
+      PERFORM routing_enqueue_zinto('lead', p_lead, l.phone, l.country, c.assigned_advisor_id, v_version);
+      RETURN jsonb_build_object('outcome', 'inherited', 'advisor_id', c.assigned_advisor_id,
+        'previous_advisor_id', l.assigned_to);
     END IF;
   END IF;
 
