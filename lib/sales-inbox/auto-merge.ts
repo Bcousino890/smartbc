@@ -35,7 +35,7 @@ export async function autoMergeLeadsByPhone(phoneDigitsTouched: string[]): Promi
     try {
       const { data, error } = await db
         .from("idealista_leads")
-        .select("id, name, phone_digits, created_at")
+        .select("id, name, phone_digits, created_at, idealista_code, property_ref, property_title")
         .like("phone_digits", `%${tail}`)
         .is("merged_into_id", null)
         .order("created_at", { ascending: true })
@@ -51,6 +51,7 @@ export async function autoMergeLeadsByPhone(phoneDigitsTouched: string[]): Promi
           name: (r.name ?? null) as string | null,
           phoneDigits: (r.phone_digits ?? null) as string | null,
           createdAt: r.created_at as string,
+          ad: { code: r.idealista_code ?? null, ref: r.property_ref ?? null, title: r.property_title ?? null },
         }))
         .filter((c) => phoneTail(c.phoneDigits) === tail);
 

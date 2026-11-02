@@ -23,6 +23,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canActOnLead, canActOnLeads, LEADS_COUNTRY } from "@/lib/db/queries/view-scope";
 import { getClientReassignScope, type ClientReassignScope } from "@/lib/db/queries/routing";
 import { ADMIN_ROLES, isExactLink, routingErrorMessage } from "@/lib/sales-inbox/routing";
+import { adsDiffer } from "@/lib/sales-inbox/merge";
 import { confirmPrepareVisits, lookupPrepareVisits } from "./prepare-visits-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -281,11 +282,12 @@ export async function registerContact(input: {
 // ─── Unir solicitudes del mismo teléfono ─────────────────────────────────────
 
 export type MergeResult =
-  | { ok: true; survivorId: string; merged: number }
+  | { ok: true; survivorId: string; merged: number; keptSeparate: number }
   | { ok: false; error: string };
 
 /**
- * Une en UNA todas las solicitudes con el mismo teléfono (últimos 9 dígitos).
+ * Une en UNA las solicitudes con el mismo teléfono (últimos 9 dígitos) que son
+ * la MISMA consulta: mismo anuncio, o sin datos del anuncio (una llamada).
  *
  * La fusión automática de la ingesta se frena cuando los nombres son
  * distintos (pareja, oficina) y solo mira lo que entra en cada captura, así
@@ -312,7 +314,7 @@ export async function mergeSamePhoneLeads(leadId: string): Promise<MergeResult> 
 
   const { data: rows, error } = await db()
     .from("idealista_leads")
-    .select("id, phone_digits, created_at, client_id, converted_at, converted_by, property_title")
+    .select("id, phone_digits, created_at, client_id, converted_at, converted_by, property_title, idealista_code, property_ref")
     .like("phone_digits", `%${tail}`)
     .is("merged_into_id", null)
     .order("created_at", { ascending: true })
@@ -330,7 +332,20 @@ export async function mergeSamePhoneLeads(leadId: string): Promise<MergeResult> 
   const allowed = new Set(await canActOnLeads(group.map((r) => r.id), "edit"));
   if (group.some((r) => !allowed.has(r.id))) return { ok: false, error: NO_ACCESS };
 
-  const [survivor, ...rest] = group;
+  // Solo se une la MISMA consulta (mismo anuncio, o sin datos del anuncio,
+  // como una llamada). Las consultas de otros anuncios son solicitudes
+  // propias aunque sean de la misma persona (especificación D07): se quedan
+  // a la vista y comparten cliente y asesor al vincularlas al cliente.
+  const asAd = (r: any) => ({
+    id: r.id, name: null, phoneDigits: r.phone_digits, createdAt: r.created_at,
+    ad: { code: r.idealista_code ?? null, ref: r.property_ref ?? null, title: r.property_title ?? null },
+  });
+  const [survivor, ...others] = group;
+  const rest = others.filter((r) => !adsDiffer(asAd(survivor), asAd(r)));
+  const keptSeparate = others.length - rest.length;
+  if (rest.length === 0) {
+    return { ok: false, error: "Las demás solicitudes de este teléfono son de otros anuncios: se mantienen separadas." };
+  }
   const ids = rest.map((r) => r.id);
 
   // Historial primero: si se corta entre las dos escrituras quedan dos leads
@@ -367,7 +382,7 @@ export async function mergeSamePhoneLeads(leadId: string): Promise<MergeResult> 
   });
 
   refresh();
-  return { ok: true, survivorId: survivor.id, merged: ids.length };
+  return { ok: true, survivorId: survivor.id, merged: ids.length, keptSeparate };
 }
 
 // ─── Seguimiento ─────────────────────────────────────────────────────────────

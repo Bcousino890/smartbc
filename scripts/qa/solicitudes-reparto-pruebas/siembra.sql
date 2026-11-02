@@ -2,7 +2,7 @@
 -- SOLO ENTORNO DE PRUEBAS. Recorrido de validación de Solicitudes · reparto.
 -- NUNCA en producción. Exige: psql -v entorno=pruebas -f siembra.sql
 --
--- Crea dos anuncios «inspo» SINTÉTICOS (sin ficha propia; son los únicos que
+-- Crea tres anuncios «inspo» SINTÉTICOS (sin ficha propia; son los únicos que
 -- pueden compartir referencia en el esquema real). Todo lo sintético lleva el
 -- prefijo QA-0237 / códigos 99023700x para encontrarlo y limpiarlo.
 -- Requiere la migración 0237 aplicada en ese entorno.
@@ -26,7 +26,8 @@ INSERT INTO idealista_listings (property_id, is_inspo, reference_code, idealista
 SELECT NULL, true, v.ref, v.code, v.title, v.street, 'Madrid', v.op
   FROM (VALUES
     ('QA-0237-A', '990237001', 'QA · Ático en Castelló', 'Calle Sintética A', 'rent'),
-    ('QA-0237-B', '990237002', 'QA · Piso en Goya',      'Calle Sintética B', 'sale')
+    ('QA-0237-B', '990237002', 'QA · Piso en Goya',      'Calle Sintética B', 'sale'),
+    ('QA-0237-C', '990237003', 'QA · Piso en Lagasca',   'Calle Sintética C', 'rent')
   ) AS v(ref, code, title, street, op)
  WHERE NOT EXISTS (SELECT 1 FROM idealista_listings x WHERE x.idealista_property_id = v.code);
 

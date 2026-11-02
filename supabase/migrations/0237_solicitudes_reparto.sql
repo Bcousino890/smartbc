@@ -182,6 +182,80 @@ REVOKE ALL ON property_routing_rules, assignment_events, zinto_owner_sync FROM a
 GRANT SELECT, INSERT, UPDATE ON property_routing_rules, zinto_owner_sync TO service_role;
 GRANT SELECT, INSERT ON assignment_events TO service_role;
 
+-- ─── 5b · Historial de publicaciones ────────────────────────────────────────
+--
+-- En el esquema actual un anuncio (`idealista_listings`) es una fila por
+-- inmueble (property_id es único desde 0017) y una republicación REESCRIBE su
+-- `idealista_property_id`. Sin historial, el «Cod.» de las consultas
+-- anteriores dejaría de existir y esas consultas perderían su anuncio.
+--
+-- Aquí queda, para siempre, qué código tuvo cada anuncio y desde/hasta cuándo.
+-- Lo alimenta un trigger sobre idealista_listings (sin tocar el publicador):
+-- al cambiar el código se cierra el anterior y se abre el nuevo. Un código
+-- anterior sigue resolviendo a SU anuncio y, por tanto, al mismo inmueble y a
+-- su reparto. El historial empieza con esta migración: los códigos que se
+-- reescribieron ANTES no se pueden recuperar.
+
+CREATE TABLE IF NOT EXISTS idealista_listing_codes (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  listing_id            uuid NOT NULL REFERENCES idealista_listings(id) ON DELETE CASCADE,
+  idealista_property_id text NOT NULL,
+  -- Instantánea del origen cuando ese código estaba vigente.
+  reference_code        text,
+  property_id           uuid,
+  valid_from            timestamptz NOT NULL DEFAULT now(),
+  valid_to              timestamptz,
+  source                text NOT NULL DEFAULT 'catalogo' CHECK (source IN ('catalogo', 'inicial')),
+  CONSTRAINT ilc_listing_code UNIQUE (listing_id, idealista_property_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ilc_code ON idealista_listing_codes (idealista_property_id);
+
+ALTER TABLE idealista_listing_codes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON idealista_listing_codes FROM anon, authenticated;
+GRANT SELECT ON idealista_listing_codes TO service_role;
+
+-- SECURITY DEFINER: el trigger escribe el historial sea quien sea quien
+-- modifique el anuncio, sin dar a nadie permiso de escritura sobre la tabla.
+CREATE OR REPLACE FUNCTION idealista_listing_code_history() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_new text := NULLIF(btrim(COALESCE(NEW.idealista_property_id, '')), '');
+        v_old text;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    v_old := NULLIF(btrim(COALESCE(OLD.idealista_property_id, '')), '');
+    IF v_old IS NOT DISTINCT FROM v_new THEN RETURN NEW; END IF;
+    IF v_old IS NOT NULL THEN
+      UPDATE idealista_listing_codes SET valid_to = now()
+       WHERE listing_id = NEW.id AND idealista_property_id = v_old AND valid_to IS NULL;
+    END IF;
+  END IF;
+  IF v_new IS NOT NULL THEN
+    INSERT INTO idealista_listing_codes (listing_id, idealista_property_id, reference_code, property_id)
+    VALUES (NEW.id, v_new, NEW.reference_code, NEW.property_id)
+    ON CONFLICT (listing_id, idealista_property_id) DO UPDATE SET valid_to = NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_idealista_listing_code_history ON idealista_listings;
+CREATE TRIGGER trg_idealista_listing_code_history
+  AFTER INSERT OR UPDATE OF idealista_property_id ON idealista_listings
+  FOR EACH ROW EXECUTE FUNCTION idealista_listing_code_history();
+
+-- Punto de partida: el código vigente de cada anuncio.
+INSERT INTO idealista_listing_codes (listing_id, idealista_property_id, reference_code, property_id, source)
+SELECT x.id, btrim(x.idealista_property_id), x.reference_code, x.property_id, 'inicial'
+  FROM idealista_listings x
+ WHERE NULLIF(btrim(COALESCE(x.idealista_property_id, '')), '') IS NOT NULL
+ON CONFLICT (listing_id, idealista_property_id) DO NOTHING;
+
+-- Anuncios a los que pertenece (o perteneció) un código.
+CREATE OR REPLACE FUNCTION listings_for_code(p_code text)
+RETURNS SETOF uuid LANGUAGE sql STABLE SET search_path = public AS $$
+  SELECT x.id FROM idealista_listings x WHERE x.idealista_property_id = p_code
+  UNION
+  SELECT h.listing_id FROM idealista_listing_codes h WHERE h.idealista_property_id = p_code
+$$;
+
 -- ─── 6 · Funciones auxiliares ────────────────────────────────────────────────
 
 -- Rol efectivo (rol por país si lo hay, si no el global) = owner/admin.
@@ -246,7 +320,8 @@ END $$;
 --
 -- Clasifica (y con p_fix, corrige) el enlace de una solicitud a partir de la
 -- ÚNICA evidencia admitida: «Ref.» contra reference_code / bc_reference y
--- «Cod.» contra idealista_property_id, exigiendo una sola vivienda candidata.
+-- «Cod.» contra idealista_property_id y su historial (idealista_listing_codes),
+-- exigiendo una sola vivienda candidata.
 -- Nunca mira dirección, título, precio ni teléfono.
 --
 --   p_fix = false  solo clasifica (backfill): si la evidencia contradice el
@@ -291,9 +366,10 @@ BEGIN
     ) s;
   END IF;
   IF v_code IS NOT NULL THEN
+    -- También los códigos de publicaciones ANTERIORES (republicaciones).
     SELECT COALESCE(array_agg(DISTINCT COALESCE('p:' || x.property_id::text, 'l:' || x.id::text)), '{}')
       INTO c_homes
-      FROM idealista_listings x WHERE x.idealista_property_id = v_code;
+      FROM idealista_listings x WHERE x.id IN (SELECT listings_for_code(v_code));
   END IF;
 
   IF v_code IS NOT NULL AND cardinality(c_homes) = 0 THEN
@@ -345,7 +421,7 @@ BEGIN
        WHERE x.property_id = v_prop AND v_ref IS NOT NULL AND lower(x.reference_code) = v_ref;
       SELECT COALESCE(array_agg(x.id), '{}') INTO e_code
         FROM idealista_listings x
-       WHERE x.property_id = v_prop AND v_code IS NOT NULL AND x.idealista_property_id = v_code;
+       WHERE x.property_id = v_prop AND v_code IS NOT NULL AND x.id IN (SELECT listings_for_code(v_code));
       IF cardinality(e_ref) > 0 AND cardinality(e_code) > 0 THEN
         e_sel := ARRAY(SELECT unnest(e_ref) INTERSECT SELECT unnest(e_code));
         v_lconf := cardinality(e_sel) = 0;
@@ -644,8 +720,7 @@ BEGIN
     SELECT l.id FROM idealista_leads l
      WHERE l.property_link_method = 'code_unresolved'
        AND l.merged_into_id IS NULL
-       AND EXISTS (SELECT 1 FROM idealista_listings x
-                    WHERE x.idealista_property_id = btrim(l.idealista_code))
+       AND EXISTS (SELECT 1 FROM listings_for_code(btrim(l.idealista_code)))
      ORDER BY l.created_at
      LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 200), 1000))
   LOOP
@@ -1056,6 +1131,8 @@ BEGIN
     'route_lead(uuid)',
     'route_leads(uuid[])',
     'reconcile_unresolved_code_leads(integer)',
+    'listings_for_code(text)',
+    'idealista_listing_code_history()',
     'assign_lead_admin(uuid, uuid, uuid, text, integer)',
     'reassign_client_admin(uuid, uuid, uuid, text, integer)',
     'routing_set_rules(uuid, text, uuid, jsonb, text)',

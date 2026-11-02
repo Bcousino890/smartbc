@@ -259,117 +259,114 @@ END $$;
 SELECT test_util.ok((SELECT advisor_id FROM property_routing_rules WHERE property_id = :P2) = :JAIME,
   'R06 · gana el primero, sin sobrescritura silenciosa');
 
--- ═══ R10 · nueva publicación de un piso ya repartido ════════════════════════
-INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id)
-VALUES ('e0000000-0000-0000-0000-000000000011', :P1, 'BC-101', '112');
+-- ═══ R10 · D11 · republicación de un piso ya repartido (esquema real) ══════
+-- En el esquema real un inmueble tiene UN anuncio (property_id único, 0017) y
+-- una republicación REESCRIBE su código en la misma fila. El historial
+-- (idealista_listing_codes) conserva el anterior.
+SELECT pg_temp.lead('400', '+34 611 000 400', NULL, '111');   -- llega con el código vigente
+SELECT route_lead(pg_temp.l('400'));
+SELECT test_util.expect_error(format(
+  $q$INSERT INTO idealista_listings (property_id, reference_code, idealista_property_id) VALUES (%L, 'BC-101', '112')$q$,
+  :P1), 'unique_violation');
+SELECT test_util.ok(true, 'Esquema real · un segundo anuncio para el mismo inmueble se rechaza (0017)');
+UPDATE idealista_listings SET idealista_property_id = '112' WHERE id = 'e0000000-0000-0000-0000-000000000001';
+SELECT test_util.ok((SELECT count(*) FROM idealista_listing_codes WHERE listing_id = 'e0000000-0000-0000-0000-000000000001') = 2
+  AND (SELECT valid_to FROM idealista_listing_codes WHERE listing_id = 'e0000000-0000-0000-0000-000000000001'
+        AND idealista_property_id = '111') IS NOT NULL
+  AND (SELECT valid_to FROM idealista_listing_codes WHERE listing_id = 'e0000000-0000-0000-0000-000000000001'
+        AND idealista_property_id = '112') IS NULL,
+  'R10 · el historial conserva el código anterior (cerrado) y abre el nuevo');
 SELECT pg_temp.lead('401', '+34 611 000 401', NULL, '112');
 SELECT route_lead(pg_temp.l('401'));
-SELECT test_util.ok((SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('401')) = :P1
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('401')) = 'e0000000-0000-0000-0000-000000000001'
+  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('401')) = :P1
   AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('401')) = :JAIME,
-  'R10 · el anuncio nuevo se resuelve exacto y hereda la regla del inmueble');
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('103')) IS NULL
-  OR (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('103')) <> 'e0000000-0000-0000-0000-000000000011',
-  'D11 · las solicitudes anteriores mantienen su origen');
+  'R10 · la consulta por el código nuevo es exacta y hereda el reparto del inmueble');
+SELECT pg_temp.lead('402', '+34 611 000 402', NULL, '111');   -- el anuncio viejo, capturado tarde
+SELECT route_lead(pg_temp.l('402'));
+SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('402')) = 'code'
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('402')) = 'e0000000-0000-0000-0000-000000000001'
+  AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('402')) = :JAIME,
+  'R10 · un código anterior sigue resolviendo a su anuncio (no queda «sin resolver»)');
+SELECT resolve_lead_link(pg_temp.l('400'), true);
+SELECT test_util.ok((SELECT idealista_code FROM idealista_leads WHERE id = pg_temp.l('400')) = '111'
+  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('400')) = 'code'
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('400')) = 'e0000000-0000-0000-0000-000000000001',
+  'D11 · la consulta anterior conserva su código y su origen tras la republicación');
 
--- ═══ Hallazgo 1 · dos anuncios del mismo inmueble ══════════════════════════
--- P1 tiene dos anuncios: L1 (Cod. 111) y su republicación L11 (Cod. 112).
--- Se valida el ANUNCIO recibido, no solo el inmueble.
-SELECT pg_temp.lead('801', '+34 611 000 801', NULL, NULL,
+-- ═══ H1 · anuncio exacto (esquema real) ════════════════════════════════════
+-- El Cod. recibido manda sobre el anuncio guardado, también con códigos de
+-- publicaciones anteriores.
+SELECT pg_temp.lead('801', '+34 611 000 801', NULL, '222',
   'd0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001');
-UPDATE idealista_leads SET idealista_code = '112' WHERE id = pg_temp.l('801');
 SELECT resolve_lead_link(pg_temp.l('801'), true);
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('801'))
-    = 'e0000000-0000-0000-0000-000000000011'
-  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('801')) = :P1
-  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('801')) = 'code',
-  'H1 · llega el Cod. del otro anuncio del mismo inmueble: se enlaza ESE anuncio');
-SELECT test_util.ok(EXISTS (SELECT 1 FROM assignment_events WHERE kind = 'lead_link_fixed'
-  AND lead_id = pg_temp.l('801') AND details->>'previous_listing_id' = 'e0000000-0000-0000-0000-000000000001'),
-  'H1 · la sustitución del anuncio queda auditada');
--- Clasificar el histórico: el anuncio guardado contradice el Cod. → conflicto, sin reescribir.
-SELECT pg_temp.lead('802', '+34 611 000 802', NULL, '111',
-  'd0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000011');
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('801')) = 'e0000000-0000-0000-0000-000000000002'
+  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('801')) = :P2
+  AND EXISTS (SELECT 1 FROM assignment_events WHERE kind = 'lead_link_fixed' AND lead_id = pg_temp.l('801')
+              AND details->>'previous_listing_id' = 'e0000000-0000-0000-0000-000000000001'),
+  'H1 · el Cod. recibido sustituye al anuncio guardado de otro inmueble, auditado');
+SELECT pg_temp.lead('802', '+34 611 000 802', NULL, '112',
+  'd0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000002');
 SELECT test_util.ok(resolve_lead_link(pg_temp.l('802'), false) = 'conflict'
-  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('802')) = 'e0000000-0000-0000-0000-000000000011',
-  'H1 · histórico: anuncio guardado distinto del Cod. recibido = conflicto, sin reescribir');
--- Solo referencia interna de la ficha (no identifica anuncio): se conserva el
--- anuncio guardado de ese mismo inmueble.
-SELECT pg_temp.lead('803', '+34 611 000 803', 'bc-1', NULL,
-  'd0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000011');
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('802')) = 'e0000000-0000-0000-0000-000000000002',
+  'H1 · histórico: guardado distinto del Cod. recibido = conflicto, sin reescribir');
+SELECT pg_temp.lead('803', '+34 611 000 803', NULL, '111',
+  'd0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000002');
 SELECT resolve_lead_link(pg_temp.l('803'), true);
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('803'))
-    = 'e0000000-0000-0000-0000-000000000011'
-  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('803')) = 'ref',
-  'H1 · referencia de la ficha sin anuncio concreto: se conserva el anuncio del mismo inmueble');
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('803')) = 'e0000000-0000-0000-0000-000000000001',
+  'H1 · un código de una publicación anterior también identifica su anuncio');
 
--- ═══ Hallazgo 1b · «Ref.» y «Cod.» juntos ══════════════════════════════════
--- P5 tiene tres anuncios: L51 y L52 comparten la referencia BC-500 (Cod. 551
--- y 552); L53 lleva BC-503 (Cod. 553). Cada evidencia se evalúa por separado y
--- el anuncio recibido es el que casa con LAS DOS, no con cualquiera.
-INSERT INTO properties (id, slug, title, country, bc_reference)
-VALUES ('d0000000-0000-0000-0000-000000000005', 'castellana', 'Castellana', 'es', 'bc-5');
-INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id) VALUES
-  ('e0000000-0000-0000-0000-000000000051', 'd0000000-0000-0000-0000-000000000005', 'BC-500', '551'),
-  ('e0000000-0000-0000-0000-000000000052', 'd0000000-0000-0000-0000-000000000005', 'BC-500', '552'),
-  ('e0000000-0000-0000-0000-000000000053', 'd0000000-0000-0000-0000-000000000005', 'BC-503', '553');
+-- ═══ H1b · «Ref.» y «Cod.» juntos (esquema real: anuncios «inspo») ═════════
+-- Solo los anuncios «inspo» (sin ficha) pueden compartir referencia (0062);
+-- cada uno es su propio inmueble. I1 e I2 comparten BC-IN; I3 lleva BC-IN3.
+INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id, is_inspo) VALUES
+  ('e0000000-0000-0000-0000-000000000091', NULL, 'BC-IN',  '991', true),
+  ('e0000000-0000-0000-0000-000000000092', NULL, 'BC-IN',  '992', true),
+  ('e0000000-0000-0000-0000-000000000093', NULL, 'BC-IN3', '993', true);
+SELECT test_util.expect_error($q$INSERT INTO idealista_listings (property_id, reference_code, idealista_property_id, is_inspo)
+  VALUES (NULL, 'BC-100', '999', false)$q$, 'unique_violation');
+SELECT test_util.ok(true, 'Esquema real · la referencia de un anuncio no-inspo no se repite (0062)');
 
--- Referencia compartida + código único, con otro anuncio guardado.
-SELECT pg_temp.lead('804', '+34 611 000 804', 'BC-500', '552',
-  'd0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000051');
+SELECT pg_temp.lead('804', '+34 611 000 804', 'BC-IN', '992', NULL, 'e0000000-0000-0000-0000-000000000091');
 SELECT resolve_lead_link(pg_temp.l('804'), true);
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('804'))
-    = 'e0000000-0000-0000-0000-000000000052'
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('804')) = 'e0000000-0000-0000-0000-000000000092'
   AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('804')) IN ('ref', 'code'),
-  'H1b · Ref. compartida y Cod. único: se elige el anuncio del código aunque hubiera otro guardado');
-
--- Referencia y código de anuncios distintos del mismo inmueble.
-SELECT pg_temp.lead('805', '+34 611 000 805', 'BC-503', '551',
-  'd0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000053');
+  'H1b · Ref. compartida y Cod. único: el anuncio del código aunque hubiera otro guardado');
+SELECT pg_temp.lead('805', '+34 611 000 805', 'BC-IN3', '991', NULL, 'e0000000-0000-0000-0000-000000000093');
 SELECT resolve_lead_link(pg_temp.l('805'), true);
 SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('805')) = 'conflict'
-  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('805')) = 'e0000000-0000-0000-0000-000000000053',
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('805')) = 'e0000000-0000-0000-0000-000000000093',
   'H1b · Ref. y Cod. de anuncios distintos: conflicto, sin dar por exacto el guardado ni reescribirlo');
-SELECT routing_set_rules(:ADM, 'es', :JAIME, '[{"property_id":"d0000000-0000-0000-0000-000000000005","expected_version":0}]');
+SELECT routing_set_rules(:ADM, 'es', :JAIME, '[{"listing_id":"e0000000-0000-0000-0000-000000000093","expected_version":0}]');
 SELECT route_lead(pg_temp.l('805'));
 SELECT test_util.ok((SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('805')) = 'link_conflict'
   AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('805')) IS NULL,
-  'H1b · ese conflicto no reparte aunque el inmueble tenga regla');
-
--- Sin anuncio guardado: referencia compartida + código único.
-SELECT pg_temp.lead('806', '+34 611 000 806', 'BC-500', '551');
+  'H1b · ese conflicto no reparte aunque el anuncio guardado tenga regla');
+SELECT pg_temp.lead('806', '+34 611 000 806', 'BC-IN', '991');
 SELECT resolve_lead_link(pg_temp.l('806'), true);
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('806'))
-    = 'e0000000-0000-0000-0000-000000000051'
-  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('806')) = 'd0000000-0000-0000-0000-000000000005',
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('806')) = 'e0000000-0000-0000-0000-000000000091',
   'H1b · sin anuncio guardado: se completa el anuncio del código');
-
--- Solo la referencia compartida: el anuncio no está identificado (el inmueble sí).
-SELECT pg_temp.lead('807', '+34 611 000 807', 'BC-500', NULL);
-SELECT resolve_lead_link(pg_temp.l('807'), true);
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('807')) IS NULL
-  AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('807')) = 'd0000000-0000-0000-0000-000000000005',
-  'H1b · solo la referencia compartida: inmueble exacto, ningún anuncio afirmado');
-
--- Histórico (solo clasificar): guardado L51, llegan BC-500 + Cod. 552 → conflicto, sin reescribir.
-SELECT pg_temp.lead('808', '+34 611 000 808', 'BC-500', '552',
-  'd0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000051');
+SELECT pg_temp.lead('807', '+34 611 000 807', 'BC-IN', NULL);
+SELECT route_lead(pg_temp.l('807'));
+SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('807')) = 'ambiguous'
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('807')) IS NULL
+  AND (SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('807')) = 'link_ambiguous',
+  'H1b · solo la referencia compartida: ambiguo, ningún anuncio afirmado ni reparto');
+SELECT pg_temp.lead('808', '+34 611 000 808', 'BC-IN', '992', NULL, 'e0000000-0000-0000-0000-000000000091');
 SELECT test_util.ok(resolve_lead_link(pg_temp.l('808'), false) = 'conflict'
-  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('808')) = 'e0000000-0000-0000-0000-000000000051',
-  'H1b · histórico: el guardado contradice el anuncio de Ref.+Cod. → conflicto, sin reescribir');
+  AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('808')) = 'e0000000-0000-0000-0000-000000000091',
+  'H1b · histórico: el guardado contradice Ref.+Cod. → conflicto, sin reescribir');
 
--- ═══ Hallazgo 1c · «Cod.» recibido que aún no está en el catálogo ══════════
--- «Código no recibido» ≠ «código recibido sin resolver». Si llegó un Cod. que
--- no conocemos, la Ref. sola no puede confirmar el anuncio (podría ser otro
--- anuncio o una republicación aún no catalogada) ni repartir por él.
+-- ═══ H1c · «Cod.» recibido que aún no está en el catálogo (esquema real) ══
+-- El anuncio de Almagro se republicará con el 669. Antes de eso, una consulta
+-- con Ref. válida + Cod. 669 no puede confirmarse por la referencia.
 INSERT INTO properties (id, slug, title, country, bc_reference)
 VALUES ('d0000000-0000-0000-0000-000000000006', 'almagro', 'Almagro', 'es', 'bc-6');
 INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id) VALUES
   ('e0000000-0000-0000-0000-000000000061', 'd0000000-0000-0000-0000-000000000006', 'BC-600', '661');
+-- Regla creada ANTES de las consultas (sin tocar effective_from).
 SELECT routing_set_rules(:ADM, 'es', :JAIME, '[{"property_id":"d0000000-0000-0000-0000-000000000006","expected_version":0}]');
-UPDATE property_routing_rules SET effective_from = now() - interval '1 hour'
- WHERE property_id = 'd0000000-0000-0000-0000-000000000006';
 
--- Sin anuncio guardado: Ref. válida + Cod. desconocido.
 SELECT pg_temp.lead('820', '+34 611 000 820', 'BC-600', '669');
 SELECT route_lead(pg_temp.l('820'));
 SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('820')) = 'code_unresolved'
@@ -379,8 +376,6 @@ SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id =
 SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('820')) IS NULL
   AND (SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('820')) = 'link_code_unresolved',
   'H1c · y no reparte aunque el inmueble de la referencia tenga regla');
-
--- Con anuncio guardado (el de la referencia): no se da por exacto ni se reescribe.
 SELECT pg_temp.lead('821', '+34 611 000 821', 'BC-600', '669',
   'd0000000-0000-0000-0000-000000000006', 'e0000000-0000-0000-0000-000000000061');
 SELECT route_lead(pg_temp.l('821'));
@@ -388,24 +383,18 @@ SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id =
   AND (SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('821')) = 'e0000000-0000-0000-0000-000000000061'
   AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('821')) IS NULL,
   'H1c · con guardado: el anuncio de la referencia no se confirma ni reparte, y no se reescribe');
-
--- Solo el código, sin resolver.
 SELECT pg_temp.lead('822', '+34 611 000 822', NULL, '668');
 SELECT route_lead(pg_temp.l('822'));
 SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('822')) = 'code_unresolved'
   AND (SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('822')) = 'link_code_unresolved',
   'H1c · solo un Cod. sin resolver: se distingue de «sin datos»');
-
--- Clasificar el histórico tampoco lo da por exacto.
 SELECT pg_temp.lead('823', '+34 611 000 823', 'BC-600', '669',
   'd0000000-0000-0000-0000-000000000006', 'e0000000-0000-0000-0000-000000000061');
 SELECT test_util.ok(resolve_lead_link(pg_temp.l('823'), false) = 'code_unresolved',
   'H1c · histórico: Ref. + Cod. sin resolver = pendiente del código, no exacto');
 
--- El anuncio del código entra en el catálogo (p. ej. se publica desde SmartBC)
--- y se reprocesa: las consultas se resuelven a ESE anuncio y se reparten.
-INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id) VALUES
-  ('e0000000-0000-0000-0000-000000000062', 'd0000000-0000-0000-0000-000000000006', 'BC-600', '669');
+-- Republicación REAL: el mismo anuncio pasa del 661 al 669 y se reprocesa.
+UPDATE idealista_listings SET idealista_property_id = '669' WHERE id = 'e0000000-0000-0000-0000-000000000061';
 DO $$
 DECLARE r jsonb;
 BEGIN
@@ -413,18 +402,15 @@ BEGIN
   PERFORM test_util.ok((r->>'processed')::int = 3,
     'H1c · el reprocesado toma solo las consultas cuyo código ya está en el catálogo');
 END $$;
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('820'))
-    = 'e0000000-0000-0000-0000-000000000062'
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('820')) = 'e0000000-0000-0000-0000-000000000061'
   AND (SELECT matched_property_id FROM idealista_leads WHERE id = pg_temp.l('820')) = 'd0000000-0000-0000-0000-000000000006'
   AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('820')) IN ('ref', 'code')
   AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('820')) = :JAIME,
-  'H1c · reprocesado sin guardado: se resuelve al anuncio del código y se reparte');
-SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('821'))
-    = 'e0000000-0000-0000-0000-000000000062'
-  AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('821')) = :JAIME
-  AND EXISTS (SELECT 1 FROM assignment_events WHERE kind = 'lead_link_fixed' AND lead_id = pg_temp.l('821')
-              AND details->>'previous_listing_id' = 'e0000000-0000-0000-0000-000000000061'),
-  'H1c · reprocesado con guardado: se corrige al anuncio del código, auditado, y se reparte');
+  'H1c · tras la republicación, sin guardado: exacto y repartido por la regla previa');
+SELECT test_util.ok((SELECT matched_listing_id FROM idealista_leads WHERE id = pg_temp.l('821')) = 'e0000000-0000-0000-0000-000000000061'
+  AND (SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('821')) IN ('ref', 'code')
+  AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('821')) = :JAIME,
+  'H1c · tras la republicación, con guardado: el mismo anuncio, ahora exacto, y repartido');
 SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('822')) = 'code_unresolved',
   'H1c · un código que sigue sin catalogar sigue pendiente');
 DO $$
@@ -437,6 +423,27 @@ BEGIN
     AND (SELECT count(*) FROM lead_activity) = n_act,
     'H1c · repetir el reprocesado no duplica nada');
 END $$;
+
+-- ═══ H4 · regla creada DESPUÉS de la consulta ══════════════════════════════
+-- Una consulta pendiente que se resuelve más tarde NO se reparte por una regla
+-- que no existía cuando llegó: «anterior a la regla», para un administrador.
+INSERT INTO properties (id, slug, title, country, bc_reference)
+VALUES ('d0000000-0000-0000-0000-000000000007', 'lagasca', 'Lagasca', 'es', 'bc-7');
+INSERT INTO idealista_listings (id, property_id, reference_code, idealista_property_id) VALUES
+  ('e0000000-0000-0000-0000-000000000071', 'd0000000-0000-0000-0000-000000000007', 'BC-710', '771');
+SELECT pg_temp.lead('830', '+34 611 000 830', 'BC-710', '779');
+SELECT route_lead(pg_temp.l('830'));
+SELECT routing_set_rules(:ADM, 'es', :SOFIA, '[{"property_id":"d0000000-0000-0000-0000-000000000007","expected_version":0}]');
+UPDATE idealista_listings SET idealista_property_id = '779' WHERE id = 'e0000000-0000-0000-0000-000000000071';
+SELECT reconcile_unresolved_code_leads(100);
+SELECT test_util.ok((SELECT property_link_method FROM idealista_leads WHERE id = pg_temp.l('830')) IN ('ref', 'code')
+  AND (SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('830')) = 'arrived_before_rule'
+  AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('830')) IS NULL,
+  'H4 · regla posterior a la consulta: vínculo exacto pero «anterior a la regla», sin reparto automático');
+SELECT assign_lead_admin(:ADM, pg_temp.l('830'), :SOFIA, NULL,
+  (SELECT assignment_version FROM idealista_leads WHERE id = pg_temp.l('830')));
+SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('830')) = :SOFIA,
+  'H4 · un administrador la asigna a mano');
 
 -- ═══ R09 · Z05 · un cliente, un asesor ══════════════════════════════════════
 -- Lucía (cliente verificado de Jaime) consulta Goya, que es de… Jaime ahora;
@@ -456,6 +463,16 @@ SELECT route_lead(pg_temp.l('502'));
 SELECT test_util.ok((SELECT routing_reason FROM idealista_leads WHERE id = pg_temp.l('502')) = 'possible_existing_client'
   AND (SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('502')) IS NULL,
   'R09 · mismo teléfono sin verificar: ni hereda ni crea un segundo asesor');
+
+-- D07: la misma persona, OTRO anuncio, es otra solicitud. Al vincularla al
+-- cliente verificado comparte su asesor; las dos siguen a la vista.
+UPDATE idealista_leads SET client_id = :LUCIA, converted_at = now() WHERE id = pg_temp.l('502');
+SELECT route_lead(pg_temp.l('502'));
+SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('502')) = :JAIME
+  AND (SELECT merged_into_id FROM idealista_leads WHERE id = pg_temp.l('502')) IS NULL
+  AND (SELECT merged_into_id FROM idealista_leads WHERE id = pg_temp.l('501')) IS NULL
+  AND (SELECT count(*) FROM lead_inbox_facts WHERE client_id = :LUCIA AND id IN (pg_temp.l('501'), pg_temp.l('502'))) = 2,
+  'D07 · dos anuncios, dos solicitudes visibles, mismo cliente verificado y mismo asesor');
 
 -- Cliente con asesor y solicitud con otro responsable: conflicto visible.
 SELECT pg_temp.lead('503', '+34 622 000 503', NULL, NULL);
@@ -526,14 +543,14 @@ DECLARE r jsonb;
 BEGIN
   r := reassign_client_admin('a0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-000000000001',
     'b0000000-0000-0000-0000-00000000000b', 'Se muda a la zona de Sofía', 1);
-  PERFORM test_util.ok(r->>'outcome' = 'reassigned' AND (r->>'leads')::int = 3 AND (r->>'tasks')::int = 1,
-    'R11 · alcance: tres solicitudes abiertas (incluida la de conflicto) y una tarea pendiente');
+  PERFORM test_util.ok(r->>'outcome' = 'reassigned' AND (r->>'leads')::int = 4 AND (r->>'tasks')::int = 1,
+    'R11 · alcance: cuatro solicitudes abiertas (incluida la de conflicto) y una tarea pendiente');
 END $$;
 SELECT test_util.ok((SELECT assigned_advisor_id FROM profiles WHERE id = :LUCIA) = :SOFIA
   AND (SELECT advisor_assignment_source FROM profiles WHERE id = :LUCIA) = 'manual_admin',
   'R11 · nuevo asesor en el cliente');
 SELECT test_util.ok((SELECT count(*) FROM idealista_leads WHERE client_id = :LUCIA
-  AND status <> 'descartado' AND assigned_to = :SOFIA AND routing_status = 'assigned') = 3,
+  AND status <> 'descartado' AND assigned_to = :SOFIA AND routing_status = 'assigned') = 4,
   'R11 · y en sus solicitudes abiertas (con sus tareas)');
 SELECT test_util.ok((SELECT assigned_to FROM idealista_leads WHERE id = pg_temp.l('602')) = :JAIME,
   'R11 · la descartada (cerrada) no se toca');

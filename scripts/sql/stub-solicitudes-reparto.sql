@@ -42,10 +42,19 @@ CREATE TABLE IF NOT EXISTS profiles_country_roles (
   UNIQUE (user_id, country)
 );
 
--- idealista_listings: en producción reference_code solo es único para los
--- anuncios no-inspo (0062). Aquí se quita la unicidad para poder probar
--- referencias repetidas. operation (0059) y archived_at (0019).
+-- idealista_listings con las RESTRICCIONES REALES del esquema:
+--   · 0017: un anuncio por inmueble (property_id UNIQUE; 0019 lo hizo nullable
+--     para los «inspo», pero no quitó la unicidad).
+--   · 0062: reference_code único solo entre anuncios no-inspo; los «inspo»
+--     pueden repetirla.
+-- (stub-supabase.sql lo crea con reference_code UNIQUE global y sin la
+-- unicidad de property_id; aquí se deja como en producción.)
 ALTER TABLE idealista_listings DROP CONSTRAINT IF EXISTS idealista_listings_reference_code_key;
+DO $$ BEGIN
+  ALTER TABLE idealista_listings ADD CONSTRAINT idealista_listings_property_id_key UNIQUE (property_id);
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL; END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS idealista_listings_reference_code_unique
+  ON idealista_listings (reference_code) WHERE is_inspo = false AND reference_code IS NOT NULL;
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS operation text DEFAULT 'rent';
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 

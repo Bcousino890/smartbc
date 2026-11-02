@@ -1,7 +1,9 @@
 -- SOLO PRUEBAS LOCALES. Tras rollback-0237.sql.
 \set ON_ERROR_STOP 1
 SELECT test_util.ok(to_regclass('property_routing_rules') IS NULL AND to_regclass('assignment_events') IS NULL
-  AND to_regclass('zinto_owner_sync') IS NULL, 'reversión: sin tablas nuevas');
+  AND to_regclass('zinto_owner_sync') IS NULL AND to_regclass('idealista_listing_codes') IS NULL
+  AND NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_idealista_listing_code_history'),
+  'reversión: sin tablas nuevas ni trigger del historial');
 SELECT test_util.ok(to_regprocedure('route_lead(uuid)') IS NULL
   AND to_regprocedure('reconcile_unresolved_code_leads(integer)') IS NULL
   AND to_regprocedure('lead_register_contact(uuid, uuid, text, text, text, timestamptz, text, boolean, uuid)') IS NULL,

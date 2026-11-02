@@ -30,6 +30,8 @@
 | Acciones de servidor (solo administradores donde corresponde) | `solicitudes/inbox-actions.ts`, `reparto/actions.ts`, `checkRoles` en `lib/auth/guard.ts` |
 | Ingesta: vínculo exacto y reparto tras guardar | `app/api/extension/idealista-leads/route.ts` (`route_leads`) |
 | Ficha del cliente: el desplegable de asesor se sustituye por «Reasignar cliente», solo para administradores | `clientes/[id]/_components/command-header.tsx` y `clientes/[id]/actions.ts` |
+| Historial de publicaciones: qué código tuvo cada anuncio y cuándo (trigger sobre `idealista_listings`) | `0237` (`idealista_listing_codes`, `listings_for_code`) |
+| Unificación por teléfono solo de la MISMA consulta; otro anuncio = otra solicitud | `lib/sales-inbox/merge.ts` (`adsDiffer`), `auto-merge.ts`, `mergeSamePhoneLeads` |
 | Pantalla «Reparto comercial» (Administración) | `app/[country]/(admin)/admin/reparto/` |
 | Solicitudes: Tarjetas, Por inmueble, Prioridades, ficha nueva y diálogos | `solicitudes/_components/*` |
 
@@ -50,6 +52,9 @@ Fabricio puede revocar cualquiera de estas decisiones. Para cada una se indica d
 | D9 | Zinto: el cambio de responsable se guarda en una cola recuperable (`zinto_owner_sync`, en estado «pendiente · falta contrato»). **No se envía nada.** | El repo no tiene contrato de asignación (ver §5). |
 | D10 | Paleta y tipografía: se usan los tokens actuales del CRM (incluido el modo oscuro), no la paleta propuesta en Figma. | El propio diseño la marca «pendiente de validar con la marca». |
 | D12 | El asesor de un cliente **existente** solo cambia con «Reasignar cliente»: administrador, motivo, versión, auditoría y traslado de sus solicitudes abiertas y tareas. Incluye la ficha del cliente, que antes lo cambiaba con un desplegable para cualquiera con «Editar» en Clientes. Las **altas** de clientes nuevos siguen fijando el asesor inicial como hasta ahora (al crearlo; no es una reasignación). | Política confirmada: solo administradores asignan o reasignan. |
+| D13 | **Una solicitud por anuncio** (especificación D07). La unificación por teléfono, automática o con el botón, solo junta la **misma** consulta: mismo «Cod.», si no misma «Ref.», si no mismo título; o una consulta sin datos del anuncio, como una llamada perdida. Las de otros anuncios quedan como solicitudes separadas. Comparten cliente y asesor cuando una persona las vincula al cliente verificado; el teléfono solo no verifica (D3). | Que unificar no oculte consultas. |
+| D14 | **Historial de publicaciones** con un trigger sobre `idealista_listings`, sin tocar el publicador: al cambiar el código se cierra el anterior y se abre el nuevo. Un código anterior sigue identificando su anuncio y su inmueble, y por tanto su reparto. Empieza con la migración: los códigos reescritos antes no se recuperan. | En el esquema actual una republicación reescribe el código de la misma fila. |
+| D15 | Las pruebas SQL usan las **restricciones reales** (`property_id` único, 0017; referencia única solo entre no-inspo, 0062). La lógica para varios anuncios por inmueble se prueba aparte, en una base que quita esa unicidad, marcada como defensiva. | Una prueba con un esquema distinto no demuestra el flujo real. |
 | D11 | Textos nuevos en español e inglés. Francés y alemán muestran el español hasta que se traduzcan. | Es el mecanismo que ya tiene el diccionario para cualquier clave sin traducir. |
 
 ## 3. Etapas y commits
@@ -58,7 +63,10 @@ Fabricio puede revocar cualquiera de estas decisiones. Para cada una se indica d
 2. `76e1bcbc`: servidor del reparto, vínculo auditado y «Registrar contacto» atómico.
 3. `1151315c`: pantalla «Reparto comercial» y `Modal` accesible (Escape, foco atrapado y foco devuelto).
 4. `00923a8f`: las tres vistas y la ficha nueva.
-5. Este commit: ajustes de la QA visual, generador de datos sintéticos, recorrido de QA y este expediente.
+5. `fe954e9f`: ajustes de la QA visual, generador de datos sintéticos, recorrido de QA y este expediente.
+6. `41e53a99`, `4e3833de` y `9f77030b`: correcciones de las revisiones de Codex (H1, H2, H3, H1b, H1c).
+7. `bc8a1aeb`: recorrido de validación y asesor del cliente solo por reasignación. Se abre el PR #386 en borrador.
+8. Este commit: solicitudes separadas por anuncio, historial de publicaciones, escenario 4 corregido y pruebas con el esquema real (§9).
 
 ## 4. Verificación
 
@@ -69,11 +77,12 @@ Todo se ejecutó en local, con datos sintéticos. No se tocó producción ni nin
 | Lint de migraciones | `python3 scripts/lint-migrations.py` | OK |
 | Tipos | `npx tsc --noEmit` | OK |
 | Pasos de la CI (todos salvo el build, que se hizo aislado) | cada `run:` de `ci.yml` | 35/35 OK |
-| Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 13 bloques OK |
-| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | 119 comprobaciones OK, más 1 de concurrencia en el script; 3 ejecuciones seguidas en verde |
+| Reparto offline (nueva, en la CI) | `npm run test:solicitudes-reparto` | 14 bloques OK |
+| Unificación por teléfono, incluida D07 (en la CI) | `npm run test:lead-merge` | OK, con 8 casos D07 nuevos |
+| Regla de reparto en Postgres 16 local, migración aplicada dos veces, concurrencia real (R12), reversión y reaplicación | `BCP_PG_DIR=<scratchpad>/pg-bcp01 scripts/sql/test-solicitudes-reparto.sh` | Con las **restricciones reales del esquema**: 127 comprobaciones (incluida la de concurrencia), más 5 **defensivas** en una base aparte; 3 ejecuciones seguidas en verde |
 | Build de producción aislado (`.env.production` apartado sin leerse, variables ficticias) | `NEXT_BUILD_DIR=.next.qa npx next build` | OK |
 | QA visual sobre `next start` + simulador, escritorio 1440 y móvil 390 (incluida la ficha del cliente) | `scripts/qa/solicitudes-reparto-qa.mts` | 35/35 OK, sin errores de consola |
-| Scripts del recorrido de validación, ejecutados contra el Postgres desechable con los 4 escenarios simulados a nivel de base | `scripts/qa/solicitudes-reparto-pruebas/*` | Salvaguardas, siembra idempotente, 4 escenarios, comprobaciones de solo lectura y limpieza: OK |
+| Recorrido de validación simulado a nivel de base contra el Postgres desechable, con los mismos scripts del entorno de pruebas | `scripts/qa/solicitudes-reparto-pruebas/simular-en-local.sh` | 12/12: escenarios 1, 2, 2b, 3, 4 y 4b, salvaguardas, siembra idempotente y limpieza |
 
 ### Criterios de aceptación de la especificación
 
@@ -119,14 +128,18 @@ Cuando estén, falta un trabajador que lea `zinto_owner_sync` (pendientes), llam
 - **Histórico.** La migración solo **clasifica** el vínculo de las solicitudes existentes y no cambia ningún enlace ni ningún responsable. Donde la evidencia contradice lo guardado, el vínculo queda en «conflicto». La especificación pide revisar una muestra de solicitudes reales antes de confiar en la nueva lectura; no se ha hecho con datos reales.
 - **Accesibilidad.** No se han probado lector de pantalla, zoom al 200 % ni contraste medido.
 - **Fase 0 del plan.** No se ha hecho la prueba con ejecutivos ni la validación de dirección. Este trabajo implementa la propuesta tal como está especificada.
-- **Un inmueble, un anuncio (esquema actual).** En las migraciones, `idealista_listings.property_id` sigue siendo único (desde 0017), así que una ficha propia solo tiene un anuncio. Una republicación que **reescriba** el código del anuncio dejará las consultas anteriores con un código que ya no está en el catálogo (`code_unresolved`, «Por verificar»). Es lo prudente, pero falta el registro histórico de publicaciones que pide la especificación. Los casos de dos anuncios por inmueble (H1/H1b) se cubren en el código y en las pruebas locales, que no tienen esa unicidad; en el esquema real no se pueden dar con fichas propias.
-- **Unificación por teléfono frente a D07.** La ingesta une automáticamente las consultas con el mismo teléfono y un nombre compatible (`autoMergeLeadsByPhone`, ya existía). La especificación pide «dos solicitudes separadas» (D07). No se ha tocado: es una decisión aparte.
+- **Historial de publicaciones: desde la migración.** Los códigos que el CRM reescribió antes de `0237` no se pueden recuperar. Las consultas que llegaron con esos códigos y se reprocesen quedarán «sin resolver» («Por verificar»).
+  - Una republicación que cree **otra fila** «inspo», en vez de reescribir la misma, es otro inmueble y no hereda reparto. En el esquema actual el CRM reescribe la misma fila.
+  - El trigger corre en cada escritura del código de un anuncio. Si fallara, fallaría esa escritura. Está probado en local, no en el VPS.
+- **Unificaciones antiguas.** Las solicitudes que se unificaron **antes** de este cambio siendo de otro anuncio siguen ocultas. No se separan solas: el historial ya se movió a la superviviente.
+  - `diagnostico-unificadas-otro-anuncio.sql` (solo lectura) las lista para decidir.
+  - Separar una es poner `merged_into_id` a NULL, con su historial ya en la otra. Es una decisión pendiente.
 - **Versión de Postgres del VPS.** No está comprobada. El repositorio apunta a la 15.8 (imagen de `scripts/sql-tests`). La revisión estática no encuentra nada exclusivo de la 16, y la batería se puede repetir con otra versión (`BCP_PGBIN`, ver `validacion.md` §A).
-- **Fuera de alcance.** No se ha implementado la relación «Propiedad propuesta» (alternativas) ni el registro histórico de publicaciones por anuncio. El vínculo usa los anuncios que existen hoy en `idealista_listings`.
+- **Fuera de alcance.** No se ha implementado la relación «Propiedad propuesta» (alternativas).
 
 ## 6. Migración `0237`
 
-- **Recuperación.** `rollback-0237.sql` en este expediente (lo ejecuta una persona). Restaura la vista de `0161` y elimina lo añadido. **No se pierde ningún responsable**, porque `assigned_to` y `assigned_advisor_id` son columnas anteriores. Sí se pierden las reglas, la auditoría y la cola creadas después. Probado en local: reversión y reaplicación.
+- **Recuperación.** `rollback-0237.sql` en este expediente (lo ejecuta una persona). Restaura la vista de `0161` y elimina lo añadido. **No se pierde ningún responsable**, porque `assigned_to` y `assigned_advisor_id` son columnas anteriores. Sí se pierden las reglas, la auditoría, la cola y el historial de publicaciones creados después. También se quita el trigger del historial. Probado en local: reversión y reaplicación.
 - **Compatibilidad.** Todas las columnas nuevas tienen valor por defecto o admiten nulos, y la vista solo añade columnas al final. El código anterior funciona con el esquema nuevo. Si falla el health check y vuelve el build anterior, el esquema nuevo no le afecta.
 - **Transacciones.** No hay `BEGIN`/`COMMIT` propio y todo es idempotente (`IF NOT EXISTS` / `CREATE OR REPLACE`). La clasificación del histórico solo toca filas sin clasificar.
 - **Acceso.** Tablas con RLS sin políticas y funciones con `REVOKE` a `PUBLIC`/`anon`/`authenticated`: solo `service_role` puede usarlas.
@@ -235,3 +248,48 @@ Pruebas:
 - La QA visual comprueba que la administradora ve «Reasignar cliente» con su alcance y que el asesor ve la ficha sin el control.
 
 La revisión de Codex se hizo en solo lectura. No se ha hecho la QA visual de Fabricio. Zinto sigue **pendiente**: la cola guarda el responsable vigente, pero no se envía nada hasta tener el contrato (§5).
+
+## 9. Cuarta ronda (2026-11-02): solicitudes separadas, historial de publicaciones, escenario 4 y esquema real
+
+### 1 · Solicitudes separadas por anuncio
+
+- **Antes.** La unificación por teléfono (automática al ingerir y el botón «Unir») juntaba consultas de **anuncios distintos** de la misma persona y escondía todas menos una.
+- **Ahora.** `adsDiffer()` bloquea la unificación cuando las dos consultas traen datos del anuncio y no coinciden. Compara el código; si no hay, la referencia; si no, el título. Una llamada sin anuncio sigue uniéndose a su consulta.
+- **Cliente y asesor.** Las solicitudes separadas comparten cliente verificado y asesor al vincularlas, sin reparto por la regla del otro piso mientras tanto: quedan pendientes como «posible cliente existente».
+- **Pruebas:**
+  - `test:lead-merge`, con 8 casos D07;
+  - SQL D07: dos solicitudes visibles, mismo cliente verificado y mismo asesor;
+  - recorrido 2b (simulado): otra solicitud visible, y tras vincularla comparte cliente y asesor.
+
+### 2 · Historial de publicaciones
+
+- **Tabla y trigger.** `idealista_listing_codes` y su trigger.
+- **Resolución.** El vínculo y el reprocesado buscan el código en el anuncio y en su historial (`listings_for_code`).
+- **Evidencia en la ficha.** Si la consulta llegó por un código anterior, «Evidencia del origen» dice «Publicación anterior: el anuncio se republicó con el código X».
+- **Prueba de control.** Con `listings_for_code` limitado al código vigente (sin historial), fallan exactamente las 3 pruebas de republicación: R10 «un código anterior sigue resolviendo», D11 «la consulta anterior conserva su código y su origen» y H1 «un código de una publicación anterior identifica su anuncio».
+
+### 3 · Escenario 4 del recorrido
+
+- **El defecto.** La versión anterior del recorrido creaba la regla del anuncio **después** de la consulta y esperaba que se repartiera. La simulación local lo ocultaba adelantando `effective_from`.
+- **Lo correcto.** Esa consulta queda «anterior a la regla», sin reparto automático; ya lo hacía `route_lead`.
+- **Recorrido nuevo.**
+  - Paso 4: la consulta se resuelve por una **republicación real** del mismo anuncio, cuya regla existía antes, y hereda su reparto.
+  - Paso 4b: regla creada después de la consulta, que queda «anterior a la regla» y la asigna un administrador.
+- **Sin atajos.** Ni las pruebas ni la simulación tocan `effective_from`. Prueba SQL H4.
+
+### 4 · Pruebas con las restricciones reales
+
+- **Stub.** `stub-solicitudes-reparto.sql` aplica `property_id` único (0017) y la referencia única entre no-inspo (0062). Las pruebas lo comprueban: un segundo anuncio para el mismo inmueble y una referencia no-inspo repetida se rechazan.
+- **Pruebas rehechas sobre ese esquema:**
+  - R10/D11: republicación en la misma fila;
+  - H1: códigos de otro inmueble y de publicaciones anteriores;
+  - H1b: referencia compartida entre anuncios «inspo»;
+  - H1c: se resuelve por republicación real.
+- **Batería defensiva.** Las pruebas que necesitan varios anuncios por inmueble están en `test-solicitudes-reparto-multianuncio.sql`. Se ejecutan en una base aparte que quita la unicidad y están marcadas como **no representativas** del esquema actual.
+
+### Pendientes que siguen explícitos
+
+- **Zinto.** Contrato de asignación sin confirmar (§5); no se envía nada.
+- **Captura del identificador exacto en la extensión.** Sin ella, la mayoría de las consultas irán a «Por verificar» y «Pendiente de reparto».
+- **Reprocesado.** Corre al terminar cada lote de ingesta. Sin lotes, las pendientes esperan.
+

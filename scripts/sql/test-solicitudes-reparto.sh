@@ -48,4 +48,8 @@ echo "== 3. reversión y reaplicación"
 $R sql $D/rollback-0237.sql $S/test-rollback-0237.sql $M37
 echo "   0237 se vuelve a aplicar tras su reversión"
 
+echo "== 4. DEFENSIVO (NO es el esquema actual): varios anuncios por inmueble, en una base aparte"
+$R reset
+$R sql $BASE $M37 $S/test-solicitudes-reparto-multianuncio.sql
+
 echo "test-solicitudes-reparto.sh: todos los escenarios en verde"

@@ -496,7 +496,14 @@ function Evidence({ lead }: { lead: LeadDetail }) {
         <dt className="text-ink/45">{t("inbox.evidence.ref")}</dt>
         <dd className="text-ink/80">{lead.propertyRef ?? t("inbox.evidence.notReceived")}</dd>
         <dt className="text-ink/45">{t("inbox.evidence.code")}</dt>
-        <dd className="text-ink/80">{lead.idealistaCode ?? t("inbox.evidence.notReceived")}</dd>
+        <dd className="text-ink/80">
+          {lead.idealistaCode ?? t("inbox.evidence.notReceived")}
+          {lead.idealistaCode && lead.listingCurrentCode && lead.idealistaCode !== lead.listingCurrentCode && (
+            <span className="block text-ink/50">
+              {t("inbox.evidence.previousPublication", { code: lead.listingCurrentCode })}
+            </span>
+          )}
+        </dd>
         <dt className="text-ink/45">{t("inbox.evidence.atEnquiry")}</dt>
         <dd className="text-ink/80">{[lead.propertyTitle, lead.propertyPrice].filter(Boolean).join(" · ") || "—"}</dd>
         <dt className="text-ink/45">{t("inbox.evidence.link")}</dt>

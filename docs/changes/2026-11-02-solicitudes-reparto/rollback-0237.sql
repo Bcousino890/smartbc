@@ -34,6 +34,10 @@ DROP FUNCTION IF EXISTS routing_listing_home(uuid);
 DROP FUNCTION IF EXISTS routing_is_advisor(uuid);
 DROP FUNCTION IF EXISTS routing_actor_is_admin(uuid, text);
 
+DROP TRIGGER IF EXISTS trg_idealista_listing_code_history ON idealista_listings;
+DROP FUNCTION IF EXISTS idealista_listing_code_history();
+DROP FUNCTION IF EXISTS listings_for_code(text);
+DROP TABLE IF EXISTS idealista_listing_codes;
 DROP TABLE IF EXISTS zinto_owner_sync;
 DROP TABLE IF EXISTS assignment_events;
 DROP FUNCTION IF EXISTS assignment_events_append_only();

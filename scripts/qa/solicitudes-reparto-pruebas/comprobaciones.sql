@@ -30,4 +30,8 @@ SELECT s.subject_kind, s.assignment_version, s.status, s.blocked_reason, p.full_
  WHERE s.subject_id IN (SELECT id FROM idealista_leads WHERE conversation_id LIKE '99023700%')
     OR s.subject_id IN (SELECT client_id FROM idealista_leads WHERE conversation_id LIKE '99023700%')
  ORDER BY s.created_at;
+SELECT x.reference_code AS anuncio, h.idealista_property_id AS codigo, h.valid_from AS desde, h.valid_to AS hasta
+  FROM idealista_listing_codes h JOIN idealista_listings x ON x.id = h.listing_id
+ WHERE x.reference_code LIKE 'QA-0237-%'
+ ORDER BY x.reference_code, h.valid_from;
 ROLLBACK;

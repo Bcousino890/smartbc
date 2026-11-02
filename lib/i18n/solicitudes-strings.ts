@@ -77,6 +77,8 @@ export const solicitudesEs: Strings = {
 
   // ── Solicitudes: tres vistas, ficha, reparto y contacto ──
   "inbox.title": "Solicitudes",
+  "inbox.duplicate.hint": "Mismo teléfono. Solo se unen las del MISMO anuncio (o sin anuncio, como una llamada); las de otros anuncios son solicitudes propias y comparten cliente y asesor al vincularlas.",
+  "inbox.duplicate.merge": "Unir las del mismo anuncio",
   "inbox.view.unassigned": "Pendiente de reparto",
   "inbox.empty.unassigned": "No hay nada pendiente de reparto.",
   "inbox.layout.label": "Vista",
@@ -205,6 +207,7 @@ export const solicitudesEs: Strings = {
   "inbox.evidence.link": "Vínculo",
   "inbox.evidence.thread": "Conversación",
   "inbox.evidence.notReceived": "No recibido",
+  "inbox.evidence.previousPublication": "Publicación anterior: el anuncio se republicó con el código {code}. Esta consulta conserva su origen.",
   "inbox.group.unverified": "Por verificar · anuncio sin identificar",
   "inbox.group.unverifiedHint": "No se agrupa por dirección",
   "inbox.group.rule": "Los grupos se forman por anuncio exacto y operación, nunca por dirección.",
@@ -302,6 +305,8 @@ export const solicitudesEn: Strings = {
   "reparto.result.before": "Before: {name}",
 
   "inbox.title": "Requests",
+  "inbox.duplicate.hint": "Same phone. Only enquiries about the SAME listing (or with no listing, like a call) are merged; enquiries about other listings are their own requests and share client and advisor once linked.",
+  "inbox.duplicate.merge": "Merge those about the same listing",
   "inbox.view.unassigned": "Pending routing",
   "inbox.empty.unassigned": "Nothing is waiting for routing.",
   "inbox.layout.label": "View",
@@ -430,6 +435,7 @@ export const solicitudesEn: Strings = {
   "inbox.evidence.link": "Link",
   "inbox.evidence.thread": "Conversation",
   "inbox.evidence.notReceived": "Not received",
+  "inbox.evidence.previousPublication": "Earlier publication: the listing was republished with code {code}. This enquiry keeps its origin.",
   "inbox.group.unverified": "To verify · unidentified listing",
   "inbox.group.unverifiedHint": "Never grouped by address",
   "inbox.group.rule": "Groups are formed by exact listing and operation, never by address.",

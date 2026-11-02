@@ -774,6 +774,9 @@ export type LeadDetail = {
   /** Evidencia recibida: «Ref.» y «Cod.» tal como llegaron. */
   propertyRef: string | null;
   idealistaCode: string | null;
+  /** Código VIGENTE del anuncio enlazado. Si difiere de `idealistaCode`, la
+   *  consulta llegó por una publicación anterior (historial, 0237). */
+  listingCurrentCode: string | null;
   linkMethod: string | null;
   linkStatus: LinkStatus;
   routingStatus: RoutingStatus;
@@ -842,7 +845,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     getStaffNames(),
   ]);
 
-  const [property, linkedClient, duplicates, clientRow, zintoSync, history] = await Promise.all([
+  const [property, linkedClient, duplicates, clientRow, zintoSync, history, listingCode] = await Promise.all([
     // La ficha propia manda; si no la hay, el anuncio de Idealista.
     row.matched_property_id
       ? getPropertyContext(row.matched_property_id)
@@ -861,6 +864,14 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
       : null,
     row.client_id ? getZintoSync("client", row.client_id) : getZintoSync("lead", id),
     getAssignmentEvents(id, row.client_id ?? null),
+    row.matched_listing_id
+      ? db()
+          .from("idealista_listings")
+          .select("idealista_property_id")
+          .eq("id", row.matched_listing_id)
+          .maybeSingle()
+          .then((r: any) => (r.data?.idealista_property_id as string | null) ?? null)
+      : null,
   ]);
   const nameOf = (uid: string | null) => (uid ? (staffNames.get(uid) ?? null) : null);
 
@@ -920,6 +931,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     avatarUrl: row.avatar_url ?? null,
     propertyRef: row.property_ref ?? null,
     idealistaCode: row.idealista_code ?? null,
+    listingCurrentCode: listingCode,
     linkMethod: row.property_link_method ?? null,
     linkStatus: linkStatus(row.property_link_method),
     routingStatus: effectiveRoutingStatus(row.routing_status, row.assigned_to),

@@ -14,6 +14,13 @@
  * distintas, no se fusiona nada y se deja el par a la vista (la bandeja ya los
  * marca con `duplicate_phone`) para resolverlo a mano.
  *
+ * Y una TERCERA, que tampoco puede más que bloquear: el ANUNCIO. Unificar es
+ * para la misma consulta repetida (escribió y llamó por el mismo piso), no
+ * para juntar consultas de anuncios distintos: cada anuncio es su propia
+ * solicitud, con su mensaje, su vínculo y su reparto (especificación D07). Si
+ * los dos traen datos del anuncio y no coinciden, no se fusionan; la misma
+ * persona comparte después cliente verificado y asesor, no la solicitud.
+ *
  * Este módulo es PURO a propósito — sin base de datos, sin red — para poder
  * probar la regla con casos reales sin montar nada.
  */
@@ -42,12 +49,34 @@ export type MergeCandidate = {
   name: string | null;
   phoneDigits: string | null;
   createdAt: string;
+  /** Lo que se sabe del anuncio consultado: «Cod.», «Ref.» y título. */
+  ad?: { code?: string | null; ref?: string | null; title?: string | null };
 };
+
+const clean = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
+
+/**
+ * ¿Son consultas de anuncios DISTINTOS? Se compara la mejor evidencia que
+ * tengan LAS DOS: el código; si no, la referencia; si no, el título del
+ * anuncio. Si a una le falta todo (una llamada perdida), no se puede decir
+ * que sean distintos y no bloquea.
+ */
+export function adsDiffer(a: MergeCandidate, b: MergeCandidate): boolean {
+  const pairs: Array<[string, string]> = [
+    [clean(a.ad?.code), clean(b.ad?.code)],
+    [clean(a.ad?.ref), clean(b.ad?.ref)],
+    [normalizeLeadName(a.ad?.title), normalizeLeadName(b.ad?.title)],
+  ];
+  for (const [x, y] of pairs) {
+    if (x && y) return x !== y;
+  }
+  return false;
+}
 
 export type MergeDecision =
   | { merge: true }
   /** No se fusiona. `reason` explica por qué, para poder auditarlo. */
-  | { merge: false; reason: "no_phone" | "different_phone" | "names_differ" | "same_lead" };
+  | { merge: false; reason: "no_phone" | "different_phone" | "names_differ" | "different_ads" | "same_lead" };
 
 /**
  * ¿Se pueden unificar automáticamente estos dos leads?
@@ -70,6 +99,8 @@ export function decideMerge(a: MergeCandidate, b: MergeCandidate): MergeDecision
   const tailB = phoneTail(b.phoneDigits);
   if (!tailA || !tailB) return { merge: false, reason: "no_phone" };
   if (tailA !== tailB) return { merge: false, reason: "different_phone" };
+  // Anuncios distintos: dos solicitudes, aunque sea la misma persona.
+  if (adsDiffer(a, b)) return { merge: false, reason: "different_ads" };
 
   const nameA = normalizeLeadName(a.name);
   const nameB = normalizeLeadName(b.name);

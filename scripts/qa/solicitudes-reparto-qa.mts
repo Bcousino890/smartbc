@@ -110,6 +110,12 @@ async function shot(page: Page, name: string) {
   check("Ficha · evidencia del origen", (await page.getByText("Evidencia del origen").count()) > 0);
   await shot(page, "05-ficha-cliente-datos");
 
+  // Republicación: la consulta conserva su código anterior y la ficha lo dice.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(4)}`, { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Cliente y datos/ }).click();
+  check("Evidencia · consulta por una publicación anterior del anuncio", (await page.getByText(/Publicación anterior: el anuncio se republicó con el código 900210/).count()) === 1);
+  await shot(page, "05b-publicacion-anterior");
+
   // Asignar una pendiente (sin cliente)
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(2)}`, { waitUntil: "networkidle" });
   check("Ficha pendiente · motivo del reparto", (await page.getByText(/ese piso no tiene asesor asignado/).count()) > 0);
