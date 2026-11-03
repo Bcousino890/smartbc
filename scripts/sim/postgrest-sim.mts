@@ -10,7 +10,7 @@
 //   · Sirve tablas en memoria cargadas de un JSON sintético.
 //   · Respeta lo que la app pide de verdad: las columnas del `select` (con las
 //     relaciones anidadas tal como están en el JSON) y los filtros eq, neq,
-//     in, is, gt, gte, lt, lte, ilike y `or=(…)` de condiciones simples,
+//     in, is, gt, gte, lt, lte, like, ilike y `or=(…)` de condiciones simples,
 //     además de order, limit y offset.
 //     Si la app pide una columna, la recibe; si no la pide, no.
 //   · `Accept: application/vnd.pgrst.object+json` (single) → un objeto, o 406.
@@ -21,11 +21,17 @@
 //   · Opcional `--auth`: sirve `GET /auth/v1/user` SOLO para los tokens
 //     sintéticos de la clave `auth.users` del JSON (token → usuario). Cualquier
 //     otro token, o ninguno, recibe 401. No hay login, refresco ni escrituras.
+//   · Opcional `--persist`: las escrituras SÍ se guardan, en memoria y solo
+//     mientras dure el proceso (nunca en el JSON): PATCH aplica el cuerpo a
+//     las filas que cumplen los filtros; POST inserta (con `id` y
+//     `created_at` si faltan). Sirve para comprobar que algo persiste al
+//     recargar. Sin la opción, todo sigue como arriba.
 //   · Opcional `--latency <ms>`: espera SIMULADA antes de cada respuesta, para
 //     modelar el viaje de red a Supabase. Queda anotada en cada línea del
 //     registro (`simLatencyMs`): un tiempo medido así no es un tiempo real.
 //
-//   node --experimental-strip-types scripts/sim/postgrest-sim.mts <puerto> <datos.json> <registro.jsonl> [carpeta-imágenes] [--auth] [--latency <ms>]
+//   node --experimental-strip-types scripts/sim/postgrest-sim.mts <puerto> <datos.json> <registro.jsonl> [carpeta-imágenes] [--auth] [--persist] [--latency <ms>]
+import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -144,8 +150,9 @@ export function applyFilters(rows: Row[], params: URLSearchParams): { rows: Row[
         test = cmp;
         break;
       }
+      case "like":
       case "ilike": {
-        const re = new RegExp("^" + val.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/%/g, ".*") + "$", "i");
+        const re = new RegExp("^" + val.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/%/g, ".*") + "$", op === "ilike" ? "i" : "");
         test = (r) => re.test(String(get(r) ?? ""));
         break;
       }
@@ -180,7 +187,7 @@ export function applyOrder(rows: Row[], order: string | null): Row[] {
   });
 }
 
-type Options = { auth: boolean; latencyMs: number };
+type Options = { auth: boolean; latencyMs: number; persist?: boolean };
 
 function startServer(port: number, dataFile: string, logFile: string, imgDir: string | null, opts: Options) {
   const all = JSON.parse(readFileSync(dataFile, "utf8")) as Record<string, unknown>;
@@ -240,9 +247,35 @@ function startServer(port: number, dataFile: string, logFile: string, imgDir: st
       });
       return;
     }
+    const m = path.match(/^\/rest\/v1\/([a-zA-Z_]\w*)$/);
+    if (opts.persist && m && (method === "PATCH" || method === "POST")) {
+      const table = m[1];
+      let raw = "";
+      req.setEncoding("utf8");
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        let body: Row | Row[] = {};
+        try {
+          body = raw ? JSON.parse(raw) : {};
+        } catch {
+          /* no JSON */
+        }
+        const rows = (tables[table] ??= []);
+        let touched: Row[];
+        if (method === "PATCH") {
+          touched = applyFilters(rows, url.searchParams).rows;
+          for (const r of touched) Object.assign(r, body);
+        } else {
+          touched = (Array.isArray(body) ? body : [body]).map((r) => ({ id: randomUUID(), created_at: new Date().toISOString(), ...r }));
+          rows.push(...touched);
+        }
+        log({ method, path, table, kind: "write", persisted: touched.length });
+        send(res, method === "POST" ? 201 : 200, touched.map((r) => project(r, url.searchParams.get("select"))));
+      });
+      return;
+    }
     // Se consume el cuerpo (escrituras) sin guardarlo.
     req.resume();
-    const m = path.match(/^\/rest\/v1\/([a-zA-Z_]\w*)$/);
     if (!m) {
       log({ method, path, kind: "other" });
       return send(res, 404, { message: "no simulado" });
@@ -277,9 +310,10 @@ function startServer(port: number, dataFile: string, logFile: string, imgDir: st
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()!)) {
   const args = process.argv.slice(2);
   const auth = args.includes("--auth");
+  const persist = args.includes("--persist");
   const li = args.indexOf("--latency");
   const latencyMs = li >= 0 ? Number(args[li + 1]) || 0 : 0;
   const positional = args.filter((a, i) => !a.startsWith("--") && !(li >= 0 && i === li + 1));
   const [port, dataFile, logFile, imgDir] = positional;
-  startServer(Number(port), dataFile, logFile, imgDir ?? null, { auth, latencyMs });
+  startServer(Number(port), dataFile, logFile, imgDir ?? null, { auth, latencyMs, persist });
 }

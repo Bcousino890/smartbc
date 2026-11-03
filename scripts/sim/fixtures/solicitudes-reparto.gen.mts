@@ -26,6 +26,9 @@ const id = (p: string, n: number) => `00000000-0000-4000-9${p}-${String(n).padSt
 const OWNER = "00000000-0000-4000-8000-0000000000a1";
 const ADVISOR = "00000000-0000-4000-8000-0000000000a2";
 const COLLEAGUE = "00000000-0000-4000-8000-0000000000aa";
+// Ficha en solo lectura: agent_junior ve Solicitudes (las suyas) pero no edita.
+const JUNIOR = "00000000-0000-4000-8000-0000000000a4";
+const JUNIOR_TOKEN = "sim-token-junior-crm01";
 const props = (d.properties as Array<Record<string, unknown>>).filter((p) => p.country === "es").slice(0, 6);
 
 // ── Anuncios de Idealista: tres con ficha propia, dos «inspo» sin ficha ──
@@ -83,6 +86,8 @@ function add(n: number, o: {
     next_action_note: o.nextNote ?? null, country: "es", created_at: o.created, updated_at: o.created, avatar_url: null,
     // 0238 · caducada: sigue en la tabla pero la vista no la enseña.
     expired_at: o.expired ? ago(1) : null,
+    // 0242 · sin teléfonos propios: la ficha usa el recibido.
+    zinto_phone: null, call_phone: null, extra_phones: n === 4 ? ["+34 699 000 404"] : [],
   };
   leads.push({ ...base, profile: { bullets: ["Pareja", "Estancia larga", "Entrada: diciembre"], presentacion: "Somos una pareja y buscamos una estancia larga." }, properties: [{ title: o.title, price: o.price, imageUrl: base.property_image_url }] });
   const waOut = o.waOut ?? 0;
@@ -107,7 +112,13 @@ function add(n: number, o: {
   activity.push({ id: id("005", n), lead_id: lid, author_id: null, kind: "assignment", body: o.assigned ? "Reparto automático por inmueble" : null, outcome: null, created_at: o.created });
 }
 
-add(1, { name: people[0], msg: msgs[0], listing: 10, method: "ref", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: ADVISOR, source: "rule", created: ago(1), ref: "BC-9010", code: "900210", op: "rent" });
+add(1, { name: people[0], msg: msgs[0], listing: 10, method: "ref", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: ADVISOR, source: "rule", created: ago(1), next: ahead(26), nextNote: "Confirmar disponibilidad para la visita del jueves", ref: "BC-9010", code: "900210", op: "rent" });
+// Historial de la 1 para la pestaña Actividad: una nota y el seguimiento programado.
+activity.push(
+  { id: id("005", 100), lead_id: id("003", 1), author_id: ADVISOR, kind: "note", body: "Ha escrito también por el portal: viene con su pareja.", outcome: null, created_at: ago(0.8) },
+  { id: id("005", 101), lead_id: id("003", 1), author_id: ADVISOR, kind: "note", body: "Pareja interesada en Castelló. Prefieren visitarlo esta semana.", outcome: null, created_at: ago(0.6) },
+  { id: id("005", 102), lead_id: id("003", 1), author_id: ADVISOR, kind: "follow_up", body: "Confirmar disponibilidad para la visita del jueves", outcome: null, created_at: ago(0.4) },
+);
 add(2, { name: people[1], msg: msgs[1], listing: 1, method: "code", title: String(props[0].title), price: "2.000.000 €", img: 2, assigned: null, reason: "no_rule", created: ago(2), code: "900100", op: "sale" });
 add(3, { name: people[2], msg: msgs[2], listing: 11, method: "ref", title: "Goya · Recoletos", price: "2.900.000 €", img: 3, assigned: COLLEAGUE, source: "rule", created: ago(20), next: ago(3), nextNote: "Llamar para confirmar visita", state: "contacted", ref: "BC-9011", op: "sale" });
 // Llegó por una publicación ANTERIOR del anuncio (código 900199; el vigente es 900210).
@@ -133,6 +144,9 @@ add(15, { name: "Caducada Prueba", msg: msgs[5], method: "none", title: "Hola, m
 // Castelló: la ficha debe SUGERIRLO («¿Es este anuncio?»), nunca afirmarlo.
 add(16, { name: "Olga Sugerida", msg: msgs[3], method: "none", title: "Calle de Castelló, Castellana, Madrid", price: "5.400 €/mes", img: null, assigned: null, reason: "link_unverified", created: ago(6), op: "rent" });
 
+// Asignada a la usuaria de solo lectura (agent_junior): ve la ficha, no la edita.
+add(17, { name: "Laura Lectura", msg: msgs[4], listing: 10, method: "ref", title: "Castelló · Castellana", price: "5.400 €/mes", img: 1, assigned: JUNIOR, source: "manual_admin", created: ago(9), next: ahead(30), nextNote: "Llamar para concretar la visita", ref: "BC-9010", code: "900210", op: "rent" });
+
 // Un cliente verificado (para «Reasignar cliente») con asesora la compañera.
 const clientProfile = {
   id: id("006", 1), role: "client", full_name: "Pedro Ficticio", email: "pedro@sim.invalid", phone: "+34 600 108 208",
@@ -152,6 +166,15 @@ const sync = [
 ];
 
 d.profiles.push(clientProfile);
+d.profiles.push({
+  id: JUNIOR, role: "agent_junior", full_name: "Junior Lectura", email: "junior@sim.invalid", phone: null, avatar_url: null,
+  assigned_advisor_id: null, personal_shopper_terms_accepted_at: null, country: "es", countries: ["es"], multi_country: false,
+  custom_role_id: null, suspended_at: null, appearance: null, created_at: ago(500), updated_at: ago(1),
+});
+d.auth.users[JUNIOR_TOKEN] = {
+  id: JUNIOR, aud: "authenticated", role: "authenticated", email: "junior@sim.invalid", email_confirmed_at: ago(500),
+  app_metadata: { provider: "email", providers: ["email"] }, user_metadata: {}, created_at: ago(500), updated_at: ago(1),
+};
 d.idealista_listings = listings;
 d.property_routing_rules = rules;
 d.idealista_leads = leads;

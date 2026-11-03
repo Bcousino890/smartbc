@@ -279,6 +279,60 @@ export async function registerContact(input: {
   return { ok: true, duplicate: data?.outcome === "duplicate" };
 }
 
+// ─── Teléfonos de contacto ───────────────────────────────────────────────────
+
+/**
+ * Guarda el teléfono de WhatsApp (Zinto) y el de llamadas de la ficha (0242).
+ * El recibido de Idealista (`phone`) no se toca: es la evidencia del origen y
+ * de él salen los duplicados. Vacío, o el mismo número que el recibido, se
+ * guarda como NULL, que significa «usa el recibido».
+ */
+export async function saveLeadPhones(
+  leadId: string,
+  input: { zinto: string; call: string },
+): Promise<ActionResult> {
+  const gate = await checkPermission("solicitudes", "edit");
+  if (!gate.ok) return gate;
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
+
+  const { data: lead } = await db()
+    .from("idealista_leads")
+    .select("phone, zinto_phone, call_phone")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!lead) return { ok: false, error: NO_ACCESS };
+
+  const digits = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "");
+  const received = digits(lead.phone);
+  const clean = (raw: string, label: string): { ok: true; value: string | null } | { ok: false; error: string } => {
+    const v = (raw ?? "").replace(/\s+/g, " ").trim();
+    if (!v) return { ok: true, value: null };
+    if (!/^\+?[\d\s().-]+$/.test(v)) return { ok: false, error: `${label}: escribe solo el número (cifras, espacios y «+»).` };
+    const d = digits(v);
+    if (d.length < 7 || d.length > 15) return { ok: false, error: `${label}: el número debe tener entre 7 y 15 cifras.` };
+    return { ok: true, value: d === received ? null : v };
+  };
+  const zinto = clean(input.zinto, "WhatsApp · Zinto");
+  if (!zinto.ok) return zinto;
+  const call = clean(input.call, "Llamadas");
+  if (!call.ok) return call;
+
+  if ((lead.zinto_phone ?? null) === zinto.value && (lead.call_phone ?? null) === call.value) {
+    return { ok: true };
+  }
+  const { error } = await db()
+    .from("idealista_leads")
+    .update({ zinto_phone: zinto.value, call_phone: call.value, updated_at: new Date().toISOString() })
+    .eq("id", leadId);
+  if (error) return { ok: false, error: "No se pudieron guardar los teléfonos." };
+
+  // Queda en el historial quién lo cambió y a qué números (no es contacto).
+  const shown = (v: string | null) => v ?? `${lead.phone ?? "—"} (recibido)`;
+  await log(leadId, "status", { body: `Teléfonos: WhatsApp ${shown(zinto.value)} · Llamadas ${shown(call.value)}` });
+  refresh();
+  return { ok: true };
+}
+
 // ─── Unir solicitudes del mismo teléfono ─────────────────────────────────────
 
 export type MergeResult =

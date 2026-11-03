@@ -44,10 +44,13 @@ export function RegisterContactDialog({
   lead,
   locale,
   onClose,
+  completingTask = false,
 }: {
   lead: LeadDetail;
   locale: string;
   onClose: () => void;
+  /** Abierto desde «Marcar como hecho»: la tarea pendiente ya va marcada. */
+  completingTask?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -58,7 +61,7 @@ export function RegisterContactDialog({
   const [date, setDate] = useState(() => madridDatePlus(new Date(), 1));
   const [time, setTime] = useState(DEFAULT_TASK_TIME);
   const [action, setAction] = useState("");
-  const [completeTask, setCompleteTask] = useState(false);
+  const [completeTask, setCompleteTask] = useState(completingTask && !!lead.nextActionAt);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
 
@@ -112,7 +115,7 @@ export function RegisterContactDialog({
         </>
       }
     >
-      <p className="text-sm text-ink/60">{t("inbox.contact.intro")}</p>
+      <p className="text-sm text-ink/60">{completingTask ? t("inbox.ws.followUp.doneHint") : t("inbox.contact.intro")}</p>
 
       <fieldset className="mt-3">
         <legend className="crm-label-sm mb-1.5 text-ink/55">{t("inbox.contact.what")}</legend>

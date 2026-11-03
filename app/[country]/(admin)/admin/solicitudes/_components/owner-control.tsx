@@ -3,22 +3,25 @@
 // ============================================================================
 // RESPONSABLE DE LA SOLICITUD
 //
-// Siempre a la vista: quién la lleva, de dónde viene esa asignación y el
-// estado de Zinto, que es INDEPENDIENTE (un fallo de Zinto no borra al
-// responsable del CRM).
+// Una línea discreta en la cabecera de la ficha: «Responsable · nombre» (o
+// «Por asignar»), con un punto dorado. El motivo del reparto, el estado de
+// Zinto —que es INDEPENDIENTE: un fallo de Zinto no borra al responsable del
+// CRM— y los cambios de responsable quedan en un desplegable.
 //
 // Solo un administrador la cambia. Con cliente vinculado no se reasigna la
 // solicitud suelta: se reasigna el cliente entero, viendo antes qué mueve.
 // ============================================================================
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
 import type { ClientReassignScope } from "@/lib/db/queries/routing";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { useT } from "@/lib/i18n/provider";
+import { cn } from "@/lib/utils";
 import { Button, Labeled, Modal, Pill, Select, TextArea, type Tone } from "@/components/admin/ui/primitives";
+import { formatDateTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/format";
 import { assignLead, getReassignScope, reassignClient, retryZintoSync } from "../inbox-actions";
 
 const ZINTO_TONE: Record<string, Tone> = {
@@ -29,88 +32,155 @@ const ZINTO_TONE: Record<string, Tone> = {
   error: "critical",
 };
 
-export function OwnerControl({
+const focusRing =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action";
+
+export function OwnerLine({
   lead,
   staff,
   isAdmin,
+  locale,
 }: {
   lead: LeadDetail;
   staff: StaffRef[];
   isAdmin: boolean;
+  locale: string;
 }) {
   const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [retrying, startRetry] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const details = useRef<HTMLDetailsElement>(null);
+
+  // El desplegable se cierra al pulsar fuera o con Escape (y el foco vuelve
+  // a la línea del responsable).
+  useEffect(() => {
+    const el = details.current;
+    if (!el) return;
+    const onDown = (e: MouseEvent) => {
+      if (el.open && !el.contains(e.target as Node)) el.open = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && el.open) {
+        el.open = false;
+        el.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
   const sync = lead.zintoSync;
   const syncState = sync?.state ?? "none";
+  const conflict = lead.routingStatus === "conflict";
   const clientOwnerDiffers =
     lead.clientAdvisor && lead.clientAdvisor.id && lead.clientAdvisor.id !== lead.assignedTo;
+  const who = conflict
+    ? t("inbox.routing.conflict")
+    : lead.assignedTo
+      ? (lead.assignedName ?? t("inbox.row.assigned"))
+      : t("inbox.ws.owner.unassigned");
+  const reason =
+    lead.routingStatus !== "assigned" && lead.routingReason
+      ? t(`inbox.routing.reason.${lead.routingReason}`)
+      : lead.assignmentSource
+        ? t(`inbox.owner.source.${lead.assignmentSource}`)
+        : null;
 
   return (
-    <div className="min-w-0 rounded-lg border border-sol-line bg-sol-surface px-4 py-2.5 sm:min-w-[264px] lg:max-w-[340px]">
-      <p className="sol-meta text-sol-muted">{t("inbox.owner.label")}</p>
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-        {lead.routingStatus === "conflict" ? (
-          <Pill tone="critical">{t("inbox.routing.conflict")}</Pill>
-        ) : lead.assignedTo ? (
-          <span className="sol-ui font-semibold text-sol-ink">{lead.assignedName ?? t("inbox.row.assigned")}</span>
-        ) : (
-          <Pill tone="warning">{t("inbox.routing.pending")}</Pill>
-        )}
-        {isAdmin ? (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="inline-flex min-h-[32px] items-center sol-ui font-semibold text-sol-action underline-offset-2 hover:underline"
-          >
-            <span aria-hidden className="me-2 font-normal text-sol-faint">·</span>
-            {lead.clientId ? t("inbox.owner.reassignClient") : t("inbox.owner.change")}
-          </button>
-        ) : (
-          <span className="text-xs text-sol-faint">{t("inbox.owner.adminOnly")}</span>
-        )}
-      </div>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+      <details ref={details} className="group relative min-w-0">
+        <summary
+          className={cn(
+            "flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-lg px-2 sol-ui text-sol-ink transition hover:bg-sol-select/60 [&::-webkit-details-marker]:hidden",
+            focusRing,
+          )}
+        >
+          <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", conflict ? "bg-sol-error" : "bg-sol-accent/80")} />
+          <span className="text-sol-muted">{t("inbox.owner.label")}</span>
+          <span aria-hidden className="text-sol-faint">·</span>
+          <span className={cn("min-w-0 truncate", conflict ? "text-sol-error" : "text-sol-ink")}>{who}</span>
+          <ChevronDown size={15} strokeWidth={2} className="shrink-0 text-sol-muted transition group-open:rotate-180" />
+          <span className="sr-only">{t("inbox.ws.owner.details")}</span>
+        </summary>
+        <div className="absolute start-0 z-30 mt-2 w-[min(380px,calc(100vw-32px))] rounded-lg border border-sol-line bg-sol-surface p-4 shadow-lg lg:start-auto lg:end-0">
+          <p className="sol-meta text-sol-muted">{t("inbox.ws.owner.reason")}</p>
+          <p className="mt-1 sol-ui text-sol-ink">{reason ?? t("inbox.ws.owner.noReason")}</p>
+          {clientOwnerDiffers && (
+            <p className="mt-1 sol-meta text-sol-muted">
+              {t("inbox.owner.clientAdvisor", { name: lead.clientAdvisor?.name ?? "—" })}
+            </p>
+          )}
+          {!isAdmin && <p className="mt-1 sol-meta text-sol-faint">{t("inbox.owner.adminOnly")}</p>}
 
-      <p className="mt-0.5 text-xs text-sol-muted">
-        {lead.routingStatus !== "assigned" && lead.routingReason
-          ? t(`inbox.routing.reason.${lead.routingReason}`)
-          : lead.assignmentSource
-            ? t(`inbox.owner.source.${lead.assignmentSource}`)
-            : null}
-        {clientOwnerDiffers && (
-          <> · {t("inbox.owner.clientAdvisor", { name: lead.clientAdvisor?.name ?? "—" })}</>
-        )}
-      </p>
+          <p className="mt-4 sol-meta text-sol-muted">{t("inbox.ws.owner.zinto")}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+            <Pill tone={ZINTO_TONE[syncState]}>{t(`inbox.zintoSync.${syncState}`)}</Pill>
+            {sync?.blockedReason === "contract_missing" && syncState === "pending" && (
+              <span className="text-sol-muted">{t("inbox.zintoSync.contractMissing")}</span>
+            )}
+            {sync?.state === "error" && sync.lastError && <span className="text-sol-error">{sync.lastError}</span>}
+            {isAdmin && sync && sync.state === "error" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={retrying}
+                onClick={() =>
+                  startRetry(async () => {
+                    setError(null);
+                    const r = await retryZintoSync(sync.id);
+                    if (!r.ok) setError(r.error);
+                    else router.refresh();
+                  })
+                }
+              >
+                <RefreshCw size={11} /> {t("inbox.zintoSync.retry")}
+              </Button>
+            )}
+          </div>
+          {error && <p role="alert" className="mt-1 text-xs text-sol-error">{error}</p>}
 
-      {/* Zinto: estado propio, separado del responsable. */}
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-        <Pill tone={ZINTO_TONE[syncState]}>{t(`inbox.zintoSync.${syncState}`)}</Pill>
-        {sync?.blockedReason === "contract_missing" && syncState === "pending" && (
-          <span className="text-sol-muted">{t("inbox.zintoSync.contractMissing")}</span>
-        )}
-        {sync?.state === "error" && sync.lastError && <span className="text-sol-error">{sync.lastError}</span>}
-        {isAdmin && sync && sync.state === "error" && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={retrying}
-            onClick={() =>
-              startRetry(async () => {
-                setError(null);
-                const r = await retryZintoSync(sync.id);
-                if (!r.ok) setError(r.error);
-                else router.refresh();
-              })
-            }
-          >
-            <RefreshCw size={11} /> {t("inbox.zintoSync.retry")}
-          </Button>
-        )}
-      </div>
-      {error && <p role="alert" className="mt-1 text-xs text-sol-error">{error}</p>}
+          {lead.assignmentHistory.length > 0 && (
+            <>
+              <p className="mt-4 sol-meta text-sol-muted">{t("inbox.history.title")}</p>
+              <ul className="mt-1.5 max-h-48 space-y-2 overflow-y-auto">
+                {lead.assignmentHistory.map((e) => (
+                  <li key={e.id} className="sol-meta">
+                    <p className="text-sol-ink">
+                      {t(`inbox.history.kind.${e.kind}`)}
+                      {(e.previousName || e.newName) && (
+                        <span className="text-sol-muted"> · {e.previousName ?? "—"} → {e.newName ?? "—"}</span>
+                      )}
+                      {e.reason && <span className="text-sol-muted"> · {e.reason}</span>}
+                    </p>
+                    <p className="text-sol-faint">
+                      {formatDateTime(e.occurredAt, locale)} · {e.actorName ?? t("inbox.history.system")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </details>
+
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={cn(
+            "inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-lg border border-sol-accent/70 px-5 sol-ui text-sol-action transition hover:bg-sol-accent/10",
+            focusRing,
+          )}
+        >
+          {lead.assignedTo ? t("inbox.owner.change") : t("inbox.ws.owner.assign")}
+        </button>
+      )}
 
       {open && isAdmin && (lead.clientId ? (
         <ReassignClientDialog clientId={lead.clientId} staff={staff} onClose={() => setOpen(false)} />
