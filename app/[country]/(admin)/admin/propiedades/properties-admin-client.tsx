@@ -68,6 +68,7 @@ const STATUS_STYLES: Record<AdminPropertyStatus, string> = {
   available: "border-emerald-200 bg-emerald-50 text-emerald-700",
   reserved: "border-amber-200 bg-amber-50 text-amber-700",
   rented: "border-blue-200 bg-blue-50 text-blue-700",
+  unavailable: "border-rose-200 bg-rose-50 text-rose-700",
   sold: "border-violet-200 bg-violet-50 text-violet-700",
   draft: "border-ink/15 bg-ink/5 text-ink/55",
 };
@@ -76,6 +77,7 @@ const STATUS_LABELS: Record<AdminPropertyStatus, string> = {
   available: "Disponible",
   reserved: "Reservado",
   rented: "Alquilado",
+  unavailable: "No disponible",
   sold: "Vendido",
   draft: "Borrador",
 };

@@ -39,7 +39,7 @@ export default async function PropertyDetailPage({
         operations: string[] | null;
         rent_price: number | null;
         stay: "short" | "long" | null;
-        status: "available" | "reserved" | "sold" | "archived";
+        status: "available" | "reserved" | "rented" | "unavailable" | "sold" | "archived";
         price: number;
         bedrooms: number;
         bathrooms: number;

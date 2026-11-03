@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import {
   DEFAULT_TAG_COLOR,
@@ -22,12 +22,15 @@ export function PropertyTagEditor({
   allTags,
   initialIds,
   onCatalogChange,
+  onAssignedChange,
 }: {
   slug: string;
   country: string;
   allTags: PropertyTag[];
   initialIds: string[];
   onCatalogChange?: (tags: PropertyTag[]) => void;
+  /** Se llama cuando el usuario añade o quita una etiqueta (no al montar). */
+  onAssignedChange?: (tags: PropertyTag[]) => void;
 }) {
   const { toast } = useToast();
   const [catalog, setCatalog] = useState(allTags);
@@ -41,6 +44,15 @@ export function PropertyTagEditor({
     () => ids.map((id) => catalog.find((t) => t.id === id)).filter(Boolean) as PropertyTag[],
     [ids, catalog],
   );
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    onAssignedChange?.(assigned);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids]);
   const suggestions = suggestTags(catalog, query, ids);
   const showCreate = canCreateTag(catalog, query);
 

@@ -137,6 +137,8 @@ export function agencyRowToLegacy(row: AgencyWithStats): Agency {
 const PROPERTY_STATUS_MAP: Record<PropertyStatus, AdminPropertyStatus> = {
   available: "available",
   reserved: "reserved",
+  rented: "rented",
+  unavailable: "unavailable",
   sold: "sold",
   archived: "draft",
 };

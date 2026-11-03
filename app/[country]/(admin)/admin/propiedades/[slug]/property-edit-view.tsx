@@ -94,7 +94,7 @@ export type PropertyForEdit = {
   operations: string[];
   rent_price: number | null;
   stay: "short" | "long" | null;
-  status: "available" | "reserved" | "sold" | "archived";
+  status: "available" | "reserved" | "rented" | "unavailable" | "sold" | "archived";
   price: number;
   bedrooms: number;
   bathrooms: number;
@@ -928,6 +928,12 @@ export function PropertyEditView({
             country={tagCountry}
             allTags={allTags}
             initialIds={tagIds}
+            onAssignedChange={(tags) => {
+              // Etiquetas de estado y estado de la ficha son lo mismo (el servidor las sincroniza).
+              const byTag: Record<string, PropertyForEdit["status"]> = { reservado: "reserved", alquilado: "rented", "no disponible": "unavailable" };
+              const next = tags.map((t) => byTag[t.name.trim().toLowerCase()]).find(Boolean);
+              setStatus((s) => (next ? next : s in { reserved: 1, rented: 1, unavailable: 1 } ? "available" : s));
+            }}
           />
         </Section>
 
@@ -1090,6 +1096,8 @@ export function PropertyEditView({
                 <option value="reserved">
                   {t("adminProps.status.reserved")}
                 </option>
+                <option value="rented">{t("adminProps.status.rented")}</option>
+                <option value="unavailable">{t("adminProps.status.unavailable")}</option>
                 <option value="sold">{t("adminProps.status.sold")}</option>
                 <option value="archived">
                   {t("adminProps.status.archived")}

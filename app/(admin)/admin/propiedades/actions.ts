@@ -1,5 +1,6 @@
 "use server";
 
+import { syncReservedTagFromStatus } from "@/lib/properties/reserved-sync";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
@@ -565,7 +566,7 @@ export type UpdatePropertyInput = {
   // geocoding automático (útil para importaciones sin coords o direcciones vagas).
   latitude?: number | null;
   longitude?: number | null;
-  status?: "available" | "reserved" | "sold" | "archived";
+  status?: "available" | "reserved" | "rented" | "unavailable" | "sold" | "archived";
   features?: string[];
   // Features añadidas a mano por BC. Se preservan en sync (no se sobreescriben).
   // En la vista pública se unen con `features` deduplicando.
@@ -729,6 +730,9 @@ export async function updateProperty(
   if (updateErr) return { ok: false, error: updateErr.message };
   if (!updated || updated.length === 0) {
     return { ok: false, error: "property_not_found" };
+  }
+  if (input.status !== undefined) {
+    await syncReservedTagFromStatus(admin, (updated[0] as { id: string }).id, input.status);
   }
 
   revalidatePath("/admin/propiedades");
