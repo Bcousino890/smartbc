@@ -400,3 +400,14 @@ Fabricio y su jefe, con la bandeja ya funcionando: menos ruido («Atención» se
 **Sincronización al subir y bajar anuncios.** Una baja hecha desde el CRM o por la API (archivar, dar de baja) se refleja al momento en Solicitudes. Una baja hecha a mano en el panel de Idealista solo se refleja cuando el CRM se entera (sincronización API → CRM); por eso conviene bajar y subir siempre desde el CRM.
 
 Verificación: unitarias y guarda tipográfica; QA visual con comprobaciones nuevas (sin «Atención», «Retirados» aparte y excluidos de «Todas», asesor del piso, sugerencia ofrecida y retirable) y las de orden adaptadas a la vista por defecto nueva.
+
+## 18. Cabecera ligera (maqueta del 3 de noviembre; pendiente de aprobación del jefe)
+
+Solo presentación de la cabecera de Solicitudes; los controles se comportan igual, con foco visible de teclado y zonas de 44 px en móvil.
+
+- **Estados** (Nuevas, Seguimiento, Mías, Pendiente de reparto, Todas, Retirados): pestañas sin recuadro, texto normal, contador en gris discreto, la activa con una línea fina en dorado apagado sobre el filete del grupo. «Atención» sigue oculta (decisión del 3 de noviembre).
+- **Fila de controles:** desaparece la línea «N solicitudes · Primero …» en todas las vistas; «Todas / Venta / Alquiler / Sin determinar» va a la izquierda, alineado con las tarjetas, y «Seleccionar» a su lado. El orden sigue en Filtros, cuyo selector refleja el aplicado.
+- **Vistas:** «Tarjetas / Por piso / Prioridades» en un selector compacto a la derecha, con un solo borde exterior y fondo tenue para la activa.
+- **Filtros:** borde fino junto al buscador y contador pequeño redondo cuando hay filtros activos.
+
+Capturas para el jefe, en claro y en oscuro, con Nuevas, Venta y Tarjetas seleccionadas: `comparacion-figma/despues/A01_Cabecera_claro.png` y `A01_Cabecera_oscuro.png`. Verificación: guarda tipográfica sin fallos y QA visual con las comprobaciones de la cabecera (sin línea de resultados, orden visible en Filtros, pestaña activa con `aria-selected`).

@@ -34,11 +34,9 @@ import type {
   PriorityBoard,
 } from "@/lib/sales-inbox/types";
 import { COMMERCIAL_STATES, INBOX_VIEWS_SHOWN } from "@/lib/sales-inbox/types";
-import { orderLabelKey } from "@/lib/sales-inbox/views";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
-import { useTn } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/plural";
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { cn } from "@/lib/utils";
 import { Button, Empty, Labeled, Modal, Pill, Select, TextArea } from "@/components/admin/ui/primitives";
@@ -125,7 +123,6 @@ export function InboxShell({
   board?: (PriorityBoard & { unplanned: number }) | null;
 }) {
   const t = useT();
-  const tn = useTn();
   const router = useRouter();
   const params = useSearchParams();
   const config = getCountryConfig(country);
@@ -249,17 +246,27 @@ export function InboxShell({
     [cur],
   );
 
-  const segBtn = (on: boolean) =>
+  // Cabecera ligera (maqueta 2026-11-03): los controles pesan poco y las
+  // tarjetas son lo primero que destaca. Foco visible de teclado y zonas de
+  // 44 px en móvil en todos los controles.
+  const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-accent";
+  // Pestaña de estado: texto normal, contador discreto, subrayado fino en
+  // dorado apagado para la activa. Sin recuadro.
+  const tabCls = (on: boolean) =>
     cn(
-      "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-5 sol-ui font-semibold transition",
-      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sol-action",
-      on
-        ? "border-sol-action bg-sol-action text-sol-on-action"
-        : "border-sol-line bg-sol-surface text-sol-ink hover:border-sol-action/40",
+      "relative inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap px-1 sol-ui transition-colors sm:px-2",
+      focusRing,
+      on ? "text-sol-ink" : "text-sol-muted hover:text-sol-ink",
     );
-  // El orden lo resuelve el servidor (`effectiveSort`): el texto dice el que
-  // de verdad se está aplicando, no una suposición.
-  const orderText = t(orderLabelKey(sort));
+  // Selector compacto (operación y vistas): un solo borde exterior y fondo
+  // tenue para la opción activa.
+  const segGroupCls = "inline-flex items-center gap-0.5 rounded-lg border border-sol-line bg-sol-surface p-0.5";
+  const segItemCls = (on: boolean) =>
+    cn(
+      "inline-flex min-h-[36px] items-center justify-center whitespace-nowrap rounded-md px-3 sol-ui transition",
+      focusRing,
+      on ? "bg-sol-select font-semibold text-sol-ink" : "text-sol-muted hover:text-sol-ink",
+    );
 
   return (
     <div className="sol-root min-h-screen">
@@ -310,15 +317,19 @@ export function InboxShell({
                 type="button"
                 onClick={() => setShowFilters((v) => !v)}
                 aria-expanded={showFilters}
-                className={segBtn(showFilters)}
+                className={cn(
+                  "inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-lg border px-4 sol-ui text-sol-ink transition",
+                  focusRing,
+                  showFilters ? "border-sol-accent/60 bg-sol-select" : "border-sol-line bg-sol-surface hover:border-sol-accent/40",
+                )}
               >
                 {t("inbox.filters")}
                 {activeFilters > 0 ? (
-                  <span className={cn("rounded-md px-1.5 sol-meta tabular-nums", showFilters ? "bg-sol-on-action/20" : "bg-sol-select text-sol-action")}>
+                  <span className="min-w-[20px] rounded-full bg-sol-select px-1.5 text-center sol-meta font-semibold tabular-nums text-sol-accent">
                     {activeFilters}
                   </span>
                 ) : (
-                  <Plus size={15} strokeWidth={2.2} className={cn("transition-transform", showFilters && "rotate-45")} />
+                  <Plus size={14} strokeWidth={2} className={cn("text-sol-muted transition-transform", showFilters && "rotate-45")} />
                 )}
               </button>
             </div>
@@ -328,7 +339,7 @@ export function InboxShell({
               En 390 px la tira se desliza. */}
           <nav
             aria-label={t("inbox.title")}
-            className="-mx-4 mt-6 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+            className="-mx-4 mt-5 flex gap-4 overflow-x-auto border-b border-sol-line px-4 [scrollbar-width:none] sm:mx-0 sm:gap-6 sm:px-0 [&::-webkit-scrollbar]:hidden"
           >
             {INBOX_VIEWS_SHOWN.map((v) => {
               const on = v === viewShown;
@@ -340,10 +351,18 @@ export function InboxShell({
                   role="tab"
                   aria-selected={on}
                   onClick={() => setParams({ view: v === "all" ? null : v })}
-                  className={segBtn(on)}
+                  className={tabCls(on)}
                 >
                   {t(`inbox.view.${v}`)}
-                  {n > 0 && <span className="tabular-nums">{n}</span>}
+                  {n > 0 && <span className={cn("sol-meta tabular-nums", on ? "text-sol-muted" : "text-sol-faint")}>{n}</span>}
+                  {/* Subrayado fino en dorado apagado; pisa la línea del nav. */}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-sol-accent/70 transition-opacity",
+                      on ? "opacity-100" : "opacity-0",
+                    )}
+                  />
                 </button>
               );
             })}
@@ -420,12 +439,12 @@ export function InboxShell({
             </div>
           )}
 
-          {/* Resultados · venta o alquiler · vista. El conmutador de vista
-              SIEMPRE ocupa el mismo sitio (a la derecha en escritorio, en su
-              fila en móvil): lo que haya a la izquierda se ajusta en su hueco
-              y nunca lo desplaza, para que no «baile» al cambiar de vista. */}
-          <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 lg:min-h-[40px] lg:flex-1">
+          {/* Operación y selección a la izquierda, alineadas con las tarjetas;
+              el conmutador de vista SIEMPRE a la derecha (en su fila en móvil),
+              sin que lo desplace lo que haya a la izquierda. La línea de
+              resultados y orden se quitó (maqueta): el orden sigue en Filtros. */}
+          <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 lg:flex-1">
               {canEdit && selectMode && layout !== "priorities" && (
                 <input
                   type="checkbox"
@@ -438,36 +457,13 @@ export function InboxShell({
                   className="h-5 w-5 accent-sol-action"
                 />
               )}
-              <p className="sol-ui text-sol-muted" aria-live="polite">
-                {selected.size > 0
-                  ? t("inbox.bulk.selected", { count: selected.size })
-                  : layout === "priorities"
-                    ? tn("inbox.results", board ? board.today.total + board.awaiting.total + board.scheduled.total : 0)
-                    : (
-                      <>
-                        {layout === "property" ? tn("inbox.resultsGrouped", total) : tn("inbox.results", total)}
-                        <span aria-hidden> · </span>
-                        {orderText}
-                      </>
-                    )}
-                {pending && <span className="ms-1 text-sol-faint">…</span>}
-              </p>
               {/* Venta o alquiler es una decisión de trabajo constante: vive a
                   la vista. «Sin determinar» es un segmento más, no un residuo. */}
-              <div className="flex items-center gap-0.5 rounded-lg border border-sol-line bg-sol-surface p-0.5">
+              <div className={segGroupCls}>
                 {([null, "sale", "rent", "unknown"] as (OperationFilter | null)[]).map((o) => {
                   const on = (cur?.get("op") ?? null) === o;
                   return (
-                    <button
-                      key={o ?? "all"}
-                      type="button"
-                      onClick={() => setParams({ op: o })}
-                      aria-pressed={on}
-                      className={cn(
-                        "min-h-[32px] whitespace-nowrap rounded-md px-2.5 sol-meta font-semibold transition",
-                        on ? "bg-sol-select text-sol-action" : "text-sol-muted hover:text-sol-ink",
-                      )}
-                    >
+                    <button key={o ?? "all"} type="button" onClick={() => setParams({ op: o })} aria-pressed={on} className={segItemCls(on)}>
                       {t(`inbox.operation.${o ?? "all"}`)}
                     </button>
                   );
@@ -481,22 +477,30 @@ export function InboxShell({
                     setSelectMode((v) => !v);
                     setSelected(new Set());
                   }}
-                  className="min-h-[32px] sol-meta font-semibold text-sol-action underline-offset-2 hover:underline"
+                  className={cn("min-h-[36px] rounded-md px-2 sol-ui text-sol-accent underline-offset-2 hover:underline", focusRing)}
                 >
                   {selectMode ? t("inbox.bulk.exitSelect") : t("inbox.bulk.select")}
                 </button>
               )}
+              {/* Lo seleccionado se dice aquí (y en la barra de lote); el
+                  contador de resultados ya no se enseña. */}
+              {selected.size > 0 && (
+                <span className="sol-meta text-sol-muted" aria-live="polite">
+                  {t("inbox.bulk.selected", { count: selected.size })}
+                </span>
+              )}
+              {pending && <span className="sol-meta text-sol-faint" aria-hidden>…</span>}
             </div>
             {/* Tres maneras de mirar la MISMA bandeja: mismos filtros, misma
                 ficha y mismas acciones. */}
-            <div role="group" aria-label={t("inbox.layout.label")} className="grid w-full shrink-0 grid-cols-3 gap-2 sm:flex sm:w-auto lg:ms-6">
+            <div role="group" aria-label={t("inbox.layout.label")} className={cn(segGroupCls, "w-full shrink-0 lg:w-auto lg:ms-6")}>
               {(["cards", "property", "priorities"] as InboxLayout[]).map((l) => (
                 <button
                   key={l}
                   type="button"
                   onClick={() => setParams({ mode: l === "cards" ? null : l, group: null })}
                   aria-pressed={layoutShown === l}
-                  className={cn(segBtn(layoutShown === l), "min-h-[40px] px-3 sm:min-w-[126px]")}
+                  className={cn(segItemCls(layoutShown === l), "flex-1 lg:flex-none lg:min-w-[112px]")}
                 >
                   {t(`inbox.layout.${l}`)}
                 </button>

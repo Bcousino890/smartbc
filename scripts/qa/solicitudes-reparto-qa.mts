@@ -83,15 +83,24 @@ async function shot(page: Page, name: string) {
   check("Extensión · aviso de versión atrasada con descarga", (await notice.count()) === 1
     && /extension-download/.test((await notice.getByRole("link").first().getAttribute("href")) ?? ""));
   // El texto de orden dice el orden que de verdad se aplica.
-  const orderText = async (q: string) => {
+  // Cabecera ligera (maqueta): sin línea de resultados/orden; el orden vive en
+  // Filtros y el selector refleja el aplicado.
+  const sortIn = async (q: string) => {
     await page.goto(`${BASE}/es/admin/solicitudes?${q}`, { waitUntil: "networkidle" });
-    return page.getByText(/Primero /).first().textContent();
+    const noLine = (await page.getByText(/Primero /).count()) === 0;
+    await page.getByRole("button", { name: /^Filtros/ }).click();
+    const v = await page.getByRole("combobox", { name: "Orden" }).inputValue();
+    return { noLine, v };
   };
-  check("Orden · «Todas» sin elegir: más recientes", /más recientes/.test((await orderText("view=all")) ?? ""));
-  check("Orden · «Más antiguas» elegido: el texto lo dice", /más antiguas/.test((await orderText("view=all&sort=oldest")) ?? ""));
-  check("Orden · por defecto («Todas»): más recientes", /más recientes/.test((await orderText("")) ?? ""));
-  check("Orden · cola de atención por URL: pendientes de atención", /pendientes de atención/.test((await orderText("view=needs-attention")) ?? ""));
-  check("Orden · «Última actividad» elegido", /actividad más reciente/.test((await orderText("view=all&sort=activity")) ?? ""));
+  const s1 = await sortIn("view=all");
+  check("Cabecera · sin línea de resultados; orden por defecto en Filtros", s1.noLine && s1.v === "");
+  const s2 = await sortIn("view=all&sort=oldest");
+  check("Cabecera · «Más antiguas» elegido se ve en Filtros", s2.noLine && s2.v === "oldest");
+  const s3 = await sortIn("view=all&sort=activity");
+  check("Cabecera · «Última actividad» elegido se ve en Filtros", s3.noLine && s3.v === "activity");
+  check("Cabecera · pestañas ligeras: la activa lleva subrayado y aria-selected",
+    (await page.getByRole("tab", { name: /^Todas/, selected: true }).count()) === 1
+      && (await page.getByRole("tab", { name: /^Nuevas/, selected: false }).count()) === 1);
   // Solicitud con cliente vinculado (cuenta como «converted»): se sigue
   // pudiendo registrar el contacto.
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(8)}`, { waitUntil: "networkidle" });
