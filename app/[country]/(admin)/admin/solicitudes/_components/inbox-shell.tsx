@@ -249,7 +249,7 @@ export function InboxShell({
       {/* ── La bandeja (oculta, pero montada, mientras se mira una ficha) ── */}
       <div className={cn("px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8", selectedId && "hidden")}>
         {extensionStatus?.outdated && (
-          <ExtensionNotice status={extensionStatus} isAdmin={isAdmin} prefix={config.prefix} locale={config.locale} />
+          <ExtensionNotice status={extensionStatus} isAdmin={isAdmin} locale={config.locale} />
         )}
         <header>
           <p className="sol-meta text-sol-muted">
@@ -648,12 +648,10 @@ export function InboxShell({
 function ExtensionNotice({
   status,
   isAdmin,
-  prefix,
   locale,
 }: {
   status: ExtensionCaptureStatus;
   isAdmin: boolean;
-  prefix: string;
   locale: string;
 }) {
   const t = useT();
@@ -681,7 +679,7 @@ function ExtensionNotice({
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {isAdmin ? (
           <a
-            href={`${prefix.replace(/\/[a-z]{2}$/, "")}/api/admin/idealista/extension-download`}
+            href="/api/admin/idealista/extension-download"
             className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-ink px-4 text-sm font-bold uppercase tracking-wider text-cream-50 hover:bg-ink-soft"
           >
             <Download size={15} strokeWidth={2} />
