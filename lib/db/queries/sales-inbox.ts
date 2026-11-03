@@ -106,6 +106,8 @@ const LIST_COLUMNS = [
   // 0238 · portada y código público del anuncio IDENTIFICADO.
   "listing_cover_url",
   "listing_ad_code",
+  // 0241 · el anuncio identificado ya no está publicado.
+  "listing_retired",
 ].join(", ");
 
 /** Lo que cabe en una tarjeta. El mensaje original nunca se recorta en la base. */
@@ -196,6 +198,7 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     assignmentSource: r.assignment_source ?? null,
     assignmentVersion: Number(r.assignment_version ?? 0),
     listingRef: r.property_ref ?? r.idealista_code ?? null,
+    listingRetired: isExactLink(r.property_link_method) && r.listing_retired === true,
   };
 }
 
@@ -480,13 +483,16 @@ async function groupByProperty(
         lastLeadAt: item.createdAt,
         newCount: item.state === "new" ? 1 : 0,
         attentionCount: needsAttention(item.reasons) ? 1 : 0,
+        retired: exact && item.listingRetired,
       });
     }
   }
 
-  // «Por verificar» va al final: es trabajo de revisión, no un inmueble.
+  // Orden: anuncios publicados, luego los ya retirados (aparte, con su
+  // origen) y al final «Por verificar», que es trabajo de revisión.
+  const rank = (g: LeadGroup) => (g.kind === "unverified" ? 2 : g.retired ? 1 : 0);
   const ordered = [...byKey.values()].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "unverified" ? 1 : -1;
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
     return new Date(b.lastLeadAt).getTime() - new Date(a.lastLeadAt).getTime();
   });
 
@@ -791,6 +797,8 @@ export type LeadDetail = {
   previousPublicationCode: string | null;
   /** Enlace público del anuncio en idealista.com; solo con vínculo exacto. */
   adUrl: string | null;
+  /** El anuncio identificado ya no está publicado (0241). */
+  listingRetired: boolean;
   linkMethod: string | null;
   linkStatus: LinkStatus;
   routingStatus: RoutingStatus;
@@ -944,6 +952,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     propertyRef: row.property_ref ?? null,
     idealistaCode: row.idealista_code ?? null,
     previousPublicationCode: listingCode,
+    listingRetired: isExactLink(row.property_link_method) && row.listing_retired === true,
     adUrl: isExactLink(row.property_link_method)
       ? (idealistaAdUrl(row.listing_ad_code) ?? idealistaAdUrl(row.idealista_code))
       : null,

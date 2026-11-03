@@ -115,7 +115,12 @@ export function LeadGroupBlock({
         <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-lg bg-sol-column md:aspect-auto md:h-[180px] md:w-[248px]">
           {group.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={group.coverUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+            <img
+              src={group.coverUrl}
+              alt=""
+              loading="lazy"
+              className={cn("absolute inset-0 h-full w-full object-cover", group.retired && "opacity-60 grayscale")}
+            />
           ) : (
             <span className="absolute inset-0 flex items-center p-4 sol-ui text-sol-muted">
               {exact ? t("inbox.card.noImage") : t("inbox.card.noVerifiedImage")}
@@ -149,6 +154,7 @@ export function LeadGroupBlock({
                 <span aria-hidden>·</span>
                 <span>{t("inbox.link.exact")}</span>
                 {group.zone && <span className="font-normal text-sol-muted">· {group.zone}</span>}
+                {group.retired && <span className="font-normal text-sol-muted">· {t("inbox.listing.retired")}</span>}
               </>
             ) : (
               <span>{t("inbox.group.unverifiedHint")}</span>

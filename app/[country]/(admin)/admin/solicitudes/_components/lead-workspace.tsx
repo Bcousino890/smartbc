@@ -885,7 +885,16 @@ function PropertyContext({
   const href = p.slug ? `${config.prefix}/propiedades/${p.slug}` : `${config.prefix}/idealista`;
   const cover = p.coverUrl ?? lead.propertyImageUrl;
   return (
-    <Panel title={t("inbox.property.title")} action={<LinkBadge status={lead.linkStatus} />}>
+    <Panel
+      title={t("inbox.property.title")}
+      action={
+        <span className="flex flex-wrap items-center gap-2">
+          {lead.listingRetired && <Pill tone="neutral">{t("inbox.listing.retired")}</Pill>}
+          <LinkBadge status={lead.linkStatus} />
+        </span>
+      }
+    >
+      {lead.listingRetired && <p className="mb-3 text-sm text-sol-muted">{t("inbox.listing.retiredHint")}</p>}
       <div className="flex flex-col gap-5 sm:flex-row">
         <div className="relative aspect-[4/3] w-full shrink-0 self-start overflow-hidden rounded-lg bg-sol-column sm:w-[212px]">
           {cover ? (

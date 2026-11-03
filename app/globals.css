@@ -1249,3 +1249,13 @@
   .sol-root [data-crm-panel] > header { padding: 16px 16px 4px; }
   .sol-root [data-crm-panel] > div:not([class=""]) { padding: 12px 16px 16px; }
 }
+
+/* Barra de progreso fina de Solicitudes mientras llega la página nueva. */
+.sol-root .bg-sol-accent-bar { background-color: rgb(var(--sol-accent)); }
+@keyframes solProgress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sol-root [class*="animate-[solProgress"] { animation: none; width: 100%; opacity: 0.6; }
+}

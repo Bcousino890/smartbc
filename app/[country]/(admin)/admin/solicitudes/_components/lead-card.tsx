@@ -73,7 +73,13 @@ export function StatusTag({ lead, className }: { lead: LeadListItem; className?:
 }
 
 /** «Ref. · Vínculo exacto» en verde, o el aviso de revisión en ámbar. */
-export function ListingLine({ lead, className }: { lead: Pick<LeadListItem, "listingRef" | "linkStatus">; className?: string }) {
+export function ListingLine({
+  lead,
+  className,
+}: {
+  lead: Pick<LeadListItem, "listingRef" | "linkStatus"> & { listingRetired?: boolean };
+  className?: string;
+}) {
   const t = useT();
   const exact = lead.linkStatus === "exact";
   return (
@@ -81,6 +87,13 @@ export function ListingLine({ lead, className }: { lead: Pick<LeadListItem, "lis
       <span className="truncate">{lead.listingRef ?? t("inbox.card.noRef")}</span>
       <span aria-hidden>·</span>
       <span>{t(`inbox.link.${lead.linkStatus}`)}</span>
+      {/* El anuncio ya no está publicado: se sigue sabiendo cuál era. */}
+      {lead.listingRetired && (
+        <>
+          <span aria-hidden>·</span>
+          <span className="text-sol-muted">{t("inbox.listing.retired")}</span>
+        </>
+      )}
     </span>
   );
 }

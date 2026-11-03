@@ -185,6 +185,28 @@ async function shot(page: Page, name: string) {
   // 0238 · Por piso agrupa también el anuncio publicado por API.
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&mode=property`, { waitUntil: "networkidle" });
   check("0238 · Por piso: el anuncio publicado por API tiene su grupo", (await page.getByText("Piso API en Velázquez").count()) > 0);
+  // 0241 · los anuncios retirados van aparte, después de los publicados.
+  const retiredHeading = page.getByRole("heading", { name: "Anuncios retirados" });
+  check("0241 · Por piso: sección «Anuncios retirados» con su anuncio",
+    (await retiredHeading.count()) === 1 && (await page.getByText("Piso en Goya").count()) > 0
+      && ((await retiredHeading.boundingBox())?.y ?? 0) < ((await page.getByText("Piso en Goya").first().boundingBox())?.y ?? 0));
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all`, { waitUntil: "networkidle" });
+  check("0241 · tarjeta de un anuncio retirado lo dice y conserva su origen",
+    (await page.locator(`[data-lead-id="${LEAD(3)}"]`).getByText("Anuncio retirado").count()) === 1
+      && (await page.locator(`[data-lead-id="${LEAD(3)}"]`).getByText("BC-9011").count()) === 1);
+  // Respuesta inmediata: con el servidor lento (1,5 s), el botón pulsado se
+  // marca antes de que llegue la página.
+  await page.route("**/es/admin/solicitudes**", async (route) => {
+    if (route.request().headers()["rsc"]) await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Prioridades" }).click();
+  await page.waitForTimeout(200);
+  check("Botones · la vista pulsada se marca al instante aunque el servidor tarde",
+    (await page.getByRole("button", { name: "Prioridades" }).getAttribute("aria-pressed")) === "true"
+      && (await page.getByRole("button", { name: "Tarjetas" }).getAttribute("aria-pressed")) === "false");
+  await page.unroute("**/es/admin/solicitudes**");
+  await page.waitForLoadState("networkidle");
   await shot(page, "08-vinculo-por-verificar");
 
   // B y C
