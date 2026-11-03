@@ -57,6 +57,7 @@ import { formatDate, formatDateTime } from "@/app/[country]/(admin)/admin/client
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { translateLeadMessage } from "../actions";
 import {
+  confirmSuggestedListing,
   convertLeadToClient,
   findClientCandidates,
   logContact,
@@ -820,6 +821,7 @@ function PropertyContext({
   const t = useT();
   const config = getCountryConfig(country);
   const [matching, setMatching] = useState(false);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
 
   const exact = lead.linkStatus === "exact";
   // Identificadores recibidos: «Idealista: Cod. | Ref.» como en el Figma.
@@ -852,6 +854,30 @@ function PropertyContext({
               </>
             )}
           </dl>
+        )}
+        {lead.suggestion && canEdit && !suggestionDismissed && (
+          <div className="mt-4 rounded-lg border border-sol-line bg-sol-column px-4 py-3">
+            <p className="font-semibold text-sol-ink">{t("inbox.property.suggestionTitle")}</p>
+            <p className="mt-1 text-sm text-sol-ink">
+              {[lead.suggestion.title, lead.suggestion.reference, lead.suggestion.price !== null ? config.formatPrice(lead.suggestion.price, null, lead.suggestion.operation) : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <p className="mt-1 text-sm text-sol-muted">{t("inbox.property.suggestionHint")}</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                className={primaryBtn}
+                onClick={() => onRun(() => confirmSuggestedListing(lead.id, { propertyId: lead.suggestion!.propertyId, listingId: lead.suggestion!.listingId }))}
+              >
+                {t("inbox.property.suggestionYes")}
+              </button>
+              <button type="button" className={btn} onClick={() => setSuggestionDismissed(true)}>
+                {t("inbox.property.suggestionNo")}
+              </button>
+            </div>
+          </div>
         )}
         <div className="mt-4 flex flex-wrap gap-3">
           <a href={lead.idealistaThreadUrl} target="_blank" rel="noopener noreferrer" className={btn}>

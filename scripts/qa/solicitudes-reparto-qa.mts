@@ -89,8 +89,9 @@ async function shot(page: Page, name: string) {
   };
   check("Orden · «Todas» sin elegir: más recientes", /más recientes/.test((await orderText("view=all")) ?? ""));
   check("Orden · «Más antiguas» elegido: el texto lo dice", /más antiguas/.test((await orderText("view=all&sort=oldest")) ?? ""));
-  check("Orden · cola de atención: pendientes de atención", /pendientes de atención/.test((await orderText("")) ?? ""));
-  check("Orden · «Última actividad» en la cola de atención", /actividad más reciente/.test((await orderText("sort=activity")) ?? ""));
+  check("Orden · por defecto («Todas»): más recientes", /más recientes/.test((await orderText("")) ?? ""));
+  check("Orden · cola de atención por URL: pendientes de atención", /pendientes de atención/.test((await orderText("view=needs-attention")) ?? ""));
+  check("Orden · «Última actividad» elegido", /actividad más reciente/.test((await orderText("view=all&sort=activity")) ?? ""));
   // Solicitud con cliente vinculado (cuenta como «converted»): se sigue
   // pudiendo registrar el contacto.
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(8)}`, { waitUntil: "networkidle" });
@@ -185,15 +186,33 @@ async function shot(page: Page, name: string) {
   // 0238 · Por piso agrupa también el anuncio publicado por API.
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&mode=property`, { waitUntil: "networkidle" });
   check("0238 · Por piso: el anuncio publicado por API tiene su grupo", (await page.getByText("Piso API en Velázquez").count()) > 0);
+  // Ruido fuera: sin segmento «Atención»; «Retirados» aparte; asesor del piso visible.
+  check("Ruido · no hay segmento «Atención» y sí «Retirados»",
+    (await page.getByRole("tab", { name: /^Atención/ }).count()) === 0 && (await page.getByRole("tab", { name: /^Retirados/ }).count()) === 1);
+  check("Ruido · «Todas» no enseña el anuncio retirado; «Por piso» dice el asesor del piso",
+    (await page.getByText("Piso en Goya").count()) === 0 && (await page.getByText("Asesor del piso").count()) > 0
+      && (await page.getByText("Asesor Sintético").count()) > 0);
+  await page.goto(`${BASE}/es/admin/solicitudes?view=retired&mode=property`, { waitUntil: "networkidle" });
   // 0241 · los anuncios retirados van aparte, después de los publicados.
   const retiredHeading = page.getByRole("heading", { name: "Anuncios retirados" });
-  check("0241 · Por piso: sección «Anuncios retirados» con su anuncio",
+  check("0241 · vista «Retirados» por piso: sección «Anuncios retirados» con su anuncio",
     (await retiredHeading.count()) === 1 && (await page.getByText("Piso en Goya").count()) > 0
       && ((await retiredHeading.boundingBox())?.y ?? 0) < ((await page.getByText("Piso en Goya").first().boundingBox())?.y ?? 0));
-  await page.goto(`${BASE}/es/admin/solicitudes?view=all`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/es/admin/solicitudes?view=retired`, { waitUntil: "networkidle" });
   check("0241 · tarjeta de un anuncio retirado lo dice y conserva su origen",
     (await page.locator(`[data-lead-id="${LEAD(3)}"]`).getByText("Anuncio retirado").count()) === 1
       && (await page.locator(`[data-lead-id="${LEAD(3)}"]`).getByText("BC-9011").count()) === 1);
+  // Sugerencia por calle y precio: se ofrece, no se afirma.
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(16)}`, { waitUntil: "networkidle" });
+  // Acotado al bloque del anuncio: la bandeja sigue montada (oculta) detrás de la ficha.
+  const adPanel = page.locator("[data-crm-panel]", { hasText: "Anuncio que consultó" });
+  check("Sugerencia · sin anuncio identificado se ofrece el que coincide por calle y precio",
+    (await adPanel.getByText("¿Es este anuncio?").count()) === 1 && (await adPanel.getByText("Ático en Castelló").count()) > 0
+      && (await adPanel.getByRole("button", { name: "Sí, es este" }).count()) === 1 && (await adPanel.getByText("Vínculo exacto").count()) === 0
+      && (await adPanel.getByText("Anuncio sin identificar").count()) === 1);
+  await page.getByRole("button", { name: "No es este" }).click();
+  check("Sugerencia · «No es este» la retira", (await page.getByText("¿Es este anuncio?").count()) === 0);
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all`, { waitUntil: "networkidle" });
   // Respuesta inmediata: con el servidor lento (1,5 s), el botón pulsado se
   // marca antes de que llegue la página.
   await page.route("**/es/admin/solicitudes**", async (route) => {
@@ -274,7 +293,8 @@ async function shot(page: Page, name: string) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   check("Móvil · sin scroll horizontal en la bandeja", overflow <= 1, `${overflow}px`);
   await shot(page, "15-movil-tarjetas");
-  await page.locator(`[data-lead-id="${LEAD(3)}"]`).first().click();
+  // La 3 es de un anuncio retirado y ya no sale en «Todas»: se abre la 1.
+  await page.locator(`[data-lead-id="${LEAD(1)}"]`).first().click();
   await page.waitForURL(/lead=/);
   await page.waitForLoadState("networkidle");
   // La ficha es una página propia (Figma A02/D01): «Volver a tarjetas».

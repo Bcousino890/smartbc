@@ -129,6 +129,10 @@ add(14, { name: "Nuria Prueba", msg: msgs[4], listing: 12, method: "code", title
 // 0238 · caducada (más de 30 días sin cliente): no sale en la bandeja.
 add(15, { name: "Caducada Prueba", msg: msgs[5], method: "none", title: "Hola, me interesa este inmueble", price: "", img: null, assigned: null, reason: "link_unverified", created: ago(1200), expired: true });
 
+// Sin código ni anuncio, pero la calle y el precio coinciden con el Ático en
+// Castelló: la ficha debe SUGERIRLO («¿Es este anuncio?»), nunca afirmarlo.
+add(16, { name: "Olga Sugerida", msg: msgs[3], method: "none", title: "Calle de Castelló, Castellana, Madrid", price: "5.400 €/mes", img: null, assigned: null, reason: "link_unverified", created: ago(6), op: "rent" });
+
 // Un cliente verificado (para «Reasignar cliente») con asesora la compañera.
 const clientProfile = {
   id: id("006", 1), role: "client", full_name: "Pedro Ficticio", email: "pedro@sim.invalid", phone: "+34 600 108 208",

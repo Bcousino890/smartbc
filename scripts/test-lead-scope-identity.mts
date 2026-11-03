@@ -113,7 +113,7 @@ for (const [label, steps] of LOST) {
   await t(`sin identidad (${label}): contadores a cero y ninguna consulta sin alcance`, async () => {
     reset(steps);
     const c = await getInboxCounts();
-    assert.deepEqual(c, { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0 });
+    assert.deepEqual(c, { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0, retired: 0 });
     assert.deepEqual(unscoped(), [], `consultas sin alcance ${JSON.stringify(unscoped())}`);
   });
   await t(`sin identidad (${label}): detalle nulo y sin leer el lead`, async () => {

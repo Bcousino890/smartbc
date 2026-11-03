@@ -20,7 +20,9 @@ export type InboxView =
   | "follow-up"
   | "my-leads"
   | "unassigned"
-  | "all";
+  | "all"
+  /** Solicitudes de anuncios que ya no están publicados (0241). */
+  | "retired";
 
 export const INBOX_VIEWS: readonly InboxView[] = [
   "needs-attention",
@@ -29,7 +31,15 @@ export const INBOX_VIEWS: readonly InboxView[] = [
   "my-leads",
   "unassigned",
   "all",
+  "retired",
 ] as const;
+
+/**
+ * Las vistas que se ENSEÑAN. «Atención» se aplaza (Fabricio y su jefe,
+ * 2026-11-03: ruido mientras el equipo no la use); sigue existiendo por URL
+ * y para el orden por prioridad, pero no tiene segmento.
+ */
+export const INBOX_VIEWS_SHOWN: readonly InboxView[] = ["new", "follow-up", "my-leads", "unassigned", "all", "retired"] as const;
 
 export function isInboxView(v: unknown): v is InboxView {
   return typeof v === "string" && (INBOX_VIEWS as readonly string[]).includes(v);
@@ -339,6 +349,8 @@ export type LeadGroup = {
   attentionCount: number;
   /** El anuncio ya no está publicado (0241): «Por piso» lo pone aparte. */
   retired: boolean;
+  /** Asesor al que Reparto comercial manda las consultas nuevas de este piso. */
+  advisorName: string | null;
 };
 
 /** Cifras del encabezado. Reales y accionables; ninguna decorativa. */
@@ -349,4 +361,6 @@ export type InboxCounts = {
   myLeads: number;
   unassigned: number;
   all: number;
+  /** De anuncios ya retirados: fuera del resto de contadores. */
+  retired: number;
 };

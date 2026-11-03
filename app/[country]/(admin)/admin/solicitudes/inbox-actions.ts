@@ -615,6 +615,32 @@ export async function matchLeadProperty(
   return { ok: true };
 }
 
+/**
+ * Confirmar la sugerencia por dirección y precio de la ficha: vínculo manual
+ * (auditado, con motivo fijo) al anuncio o a la ficha sugeridos. La
+ * sugerencia nunca se aplica sola; esto es el clic de la persona.
+ */
+export async function confirmSuggestedListing(
+  leadId: string,
+  target: { propertyId: string | null; listingId: string | null },
+): Promise<ActionResult> {
+  const gate = await checkPermission("solicitudes", "edit");
+  if (!gate.ok) return gate;
+  if (!(await canActOnLead(leadId, "edit"))) return { ok: false, error: NO_ACCESS };
+  if (!target.propertyId && !target.listingId) return { ok: false, error: "No hay anuncio que confirmar." };
+
+  const { error } = await db().rpc("set_lead_link_manual", {
+    p_actor: gate.profile.id,
+    p_lead: leadId,
+    p_property: target.propertyId,
+    p_listing: target.listingId,
+    p_reason: "Confirmado por la persona: coincide por dirección y precio con lo recibido de Idealista.",
+  });
+  if (error) return { ok: false, error: routingErrorMessage(error) };
+  refresh();
+  return { ok: true };
+}
+
 // ─── Lote ────────────────────────────────────────────────────────────────────
 //
 // A propósito NO hay envío masivo de WhatsApp ni de email: una bandeja con
