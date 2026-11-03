@@ -501,7 +501,7 @@ export type ConvertResult =
 export async function convertLeadToClient(input: {
   leadId: string;
   existingClientId?: string;
-  newClient?: { name: string; email: string; phone: string };
+  newClient?: { name: string; email: string; phone: string; extraPhones?: string[] };
   /** Añadir la propiedad del anuncio a la selección del cliente. */
   addProperty?: boolean;
 }): Promise<ConvertResult> {

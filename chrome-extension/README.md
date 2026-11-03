@@ -31,6 +31,13 @@ Revisado en vivo en el inbox el 2026-11-03. Tres fallos de la 1.14.x:
 
 El botón de cierre del modal de Idealista es `span.icon-close` (sin
 aria-label ni texto): Escape no siempre llega, así que se cierra también con él.
+**Mensajes del contacto.** Idealista renombró `data-qa="seeker-message"` a
+`interlocutor-message` (los nuestros son `assigned-message`). Con el selector
+viejo la extensión caía al respaldo, que descarta cualquier párrafo con un
+`<span>` dentro, y eso es justo lo que pasa cuando el mensaje lleva un teléfono
+(Idealista lo convierte en enlace): esos leads llegaban **sin mensaje**
+(caso janebillot). Verificado en vivo el 2026-11-03.
+
 La lógica pura (teléfonos, tarjetas) está en `inbox-core.js` y se prueba con
 `npm run test:extension-inbox`.
 

@@ -485,7 +485,10 @@
   // escribió cada mensaje y mezclaba nuestras respuestas con las del
   // contacto. Solo se toman los mensajes del contacto.
   function extractSeekerMessages() {
-    const nodes = document.querySelectorAll('[data-qa="seeker-message"]');
+    // Idealista renombró el atributo: los mensajes del contacto son
+    // «interlocutor-message» y los nuestros «assigned-message» (verificado en
+    // vivo el 2026-11-03). «seeker-message» se mantiene por si vuelve.
+    const nodes = document.querySelectorAll('[data-qa="interlocutor-message"], [data-qa="seeker-message"]');
     if (nodes.length === 0) return null;
     const texts = [...nodes]
       .map((el) => {

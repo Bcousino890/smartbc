@@ -1197,14 +1197,15 @@ function CreateClientForm({
   onError,
 }: {
   lead: LeadDetail;
-  prefill: { name: string; email: string; phone: string };
+  prefill: { name: string; email: string; phone: string; extraPhones: string[] };
   disabled: boolean;
   onError: (e: string | null) => void;
 }) {
   const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState(prefill);
+  const [f, setF] = useState({ name: prefill.name, email: prefill.email, phone: prefill.phone });
+  const [extra, setExtra] = useState(prefill.extraPhones.join(", "));
   const [saving, start] = useTransition();
 
   if (!open) {
@@ -1231,6 +1232,12 @@ function CreateClientForm({
         inputMode="tel"
       />
       <TextInput
+        value={extra}
+        onChange={(e) => setExtra(e.target.value)}
+        placeholder={t("inbox.client.extraPhones")}
+        inputMode="tel"
+      />
+      <TextInput
         value={f.email}
         onChange={(e) => setF({ ...f, email: e.target.value })}
         placeholder={t("inbox.client.emailOptional")}
@@ -1250,7 +1257,10 @@ function CreateClientForm({
           onClick={() => {
             onError(null);
             start(async () => {
-              const r = await convertLeadToClient({ leadId: lead.id, newClient: f });
+              const r = await convertLeadToClient({
+                leadId: lead.id,
+                newClient: { ...f, extraPhones: extra.split(/[,;\n]/).map((p) => p.trim()).filter(Boolean) },
+              });
               if (!r.ok) onError(r.error);
               else router.refresh();
             });

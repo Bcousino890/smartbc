@@ -23,6 +23,7 @@
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
+import { parseExtraPhones } from "@/lib/services/idealista/lead-phones";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
 import { canActOnClient, canActOnLead } from "@/lib/db/queries/view-scope";
@@ -55,7 +56,7 @@ export type PrepareVisitsLookup =
       matches: ClientMatch[];
       /** true = hay que mirar antes de vincular (varios, o solo cola de 9). */
       ambiguous: boolean;
-      prefill: { name: string; email: string; phone: string };
+      prefill: { name: string; email: string; phone: string; extraPhones: string[] };
       property: { id: string; title: string } | null;
     };
 
@@ -183,6 +184,7 @@ export async function lookupPrepareVisits(
   let name = "";
   let email = "";
   let phone = "";
+  let extraPhones: string[] = [];
   let property: { id: string; title: string } | null = null;
 
   if (source === "idealista") {
@@ -191,7 +193,7 @@ export async function lookupPrepareVisits(
     // diálogo decía "Lead no encontrado" para todos los leads.
     const { data: lead, error: leadError } = await admin
       .from("idealista_leads")
-      .select("name, phone, matched_property_id")
+      .select("name, phone, extra_phones, matched_property_id")
       .eq("id", id)
       .maybeSingle();
     if (leadError) {
@@ -201,6 +203,7 @@ export async function lookupPrepareVisits(
     if (!lead) return { ok: false, error: "Lead no encontrado." };
     name = lead.name ?? "";
     phone = lead.phone ?? "";
+    extraPhones = Array.isArray(lead.extra_phones) ? lead.extra_phones : [];
     if (lead.matched_property_id) {
       const { data: prop } = await admin
         .from("properties")
@@ -236,7 +239,7 @@ export async function lookupPrepareVisits(
     ok: true,
     matches,
     ambiguous,
-    prefill: { name, email, phone },
+    prefill: { name, email, phone, extraPhones },
     property,
   };
 }
@@ -252,7 +255,7 @@ export type ConfirmPrepareVisits =
  */
 export async function confirmPrepareVisits(input: {
   existingClientId?: string;
-  newClient?: { name: string; email: string; phone: string };
+  newClient?: { name: string; email: string; phone: string; extraPhones?: string[] };
   propertyId?: string;
 }): Promise<ConfirmPrepareVisits> {
   const gate = await checkPermission("viewing_collections", "create");
@@ -310,9 +313,17 @@ export async function confirmPrepareVisits(input: {
     clientId = created.user.id;
 
     const phone = input.newClient.phone.trim() || null;
+    // Los demás teléfonos del contacto (p. ej. el que escribió en su mensaje):
+    // sin repetir el principal ni entre sí.
+    const extraPhones = parseExtraPhones(input.newClient.extraPhones ?? [], phone);
     await admin
       .from("profiles")
-      .update({ full_name: name, ...(phone ? { phone } : {}), country: "es" })
+      .update({
+        full_name: name,
+        ...(phone ? { phone } : {}),
+        ...(extraPhones.length > 0 ? { extra_phones: extraPhones } : {}),
+        country: "es",
+      })
       .eq("id", clientId);
   } else {
     return { ok: false, error: "Falta el cliente." };
