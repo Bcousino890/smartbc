@@ -191,6 +191,15 @@ export function LeadGroupBlock({
         {/* Última consulta y acceso a la demanda */}
         <div className="flex shrink-0 flex-col justify-between gap-4 px-1 pb-1 md:w-[300px] md:py-3 md:pe-4 xl:w-[370px]">
           <div>
+            {/* Reparto comercial, visto desde aquí: quién recibe lo nuevo de este piso. */}
+            <p className="mb-3 sol-meta">
+              <span className="text-sol-muted">{t("inbox.group.advisor")}: </span>
+              {group.advisorName ? (
+                <span className="font-semibold text-sol-ink">{group.advisorName}</span>
+              ) : (
+                <span className="font-semibold text-sol-review-ink">{t("inbox.group.noAdvisor")}</span>
+              )}
+            </p>
             <p className="sol-meta text-sol-muted">{t("inbox.group.lastEnquiry")}</p>
             <p className="mt-1 truncate text-lg font-semibold text-sol-ink">
               {latest?.name?.trim() || t("inbox.row.noName")}

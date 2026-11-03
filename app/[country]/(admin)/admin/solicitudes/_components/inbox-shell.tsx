@@ -33,7 +33,7 @@ import type {
   OperationFilter,
   PriorityBoard,
 } from "@/lib/sales-inbox/types";
-import { COMMERCIAL_STATES, INBOX_VIEWS } from "@/lib/sales-inbox/types";
+import { COMMERCIAL_STATES, INBOX_VIEWS_SHOWN } from "@/lib/sales-inbox/types";
 import { orderLabelKey } from "@/lib/sales-inbox/views";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -81,6 +81,7 @@ const COUNT_KEY: Record<InboxView, keyof InboxCounts> = {
   "my-leads": "myLeads",
   unassigned: "unassigned",
   all: "all",
+  retired: "retired",
 };
 
 export function InboxShell({
@@ -148,7 +149,7 @@ export function InboxShell({
     setOptimistic(null);
   }, [paramsKey]);
   const cur = optimistic ?? params;
-  const viewShown: InboxView = optimistic ? ((optimistic.get("view") as InboxView | null) ?? "needs-attention") : view;
+  const viewShown: InboxView = optimistic ? ((optimistic.get("view") as InboxView | null) ?? "all") : view;
   const layoutShown: InboxLayout = optimistic
     ? ((optimistic.get("mode") as InboxLayout | null) ?? (optimistic.get("group") === "property" ? "property" : "cards"))
     : layout;
@@ -329,7 +330,7 @@ export function InboxShell({
             aria-label={t("inbox.title")}
             className="-mx-4 mt-6 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
           >
-            {INBOX_VIEWS.map((v) => {
+            {INBOX_VIEWS_SHOWN.map((v) => {
               const on = v === viewShown;
               const n = counts[COUNT_KEY[v]];
               return (
@@ -338,7 +339,7 @@ export function InboxShell({
                   type="button"
                   role="tab"
                   aria-selected={on}
-                  onClick={() => setParams({ view: v === "needs-attention" ? null : v })}
+                  onClick={() => setParams({ view: v === "all" ? null : v })}
                   className={segBtn(on)}
                 >
                   {t(`inbox.view.${v}`)}

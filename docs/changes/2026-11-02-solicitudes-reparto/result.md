@@ -385,3 +385,18 @@ Con la extensión ya actualizada (las solicitudes nuevas llegan con «Vínculo e
 | Botones | El segmento, la vista, los filtros y la solicitud pulsada se reflejan al instante (estado optimista de la URL) y una barra fina indica que llega la página; la ficha se abre en el acto con «Cargando la solicitud…». |
 
 Verificación: SQL (0241 aplicada dos veces; el id antiguo de la API sigue llevando al anuncio; clon; retirado por API, por archivo y por ficha propia; vuelta a publicar; reversión de 0241 y de la cadena 0237→0241 con reaplicación), unitarias en verde, guarda tipográfica sin fallos, QA visual con tres comprobaciones nuevas (sección de retirados, marca en la tarjeta con su origen, y botón marcado antes de que responda un servidor lento a propósito).
+
+## 17. Menos ruido, asesor del piso a la vista, anuncios retirados fuera y sugerencia confirmable (2026-11-03)
+
+Fabricio y su jefe, con la bandeja ya funcionando: menos ruido («Atención» se aplaza), ver desde Solicitudes qué asesor tiene cada piso, que al reemplazar anuncios la bandeja «se limpie» sola y lo nuevo entre limpio, y que un «Anuncio sin identificar» cuyo texto dice claramente el piso no se quede sin salida.
+
+| Pieza | Cambio |
+|---|---|
+| «Atención» | Sin segmento (sigue por URL `?view=needs-attention` y como orden por prioridad). La vista por defecto pasa a «Todas»; su orden, las más recientes. |
+| «Retirados» | Vista nueva. Las solicitudes de anuncios retirados (0241) salen SOLO ahí: en cuanto se baja un anuncio desaparecen de «Todas», «Nuevas», «Por piso» y «Prioridades», y lo que llegue por los anuncios nuevos entra limpio. Conservan su origen y caducan a los 30 días sin cliente. Los contadores siguen la misma regla. |
+| Asesor del piso | Cada anuncio de «Por piso» dice a quién manda Reparto comercial sus consultas nuevas («Asesor del piso: …» o «Sin asesor en Reparto comercial»). |
+| Sugerencia | Sin anuncio identificado, la ficha ofrece el que coincide por calle y precio (el emparejamiento antiguo, ahora como pregunta): «¿Es este anuncio?» con «Sí, es este» (vínculo manual auditado, con motivo fijo) o «No es este». Nunca se vincula solo. |
+
+**Sincronización al subir y bajar anuncios.** Una baja hecha desde el CRM o por la API (archivar, dar de baja) se refleja al momento en Solicitudes. Una baja hecha a mano en el panel de Idealista solo se refleja cuando el CRM se entera (sincronización API → CRM); por eso conviene bajar y subir siempre desde el CRM.
+
+Verificación: unitarias y guarda tipográfica; QA visual con comprobaciones nuevas (sin «Atención», «Retirados» aparte y excluidos de «Todas», asesor del piso, sugerencia ofrecida y retirable) y las de orden adaptadas a la vista por defecto nueva.

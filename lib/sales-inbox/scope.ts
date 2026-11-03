@@ -32,11 +32,14 @@ export interface CountQuery<Q> {
  * alcance): así cuentan exactamente lo que la lista puede enseñar.
  */
 export function inboxCountQueries<Q extends CountQuery<Q>>(base: () => Q, userId: string | null) {
+  // Las solicitudes de anuncios retirados (0241) solo cuentan en «Retirados».
+  const live = () => base().not("listing_retired", "is", true);
   return {
-    new: base().eq("commercial_state", "new"),
-    followUp: base().not("next_action_at", "is", null),
-    myLeads: userId ? base().eq("assigned_to", userId) : null,
-    unassigned: base().is("assigned_to", null),
-    all: base(),
+    new: live().eq("commercial_state", "new"),
+    followUp: live().not("next_action_at", "is", null),
+    myLeads: userId ? live().eq("assigned_to", userId) : null,
+    unassigned: live().is("assigned_to", null),
+    all: live(),
+    retired: base().eq("listing_retired", "true"),
   };
 }

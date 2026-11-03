@@ -37,6 +37,7 @@ import {
 } from "@/lib/sales-inbox/derive";
 import { effectiveRoutingStatus, idealistaAdUrl, isExactLink, linkStatus, previousPublicationCode, type LinkStatus, type RoutingStatus, type ZintoSyncInfo } from "@/lib/sales-inbox/routing";
 import { getAssignmentEvents, getZintoSync } from "./routing";
+import { matchPropertyByAddress, type AddressMatchCandidate } from "@/lib/services/idealista/lead-property-match";
 import { groupKeyFor, priorityColumn } from "@/lib/sales-inbox/views";
 import {
   GROUP_PAGE_SIZE,
@@ -235,6 +236,12 @@ function applyFilters(q: any, f: InboxFilters, userId: string | null) {
   if (f.assignedTo === "me" && userId) q = q.eq("assigned_to", userId);
   else if (f.assignedTo === "none") q = q.is("assigned_to", null);
   else if (f.assignedTo) q = q.eq("assigned_to", f.assignedTo);
+
+  // Las solicitudes de anuncios retirados (0241) viven en su propia vista:
+  // al bajar un anuncio, lo suyo desaparece del resto de la bandeja y lo que
+  // llegue por los anuncios nuevos entra limpio.
+  if (f.view === "retired") q = q.eq("listing_retired", true);
+  else q = q.not("listing_retired", "is", true);
 
   switch (f.view) {
     case "new":
@@ -484,6 +491,7 @@ async function groupByProperty(
         newCount: item.state === "new" ? 1 : 0,
         attentionCount: needsAttention(item.reasons) ? 1 : 0,
         retired: exact && item.listingRetired,
+        advisorName: null,
       });
     }
   }
@@ -502,6 +510,31 @@ async function groupByProperty(
   // Solo se piden los datos de las fichas VISIBLES: sin esto sería un N+1
   // sobre todas las propiedades del listado. Dos consultas porque hay dos
   // procedencias posibles, no porque haya dos modelos.
+  // Asesor del piso: la regla activa de Reparto comercial, para ver desde
+  // aquí qué reparto tiene cada anuncio sin ir a la otra pantalla.
+  try {
+    const subjects = page.filter((g) => g.kind === "exact" && (g.propertyId || g.listingId));
+    if (subjects.length > 0) {
+      const pIds = subjects.map((g) => g.propertyId).filter((x): x is string => Boolean(x));
+      const lIds = subjects.map((g) => g.listingId).filter((x): x is string => Boolean(x));
+      const ors = [pIds.length ? `property_id.in.(${pIds.join(",")})` : null, lIds.length ? `listing_id.in.(${lIds.join(",")})` : null].filter(Boolean);
+      const { data: rules } = await db()
+        .from("property_routing_rules")
+        .select("property_id, listing_id, advisor_id, active")
+        .eq("active", true)
+        .or(ors.join(","));
+      for (const r of (rules ?? []) as any[]) {
+        if (!r.advisor_id) continue;
+        const name = staffNames.get(r.advisor_id) ?? null;
+        for (const g of subjects) {
+          if ((r.property_id && g.propertyId === r.property_id) || (r.listing_id && g.listingId === r.listing_id)) g.advisorName = name;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[groupByProperty] reglas de reparto:", (e as Error).message);
+  }
+
   const propertyIds = page.map((g) => g.propertyId).filter((x): x is string => Boolean(x));
   const listingIds = page
     .filter((g) => !g.propertyId)
@@ -640,7 +673,7 @@ const PRIORITY_COLUMN_LIMIT = 40;
 export async function getInboxCounts(): Promise<InboxCounts> {
   const gate = await checkPermission("solicitudes", "view");
   if (!gate.ok) {
-    return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0 };
+    return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0, retired: 0 };
   }
   const scopeRaw = await resolveViewScope("solicitudes", "view", LEADS_COUNTRY);
   const scope: InboxScope = {
@@ -651,18 +684,19 @@ export async function getInboxCounts(): Promise<InboxCounts> {
   // Sin acceso o sin identidad, la lista sale vacía: los contadores también,
   // sin consultar la bandeja.
   if (scope.restriction === "none" || !scope.userId) {
-    return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0 };
+    return { needsAttention: 0, new: 0, followUp: 0, myLeads: 0, unassigned: 0, all: 0, retired: 0 };
   }
 
   const base = () => applyScope(db().from(VIEW).select("id", { count: "exact", head: true }), scope);
   const c = inboxCountQueries(base, scope.userId);
 
-  const [newCount, followUp, myLeads, unassigned, all] = await Promise.all([
+  const [newCount, followUp, myLeads, unassigned, all, retired] = await Promise.all([
     c.new,
     c.followUp,
     c.myLeads ?? Promise.resolve({ count: 0 }),
     c.unassigned,
     c.all,
+    c.retired,
   ]);
 
   // "Necesitan atención" no se puede contar en SQL sin reescribir la regla
@@ -682,6 +716,7 @@ export async function getInboxCounts(): Promise<InboxCounts> {
     myLeads: (myLeads as any).count ?? 0,
     unassigned: (unassigned as any).count ?? 0,
     all: (all as any).count ?? 0,
+    retired: (retired as any).count ?? 0,
   };
 }
 
@@ -799,6 +834,11 @@ export type LeadDetail = {
   adUrl: string | null;
   /** El anuncio identificado ya no está publicado (0241). */
   listingRetired: boolean;
+  /**
+   * Sin anuncio identificado: el que coincide por dirección y precio, para
+   * CONFIRMARLO con un clic. Nunca se afirma solo.
+   */
+  suggestion: LeadSuggestion | null;
   linkMethod: string | null;
   linkStatus: LinkStatus;
   routingStatus: RoutingStatus;
@@ -866,6 +906,10 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
       .limit(200),
     getStaffNames(),
   ]);
+
+  const suggestion = isExactLink(row.property_link_method)
+    ? null
+    : await suggestListingByAddress(row.property_title ?? null, row.property_price ?? null);
 
   const [property, linkedClient, duplicates, clientRow, zintoSync, history, listingCode] = await Promise.all([
     // Solo con vínculo exacto se enseña un inmueble: el emparejamiento
@@ -953,6 +997,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     idealistaCode: row.idealista_code ?? null,
     previousPublicationCode: listingCode,
     listingRetired: isExactLink(row.property_link_method) && row.listing_retired === true,
+    suggestion,
     adUrl: isExactLink(row.property_link_method)
       ? (idealistaAdUrl(row.listing_ad_code) ?? idealistaAdUrl(row.idealista_code))
       : null,
@@ -1073,6 +1118,74 @@ async function getListingContext(listingId: string): Promise<LeadPropertyContext
       status: null,
       zone: data.address_city ?? null,
       coverUrl: Array.isArray(data.photo_ids) && data.photo_ids[0] ? String(data.photo_ids[0]) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type LeadSuggestion = {
+  propertyId: string | null;
+  listingId: string | null;
+  title: string | null;
+  reference: string | null;
+  price: number | null;
+  operation: string | null;
+};
+
+/**
+ * El anuncio que coincide por calle y precio con lo que llegó de Idealista.
+ * Es el emparejamiento antiguo (lead-property-match), pero como SUGERENCIA:
+ * la ficha lo enseña con «¿Es este anuncio?» y solo se vincula si alguien
+ * confirma. Primero el anuncio de Idealista (es lo que vio la persona); si
+ * no, la ficha propia.
+ */
+async function suggestListingByAddress(title: string | null, price: string | null): Promise<LeadSuggestion | null> {
+  if (!title) return null;
+  try {
+    const { data: listings } = await db()
+      .from("idealista_listings")
+      .select("id, property_id, reference_code, inspo_title, address_street, address_city, operation, price, total_rental_price")
+      .is("archived_at", null);
+    const lCands: AddressMatchCandidate[] = (listings ?? []).map((l: any) => ({
+      id: l.id,
+      street: l.address_street ?? null,
+      zone: l.address_city ?? null,
+      prices: [l.price, l.total_rental_price],
+    }));
+    const lid = matchPropertyByAddress(title, price, lCands);
+    if (lid) {
+      const l = (listings ?? []).find((x: any) => x.id === lid) as any;
+      const raw = l.operation === "rent" ? l.total_rental_price : l.price;
+      return {
+        propertyId: l.property_id ?? null,
+        listingId: l.id,
+        title: l.inspo_title ?? l.address_street ?? null,
+        reference: l.reference_code ?? null,
+        price: raw === null || raw === undefined ? null : Number(raw),
+        operation: l.operation ?? null,
+      };
+    }
+    const { data: props } = await db()
+      .from("properties")
+      .select("id, title, address, zone, property_reference, price, rent_price, operation")
+      .is("archived_at", null);
+    const pCands: AddressMatchCandidate[] = (props ?? []).map((p: any) => ({
+      id: p.id,
+      street: p.address ?? null,
+      zone: p.zone ?? null,
+      prices: [p.price, p.rent_price],
+    }));
+    const pid = matchPropertyByAddress(title, price, pCands);
+    if (!pid) return null;
+    const p = (props ?? []).find((x: any) => x.id === pid) as any;
+    return {
+      propertyId: p.id,
+      listingId: null,
+      title: p.title ?? null,
+      reference: p.property_reference ?? null,
+      price: p.price === null || p.price === undefined ? null : Number(p.price),
+      operation: p.operation ?? null,
     };
   } catch {
     return null;

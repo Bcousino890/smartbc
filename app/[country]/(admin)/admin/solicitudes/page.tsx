@@ -100,7 +100,8 @@ export default async function SalesInboxPage({
   const stateParam = one(sp.state);
   const groupParam = one(sp.group);
   const opParam = one(sp.op);
-  const view = isInboxView(viewParam) ? viewParam : "needs-attention";
+  // Por defecto «Todas»: la cola de atención se aplaza (sigue por URL).
+  const view = isInboxView(viewParam) ? viewParam : "all";
   // A · Tarjetas (por defecto) · B · Por inmueble · C · Prioridades. El viejo
   // `?group=property` sigue abriendo B: los enlaces guardados no se rompen.
   const modeParam = one(sp.mode);
