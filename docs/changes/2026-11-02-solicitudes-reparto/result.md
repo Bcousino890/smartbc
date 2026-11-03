@@ -368,3 +368,20 @@ Verificación: unitarias (comparación de versiones; el zip se lista y se compru
 ### Despliegue de #389 (2026-11-02, 23:16 UTC)
 
 Fusionado como `8ef00f80`. Trece minutos después, producción seguía sirviendo el build anterior (los chunks compartidos de `/login` no cambiaron); como con #386, lo más probable es el fallo intermitente de Google Fonts al compilar, tras el cual el cron no reintenta. Este commit relanza el despliegue. Nota: las rutas bajo `/api/admin` responden 401 sin sesión aunque no existan, así que no sirven como señal de build nuevo.
+
+## 16. Anuncios retirados y republicados, y respuesta inmediata (0241, 2026-11-03)
+
+Con la extensión ya actualizada (las solicitudes nuevas llegan con «Vínculo exacto»), Fabricio planteó: los anuncios se suben y se bajan a menudo; lo nuevo debe verse como nuevo, lo de anuncios retirados aparte mientras dure su plazo, y el origen de cada cliente siempre. Además, los botones se notaban lentos.
+
+**Qué es «Anuncio sin identificar».** Dos casos: (1) llamadas perdidas, que la extensión anterior a la 1.15 capturaba sin leer el código del anuncio (lo arregla la 1.15.0 del PR #392, que abre el modal de la tarjeta también en las llamadas); (2) solicitudes capturadas antes de la 1.14, sin código. Las dos caducan a los 30 días sin cliente.
+
+**El origen no se pierde.** Un anuncio publicado nunca se borra de la base: se archiva (`/api/admin/idealista/delete-listing`). La solicitud guarda además el título, el precio y el código con que llegó. Faltaba un caso: un anuncio borrado y vuelto a publicar por la API cambia de `api_property_id`, y el historial de códigos (0237) solo seguía `idealista_property_id`.
+
+| Pieza | Cambio |
+|---|---|
+| Migración 0241 | Trigger `idealista_listing_api_code_history`: el historial guarda también `api_property_id` y `api_clone_property_id` (`source = 'api'`), cerrando el anterior al cambiar. La vista añade `listing_retired`: archivado en el CRM, dado de baja por la API (`api_state` inactive/deleted) o despublicado; si solo hay ficha propia, su archivo. Aditiva e idempotente; reversión en `rollback-0241.sql`. |
+| «Por piso» | Primero los anuncios publicados; después, bajo «Anuncios retirados», los que ya no lo están (foto en gris, «Anuncio retirado»); al final «Por verificar». |
+| Tarjeta y ficha | «Anuncio retirado» junto a la referencia y el vínculo; en la ficha, la nota de que la solicitud conserva de qué piso venía. |
+| Botones | El segmento, la vista, los filtros y la solicitud pulsada se reflejan al instante (estado optimista de la URL) y una barra fina indica que llega la página; la ficha se abre en el acto con «Cargando la solicitud…». |
+
+Verificación: SQL (0241 aplicada dos veces; el id antiguo de la API sigue llevando al anuncio; clon; retirado por API, por archivo y por ficha propia; vuelta a publicar; reversión de 0241 y de la cadena 0237→0241 con reaplicación), unitarias en verde, guarda tipográfica sin fallos, QA visual con tres comprobaciones nuevas (sección de retirados, marca en la tarjeta con su origen, y botón marcado antes de que responda un servidor lento a propósito).

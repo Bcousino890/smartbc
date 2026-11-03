@@ -81,3 +81,6 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS cover_photo_url text;
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS photo_ids text[] DEFAULT '{}';
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS api_property_id bigint;
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS api_clone_property_id bigint;
+
+-- 0118 (estado del anuncio en la API): lo que lee la vista de 0241.
+ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS api_state text;

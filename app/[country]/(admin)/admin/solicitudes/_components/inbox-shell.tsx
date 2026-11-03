@@ -16,7 +16,7 @@
 // Volver de la ficha devuelve a la misma vista, posición y filtro.
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Plus, Search, X } from "lucide-react";
 import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
@@ -138,7 +138,22 @@ export function InboxShell({
   const [selectMode, setSelectMode] = useState(false);
   const savedScroll = useRef(0);
 
-  const selectedId = params?.get("lead") ?? null;
+  // Respuesta inmediata: al pulsar un segmento, una vista, un filtro o una
+  // solicitud, la pantalla refleja el cambio YA (botón marcado, ficha abierta
+  // con «Cargando…»), sin esperar a que el servidor devuelva la página nueva.
+  // En cuanto llega, la URL real manda y esto se descarta.
+  const [optimistic, setOptimistic] = useState<URLSearchParams | null>(null);
+  const paramsKey = params?.toString() ?? "";
+  useEffect(() => {
+    setOptimistic(null);
+  }, [paramsKey]);
+  const cur = optimistic ?? params;
+  const viewShown: InboxView = optimistic ? ((optimistic.get("view") as InboxView | null) ?? "needs-attention") : view;
+  const layoutShown: InboxLayout = optimistic
+    ? ((optimistic.get("mode") as InboxLayout | null) ?? (optimistic.get("group") === "property" ? "property" : "cards"))
+    : layout;
+
+  const selectedId = cur?.get("lead") ?? null;
 
   // La ficha es una página propia (Figma A02): al abrirla se guarda el scroll
   // de la bandeja y se sube arriba; al volver se restaura. La bandeja sigue
@@ -158,7 +173,7 @@ export function InboxShell({
 
   const setParams = useCallback(
     (patch: Record<string, string | null>, opts: { replace?: boolean } = {}) => {
-      const qs = new URLSearchParams(params?.toString() ?? "");
+      const qs = new URLSearchParams((optimistic ?? params)?.toString() ?? "");
       for (const [k, v] of Object.entries(patch)) {
         if (v === null || v === "") qs.delete(k);
         else qs.set(k, v);
@@ -176,12 +191,13 @@ export function InboxShell({
       // y una pulsación por fila, el Atrás quedaría inservible.
       const href = `?${qs.toString()}`;
       const opensLead = "lead" in patch && patch.lead !== null;
+      setOptimistic(new URLSearchParams(qs.toString()));
       startNav(() => {
         if (opensLead && !opts.replace) router.push(href, { scroll: false });
         else router.replace(href, { scroll: false });
       });
     },
-    [params, router],
+    [params, optimistic, router],
   );
 
   // Búsqueda con freno: sin él, cada tecla sería una consulta al servidor.
@@ -228,8 +244,8 @@ export function InboxShell({
 
   const activeFilters = useMemo(
     () =>
-      ["state", "assigned", "type", "intl", "unmatched", "op"].filter((k) => params?.get(k)).length,
-    [params],
+      ["state", "assigned", "type", "intl", "unmatched", "op"].filter((k) => cur?.get(k)).length,
+    [cur],
   );
 
   const segBtn = (on: boolean) =>
@@ -246,6 +262,13 @@ export function InboxShell({
 
   return (
     <div className="sol-root min-h-screen">
+      {/* Mientras llega la página nueva, una barra fina arriba dice que algo
+          está pasando: el botón ya se ha marcado. */}
+      {pending && (
+        <div aria-hidden className="fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden lg:left-[260px]">
+          <div className="h-full w-1/3 animate-[solProgress_1s_ease-in-out_infinite] bg-sol-accent-bar" />
+        </div>
+      )}
       {/* ── La bandeja (oculta, pero montada, mientras se mira una ficha) ── */}
       <div className={cn("px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8", selectedId && "hidden")}>
         {extensionStatus?.outdated && (
@@ -307,7 +330,7 @@ export function InboxShell({
             className="-mx-4 mt-6 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
           >
             {INBOX_VIEWS.map((v) => {
-              const on = v === view;
+              const on = v === viewShown;
               const n = counts[COUNT_KEY[v]];
               return (
                 <button
@@ -328,7 +351,7 @@ export function InboxShell({
           {showFilters && (
             <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-sol-line bg-sol-surface p-3">
               <Select
-                value={params?.get("state") ?? ""}
+                value={cur?.get("state") ?? ""}
                 onChange={(e) => setParams({ state: e.target.value || null })}
                 aria-label={t("inbox.filter.state")}
                 className="w-auto"
@@ -341,7 +364,7 @@ export function InboxShell({
                 ))}
               </Select>
               <Select
-                value={params?.get("assigned") ?? ""}
+                value={cur?.get("assigned") ?? ""}
                 onChange={(e) => setParams({ assigned: e.target.value || null })}
                 aria-label={t("inbox.assign.label")}
                 className="w-auto"
@@ -356,7 +379,7 @@ export function InboxShell({
                 ))}
               </Select>
               <Select
-                value={params?.get("type") ?? ""}
+                value={cur?.get("type") ?? ""}
                 onChange={(e) => setParams({ type: e.target.value || null })}
                 aria-label={t("inbox.filter.type")}
                 className="w-auto"
@@ -370,18 +393,18 @@ export function InboxShell({
               </Select>
               <FilterToggle
                 label={t("inbox.filter.international")}
-                on={params?.get("intl") === "1"}
-                onClick={() => setParams({ intl: params?.get("intl") === "1" ? null : "1" })}
+                on={cur?.get("intl") === "1"}
+                onClick={() => setParams({ intl: cur?.get("intl") === "1" ? null : "1" })}
               />
               <FilterToggle
                 label={t("inbox.filter.unmatched")}
-                on={params?.get("unmatched") === "1"}
+                on={cur?.get("unmatched") === "1"}
                 onClick={() =>
-                  setParams({ unmatched: params?.get("unmatched") === "1" ? null : "1" })
+                  setParams({ unmatched: cur?.get("unmatched") === "1" ? null : "1" })
                 }
               />
               <Select
-                value={params?.get("sort") ?? ""}
+                value={cur?.get("sort") ?? ""}
                 onChange={(e) => setParams({ sort: e.target.value || null })}
                 aria-label={t("inbox.sort.label")}
                 className="w-auto sm:ms-auto"
@@ -432,7 +455,7 @@ export function InboxShell({
                   la vista. «Sin determinar» es un segmento más, no un residuo. */}
               <div className="flex items-center gap-0.5 rounded-lg border border-sol-line bg-sol-surface p-0.5">
                 {([null, "sale", "rent", "unknown"] as (OperationFilter | null)[]).map((o) => {
-                  const on = (params?.get("op") ?? null) === o;
+                  const on = (cur?.get("op") ?? null) === o;
                   return (
                     <button
                       key={o ?? "all"}
@@ -471,8 +494,8 @@ export function InboxShell({
                   key={l}
                   type="button"
                   onClick={() => setParams({ mode: l === "cards" ? null : l, group: null })}
-                  aria-pressed={layout === l}
-                  className={cn(segBtn(layout === l), "min-h-[40px] px-3 sm:min-w-[126px]")}
+                  aria-pressed={layoutShown === l}
+                  className={cn(segBtn(layoutShown === l), "min-h-[40px] px-3 sm:min-w-[126px]")}
                 >
                   {t(`inbox.layout.${l}`)}
                 </button>
@@ -512,9 +535,18 @@ export function InboxShell({
           ) : layout === "property" ? (
             <>
               <ul className="space-y-5">
-                {groups.map((g) => (
+                {groups.map((g, i) => (
+                  <Fragment key={g.key}>
+                  {/* Los anuncios ya retirados van aparte, después de los
+                      publicados: siguen teniendo su origen, pero no son
+                      oferta viva. Caducan con la solicitud (30 días). */}
+                  {g.retired && !groups[i - 1]?.retired && (
+                    <li className="list-none pt-4">
+                      <h2 className="crm-section-title text-sol-ink">{t("inbox.retired.title")}</h2>
+                      <p className="mt-1 text-sm text-sol-muted">{t("inbox.retired.hint")}</p>
+                    </li>
+                  )}
                   <LeadGroupBlock
-                    key={g.key}
                     group={g}
                     country={country}
                     activeLeadId={selectedId}
@@ -540,6 +572,7 @@ export function InboxShell({
                       })
                     }
                   />
+                  </Fragment>
                 ))}
               </ul>
               <p className="mt-6 sol-ui text-sol-muted">{t("inbox.group.rule")}</p>
@@ -598,7 +631,7 @@ export function InboxShell({
       {/* ── La ficha: página propia (Figma A02) ── */}
       {selectedId && (
         <div className="px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-8">
-          {selectedLead ? (
+          {selectedLead && selectedLead.id === selectedId ? (
             // `key` por lead: sin él React reutiliza la ficha al cambiar de
             // solicitud y arrastra su estado local (el formulario de cliente
             // con el teléfono anterior, la traducción, las notas).
@@ -614,7 +647,9 @@ export function InboxShell({
             />
           ) : (
             <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-8">
-              <p className="max-w-xs text-center text-sm text-sol-muted">{t("inbox.pickOne")}</p>
+              <p className="max-w-xs text-center text-sm text-sol-muted" aria-live="polite">
+                {pending ? t("inbox.loadingLead") : t("inbox.pickOne")}
+              </p>
               <Button onClick={() => setParams({ lead: null })}>
                 <ArrowLeft size={16} /> {t(`inbox.backTo.${layout}`)}
               </Button>

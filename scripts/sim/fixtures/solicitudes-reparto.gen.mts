@@ -36,7 +36,8 @@ const listings = [
     total_rental_price: p.rent_price ?? p.price, idealista_state: "published", archived_at: null,
   })),
   { id: id("001", 10), property_id: null, reference_code: "BC-9010", idealista_property_id: "900210", inspo_title: "Ático en Castelló", address_street: "Calle de Castelló", address_city: "Madrid", operation: "rent", price: 0, total_rental_price: 5400, idealista_state: "published", archived_at: null },
-  { id: id("001", 11), property_id: null, reference_code: "BC-9011", idealista_property_id: "900211", inspo_title: "Piso en Goya", address_street: "Calle de Goya", address_city: "Madrid", operation: "sale", price: 2900000, total_rental_price: null, idealista_state: "published", archived_at: null },
+  // Retirado (0241): dado de baja por la API; sus solicitudes conservan el origen.
+  { id: id("001", 11), property_id: null, reference_code: "BC-9011", idealista_property_id: "900211", inspo_title: "Piso en Goya", address_street: "Calle de Goya", address_city: "Madrid", operation: "sale", price: 2900000, total_rental_price: null, idealista_state: "published", api_state: "inactive", archived_at: null },
   // Publicado por la API en tiempo real: sin idealista_property_id, con api_property_id (0238).
   { id: id("001", 12), property_id: null, reference_code: "BC-9012", idealista_property_id: null, api_property_id: 777001, api_clone_property_id: null, photo_ids: [`${SIM}/img/foto-9.jpg?api=12`], inspo_title: "Piso API en Velázquez", address_street: "Calle de Velázquez", address_city: "Madrid", operation: "rent", price: 0, total_rental_price: 3900, idealista_state: "published", archived_at: null },
 ];
@@ -91,6 +92,8 @@ function add(n: number, o: {
     ...base,
     // 0238 · portada y código público del anuncio identificado.
     listing_cover_url: exactLink && o.img ? `${SIM}/img/foto-${o.img}.jpg?c=${n}` : null,
+    // 0241 · el anuncio identificado ya no está publicado.
+    listing_retired: exactLink && !!listing && ((listing as { api_state?: string }).api_state === "inactive" || !!listing.archived_at),
     listing_ad_code: exactLink ? (listing?.idealista_property_id ?? ((listing as { api_property_id?: number } | null)?.api_property_id?.toString() ?? null)) : null,
     wa_conversation_id: waOut || waIn ? id("004", n) : null, wa_outbound: waOut, wa_inbound: waIn,
     wa_first_outbound_at: waOut ? ago(20) : null, wa_last_message_at: waOut || waIn ? ago(waIn ? 2 : 20) : null,

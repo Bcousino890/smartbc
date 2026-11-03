@@ -180,6 +180,8 @@ export type LeadListItem = {
   assignmentVersion: number;
   /** Ref. o Cod. del anuncio tal como llegó con la solicitud (o null). */
   listingRef: string | null;
+  /** El anuncio identificado ya no está publicado (0241). */
+  listingRetired: boolean;
 };
 
 export type LeadSource = "idealista" | "web" | "visit_request";
@@ -335,6 +337,8 @@ export type LeadGroup = {
   newCount: number;
   /** Cuántas reclaman atención. */
   attentionCount: number;
+  /** El anuncio ya no está publicado (0241): «Por piso» lo pone aparte. */
+  retired: boolean;
 };
 
 /** Cifras del encabezado. Reales y accionables; ninguna decorativa. */
