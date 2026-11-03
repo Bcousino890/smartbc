@@ -16,6 +16,7 @@
   const API_URL = PORTAL_ORIGIN + "/api/extension/idealista-leads";
   const RUNS_URL = PORTAL_ORIGIN + "/api/extension/idealista-capture-runs";
 
+  const CORE = self.SmartbcInboxCore;
   const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/;
   const COUNTRY_RE = /\(([A-Z]{2})\)/;
   const PRICE_RE = /([\d.,]+\s*€(?:\/mes)?)/;
@@ -146,19 +147,18 @@
         const type = typeParts.length > 0 ? typeParts[typeParts.length - 1] : null;
         const title = lines.find((l) => l !== priceLine) || null;
         const date = cardDateLabel(dayHeaders, el);
-        return { title, price, type, imageUrl, date };
+        const card = { title, price, type, imageUrl, date };
+        Object.defineProperty(card, "_el", { value: el });
+        return card;
       })
       .filter((c) => c.title || c.price || c.imageUrl);
     // Dedup por título (la misma propiedad puede aparecer repetida si se
     // menciona en más de un mensaje del hilo) — se queda con la primera
-    // aparición, que es la fecha en la que se preguntó por primera vez.
-    const seen = new Set();
-    return cards.filter((c) => {
-      const key = c.title || c.imageUrl;
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // aparición, que es la fecha en la que se preguntó por primera vez. Se
+    // anota cuál es la consulta MÁS RECIENTE (la última tarjeta del hilo).
+    const { unique, latestIndex } = CORE.dedupeCards(cards);
+    Object.defineProperty(unique, "latestIndex", { value: latestIndex });
+    return unique;
   }
 
   // Foto de perfil del contacto: la src apunta siempre a
@@ -382,10 +382,11 @@
     const rowCards = extractPropertyCards(row);
     if (rowCards.length > 0) {
       lead.properties = rowCards;
-      lead.propertyTitle = rowCards[0].title || lead.propertyTitle;
-      lead.propertyPrice = rowCards[0].price || lead.propertyPrice;
-      lead.propertyType = rowCards[0].type || lead.propertyType;
-      lead.propertyImageUrl = rowCards[0].imageUrl || null;
+      const rowLatest = rowCards[rowCards.latestIndex >= 0 ? rowCards.latestIndex : 0];
+      lead.propertyTitle = rowLatest.title || lead.propertyTitle;
+      lead.propertyPrice = rowLatest.price || lead.propertyPrice;
+      lead.propertyType = rowLatest.type || lead.propertyType;
+      lead.propertyImageUrl = rowLatest.imageUrl || null;
     }
 
     lead.isInternational = lines.some((l) => /internacional/i.test(l));
@@ -501,6 +502,24 @@
     return unique.length > 0 ? unique.join("\n\n").slice(0, 50000) : null;
   }
 
+  // Teléfonos de la cabecera del panel de contacto (lo que hay encima de
+  // «Convertir a demanda»), con su país si lo trae: "+39 366 400 5565 (Italia, IT)".
+  function panelHeadPhones(panel) {
+    if (!panel) return [];
+    const allLines = textLines(panel);
+    const anchorIdx = allLines.findIndex((l) => /convertir a demanda/i.test(l));
+    const head = anchorIdx >= 0 ? allLines.slice(0, anchorIdx) : allLines;
+    const out = [];
+    for (const line of head) {
+      const m = line.match(PHONE_RE);
+      if (!m || m[1].replace(/\D/g, "").length < 8) continue;
+      const cc = (line.match(/\(([^)]*?)\)/) || [])[1];
+      const country = cc ? (cc.match(/([A-Z]{2})\s*$/) || [])[1] : null;
+      out.push({ phone: m[1], country: country || null });
+    }
+    return out;
+  }
+
   async function extractDetailLead(conversationId) {
     const lead = { conversationId };
     const bodyText = document.body.innerText || "";
@@ -523,17 +542,12 @@
       lead.isInternational = /internacional/i.test(bodyText);
       lead.message = "☎ Llamada perdida — te llamó para pedir información sobre el inmueble y no fue respondida.";
       const cards = extractPropertyCards(document);
-      if (cards.length > 0) {
-        lead.properties = cards;
-        lead.propertyTitle = cards[0].title;
-        lead.propertyPrice = cards[0].price;
-        lead.propertyType = cards[0].type;
-        lead.propertyImageUrl = cards[0].imageUrl;
-      }
+      const latest = await applyCardCodes(cards);
+      setPrimaryProperty(lead, cards, latest);
       const codM = bodyText.match(/Cod\.\s*:?\s*(\d{6,})/i);
-      if (codM) lead.idealistaCode = codM[1];
+      if (codM && !lead.idealistaCode) lead.idealistaCode = codM[1];
       const refM = bodyText.match(/Ref\.\s*:?\s*([A-Za-z0-9_-]{2,20})/);
-      if (refM) lead.propertyRef = refM[1];
+      if (refM && !lead.propertyRef) lead.propertyRef = refM[1];
       return lead;
     }
 
@@ -660,11 +674,12 @@
     // campos planos property* quedan como la primera para compatibilidad.
     const propertyCards = extractPropertyCards(document);
     if (propertyCards.length > 0) {
-      lead.properties = propertyCards;
-      lead.propertyTitle = propertyCards[0].title;
-      lead.propertyPrice = propertyCards[0].price;
-      lead.propertyType = propertyCards[0].type;
-      lead.propertyImageUrl = propertyCards[0].imageUrl;
+      // Código y Ref. de CADA consulta (cada tarjeta abre su propio modal) y,
+      // como principal, la consulta más reciente: antes salía la primera del
+      // hilo, y quien volvía a escribir por otro piso seguía figurando en el
+      // viejo.
+      const latest = await applyCardCodes(propertyCards);
+      setPrimaryProperty(lead, propertyCards, latest);
     } else {
       // Respaldo: línea con € y la anterior como título (por si las
       // tarjetas no tienen imagen o cambió el markup).
@@ -678,22 +693,36 @@
       }
     }
 
-    // Cod./Ref. — visibles si el modal de la propiedad está abierto.
-    // El punto es obligatorio para no capturar palabras tipo "Reciente".
-    const codMatch = bodyText.match(COD_RE);
-    if (codMatch) lead.idealistaCode = codMatch[1];
-    const refMatch = bodyText.match(REF_RE);
-    if (refMatch) lead.propertyRef = refMatch[1];
-
-    // Sin el «Cod.» a la vista, el CRM no puede saber QUÉ anuncio consultó
-    // (solo agrupa y reparte con vínculo exacto). Se busca en el enlace de la
-    // tarjeta del anuncio y, si no está, se abre su modal un instante para
-    // leerlo. Ver readAdIdentifiers.
+    // Cod./Ref. visibles en la página (modal del anuncio abierto): solo como
+    // respaldo cuando no hay tarjetas de las que leerlos.
     if (!lead.idealistaCode) {
-      const ids = await readAdIdentifiers();
-      if (ids.code) lead.idealistaCode = ids.code;
-      if (ids.ref && !lead.propertyRef) lead.propertyRef = ids.ref;
+      const codMatch = bodyText.match(COD_RE);
+      if (codMatch) lead.idealistaCode = codMatch[1];
     }
+    if (!lead.propertyRef) {
+      const refMatch = bodyText.match(REF_RE);
+      if (refMatch) lead.propertyRef = refMatch[1];
+    }
+
+    // Teléfonos. La ficha del panel manda; los números que el contacto escribe
+    // en su mensaje (Idealista los convierte en enlace) van como extras.
+    // Antes se guardaba el primer enlace de la página —el del mensaje— y el de
+    // la ficha se perdía.
+    const panelPhones = panelHeadPhones(panel);
+    const attrPhones = [...document.querySelectorAll("[appcallback_target_phone]")]
+      .map((el) => (el.innerText || "").trim() || el.getAttribute("appcallback_target_phone"))
+      .filter(Boolean);
+    const phones = CORE.collectPhones({
+      panel: panelPhones.map((p) => p.phone),
+      attr: attrPhones,
+      text: lead.message || "",
+    });
+    if (phones.phone) {
+      lead.phone = phones.phone;
+      const fromPanel = panelPhones.find((p) => CORE.samePhone(p.phone, phones.phone));
+      if (fromPanel && fromPanel.country) lead.phoneCountry = fromPanel.country;
+    }
+    if (phones.extraPhones.length > 0) lead.extraPhones = phones.extraPhones;
 
     return lead;
   }
@@ -701,47 +730,45 @@
   const COD_RE = /Cod\.\s*:?\s*(\d{6,})/i;
   const REF_RE = /Ref\.\s*:?\s*([A-Za-z0-9_-]{2,20})/;
 
-  // Elemento de la tarjeta del anuncio en el hilo (la primera: el anuncio por
-  // el que se abrió la conversación).
-  function findAdCard() {
-    return [...document.querySelectorAll("button, a")].find((el) => el.querySelector('img[alt="Imagen del anuncio"]')) || null;
-  }
+  // Tope de tarjetas cuyo código se lee abriendo su modal (≈2 s cada una): se
+  // leen de la más reciente hacia atrás, que son las que importan.
+  const MAX_CARD_CODE_READS = 8;
 
   /**
-   * Identificador exacto del anuncio consultado: {code, ref}.
+   * Identificador exacto del anuncio de UNA tarjeta: {code, ref}.
    *  1. Un enlace a /inmueble/<id>/ en la propia tarjeta (o dentro de ella).
    *  2. Si no, se pulsa la tarjeta para abrir el modal del anuncio, se lee
-   *     «Cod.» (y «Ref.») de su texto y se cierra con Escape. Si el modal no
-   *     aparece en 3 s, se deja estar: la solicitud llega sin código y el CRM
+   *     «Cod.» (y «Ref.») de su texto y se cierra con Escape. Solo se da por
+   *     bueno si el modal habla de ESTA tarjeta (su calle aparece en el
+   *     texto): un código de otro anuncio es peor que ninguno. Si el modal no
+   *     aparece en 3 s, se deja estar: la consulta llega sin código y el CRM
    *     la enseña como «Por verificar».
    */
-  async function readAdIdentifiers() {
+  async function readCardIdentifiers(card, title) {
     const out = { code: null, ref: null };
-    const card = findAdCard();
     if (!card) return out;
 
     const linkEl = card.matches("a[href]") ? card : card.querySelector("a[href]");
     const href = linkEl ? linkEl.getAttribute("href") || "" : "";
-    const fromHref = href.match(/\/inmueble\/(\d{6,})/);
+    const fromHref = CORE.codeFromHref(href);
     if (fromHref) {
-      out.code = fromHref[1];
+      out.code = fromHref;
       return out;
     }
     // Una tarjeta-enlace que navegaría a otra página no se pulsa: perderíamos
     // el hilo. Solo se abre el modal de los botones.
     if (linkEl && /^https?:/.test(href) && !href.includes("/inbox/")) return out;
 
-    const before = document.body.innerText || "";
-    if (COD_RE.test(before)) {
-      out.code = (before.match(COD_RE) || [])[1] || null;
-      out.ref = (before.match(REF_RE) || [])[1] || null;
-      return out;
-    }
+    // Un modal anterior que no se haya cerrado haría leer el código equivocado.
+    if (!(await closeAdModal())) return out;
+
+    const street = String(title || "").split(",")[0].trim();
+    const isOurModal = (t) => COD_RE.test(t) && (!street || t.includes(street));
     try {
       card.click();
       const text = await waitFor(() => {
         const t = document.body.innerText || "";
-        return COD_RE.test(t) ? t : null;
+        return isOurModal(t) ? t : null;
       }, 3000, 150);
       if (text) {
         out.code = (text.match(COD_RE) || [])[1] || null;
@@ -755,11 +782,51 @@
     return out;
   }
 
+  /**
+   * Pone `code` y `ref` en cada tarjeta (las más recientes primero, hasta
+   * MAX_CARD_CODE_READS) y devuelve la tarjeta de la consulta más reciente,
+   * que es la propiedad principal del contacto. Si un modal se resiste a
+   * cerrarse se deja de leer: seguir mezclaría códigos entre tarjetas.
+   */
+  async function applyCardCodes(cards) {
+    if (!cards || cards.length === 0) return null;
+    const latest = cards[cards.latestIndex >= 0 ? cards.latestIndex : cards.length - 1];
+    const order = [latest, ...[...cards].reverse().filter((c) => c !== latest)];
+    for (const c of order.slice(0, MAX_CARD_CODE_READS)) {
+      const ids = await readCardIdentifiers(c._el, c.title);
+      if (ids.code) c.code = ids.code;
+      if (ids.ref) c.ref = ids.ref;
+      if (COD_RE.test(document.body.innerText || "")) break;
+    }
+    return latest;
+  }
+
+  /** Propiedad principal del lead = la consulta más reciente; el resto va en properties. */
+  function setPrimaryProperty(lead, cards, latest) {
+    if (!cards || cards.length === 0) return;
+    const primary = latest || cards[cards.latestIndex >= 0 ? cards.latestIndex : cards.length - 1];
+    lead.properties = cards;
+    lead.propertyTitle = primary.title;
+    lead.propertyPrice = primary.price;
+    lead.propertyType = primary.type;
+    lead.propertyImageUrl = primary.imageUrl;
+    if (primary.code) lead.idealistaCode = primary.code;
+    if (primary.ref) lead.propertyRef = primary.ref;
+  }
+
   async function closeAdModal() {
     const isOpen = () => COD_RE.test(document.body.innerText || "");
-    if (!isOpen()) return;
+    if (!isOpen()) return true;
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
     await sleep(250);
+    if (isOpen()) {
+      // La «×» del modal de Idealista es un span.icon-close con un <a> dentro
+      // (sin aria-label ni texto): verificado en vivo el 2026-11-03, es lo
+      // único que lo cierra cuando Escape no llega.
+      const x = document.querySelector(".modal-container .icon-close");
+      if (x) (x.querySelector("a") || x).click();
+      await sleep(300);
+    }
     if (isOpen()) {
       const closeBtn = [...document.querySelectorAll("button")].find((b) =>
         /cerrar|close/i.test((b.getAttribute("aria-label") || "") + " " + (b.textContent || "")),
@@ -768,7 +835,8 @@
       await sleep(250);
     }
     // Si sigue abierto se deja: el siguiente paso del recorrido navega a otro
-    // hilo y la SPA lo desmonta.
+    // hilo y la SPA lo desmonta. Se avisa a quien llama para que no lea más.
+    return !isOpen();
   }
 
   // ── Modo LISTA: botón flotante ─────────────────────────────────────

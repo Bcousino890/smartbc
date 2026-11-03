@@ -743,6 +743,8 @@ export type LeadDetail = {
   id: string;
   name: string | null;
   phone: string | null;
+  /** Otros teléfonos del contacto (p. ej. el que escribió en su mensaje). */
+  extraPhones: string[];
   isInternational: boolean;
   message: string | null;
   profileBullets: string[];
@@ -898,6 +900,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     id: row.id,
     name: row.name ?? null,
     phone: row.phone ?? null,
+    extraPhones: Array.isArray(rawLead?.extra_phones) ? rawLead.extra_phones.filter((p: unknown) => typeof p === "string") : [],
     isInternational: Boolean(row.is_international),
     message: row.message ?? null,
     profileBullets: Array.isArray(profile?.bullets) ? profile.bullets : [],

@@ -4,6 +4,7 @@ import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
 import { autoMergeLeadsByPhone } from "@/lib/sales-inbox/auto-merge";
+import { mergeExtraPhones, parseExtraPhones } from "@/lib/services/idealista/lead-phones";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
 // Público a propósito (lo llama la extensión desde idealista.com); la seguridad
@@ -29,6 +30,8 @@ type IncomingProperty = {
   type?: unknown;
   imageUrl?: unknown;
   date?: unknown;
+  code?: unknown;
+  ref?: unknown;
 };
 
 type IncomingLead = {
@@ -36,6 +39,7 @@ type IncomingLead = {
   name?: unknown;
   phone?: unknown;
   phoneCountry?: unknown;
+  extraPhones?: unknown;
   avatarUrl?: unknown;
   isInternational?: unknown;
   message?: unknown;
@@ -84,6 +88,11 @@ type NormalizedProperty = {
   type: string | null;
   imageUrl: string | null;
   date: string | null;
+  // «Cod.» y «Ref.» del anuncio de ESA consulta (1.15 de la extensión): cada
+  // tarjeta del hilo abre su propio modal. Sin ellos el CRM solo sabía el
+  // código de una de las consultas del contacto.
+  code?: string | null;
+  ref?: string | null;
 };
 
 // Un mismo contacto puede preguntar por varias propiedades distintas en un
@@ -100,6 +109,8 @@ function asProperties(value: unknown): NormalizedProperty[] {
       type: asText(p.type, 100),
       imageUrl: asText(p.imageUrl, 1000),
       date: asText(p.date, 100),
+      code: asText(p.code, 20),
+      ref: asText(p.ref, 40),
     }))
     .filter((p) => p.title || p.price || p.imageUrl)
     .slice(0, 30);
@@ -141,6 +152,8 @@ function mergeProperties(existing: NormalizedProperty[], incoming: NormalizedPro
         type: prev.type ?? p.type,
         imageUrl: prev.imageUrl ?? p.imageUrl,
         date: prev.date ?? p.date,
+        code: prev.code ?? p.code ?? null,
+        ref: prev.ref ?? p.ref ?? null,
       };
     }
   }
@@ -261,10 +274,13 @@ export async function POST(req: Request) {
     // al hotlink de Idealista para no perder la referencia.
     const existingImageUrl: string | null = existing?.property_image_url ?? null;
     let propertyImageUrl: string | null;
-    if (isPersistedLeadImage(existingImageUrl)) {
+    // Solo si sigue siendo la misma propiedad: con la 1.15 la principal es la
+    // consulta más reciente, y la portada de la anterior no es la suya.
+    const sameProperty = !lead.property_title || lead.property_title === existing?.property_title;
+    if (isPersistedLeadImage(existingImageUrl) && sameProperty) {
       propertyImageUrl = existingImageUrl;
     } else {
-      const candidateImageUrl = lead.property_image_url ?? existingImageUrl;
+      const candidateImageUrl = lead.property_image_url ?? (sameProperty ? existingImageUrl : null);
       propertyImageUrl = candidateImageUrl
         ? ((await persistIdealistaLeadImage(db, lead.conversation_id, "cover", candidateImageUrl))?.url ??
           candidateImageUrl)
@@ -287,13 +303,25 @@ export async function POST(req: Request) {
       }
     }
 
+    // Teléfono principal: el que fija el detalle (la ficha) no lo pisa un
+    // listado posterior; si el listado trae otro, pasa a extra.
+    const primaryPhone: string | null =
+      !isDetail && existing?.detail_captured && existing?.phone
+        ? existing.phone
+        : (lead.phone ?? existing?.phone ?? null);
+
     // Merge: la captura de lista solo rellena huecos y nunca pisa el detalle;
     // la captura de detalle sobreescribe mensaje/perfil y marca detail_captured.
     const merged: Record<string, unknown> = {
       conversation_id: lead.conversation_id,
       name: lead.name ?? existing?.name ?? "",
-      phone: lead.phone ?? existing?.phone ?? null,
-      phone_country: lead.phone_country ?? existing?.phone_country ?? null,
+      phone: primaryPhone,
+      phone_country: primaryPhone === lead.phone ? (lead.phone_country ?? existing?.phone_country ?? null) : (existing?.phone_country ?? null),
+      extra_phones: mergeExtraPhones(
+        existing?.extra_phones,
+        [...lead.extra_phones, ...(primaryPhone !== lead.phone ? [lead.phone] : [])],
+        primaryPhone,
+      ),
       avatar_url: lead.avatar_url ?? existing?.avatar_url ?? null,
       is_international: lead.is_international ?? existing?.is_international ?? false,
       property_title: lead.property_title ?? existing?.property_title ?? null,
@@ -498,6 +526,7 @@ function normalizeLead(raw: IncomingLead) {
     name: asText(raw.name),
     phone: normalizePhone(asText(raw.phone)),
     phone_country: asText(raw.phoneCountry)?.slice(0, 8) ?? null,
+    extra_phones: parseExtraPhones(raw.extraPhones, normalizePhone(asText(raw.phone))),
     avatar_url: asText(raw.avatarUrl, 1000),
     is_international: typeof raw.isInternational === "boolean" ? raw.isInternational : null,
     message: asText(raw.message, 50000),

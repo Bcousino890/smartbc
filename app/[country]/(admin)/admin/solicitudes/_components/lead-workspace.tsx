@@ -447,6 +447,13 @@ function NextStep({
           <ZintoStatus lead={lead} locale={locale} canEdit={canEdit} busy={busy} onRun={onRun} />
         </div>
       )}
+      {lead.extraPhones.map((extra) => (
+        <div key={extra} className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="sol-meta text-sol-muted">{t("inbox.contact.otherPhone")}</span>
+          <span className="font-mono text-sm text-sol-ink">{extra}</span>
+          <CopyPhoneButton phone={extra} />
+        </div>
+      ))}
       {hints.length > 0 && (
         <ul className="mt-4 flex flex-wrap gap-2 border-t border-sol-line pt-4">
           {hints.map((h) => (

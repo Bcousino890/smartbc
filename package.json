@@ -9,6 +9,8 @@
     "start": "next start --port 3137",
     "lint": "next lint",
     "test:extension-filters": "node scripts/test-extension-filters.mjs",
+    "test:extension-inbox": "node scripts/test-extension-inbox.mjs",
+    "test:lead-phones": "node --experimental-strip-types scripts/test-lead-phones.mts",
     "test:typography": "node scripts/check-crm-typography.mjs",
     "test:crm-appearance": "node --experimental-strip-types --no-warnings scripts/test-crm-appearance.mts && npm run test:notifications-bell",
     "test:notifications-bell": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-notifications-bell-store.mts",
