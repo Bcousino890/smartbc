@@ -321,19 +321,22 @@ t("isLeadAllowedForScope: ver la cola sin asignar no da permiso de escritura", (
 // Bandeja de Solicitudes: el filtro SQL real (applyLeadViewScope) y los
 // contadores reales (inboxCountQueries) sobre un constructor en memoria que
 // entiende el subconjunto de PostgREST que usan.
-type Lead = { id: string; assigned_to: string | null; commercial_state: string; next_action_at: string | null };
+type Lead = { id: string; assigned_to: string | null; commercial_state: string; next_action_at: string | null; listing_retired?: boolean };
 class MemQuery {
   rows: Lead[];
   constructor(rows: Lead[]) {
     this.rows = rows;
   }
   private w(f: (r: Lead) => boolean) { return new MemQuery(this.rows.filter(f)); }
-  eq(c: string, v: string) { return this.w((r) => (r as any)[c] === v); }
+  // PostgREST recibe los booleanos como texto («eq.true»); aquí se comparan
+  // como los guarda la fila.
+  eq(c: string, v: string) { return this.w((r) => (r as any)[c] === (v === "true" ? true : v === "false" ? false : v)); }
   is(c: string, v: null) { return this.w((r) => (r as any)[c] === v); }
   in(c: string, vs: readonly string[]) { return this.w((r) => vs.includes((r as any)[c])); }
+  // «not.is.null» (hay valor) y «not.is.true» (no es verdadero: false, null o sin columna).
   not(c: string, op: string, v: unknown) {
-    assert.equal(op, "is"); assert.equal(v, null);
-    return this.w((r) => (r as any)[c] !== null);
+    assert.equal(op, "is"); assert.ok(v === null || v === true, `not.is.${String(v)} no se usa`);
+    return this.w((r) => (v === null ? (r as any)[c] !== null : (r as any)[c] !== true));
   }
   or(expr: string) {
     // Solo la forma «col.eq.X,col.is.null», que es la que se usa.
@@ -350,13 +353,15 @@ const LEADS: Lead[] = [
   { id: "sin-asignar-seguimiento", assigned_to: null, commercial_state: "contacted", next_action_at: "2026-10-28" },
   { id: "ajeno-nuevo", assigned_to: "u2", commercial_state: "new", next_action_at: null },
   { id: "ajeno-seguimiento", assigned_to: "u2", commercial_state: "contacted", next_action_at: "2026-10-29" },
+  // De un anuncio ya retirado (0241): se ve con el alcance, pero solo cuenta en «Retirados».
+  { id: "propio-retirado", assigned_to: "u1", commercial_state: "new", next_action_at: null, listing_retired: true },
 ];
 const visible = (restriction: string, userId: string | null) => applyLeadViewScope(new MemQuery(LEADS), restriction, userId).rows.map((r) => r.id).sort();
 
 t("bandeja con «Solo lo suyo»: propio sí, ajeno no, sin asignar sí", () => {
   for (const restriction of ["own_only", "team", "assigned_only"]) {
     const ids = visible(restriction, "u1");
-    assert.deepEqual(ids, ["propio-nuevo", "propio-seguimiento", "sin-asignar-nuevo", "sin-asignar-seguimiento"], restriction);
+    assert.deepEqual(ids, ["propio-nuevo", "propio-retirado", "propio-seguimiento", "sin-asignar-nuevo", "sin-asignar-seguimiento"], restriction);
   }
 });
 
@@ -381,20 +386,24 @@ t("contadores de la bandeja = lo que enseña la lista", () => {
   for (const restriction of ["own_only", "all"]) {
     const userId = "u1";
     const base = () => applyLeadViewScope(new MemQuery(LEADS), restriction, userId);
-    const list = base().rows;
+    // Las de anuncios retirados solo cuentan en «Retirados» (0241).
+    const list = base().rows.filter((r) => r.listing_retired !== true);
     const c = inboxCountQueries(base, userId);
     assert.equal(c.all.count, list.length, `${restriction}: all`);
     assert.equal(c.new.count, list.filter((r) => r.commercial_state === "new").length, `${restriction}: new`);
     assert.equal(c.followUp.count, list.filter((r) => r.next_action_at !== null).length, `${restriction}: followUp`);
     assert.equal(c.myLeads!.count, list.filter((r) => r.assigned_to === userId).length, `${restriction}: myLeads`);
     assert.equal(c.unassigned.count, list.filter((r) => r.assigned_to === null).length, `${restriction}: unassigned`);
+    assert.equal(c.retired.count, base().rows.filter((r) => r.listing_retired === true).length, `${restriction}: retired`);
   }
-  // Con «Solo lo suyo», la cola sin asignar cuenta (2) y lo ajeno no cuenta nunca.
+  // Con «Solo lo suyo», la cola sin asignar cuenta (2), lo ajeno no cuenta
+  // nunca y la retirada propia solo cuenta en «Retirados».
   const own = inboxCountQueries(() => applyLeadViewScope(new MemQuery(LEADS), "own_only", "u1"), "u1");
   assert.equal(own.unassigned.count, 2);
   assert.equal(own.all.count, 4);
   assert.equal(own.new.count, 2);
-  assert.ok(own.all.rows.every((r) => r.assigned_to !== "u2"));
+  assert.equal(own.retired.count, 1);
+  assert.ok(own.all.rows.every((r) => r.assigned_to !== "u2" && r.listing_retired !== true));
 });
 
 t("documentación: acción del PATCH -> permiso y alcance de staff", () => {
