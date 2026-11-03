@@ -11,6 +11,29 @@ Extensión de Chrome con tres funciones:
    portal y los manda a la sección **Enlaces de portales** de su ficha, con el
    compañero que los va a llamar ya asignado.
 
+## Una consulta, un anuncio; un contacto, todos sus teléfonos (1.15)
+
+Revisado en vivo en el inbox el 2026-11-03. Tres fallos de la 1.14.x:
+
+- **La propiedad principal era la consulta más antigua.** El hilo se lee de
+  arriba abajo y se tomaba la primera tarjeta. Ahora la principal es la de la
+  consulta **más reciente** (la última tarjeta del hilo) y cada tarjeta lleva su
+  propio `code` y `ref` en `properties`. Se leen abriendo el modal de cada una
+  (las 8 más recientes, ≈2 s cada una) y solo se dan por buenos si el modal
+  habla de esa tarjeta.
+- **Las llamadas perdidas nunca traían código.** Su rama no abría el modal.
+  Ahora usan el mismo método que las conversaciones.
+- **Se perdía el teléfono de la ficha.** Si el contacto escribía un número en su
+  mensaje, Idealista lo convierte en enlace (`appcallback_target_phone`) y la
+  extensión guardaba ese, no el de la ficha. Ahora el principal es el de la
+  ficha y los demás (enlaces y números escritos en el mensaje) viajan en
+  `extraPhones` (máximo 4); el portal los guarda en `extra_phones` (0239).
+
+El botón de cierre del modal de Idealista es `span.icon-close` (sin
+aria-label ni texto): Escape no siempre llega, así que se cierra también con él.
+La lógica pura (teléfonos, tarjetas) está en `inbox-core.js` y se prueba con
+`npm run test:extension-inbox`.
+
 ## Código del anuncio en cada solicitud (1.14)
 
 El CRM solo agrupa, reparte y enseña un inmueble cuando sabe **exactamente**
