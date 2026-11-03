@@ -393,7 +393,7 @@ export type ClientsStats = {
 };
 
 // Admin / Propiedades (catalog management)
-export type AdminPropertyStatus = "available" | "reserved" | "rented" | "sold" | "draft";
+export type AdminPropertyStatus = "available" | "reserved" | "rented" | "unavailable" | "sold" | "draft";
 
 export type AdminProperty = {
   id: string;

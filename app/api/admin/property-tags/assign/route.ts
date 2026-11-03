@@ -1,6 +1,7 @@
 import "server-only";
 import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
+import { syncStatusFromReservedTag } from "@/lib/properties/reserved-sync";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const db = () => createAdminClient() as any;
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
         if (error) throw error;
       }
     }
+    await syncStatusFromReservedTag(db(), propIds, add, remove);
     return Response.json({ ok: true, updated: props.length });
   } catch (err) {
     console.error("[property-tags] assign", err);

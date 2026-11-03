@@ -7,7 +7,6 @@
 // alcance aparte (O-B3 en docs/changes/2026-10-17-bcp-01-importar-y-buscar):
 //   · con «Alquiler», una dual se compara con `price` (el de venta);
 //   · distrito y subzona son igualdad exacta de texto;
-//   · «Alquilado» (`rented`) nunca coincide con una fila real.
 // El buscador del catálogo NO usa este predicado (ver lib/catalogs/search.ts).
 
 import type { AdminProperty } from "@/lib/types";
@@ -19,7 +18,7 @@ export type AdminPropertyFilters = {
   query: string;
   tagIds: string[];
   operation: "" | "alquiler" | "venta";
-  status: "" | "available" | "reserved" | "sold" | "rented" | "draft";
+  status: "" | "available" | "reserved" | "sold" | "rented" | "unavailable" | "draft";
   zone: string;
   subzone: string;
   agency: string;
