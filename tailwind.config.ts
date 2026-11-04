@@ -20,7 +20,7 @@ const ln = family("ln");
 // Solicitudes · estética del Figma (app/globals.css, bloque «SOLICITUDES»).
 // Variables propias con su oscuro; fuera de `.sol-root` nadie las usa.
 const SOL_NAMES = [
-  "ink", "muted", "faint", "action", "action-strong", "on-action", "select", "bg",
+  "ink", "muted", "faint", "action", "action-strong", "on-action", "accent", "select", "bg",
   "surface", "column", "line", "review", "review-ink", "error", "error-bg", "info", "info-ink",
 ] as const;
 const SOL = Object.fromEntries(SOL_NAMES.map((n) => [n, `rgb(var(--sol-${n}) / <alpha-value>)`]));

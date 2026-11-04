@@ -635,7 +635,7 @@ export function InboxShell({
 
       {/* ── La ficha: página propia (Figma A02) ── */}
       {selectedId && (
-        <div className="px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-8">
+        <div className="px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-6 lg:pt-6">
           {selectedLead && selectedLead.id === selectedId ? (
             // `key` por lead: sin él React reutiliza la ficha al cambiar de
             // solicitud y arrastra su estado local (el formulario de cliente

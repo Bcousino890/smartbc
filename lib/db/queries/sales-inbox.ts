@@ -786,6 +786,13 @@ export type LeadDetail = {
   phone: string | null;
   /** Otros teléfonos del contacto (p. ej. el que escribió en su mensaje). */
   extraPhones: string[];
+  /**
+   * Teléfono para WhatsApp (Zinto) y para llamadas (0242). Mientras no se
+   * configure uno distinto, los dos son `phone`, el recibido de Idealista, que
+   * se conserva aparte como evidencia del origen.
+   */
+  zintoPhone: string | null;
+  callPhone: string | null;
   isInternational: boolean;
   message: string | null;
   profileBullets: string[];
@@ -896,8 +903,11 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     return null;
   }
 
-  const [{ data: rawLead }, { data: acts }, staffNames] = await Promise.all([
-    db().from("idealista_leads").select("profile, properties").eq("id", id).maybeSingle(),
+  const [{ data: rawLead }, { data: phones }, { data: acts }, staffNames] = await Promise.all([
+    db().from("idealista_leads").select("profile, properties, extra_phones").eq("id", id).maybeSingle(),
+    // Aparte: si 0242 aún no estuviera aplicada, la ficha sigue con el
+    // teléfono recibido en vez de perder el perfil entero.
+    db().from("idealista_leads").select("zinto_phone, call_phone").eq("id", id).maybeSingle(),
     db()
       .from("lead_activity")
       .select("id, kind, outcome, body, created_at, author_id")
@@ -953,6 +963,8 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     name: row.name ?? null,
     phone: row.phone ?? null,
     extraPhones: Array.isArray(rawLead?.extra_phones) ? rawLead.extra_phones.filter((p: unknown) => typeof p === "string") : [],
+    zintoPhone: phones?.zinto_phone?.trim() || row.phone || null,
+    callPhone: phones?.call_phone?.trim() || row.phone || null,
     isInternational: Boolean(row.is_international),
     message: row.message ?? null,
     profileBullets: Array.isArray(profile?.bullets) ? profile.bullets : [],

@@ -11,6 +11,7 @@ BASE="$S/stub-supabase.sql $S/test-util.sql $S/stub-solicitudes-reparto.sql $M/0
 M37=$M/0237_solicitudes_reparto.sql
 M38=$M/0238_solicitudes_vinculo_exacto_retencion.sql
 M41=$M/0241_solicitudes_anuncios_retirados.sql
+M42=$M/0242_solicitudes_telefonos_contacto.sql
 LOCK_ERR_A=$(mktemp)
 LOCK_ERR_B=$(mktemp)
 
@@ -21,6 +22,8 @@ echo "== 1b. 0238 aplicada DOS veces (idempotente) + API, caducidad y vista"
 $R sql $M38 $M38 $S/test-solicitudes-retencion.sql
 echo "== 1c. 0241 aplicada DOS veces (idempotente) + historial de la API y anuncios retirados"
 $R sql $M41 $M41 $S/test-solicitudes-retirados.sql
+echo "== 1d. 0242 aplicada DOS veces (idempotente) + teléfonos de WhatsApp y de llamadas"
+$R sql $M42 $M42 $S/test-solicitudes-telefonos.sql
 
 echo "== 2. R12: dos primeras consultas a la vez del mismo cliente"
 $R sql $S/test-solicitudes-reparto-conc-setup.sql
@@ -51,6 +54,8 @@ echo "   ok · H2 · las dos sesiones terminan sin interbloqueo"
 $R sql $S/test-solicitudes-reparto-lock-check.sql
 
 echo "== 3. reversión y reaplicación"
+$R sql $D/rollback-0242.sql $S/test-rollback-0242.sql $M42
+echo "   0242 se vuelve a aplicar tras su reversión"
 $R sql $D/rollback-0241.sql $S/test-rollback-0241.sql $M41
 echo "   0241 se vuelve a aplicar tras su reversión"
 $R sql $D/rollback-0241.sql

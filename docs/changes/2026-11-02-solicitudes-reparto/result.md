@@ -154,7 +154,7 @@ Está en `validacion.md`: compatibilidad con la versión de Postgres del VPS, re
 ```sh
 node --experimental-strip-types scripts/sim/fixtures/crm-01-admin.gen.mts <scratch>/base.json <scratch>/img
 node --experimental-strip-types scripts/sim/fixtures/solicitudes-reparto.gen.mts <scratch>/base.json <scratch>/fixture.json
-node --experimental-strip-types scripts/sim/postgrest-sim.mts 54381 <scratch>/fixture.json <scratch>/sim.jsonl <scratch>/img --auth
+node --experimental-strip-types scripts/sim/postgrest-sim.mts 54381 <scratch>/fixture.json <scratch>/sim.jsonl <scratch>/img --auth --persist
 mv .env.production <scratch>/   # sin leerlo; se devuelve al terminar
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54381 NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon \
   SUPABASE_SERVICE_ROLE_KEY=dummy-service NEXT_BUILD_DIR=.next.qa npx next build
@@ -411,3 +411,36 @@ Solo presentación de la cabecera de Solicitudes; los controles se comportan igu
 - **Filtros:** borde fino junto al buscador y contador pequeño redondo cuando hay filtros activos.
 
 Capturas para el jefe, en claro y en oscuro, con Nuevas, Venta y Tarjetas seleccionadas: `comparacion-figma/despues/A01_Cabecera_claro.png` y `A01_Cabecera_oscuro.png`. Verificación: guarda tipográfica sin fallos y QA visual con las comprobaciones de la cabecera (sin línea de resultados, orden visible en Filtros, pestaña activa con `aria-selected`).
+
+**Corrección posterior (4 de noviembre).** El color `sol-accent` no estaba registrado en `tailwind.config.ts`, así que las clases `*-sol-accent` de esta cabecera no generaban CSS: la línea dorada de la pestaña activa y el borde de «Filtros» abierto no se pintaban. Queda registrado en §19, y la QA mide ahora el color real de la línea.
+
+## 19. Ficha de la solicitud por pestañas (maquetas del 4 de noviembre)
+
+Rediseño de la ficha con tres maquetas: «Resumen», «Actividad» y «Cliente y datos». Los datos de ejemplo de las maquetas se sustituyen por los reales de cada solicitud.
+
+**Cabecera común.** Nombre, estado (recuadro pequeño en versalitas) y origen («Idealista · referencia · hace…»). A la derecha, «Volver a tarjetas» (o a la vista de la que se vino) y una línea discreta «● Responsable · nombre» o «Por asignar». El motivo del reparto, el estado de Zinto (con «Reintentar» para administradores) y los cambios de responsable quedan en su desplegable, que se cierra con Escape o al pulsar fuera. «Asignar asesor» (sin responsable) o «Cambiar» (con responsable) solo para administradores. Con cliente vinculado, «Cambiar» abre la reasignación del cliente completo, con su alcance, como antes.
+
+**Pestañas.** Ligeras, con una línea fina dorada bajo la activa; las flechas izquierda y derecha pasan de una a otra.
+
+| Pestaña | Columna izquierda | Columna derecha |
+|---|---|---|
+| Resumen | «Anuncio consultado»: foto, título, precio, referencia y vínculo; «Ver anuncio original» (solo con vínculo verificado), «Ficha interna», «Preparar visitas» y «Revisar vínculo». Debajo, «Lo que preguntó»: mensaje, presentación y viñetas recortados, con «Ver mensaje completo», «Traducir» y «Abrir conversación en Idealista». | «Siguiente paso»: «Registrar contacto» como acción principal (dorado apagado), «Abrir Zinto» y «Llamar» como secundarias, el estado de WhatsApp y «Descartar». Debajo, «Actividad reciente» (los dos últimos eventos) con «Ver actividad». |
+| Actividad | «Historial de la solicitud»: fecha, autor y contenido; los cuatro últimos a la vista y «Ver historial completo» bajo demanda. | «Próximo seguimiento»: fecha, hora y acción; «Editar» (cambiar o quitar) y «Marcar como hecho», que abre «Registrar contacto» con la tarea ya marcada: resultado y próxima tarea se guardan juntos, el historial se conserva y la solicitud sigue abierta. Debajo, «Añadir nota». |
+| Cliente y datos | «Contacto»: «WhatsApp · Zinto» y «Llamadas», dos campos independientes con su acción al lado y un solo «Guardar teléfonos»; el correo del cliente vinculado; el teléfono recibido de Idealista como evidencia. | «Cliente en el CRM» (vinculado con acceso a su ficha, o buscar, vincular y crear como antes) y «Anuncio de origen» con miniatura, referencia y «Ver evidencia» (en un diálogo). |
+
+Se mantienen las condiciones de antes: sin vínculo exacto no hay foto ni ficha de un piso «parecido» y no se prepara visita; la sugerencia «¿Es este anuncio?» se ofrece y no se afirma; la asignación es solo de administradores y el cliente conserva su único asesor. Abrir Zinto o llamar siguen sin registrar un contacto.
+
+**Dos teléfonos (migración 0242).** `idealista_leads.zinto_phone` y `call_phone`, aditivas. NULL significa «usa el recibido» (`phone`), así que las solicitudes existentes empiezan con su teléfono de siempre en los dos campos. `phone` no se modifica nunca desde la ficha: es la evidencia del origen y de él salen los duplicados y la fusión. «Abrir Zinto» usa el de WhatsApp y «Llamar» el de llamadas en toda la ficha (también en la barra fija del móvil). `saveLeadPhones` comprueba el permiso de edición y el alcance, admite solo cifras, espacios y «+» (7 a 15 cifras), guarda NULL si el número coincide con el recibido y deja el cambio en el historial («Teléfonos actualizados», con autor). El estado de WhatsApp se sigue leyendo por `lead_id`, así que funciona igual con un número de Zinto distinto. Reversión: `rollback-0242.sql`.
+
+De paso, la ficha lee por fin `extra_phones` (0239): la consulta del detalle no lo pedía y la lista «En su mensaje» salía siempre vacía.
+
+**Encaje.** A 1440 × 900 el contenido inicial de cada pestaña cabe sin desplazamiento vertical, en claro y en oscuro (la QA mide la altura de la página y el borde del último panel). En móvil las secciones se apilan, sin scroll lateral, con pestañas de 48 px y la acción principal fija abajo.
+
+**Capturas para revisar** (1440 × 900, oscuro): `comparacion-figma/despues/A02_Ficha_resumen_oscuro.png`, `A02_Ficha_actividad_oscuro.png` y `A02_Ficha_cliente_oscuro.png`.
+
+**Verificación.**
+
+- SQL (Postgres 16 desechable): 0242 aplicada dos veces, dos números distintos sin tocar el recibido ni sus dígitos, un número demasiado corto rechazado; reversión y reaplicación.
+- QA visual: 100/100. Entre las nuevas: encaje de las tres pestañas en claro y oscuro; línea dorada pintada (bandeja y ficha); pestañas con teclado; «Ver anuncio original» distinto de la conversación; dos teléfonos distintos que persisten tras recargar, «Llamar» con el de llamadas en las dos pestañas y «Abrir Zinto» con el de WhatsApp; el cambio en el historial sin registrar contacto; número imposible rechazado por el servidor; solicitud antigua con su teléfono en los dos campos; cliente vinculado con su ficha y correo; usuaria sin permiso de edición (agent_junior) sin guardar, registrar, seguimiento, nota ni asignación; «Marcar como hecho» con la tarea marcada; móvil apilado.
+- Para que «persiste tras recargar» se pueda comprobar, el simulador tiene una opción `--persist` (escrituras en memoria mientras dura el proceso; sin ella, todo sigue igual) y entiende el filtro `like`, con el que la ficha busca duplicados.
+- El build local usa las fuentes de Google descargadas (`NEXT_FONT_GOOGLE_MOCKED_RESPONSES` de Next, fuera del repositorio): Google devolvía a veces una URL de fuente sin extensión y `next/font` tumbaba el build, el mismo fallo intermitente que ha parado la CI y los despliegues.

@@ -1250,6 +1250,22 @@
   .sol-root [data-crm-panel] > div:not([class=""]) { padding: 12px 16px 16px; }
 }
 
+/* Ficha por pestañas (maquetas del 4 de noviembre): la acción principal va en
+   dorado apagado con texto de tinta; en oscuro, un oro algo más claro. */
+:root {
+  --sol-cta: 214 186 132;
+  --sol-cta-strong: 201 170 112;
+  --sol-on-cta: 26 22 16;
+}
+@media screen {
+  html[data-crm-theme="dark"] {
+    --sol-cta: 222 194 138;
+    --sol-cta-strong: 234 208 156;
+  }
+}
+.sol-root .sol-cta { background-color: rgb(var(--sol-cta)); color: rgb(var(--sol-on-cta)); }
+.sol-root .sol-cta:hover { background-color: rgb(var(--sol-cta-strong)); }
+
 /* Barra de progreso fina de Solicitudes mientras llega la página nueva. */
 .sol-root .bg-sol-accent-bar { background-color: rgb(var(--sol-accent)); }
 @keyframes solProgress {
