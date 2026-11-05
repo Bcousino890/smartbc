@@ -1,7 +1,10 @@
 "use server";
 
 // ============================================================================
-// REPARTO COMERCIAL · escritura (solo administradores)
+// ASESOR DEL PISO · escritura (solo administradores)
+//
+// Se cambia desde «Por piso» en Solicitudes (antes había una pantalla aparte,
+// «Reparto comercial», que se quitó para reducir ruido).
 //
 // El permiso se comprueba DOS veces: aquí (rol efectivo en el país, igual que
 // requireRoles) y dentro de cada función de la base (routing_actor_is_admin),
@@ -43,7 +46,7 @@ function toPayload(items: Item[]) {
 }
 
 function refresh(country: string) {
-  revalidatePath(`/${country}/admin/reparto`);
+  revalidatePath(`/${country}/admin/solicitudes`);
 }
 
 /** Asigna uno o varios inmuebles a un asesor, con resultado por elemento. */

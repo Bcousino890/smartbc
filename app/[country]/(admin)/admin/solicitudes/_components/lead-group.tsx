@@ -12,16 +12,21 @@
 // precio actual de la ficha y cuántas consultas van sin trabajar.
 // ============================================================================
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import type { LeadGroup } from "@/lib/sales-inbox/types";
+import type { StaffRef } from "@/lib/portal-links/types";
+import { subjectKey } from "@/lib/sales-inbox/routing";
+import { Button, Labeled, Modal, Select } from "@/components/admin/ui/primitives";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import { useTn } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/plural";
 import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { LeadRow } from "./lead-row";
+import { clearRoutingRules, setRoutingRules } from "../routing-actions";
 
 export function LeadGroupBlock({
   group,
@@ -29,12 +34,17 @@ export function LeadGroupBlock({
   activeLeadId,
   selected,
   selectable,
+  staff,
+  isAdmin,
   onOpen,
   onToggleSelect,
   onToggleGroup,
 }: {
   group: LeadGroup;
   country: Country;
+  /** Para elegir el asesor del piso (solo administradores). */
+  staff: StaffRef[];
+  isAdmin: boolean;
   activeLeadId: string | null;
   selected: Set<string>;
   selectable: boolean;
@@ -50,6 +60,7 @@ export function LeadGroupBlock({
   // despliegan a demanda. Al volver de una ficha, el anuncio de esa solicitud
   // sigue abierto.
   const [open, setOpen] = useState(() => group.leads.some((l) => l.id === activeLeadId));
+  const [advisorOpen, setAdvisorOpen] = useState(false);
 
   const ids = group.leads.map((l) => l.id);
   const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
@@ -191,13 +202,26 @@ export function LeadGroupBlock({
         {/* Última consulta y acceso a la demanda */}
         <div className="flex shrink-0 flex-col justify-between gap-4 px-1 pb-1 md:w-[300px] md:py-3 md:pe-4 xl:w-[370px]">
           <div>
-            {/* Reparto comercial, visto desde aquí: quién recibe lo nuevo de este piso. */}
+            {/* Asesor del piso: quién recibe lo nuevo de este piso. Un
+                administrador lo cambia aquí mismo. */}
             <p className="mb-3 sol-meta">
               <span className="text-sol-muted">{t("inbox.group.advisor")}: </span>
               {group.advisorName ? (
                 <span className="font-semibold text-sol-ink">{group.advisorName}</span>
               ) : (
                 <span className="font-semibold text-sol-review-ink">{t("inbox.group.noAdvisor")}</span>
+              )}
+              {isAdmin && (group.propertyId || group.listingId) && (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={() => setAdvisorOpen(true)}
+                    className="font-medium text-sol-muted underline-offset-2 hover:text-sol-action hover:underline"
+                  >
+                    {t("inbox.group.changeAdvisor")}
+                  </button>
+                </>
               )}
             </p>
             <p className="sol-meta text-sol-muted">{t("inbox.group.lastEnquiry")}</p>
@@ -239,6 +263,81 @@ export function LeadGroupBlock({
           ))}
         </ul>
       )}
+      {advisorOpen && (
+        <PropertyAdvisorDialog group={group} country={country} staff={staff} onClose={() => setAdvisorOpen(false)} />
+      )}
     </li>
+  );
+}
+
+/**
+ * Cambiar el asesor del piso. Vale para las consultas que lleguen DESPUÉS:
+ * ningún cliente ni solicitud ya asignados cambian (lo garantiza la base).
+ * Elegir «Sin asesor» deja lo nuevo en «Pendiente de reparto».
+ */
+function PropertyAdvisorDialog({
+  group,
+  country,
+  staff,
+  onClose,
+}: {
+  group: LeadGroup;
+  country: Country;
+  staff: StaffRef[];
+  onClose: () => void;
+}) {
+  const t = useT();
+  const router = useRouter();
+  const [advisor, setAdvisor] = useState(group.advisorId ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, start] = useTransition();
+
+  // La regla es la de la ficha propia o, si no tiene, la del anuncio: la
+  // misma clave con la que se agrupa el piso.
+  const key = group.propertyId
+    ? subjectKey({ kind: "property", id: group.propertyId })
+    : subjectKey({ kind: "listing", id: group.listingId! });
+  const items = [{ key, expectedVersion: group.ruleVersion }];
+  const unchanged = advisor === (group.advisorId ?? "");
+
+  const submit = () =>
+    start(async () => {
+      setError(null);
+      const r = advisor
+        ? await setRoutingRules({ country, advisorId: advisor, items })
+        : await clearRoutingRules({ country, items });
+      if (!r.ok) return setError(r.error);
+      const outcome = r.outcomes[0]?.result;
+      if (outcome === "version_conflict") return setError(t("inbox.group.advisorConflict"));
+      if (outcome === "not_found" || outcome === "invalid") return setError(t(`reparto.result.${outcome}`));
+      onClose();
+      router.refresh();
+    });
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t("inbox.group.advisorTitle")}
+      footer={
+        <>
+          <Button onClick={onClose} disabled={saving}>{t("common.cancel")}</Button>
+          <Button variant="primary" onClick={submit} disabled={saving || unchanged}>
+            {saving ? t("cc.saving") : t("inbox.group.advisorSave")}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-ink/70">{t("inbox.group.advisorScope")}</p>
+      <Labeled label={t("inbox.assignDialog.advisor")} className="mt-3">
+        <Select value={advisor} onChange={(e) => setAdvisor(e.target.value)}>
+          <option value="">{t("inbox.group.advisorNone")}</option>
+          {staff.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </Select>
+      </Labeled>
+      {error && <p role="alert" className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+    </Modal>
   );
 }
