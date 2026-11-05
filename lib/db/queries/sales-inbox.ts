@@ -491,7 +491,9 @@ async function groupByProperty(
         newCount: item.state === "new" ? 1 : 0,
         attentionCount: needsAttention(item.reasons) ? 1 : 0,
         retired: exact && item.listingRetired,
+        advisorId: null,
         advisorName: null,
+        ruleVersion: 0,
       });
     }
   }
@@ -510,8 +512,10 @@ async function groupByProperty(
   // Solo se piden los datos de las fichas VISIBLES: sin esto sería un N+1
   // sobre todas las propiedades del listado. Dos consultas porque hay dos
   // procedencias posibles, no porque haya dos modelos.
-  // Asesor del piso: la regla activa de Reparto comercial, para ver desde
-  // aquí qué reparto tiene cada anuncio sin ir a la otra pantalla.
+  // Asesor del piso: la regla activa del piso, que se ve y (si eres
+  // administrador) se cambia aquí mismo. Se leen también las retiradas para
+  // conocer su versión: la regla del piso es la de su ficha propia o, si no
+  // tiene, la del anuncio (la misma clave que agrupa).
   try {
     const subjects = page.filter((g) => g.kind === "exact" && (g.propertyId || g.listingId));
     if (subjects.length > 0) {
@@ -520,14 +524,19 @@ async function groupByProperty(
       const ors = [pIds.length ? `property_id.in.(${pIds.join(",")})` : null, lIds.length ? `listing_id.in.(${lIds.join(",")})` : null].filter(Boolean);
       const { data: rules } = await db()
         .from("property_routing_rules")
-        .select("property_id, listing_id, advisor_id, active")
-        .eq("active", true)
+        .select("property_id, listing_id, advisor_id, active, version")
         .or(ors.join(","));
-      for (const r of (rules ?? []) as any[]) {
-        if (!r.advisor_id) continue;
-        const name = staffNames.get(r.advisor_id) ?? null;
-        for (const g of subjects) {
-          if ((r.property_id && g.propertyId === r.property_id) || (r.listing_id && g.listingId === r.listing_id)) g.advisorName = name;
+      for (const g of subjects) {
+        const own = (r: any) => (g.propertyId ? r.property_id === g.propertyId : r.listing_id === g.listingId);
+        const matches = ((rules ?? []) as any[]).filter(
+          (r) => (r.property_id && g.propertyId === r.property_id) || (r.listing_id && g.listingId === r.listing_id),
+        );
+        const subjectRule = matches.find(own);
+        g.ruleVersion = subjectRule ? Number(subjectRule.version) || 0 : 0;
+        const shown = [subjectRule, ...matches].find((r) => r?.active && r.advisor_id);
+        if (shown) {
+          g.advisorId = shown.advisor_id;
+          g.advisorName = staffNames.get(shown.advisor_id) ?? null;
         }
       }
     }

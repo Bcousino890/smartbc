@@ -557,6 +557,8 @@ export function InboxShell({
                     activeLeadId={selectedId}
                     selected={selected}
                     selectable={canEdit && selectMode}
+                    staff={staff}
+                    isAdmin={isAdmin}
                     onOpen={openLead}
                     onToggleSelect={(id, checked) =>
                       setSelected((prev) => {

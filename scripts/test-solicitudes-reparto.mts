@@ -294,7 +294,7 @@ t("R02 · las acciones de reparto exigen administrador antes de tocar la base", 
   // «Asignarme» delega en assignLead (mismo gate).
   assert.match(body(inbox, "assignLeadToMe"), /return assignLead\(/);
 
-  const reparto = "app/[country]/(admin)/admin/reparto/actions.ts";
+  const reparto = "app/[country]/(admin)/admin/solicitudes/routing-actions.ts";
   for (const fn of ["setRoutingRules", "clearRoutingRules"]) {
     const b = body(reparto, fn);
     assert.ok(b.indexOf("checkRoles(ADMIN_ROLES") >= 0 && b.indexOf("checkRoles(ADMIN_ROLES") < b.indexOf("rpc("), fn);

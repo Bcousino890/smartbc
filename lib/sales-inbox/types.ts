@@ -349,8 +349,14 @@ export type LeadGroup = {
   attentionCount: number;
   /** El anuncio ya no está publicado (0241): «Por piso» lo pone aparte. */
   retired: boolean;
-  /** Asesor al que Reparto comercial manda las consultas nuevas de este piso. */
+  /** Asesor del piso: a quién van las consultas nuevas de este piso. */
+  advisorId: string | null;
   advisorName: string | null;
+  /**
+   * Versión de la regla del piso (0 si nunca tuvo): el cambio desde «Por
+   * piso» la manda para no pisar lo que otro administrador acabe de guardar.
+   */
+  ruleVersion: number;
 };
 
 /** Cifras del encabezado. Reales y accionables; ninguna decorativa. */

@@ -268,20 +268,18 @@ async function shot(page: Page, name: string) {
   check("C · tres columnas", (await page.getByRole("heading", { name: "Atender hoy" }).count()) === 1 && (await page.getByRole("heading", { name: "Programadas" }).count()) === 1);
   await shot(page, "10-prioridades");
 
-  // Reparto comercial
-  await page.goto(`${BASE}/es/admin/reparto`, { waitUntil: "networkidle" });
-  check("Reparto · tabla visible para administradora", (await page.getByRole("table").count()) === 1);
-  await page.getByRole("checkbox").nth(1).check();
-  await page.getByRole("checkbox").nth(2).check();
-  await page.getByRole("checkbox").nth(3).check();
-  check("Reparto · barra contextual con 3 seleccionados", (await page.getByText("Seleccionados: 3").count()) === 1);
-  await page.getByRole("button", { name: "Asignar a ejecutivo" }).click();
+  // Asesor del piso: se cambia en «Por piso» (ya no hay pantalla aparte).
+  check("Reparto · sin entrada de menú «Reparto comercial»", (await page.getByRole("link", { name: "Reparto comercial" }).count()) === 0);
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&mode=property`, { waitUntil: "networkidle" });
+  check("Por piso · administradora ve «Cambiar» junto al asesor del piso", (await page.getByRole("button", { name: "Cambiar", exact: true }).count()) > 0);
+  await page.getByRole("button", { name: "Cambiar", exact: true }).first().click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Asesor").selectOption({ index: 2 });
-  check("Reparto · revisión de lo que se sustituye antes de confirmar", (await dialog.getByText(/se sustituyen/).count()) + (await dialog.getByText("Sin asesor").count()) > 0);
-  await shot(page, "11-reparto-asignar");
+  check("Por piso · el diálogo explica que solo afecta a lo nuevo", (await dialog.getByText(/Ningún cliente ni solicitud ya asignados cambian/).count()) === 1);
+  check("Por piso · se puede dejar sin asesor", (await dialog.getByLabel("Asesor").locator("option", { hasText: "Sin asesor" }).count()) === 1);
+  await shot(page, "11-por-piso-asesor");
   await page.keyboard.press("Escape");
-  await shot(page, "12-reparto-tabla");
+  const gone = await page.goto(`${BASE}/es/admin/reparto`, { waitUntil: "networkidle" });
+  check("Reparto · la pantalla aparte ya no existe", gone?.status() === 404, String(gone?.status()));
 
   // Ficha del cliente: el asesor solo se cambia con «Reasignar cliente».
   await page.goto(`${BASE}/es/admin/clientes/${CLIENT}`, { waitUntil: "networkidle" });
@@ -468,10 +466,10 @@ async function setTheme(page: Page, theme: "dark" | "light") {
   const { browser, ctx } = await context(ADVISOR, false);
   const page = await ctx.newPage();
   watch(page, "asesor");
-  await page.goto(`${BASE}/es/admin/reparto`, { waitUntil: "networkidle" });
-  check("R02 · asesor: Reparto explica que es solo de administradores", (await page.getByText(/Solo un administrador puede ver y cambiar el reparto/).count()) === 1);
-  check("R02 · asesor: sin tabla de reparto", (await page.getByRole("table").count()) === 0);
-  await shot(page, "13-reparto-asesor");
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&mode=property`, { waitUntil: "networkidle" });
+  check("R02 · asesor: en «Por piso» ve el asesor del piso pero no puede cambiarlo",
+    (await page.getByText("Asesor del piso:").count()) > 0 && (await page.getByRole("button", { name: "Cambiar", exact: true }).count()) === 0);
+  await shot(page, "13-por-piso-asesor");
   await page.goto(`${BASE}/es/admin/solicitudes?view=all&lead=${LEAD(1)}`, { waitUntil: "networkidle" });
   check("R02 · asesor: sin botón para cambiar responsable", (await page.getByRole("button", { name: /^Cambiar$|Reasignar cliente|Asignar asesor/ }).count()) === 0);
   check("R02 · asesor: se le explica por qué", (await page.getByText("Solo un administrador puede cambiarlo").count()) > 0);
@@ -525,10 +523,11 @@ async function setTheme(page: Page, theme: "dark" | "light") {
     check(`Móvil · ficha «${tab}»: apilada, sin scroll lateral, pestaña cómoda`, m.overflow <= 1 && m.stacked && tabH >= 44, `${m.overflow}px, pestaña ${Math.round(tabH)}px`);
     await shot(page, `22-movil-ficha-${tab === "Cliente y datos" ? "cliente" : tab.toLowerCase()}`);
   }
-  await page.goto(`${BASE}/es/admin/reparto`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/es/admin/solicitudes?view=all&mode=property`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Cambiar", exact: true }).first().click();
   const overflowR = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  check("Móvil · Reparto sin scroll horizontal", overflowR <= 1, `${overflowR}px`);
-  await shot(page, "17-movil-reparto");
+  check("Móvil · asesor del piso sin scroll horizontal", overflowR <= 1 && (await page.getByRole("dialog").count()) === 1, `${overflowR}px`);
+  await shot(page, "17-movil-asesor-piso");
   await browser.close();
 }
 
