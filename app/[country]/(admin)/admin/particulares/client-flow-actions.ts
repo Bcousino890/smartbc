@@ -16,7 +16,7 @@ import { checkPermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
-import { briefFromRow, briefGaps, type BriefInput } from "@/lib/clients/brief";
+import { briefFromRow, briefGaps, EMPTY_BRIEF, type BriefInput } from "@/lib/clients/brief";
 import { listEncargos } from "@/lib/db/queries/encargos";
 import type { Encargo, EncargoStatus } from "@/lib/encargos/model";
 import { encargoSummary, resolveSelectedEncargo } from "@/lib/encargos/ui-state";
@@ -64,7 +64,10 @@ export type ClientContext = {
   encargos: EncargoOption[];
   /** El encargo con el que trabaja la pantalla: el de `?encargo=` si es suyo, si no el principal. null en Chile. */
   selectedEncargo: EncargoOption | null;
-  /** El brief del encargo elegido (en Chile, el de siempre): de aquí salen los filtros que se rellenan solos. */
+  /**
+   * Lo que hace falta del encargo elegido para rellenar los filtros (`briefToCaptacionesFilters`): operación,
+   * estancia, precio, dormitorios, baños, m² y zonas. El resto (ingresos, notas…) NO viaja al navegador.
+   */
   brief: BriefInput | null;
 };
 
@@ -77,6 +80,28 @@ export type EncargoOption = {
   /** Lo esencial en una línea (operación, presupuesto, dormitorios, zonas). */
   summary: string;
 };
+
+/** Solo los campos que se convierten en filtros; lo demás se queda en los valores vacíos. */
+function filterBrief(b: BriefInput): BriefInput {
+  return {
+    ...EMPTY_BRIEF,
+    operation: b.operation,
+    stay: b.stay,
+    zones: b.zones,
+    subzones: b.subzones,
+    zonesFlexible: b.zonesFlexible,
+    polygons: b.polygons,
+    minPrice: b.minPrice,
+    maxPrice: b.maxPrice,
+    maxPriceFlexPct: b.maxPriceFlexPct,
+    maxPriceByBedrooms: b.maxPriceByBedrooms,
+    minBedrooms: b.minBedrooms,
+    maxBedrooms: b.maxBedrooms,
+    minBathrooms: b.minBathrooms,
+    minSquareMeters: b.minSquareMeters,
+    maxSquareMeters: b.maxSquareMeters,
+  };
+}
 
 const toOption = (e: Encargo): EncargoOption => ({
   id: e.id,
@@ -154,7 +179,7 @@ export async function getClientContext(
       book,
       encargos: encargoSel.list.map(toOption),
       selectedEncargo: selected ? toOption(selected) : null,
-      brief,
+      brief: brief ? filterBrief(brief) : null,
     },
   };
 }
