@@ -145,6 +145,16 @@ Captaciones (67 + 30 BD) y migración 0243-0245 con rollbacks: todo verde. Adem�
 `test:typography` falla igual que en `main` (27 violaciones en ambos; ficheros ajenos). Los tests con BD usan contenedores
 Postgres desechables con volcado de solo lectura del esquema; no se escribió en `supabase-db`.
 
+## Verificación tras la revisión final (2026-11-06, F1-F9, sin navegador)
+
+`npm run test:encargos` verde: ui-state + schedule (81), fuentes puras (30), acciones (53, BD con 0246), fuentes (30 + 49 BD:
+propiedades que nacen de un anuncio, fraude sospechoso, páginas cortas), aviso (36 + 6 BD), runner (6 + 74 BD: páginas de
+2 filas, marca atascada, herencia de alertas y baja en todas las filas), seed Yeanette (75 BD), Captaciones (67 + 30 BD) y
+migración 0243-0246 con rollbacks (68 comprobaciones, RLS con rol `authenticated` + JWT simulado). Además
+`test:client-brief`, `test:captaciones-filters` (33/33), `test:notifications-bell` (15), `test:crm-appearance` (15),
+`test-api-guards` (227 handlers), `tsc --noEmit` y `next build` en copia limpia de HEAD: OK. `test:typography`: las mismas
+27 violaciones previas.
+
 ## Checklist de verificación MANUAL del dueño (nada se probó en un navegador)
 
 1. **Ficha del cliente (España):** sección Encargos del Resumen. Crear, editar, pausar, cerrar un encargo. El principal no se
