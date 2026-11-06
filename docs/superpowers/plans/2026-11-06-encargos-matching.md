@@ -263,7 +263,27 @@
 
 ---
 
-### Task 11: Verificación final y entrega
+### Task 11: Captaciones — selector de encargo del cliente
+
+> Añadida el 2026-11-06 a petición del dueño (captura de pantalla de `/es/admin/captaciones?cliente=…`): en Captaciones la barra «Captando para {cliente}» solo mostraba el encargo principal; debe poder elegirse CUALQUIERA de los encargos del cliente y todo lo que depende del encargo debe seguir al elegido.
+
+**Files:**
+- Modify: la barra de cliente de Captaciones (`ClientBar`) y la página `particulares-page.tsx` bajo `app/[country]/(admin)/admin/captaciones/` y/o `components/admin/particulares/**` (localizar con `grep -rn "Captando para\|ClientBar" app components`), `captacion-actions.ts` (guardar zona dibujada), `lib/captaciones-map/*` (`toMapBrief`, `describeBrief`, `getClientContext`), `lib/db/queries/suggested-particulares.ts` (`evaluateParticularForClient`), la tarjeta «Para el encargo de X» de la ficha del anuncio (`_ficha/client-fit-card.tsx`) y el hook de filtros (`lib/particulares/filters-from-params.ts`, parámetro `cliente`).
+- Create/Modify: `lib/encargos/ui-state.ts` (reutilizar `resolveSelectedEncargo`), tests `scripts/test-encargos-captaciones.mts`.
+
+**Interfaces:**
+- Consumes: `listEncargos(clientId)`, `Encargo`, `resolveSelectedEncargo(encargos, param)` (Task 9), `getSuggestedParticulares(clientId, { encargoId })`, `evaluateParticularForClient`.
+- Produces: parámetro de URL `?cliente=<uuid>&encargo=<uuid>` en Captaciones (`encargo` opcional: por defecto el principal; un id ajeno al cliente cae al principal); `evaluateParticularForClient(clientId, particularId, opts?: { encargoId?: string })`; `getClientContext(clientId, opts?: { encargoId?: string })`; la acción de guardar zona dibujada recibe `encargoId?` y actualiza **ese** encargo (hoy actualiza la fila principal).
+
+- [ ] **Step 1: Tests (rojos)**: función pura de selección (`?encargo=` válido / ajeno / ausente / cerrado); `evaluateParticularForClient` con `encargoId` de un encargo secundario usa SU brief (un anuncio que encaja con la Demanda 3 y no con la 1 da `fits:true` solo con el encargo 3); guardar zona dibujada con `encargoId` modifica ese encargo y no el principal (BD real desechable, patrón de `test-encargos-actions`); `?encargo=` con basura se ignora; un cliente `cl` no muestra selector.
+- [ ] **Step 2: Ejecutar** — Esperado: FAIL.
+- [ ] **Step 3: Implementar**: la barra «Captando para» muestra un **selector con TODOS los encargos del cliente** (nombre, «Principal», estado Activo/En pausa/Cerrado, resumen de una línea); al elegir uno se actualiza la URL (`?encargo=`) y todo lo que depende del encargo usa el elegido: resumen y panel «Ver encargo», «Editar encargo» (abre la edición de ESE encargo), etiquetas «Encaja N» y puntuaciones de la lista/cuadrícula/mapa, brief del mapa y zona dibujada (se guarda en ese encargo), tarjeta «Para el encargo de X» de la ficha del anuncio (mantener `encargo` al navegar a ella). Un encargo en pausa o cerrado muestra un aviso claro («Encargo en pausa: no hace matching») y no pinta «Encaja». «Captar para X y añadir a su book» sigue siendo del **cliente** (no del encargo). Solo España: sin selector para clientes `cl`. Un cliente con un único encargo no cambia de aspecto (selector oculto o deshabilitado).
+- [ ] **Step 4: Ejecutar tests, `npm run test:captaciones-filters`, `npm run test:encargos-ui-state`, `npx tsc --noEmit`** — Esperado: PASS.
+- [ ] **Step 5: Commit** `feat(encargos): selector de encargo en Captaciones`.
+
+---
+
+### Task 12: Verificación final y entrega
 
 **Files:**
 - Modify: `CLAUDE.md` (sección breve «Encargos múltiples»: cron a instalar, scripts a ejecutar, regla del principal), `docs/changes/2026-11-06-encargos-matching/README.md`
