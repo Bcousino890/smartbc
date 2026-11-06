@@ -158,7 +158,10 @@ export function ParticularesClient({
   // el enlace abra la misma; cuadrícula es el valor por defecto.
   const view = f.view;
   const isMap = view === "map";
-  const clientScores = useClientScores(pickedClient, !isMap && !matchingOff, encargoForRequests);
+  // La puntuación espera a saber qué encargo es (y si está en pausa o cerrado, que no hace matching): así no se
+  // pide para nada. Si el contexto falla, se pide igual (la barra usa su resumen como respaldo).
+  const encargoKnown = !!ctx || (!!f.clientId && !!clientCtx.error);
+  const clientScores = useClientScores(pickedClient, !isMap && encargoKnown && !matchingOff, encargoForRequests);
   const layout: CardLayout = view === "list" ? "list" : "grid";
   // Zona del mapa: la vigente en los filtros (la dibujada en el mapa o en el
   // modal «Ubicación en el mapa»). La vista solo la lee al montarse, así que

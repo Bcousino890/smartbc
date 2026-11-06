@@ -4,17 +4,23 @@
 // con los MISMOS nombres de parámetro de URL que lee `lib/particulares/filters-from-params.ts` (y escribe
 // `use-particulares-filters.ts`): la lista, el mapa y la API los leen igual, y salen como chips normales.
 //
-// Qué se rellena y por qué (lo que el filtro no puede expresar se dice aquí):
-//  · operation  ← operación.
-//  · alquiler   ← estancia, solo en alquiler (short → «temporada», long → «larga»). Ojo: el matching de
-//                 particulares no mira la estancia; «temporada» exige la etiqueta del anuncio.
+// PRINCIPIO: un filtro rellenado NUNCA puede esconder un anuncio que el matching del encargo enseñaría como
+// «Encaja». Puede enseñar MÁS (el matching sigue puntuando y descartando), nunca menos. Por eso:
+//  · operation  ← operación (el matching solo cruza esa operación).
 //  · priceMin   ← minPrice. priceMax ← el MISMO techo que el prefiltro SQL del matching (`sqlPriceCeiling`):
 //                 el mayor de maxPrice y los topes por dormitorios, con el margen `maxPriceFlexPct`.
 //  · bedrooms   ← minBedrooms (el filtro es «N o más»); si min = max, además `dormExacto=1`. El filtro no
-//                 tiene máximo: un «2–3 dorm.» queda en «2+» (el matching sigue descartando los de 4).
-//  · banos      ← minBathrooms. areaMin / areaMax ← m².
+//                 tiene máximo: un «2–3 dorm.» queda en «2+» (enseña más; el matching descarta los de 4).
 //  · zone       ← zonas y barrios con el vocabulario del matching (ver `zoneSelectionsFor`).
 //  · zonePoly   ← la zona dibujada, que manda sobre los nombres (como en `evaluateMatch`).
+// OMISIONES DELIBERADAS (serían más estrictas que el matching):
+//  · Baños: el matching se queda con los anuncios sin dato (0/null = «Baños sin dato», solo aviso); `banos` los
+//    quitaría.
+//  · m²: el matching admite −5 % / +10 % y se queda con los anuncios sin superficie («Superficie sin dato»);
+//    `areaMin`/`areaMax` (gte/lte en SQL) quitarían siempre los que no la tienen, con o sin margen.
+//  · Estancia: el matching de particulares no la mira; `alquiler=temporada` exige la etiqueta del anuncio y
+//    escondería casi todo (la Demanda 2, «6 meses», se quedaría casi vacía). El resumen del encargo la sigue
+//    enseñando.
 // Un campo vacío (null, 0, []) no genera filtro. Zonas «flexibles» → sin filtro de zona (el matching no
 // descarta por zona).
 
@@ -24,20 +30,7 @@ import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { encodeZonePolygons } from "@/lib/zone-polygon";
 
 /** Los parámetros de URL que rellena un encargo (y que «elegir otro encargo» sustituye). */
-export const ENCARGO_FILTER_PARAMS = [
-  "operation",
-  "alquiler",
-  "priceMin",
-  "priceMax",
-  "bedrooms",
-  "dormExacto",
-  "banos",
-  "banosExacto",
-  "areaMin",
-  "areaMax",
-  "zone",
-  "zonePoly",
-] as const;
+export const ENCARGO_FILTER_PARAMS = ["operation", "priceMin", "priceMax", "bedrooms", "dormExacto", "zone", "zonePoly"] as const;
 export type EncargoFilterParam = (typeof ENCARGO_FILTER_PARAMS)[number];
 export type CaptacionesFilterParams = Partial<Record<EncargoFilterParam, string>>;
 
@@ -72,8 +65,9 @@ function madridDistrict(name: string): string | null {
  *  · Un distrito de Madrid (o un municipio del desplegable) en `zones` → "d:…": vale por todos sus barrios,
  *    igual que en el matching; los barrios marcados dentro de él quedan cubiertos.
  *  · Cada barrio (o zona suelta) → las zonas CRUDAS del desplegable que el matching reconocería como ese
- *    barrio («Justicia - Chueca» es Justicia). Sin datos del desplegable, o si ninguna casa, el nombre tal
- *    cual ("z:Recoletos"): el filtro es exacto, así que puede no dar resultados, pero no inventa otro sitio.
+ *    barrio («Justicia - Chueca» es Justicia). Un nombre sin ninguna zona cruda que case (o sin datos del
+ *    desplegable) NO se emite: «z:<nombre>» es exacto y no casaría con ningún anuncio (sería un chip muerto).
+ *    Si al final no queda ninguna entrada, no hay filtro de zona (enseña más, nunca menos).
  */
 export function zoneSelectionsFor(brief: Pick<BriefInput, "zones" | "subzones">, groups: ZoneGroupLite[] = []): string[] {
   const out: string[] = [];
@@ -107,8 +101,7 @@ export function zoneSelectionsFor(brief: Pick<BriefInput, "zones" | "subzones">,
         if (rawZoneAliases(z.name, g.isMadrid !== false).includes(want)) hits.push(z.name);
       }
     }
-    if (hits.length) hits.forEach((h) => add(`z:${h}`));
-    else add(`z:${name}`);
+    hits.forEach((h) => add(`z:${h}`));
   }
   return out;
 }
@@ -120,7 +113,7 @@ export function briefToCaptacionesFilters(
 ): CaptacionesFilterParams {
   const f: CaptacionesFilterParams = {};
   f.operation = brief.operation === "sale" ? "sale" : "rent";
-  if (f.operation === "rent" && brief.stay) f.alquiler = brief.stay === "short" ? "temporada" : "larga";
+  // Sin estancia, baños ni m²: ver OMISIONES DELIBERADAS en la cabecera.
 
   if (positive(brief.minPrice)) f.priceMin = String(Math.round(brief.minPrice));
   const ceiling = sqlPriceCeiling(brief);
@@ -130,9 +123,6 @@ export function briefToCaptacionesFilters(
     f.bedrooms = String(brief.minBedrooms);
     if (brief.maxBedrooms === brief.minBedrooms) f.dormExacto = "1";
   }
-  if (positive(brief.minBathrooms)) f.banos = String(brief.minBathrooms);
-  if (positive(brief.minSquareMeters)) f.areaMin = String(Math.round(brief.minSquareMeters));
-  if (positive(brief.maxSquareMeters)) f.areaMax = String(Math.round(brief.maxSquareMeters));
 
   if (!brief.zonesFlexible) {
     if (brief.polygons?.length) f.zonePoly = encodeZonePolygons(brief.polygons);

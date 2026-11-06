@@ -94,12 +94,20 @@ function EncargoPicker({
 
   const listId = `encargos-${selected.id}`;
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      className="relative"
+      // Salir con Tab (el foco se va fuera del selector) lo cierra.
+      onBlur={(e) => {
+        if (open && !ref.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <button
         ref={trigger}
         type="button"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls={listId}
+        aria-controls={open ? `${listId}-panel` : undefined}
         aria-label={`Encargo: ${selected.label}${selected.isPrimary ? " (principal)" : ""}, ${ENCARGO_STATUS_LABEL[selected.status]}. Cambiar de encargo`}
         onClick={() => setOpen((v) => !v)}
         className={cn(BAR_BUTTON, "max-w-full", FOCUS_RING)}
@@ -110,7 +118,12 @@ function EncargoPicker({
         <ChevronDown size={14} aria-hidden className={cn("shrink-0 transition", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-[min(92vw,480px)] rounded-xl border border-ink/10 bg-white p-1.5 shadow-xl">
+        <div
+          id={`${listId}-panel`}
+          role="dialog"
+          aria-labelledby={`${listId}-t`}
+          className="absolute left-0 top-full z-40 mt-1 w-[min(92vw,480px)] rounded-xl border border-ink/10 bg-white p-1.5 shadow-xl"
+        >
           <p id={`${listId}-t`} className="px-2.5 pb-1 pt-1.5 text-xs font-medium text-ink/65">
             Encargos de {clientName} · {encargos.length}
           </p>

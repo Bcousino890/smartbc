@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { CaptacionesFilterParams } from "@/lib/captaciones-map/brief-filters";
+import { nextFiltersQuery } from "@/lib/particulares/filters-url";
 
 export type OperationFilter = "" | "rent" | "sale";
 export type PhoneFilterValue = "" | "no_phone" | "with_phone";
@@ -422,13 +423,10 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
         if (URL_DEFAULTS[key] !== undefined && v === URL_DEFAULTS[key]) continue;
         params.set(PARAM_KEYS[key], v === true ? "1" : String(v));
       }
-      const qs = params.toString();
-      // Misma URL de filtros que la actual (sin página ni ficha): nada que navegar.
-      const cur = new URLSearchParams(searchParamsRef.current.toString());
-      const hadExtras = cur.has("page") || cur.has("ficha");
-      cur.delete("page");
-      cur.delete("ficha");
-      if (!hadExtras && cur.toString() === qs) return;
+      // Conserva la ficha abierta (`ficha`): rellenar los filtros del encargo desde la ficha no la cierra.
+      // Misma URL que la actual (y sin página que quitar): nada que navegar.
+      const { qs, unchanged } = nextFiltersQuery(params.toString(), searchParamsRef.current);
+      if (unchanged) return;
       // Solo cambió la vista (cuadrícula/lista/mapa): el servidor no la usa,
       // así que no hace falta pedirle la página otra vez. replaceState nativo
       // (Next lo integra con useSearchParams) solo actualiza la URL.
@@ -567,20 +565,18 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
 
   /**
    * Rellena los filtros con los de un encargo (`briefToCaptacionesFilters`) y pone la marca. SUSTITUYE solo los
-   * filtros que vienen de un encargo (operación, estancia, precio, dormitorios, baños, m², zona): lo demás
-   * (búsqueda, portal, anunciante…) se queda como estaba.
+   * filtros que vienen de un encargo (`ENCARGO_FILTER_PARAMS`: operación, precio, dormitorios, zona): lo demás
+   * (búsqueda, portal, anunciante, baños, m², estancia…) se queda como estaba.
    */
   const applyEncargoFilters = useCallback((p: CaptacionesFilterParams, encargoId: string) => {
-    setOperationRaw(p.operation === "rent" || p.operation === "sale" ? p.operation : "");
-    setRentalKind(p.alquiler === "larga" || p.alquiler === "temporada" ? p.alquiler : "");
+    const op = p.operation === "rent" || p.operation === "sale" ? p.operation : "";
+    setOperationRaw(op);
+    // Como setOperation: el tipo de alquiler solo tiene sentido en alquiler.
+    if (op !== "rent") setRentalKind("");
     setPriceMin(p.priceMin ?? "");
     setPriceMax(p.priceMax ?? "");
     setBedrooms(p.bedrooms ?? "");
     setBedroomsExact(p.dormExacto === "1");
-    setBathrooms(p.banos ?? "");
-    setBathroomsExact(p.banosExacto === "1");
-    setAreaMin(p.areaMin ?? "");
-    setAreaMax(p.areaMax ?? "");
     setZoneRaw(p.zone ?? "");
     setDrawnZoneRaw(p.zonePoly ?? "");
     setAutofill(encargoId);
