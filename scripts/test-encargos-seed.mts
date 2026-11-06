@@ -4,6 +4,9 @@ import { execFileSync } from "node:child_process";
 import { createAdminClient } from "../lib/db/admin.ts";
 import { briefFromRow, buildPreferencesPayload, EMPTY_BRIEF, validateBrief } from "../lib/clients/brief.ts";
 import { evaluateMatch, type MatchProperty } from "../lib/clients/brief-match.ts";
+import { runEncargoMatching } from "../lib/encargos/runner.ts";
+import { evaluateParticularRow } from "../lib/db/queries/suggested-particulares.ts";
+import { __failRpc } from "./shims/supabase-on-psql.mts";
 import { seedYeanetteEncargos, completeDemanda1, DEMANDA_2, DEMANDA_3 } from "./seed-yeanette-encargos.mts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,14 +44,14 @@ await primary(YEANETTE);
 // ── dry: no escribe ────────────────────────────────────────────────────────
 let r = await seedYeanetteEncargos(YEANETTE, { dryRun: true });
 eq([r.created, r.updated], [["Demanda 2", "Demanda 3"], ["Demanda 1"]], "dry: dice qué haría");
-ok(r.primaryFills.length === 4 && r.primaryFills.some((f) => /minFloor/.test(f)), "dry: dice qué completaría en la Demanda 1", r.primaryFills);
+ok(r.primaryFills.length === 6 && r.primaryFills.some((f) => /minFloor/.test(f)), "dry: dice qué completaría en la Demanda 1", r.primaryFills);
 let rs = await rows(YEANETTE);
 ok(rs.length === 1 && rs[0].label === "Encargo 1" && rs[0].end_client_label === null, "dry: no escribe nada", rs);
 
 // ── primera ejecución sin avisos ────────────────────────────────────────────
 const before = await noteCount();
 r = await seedYeanetteEncargos(YEANETTE, { notify: false });
-eq([r.created, r.updated, r.skipped, r.initialPasses], [["Demanda 2", "Demanda 3"], ["Demanda 1"], [], []], "primera ejecución: crea 2 y renombra la principal; sin pases iniciales");
+eq([r.created, r.updated, r.skipped, r.passes], [["Demanda 2", "Demanda 3"], ["Demanda 1"], [], []], "primera ejecución: crea 2 y renombra la principal; sin pases iniciales");
 rs = await rows(YEANETTE);
 eq(rs.length, 3, "tres encargos");
 const d1 = rs.find((x) => x.is_primary)!;
@@ -78,7 +81,10 @@ for (const d of [DEMANDA_2, DEMANDA_3]) {
   eq(buildPreferencesPayload(b), buildPreferencesPayload(d.brief), `${d.label}: ida y vuelta por briefFromRow`);
 }
 const b2 = briefFromRow(rs.find((x) => x.label === "Demanda 2")!);
-eq([b2.maxPriceByBedrooms, b2.stayMonths, b2.stay, b2.availableFrom, b2.furnished, b2.students], [{ "3": 5200, "4": 6300 }, 6, "short", "2027-01-01", "furnished", 1], "Demanda 2: campos clave");
+eq([b2.maxPriceByBedrooms, b2.stayMonths, b2.stay, b2.availableFrom, b2.furnished, b2.students, b2.zones], [{ "3": 5200, "4": 6300 }, 6, "short", "2027-01-01", "furnished", null, []], "Demanda 2: campos clave (sin distritos, sin estudiantes inventados)");
+const b3 = briefFromRow(rs.find((x) => x.label === "Demanda 3")!);
+eq(b3.zones, [], "Demanda 3: sin distritos");
+ok(/Ideal ~4\.000/.test(d1Brief.notes ?? "") && /2-3 baños \(máx\. 3\)/.test(d1Brief.notes ?? ""), "Demanda 1: notas con «ideal» y «baños»", d1Brief.notes);
 
 // cap por dormitorios en el cruce
 const prop = (bedrooms: number, price: number): MatchProperty => ({
@@ -92,6 +98,23 @@ for (const sub of ["Justicia", "Chueca-Justicia"]) {
   ok(!evaluateMatch(b2, { ...prop(3, 5000), zone: "Centro", subzone: sub }).excluded, `Demanda 2: Centro · ${sub} encaja`);
 }
 
+// Zonas: lista explícita de barrios, sin inundar los distritos
+const crm = (zone: string, subzone: string, o: Partial<MatchProperty> = {}): MatchProperty => ({ ...prop(3, 5000), zone, subzone, ...o });
+const fits = (b: ReturnType<typeof briefFromRow>, p: MatchProperty) => !evaluateMatch(b, p).excluded;
+ok(fits(b3, crm("Salamanca", "Castellana", { price: 5500 })), "D3: Salamanca·Castellana encaja");
+ok(fits(b3, crm("Retiro", "Jerónimos", { price: 5500 })), "D3: Retiro·Jerónimos encaja");
+ok(!fits(b3, crm("Salamanca", "Goya", { price: 5500 })), "D3: Salamanca·Goya NO encaja");
+ok(!fits(b3, crm("Retiro", "Adelfas", { price: 5500 })), "D3: Retiro·Adelfas NO encaja");
+ok(!fits(b2, crm("Centro", "Sol")), "D2: Centro·Sol NO encaja");
+ok(!fits(b2, crm("Salamanca", "Goya")), "D2: Salamanca·Goya NO encaja");
+const prow = (zone: string, o: Record<string, unknown> = {}) => ({
+  zone, municipality: "Madrid", price: 5000, operation: "rent", bedrooms: 3, bathrooms: 2, square_meters: 120, title: "Piso", ...o,
+});
+ok(!evaluateParticularRow(b3, prow("Jerónimos", { price: 5500 })).excluded, "D3: particular con zona «Jerónimos» encaja");
+ok(!evaluateParticularRow(b2, prow("Justicia - Chueca")).excluded, "D2: particular «Justicia - Chueca» encaja por alias");
+ok(evaluateParticularRow(b2, prow("Sol")).excluded, "D2: particular «Sol» NO encaja");
+ok(evaluateParticularRow(b3, prow("Adelfas", { price: 5500 })).excluded, "D3: particular «Adelfas» NO encaja");
+
 // ── idempotencia ────────────────────────────────────────────────────────────
 r = await seedYeanetteEncargos(YEANETTE, { notify: false });
 eq([r.created, r.updated], [[], []], "segunda ejecución: no crea ni cambia nada");
@@ -104,15 +127,20 @@ await primary(C_NEW, "Mi búsqueda");
 r = await seedYeanetteEncargos(C_NEW, { notify: false });
 eq(r.updated, ["Mi búsqueda"], "nombre ya editado: no se renombra");
 const mine = (await rows(C_NEW)).find((x) => x.is_primary)!;
-eq([mine.label, mine.end_client_label], ["Mi búsqueda", null], "…y se conserva sin etiqueta nueva");
+eq([mine.label, mine.end_client_label], ["Mi búsqueda", "Demanda 1 · lado Recoletos"], "…se conserva y la etiqueta del cliente final (vacía) se rellena");
 // una principal con esos campos editados a mano no se toca en absoluto
 const C_MAN = uuid(6);
 await profile(C_MAN, "client");
-await primary(C_MAN, "Encargo 1", { min_floor: 3, must_have: ["ascensor"], nice_to_have: ["garaje"], notes: "Quiere algo reformado" });
+const MAN_NOTES = "Ideal 4.000, 2-3 baños, reformado";
+await primary(C_MAN, "Encargo 1", { min_floor: 3, must_have: ["ascensor"], nice_to_have: ["garaje"], notes: MAN_NOTES, end_client_label: "Mi etiqueta" });
 r = await seedYeanetteEncargos(C_MAN, { notify: false });
 eq(r.primaryFills, [], "principal editada a mano: nada que completar");
-const man = briefFromRow((await rows(C_MAN)).find((x) => x.is_primary)!);
-eq([man.minFloor, man.mustHave, man.niceToHave, man.notes], [3, ["ascensor"], ["garaje"], "Quiere algo reformado"], "principal editada a mano: intacta");
+const manRow = (await rows(C_MAN)).find((x) => x.is_primary)!;
+const man = briefFromRow(manRow);
+eq([man.minFloor, man.mustHave, man.niceToHave, man.notes, manRow.end_client_label], [3, ["ascensor"], ["garaje"], MAN_NOTES, "Mi etiqueta"], "principal editada a mano: intacta (también su etiqueta de cliente final)");
+// segunda ejecución con notify:true: nada completado -> ningún pase (ni de la Demanda 1 ni de las ya existentes)
+r = await seedYeanetteEncargos(C_MAN, { notify: true });
+eq([r.passes, r.failedPasses, r.created], [[], [], []], "sin relleno ni encargos nuevos: ningún pase inicial");
 
 // ── cliente inexistente / de Chile ──────────────────────────────────────────
 r = await seedYeanetteEncargos(uuid(99), { notify: false });
@@ -133,12 +161,51 @@ assert.ifError((await db.from("particulares").insert({
   bedrooms: 3, bathrooms: 2, square_meters: 140, is_active: true, title: "Piso en Recoletos",
 })).error);
 const n0 = await noteCount();
+// dry con notify por defecto (true): no escribe ni avisa
+r = await seedYeanetteEncargos(C_NOTIFY, { dryRun: true });
+eq([await noteCount(), (await rows(C_NOTIFY)).length, r.plannedPasses], [n0, 1, ["Demanda 1", "Demanda 2", "Demanda 3"]], "dry: no crea avisos ni filas y anuncia los pases", r);
 r = await seedYeanetteEncargos(C_NOTIFY, { notify: true });
 eq(r.created, ["Demanda 2", "Demanda 3"], "notify:true: crea los dos");
-eq(r.initialPasses.map((p) => [p.label, p.inserted]), [["Demanda 2", 0], ["Demanda 3", 1]], "pase inicial: solo Demanda 3 encaja (3 dorm. a 5.500 € supera el tope de la 2)", r.initialPasses);
-eq(await noteCount() - n0, 2, "un aviso agrupado de la Demanda 3 para el asesor y otro para el admin");
+eq(r.passes.map((p) => [p.label, p.inserted]), [["Demanda 1", 1], ["Demanda 2", 0], ["Demanda 3", 1]], "pases: la Demanda 1 (brief completado) y las nuevas; D2 no encaja (3 dorm. a 5.500 € supera su tope)", r.passes);
+eq(await noteCount() - n0, 4, "un aviso agrupado (asesor + admin) de la Demanda 1 y otro de la Demanda 3");
 r = await seedYeanetteEncargos(C_NOTIFY, { notify: true });
-eq([r.created, r.initialPasses, await noteCount() - n0], [[], [], 2], "repetir no vuelve a avisar");
+eq([r.created, r.passes, await noteCount() - n0], [[], [], 4], "repetir no vuelve a avisar");
+
+// --passes-only: no crea ni cambia nada y avisa solo de lo no visto
+assert.ifError((await db.from("particulares").insert({
+  id: uuid(501), portal: "idealista", external_id: "e2", source_url: "https://t.local/2", zone: "Castellana", price: 5800, operation: "rent",
+  bedrooms: 4, bathrooms: 2, square_meters: 160, is_active: true, title: "Piso en Castellana",
+})).error);
+const encBefore = JSON.stringify((await rows(C_NOTIFY)).map((x) => [x.id, x.label, x.updated_at]).sort());
+r = await seedYeanetteEncargos(C_NOTIFY, { passesOnly: true });
+eq([r.created, r.updated, r.passes.map((p) => [p.label, p.inserted])], [[], [], [["Demanda 1", 0], ["Demanda 2", 0], ["Demanda 3", 1]]], "--passes-only: no crea ni cambia nada; solo lo no visto", r);
+eq([JSON.stringify((await rows(C_NOTIFY)).map((x) => [x.id, x.label, x.updated_at]).sort()), await noteCount() - n0], [encBefore, 6], "…encargos intactos y un aviso nuevo por destinatario");
+r = await seedYeanetteEncargos(C_NOTIFY, { passesOnly: true });
+eq([r.passes.map((p) => p.inserted), await noteCount() - n0], [[0, 0, 0], 6], "--passes-only repetido: nada nuevo");
+r = await seedYeanetteEncargos(C_NOTIFY, { passesOnly: true, notify: false });
+eq(r.passes, [], "--passes-only con notify:false: nada");
+
+// un pase que falla no impide los demás y se puede reintentar con --passes-only
+const C_FAIL = uuid(7);
+await profile(C_FAIL, "client", { assigned_advisor_id: ADVISOR });
+await primary(C_FAIL);
+const nf = await noteCount();
+__failRpc("claim_and_notify_encargo_matches", 1);
+r = await seedYeanetteEncargos(C_FAIL, { notify: true });
+eq(r.created, ["Demanda 2", "Demanda 3"], "pase fallido: los encargos se crean igualmente");
+eq(r.failedPasses.length, 1, "pase fallido: queda registrado", r.failedPasses);
+ok(r.passes.length === 2, "pase fallido: los demás pases se ejecutan", r.passes);
+const failedId = r.failedPasses[0].id;
+const pend = (await db.from("encargo_matches").select("id").eq("encargo_id", failedId).is("notified_at", null)).data as unknown[];
+ok(pend.length > 0, "pase fallido: las filas insertadas quedan pendientes (las reintenta el cron)", pend);
+r = await seedYeanetteEncargos(C_FAIL, { passesOnly: true });
+ok(r.failedPasses.length === 0 && r.created.length === 0, "--passes-only tras el fallo: sin errores ni encargos nuevos", r);
+ok((await db.from("encargo_matches").select("id").eq("encargo_id", failedId)).data.length === pend.length, "…y sin filas duplicadas");
+// el cron avisa lo pendiente (más de 10 min después)
+await runEncargoMatching({ now: new Date(Date.now() + 3600_000) });
+const cr = await runEncargoMatching({ now: new Date(Date.now() + 7200_000) });
+ok(cr.pending_retried >= pend.length && (await db.from("encargo_matches").select("id").eq("encargo_id", failedId).is("notified_at", null)).data.length === 0, "el cron avisa las pendientes del pase fallido", cr);
+ok(await noteCount() > nf, "…y hay avisos");
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 const cli = (...args: string[]) => {
@@ -155,8 +222,11 @@ await primary(YEANETTE);
 let c = cli("--dry");
 ok(c.code === 0 && /db-de-prueba\.invalid/.test(c.out), "CLI --dry: sale bien y dice la BD destino", c.out);
 eq((await rows(YEANETTE)).length, 1, "CLI --dry: no escribe");
+ok(/completará/.test(c.out), "CLI --dry: dice lo que completará", c.out);
 c = cli();
 ok(c.code !== 0 && /--yes/.test(c.out), "CLI sin --yes: se niega", c.out);
+c = cli("--passes-only");
+ok(c.code !== 0 && /--yes/.test(c.out), "CLI --passes-only sin --yes: se niega", c.out);
 eq((await rows(YEANETTE)).length, 1, "CLI sin --yes: no escribe");
 c = cli("--yes", "--no-notify");
 ok(c.code === 0, "CLI --yes --no-notify: sale bien", c.out);

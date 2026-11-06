@@ -4,8 +4,11 @@
 //  1. renombra esa fila a «Demanda 1» y le pone `end_client_label` «Demanda 1 · lado Recoletos», SOLO si su
 //     nombre sigue siendo el de por defecto («Encargo 1»): no pisa ediciones manuales. Además completa SOLO lo vacío de su brief (completeDemanda1): minFloor 1 («no bajo»), imprescindible exterior, deseables terraza y balcón, y la nota «Reformado (leer descripción)» (en alquiler «reformado» no se puede exigir).
 //  2. crea «Demanda 2» (estudiantes, enero–junio) y «Demanda 3» (larga estancia), no principales.
-//  3. lanza el pase inicial (UN aviso agrupado por encargo al asesor asignado y a los admins) solo de los encargos
-//     NUEVOS, salvo --no-notify.
+//  3. lanza el pase inicial (UN aviso agrupado por encargo al asesor asignado y a los admins) de los encargos NUEVOS
+//     y de la Demanda 1 si se completó su brief (editarlo reinicia baseline_at), salvo --no-notify.
+// Los rellenos de la Demanda 1 se reaplican al relanzar SOLO sobre campos que sigan VACÍOS (lo que el equipo edite no
+// se pisa; lo que borre a mano se volverá a rellenar). Un pase inicial que falle se reintenta con --passes-only
+// (si ya había insertado filas sin avisar, las avisa el cron de encargos al cabo de 10 min; el pase nunca duplica).
 // Idempotente por nombre: si «Demanda 2»/«Demanda 3» ya existen se saltan. Si el cliente no existe o no es de
 // España (profiles.country = 'es', role = 'client'), no hace nada (sale con código 0). Lo ejecuta el DUEÑO tras
 // desplegar; no lo lances contra producción desde una sesión de desarrollo.
@@ -29,6 +32,7 @@
 //   node --env-file=.env.local scripts/seed-yeanette-encargos.bundle.mjs --dry        # solo dice qué haría
 //   node --env-file=.env.local scripts/seed-yeanette-encargos.bundle.mjs --yes        # escribe y avisa
 //   node --env-file=.env.local scripts/seed-yeanette-encargos.bundle.mjs --yes --no-notify   # sin pases iniciales
+//   node --env-file=.env.local scripts/seed-yeanette-encargos.bundle.mjs --yes --passes-only  # reintenta SOLO los pases iniciales (no crea ni cambia nada)
 // Sin --yes (ni --dry) se niega a escribir.
 import { pathToFileURL } from "node:url";
 import { createAdminClient } from "../lib/db/admin.ts";
@@ -47,8 +51,9 @@ export const DEMANDA_2: { label: string; endClientLabel: string; brief: BriefInp
   brief: {
     ...EMPTY_BRIEF,
     operation: "rent",
-    zones: ["Salamanca", "Centro"],
-    subzones: ["Recoletos", "Justicia"],
+    // Sin distritos: un distrito en `zones` vale por todos sus barrios y la demanda es una lista explícita.
+    zones: [],
+    subzones: ["Recoletos", "Justicia", "Chueca-Justicia"],
     minBedrooms: 3,
     maxBedrooms: 4,
     maxPrice: 6300,
@@ -57,7 +62,7 @@ export const DEMANDA_2: { label: string; endClientLabel: string; brief: BriefInp
     stayMonths: 6,
     availableFrom: "2027-01-01",
     furnished: "furnished",
-    students: 1,
+    // `students` (nº de estudiantes entre los ocupantes) no se inventa: se desconoce; va en las notas.
     notes: "Estudiantes. Enero a junio.",
   },
 };
@@ -68,7 +73,7 @@ export const DEMANDA_3: { label: string; endClientLabel: string; brief: BriefInp
   brief: {
     ...EMPTY_BRIEF,
     operation: "rent",
-    zones: ["Salamanca", "Retiro"],
+    zones: [],
     subzones: ["Recoletos", "Jerónimos", "Castellana"],
     minBedrooms: 3,
     maxBedrooms: 4,
@@ -95,10 +100,12 @@ export function completeDemanda1(b: BriefInput): { brief: BriefInput; fills: str
     next.niceToHave = ["terraza", "balcon"].filter((k) => !next.mustHave.includes(k));
     if (next.niceToHave.length) fills.push("deseable: terraza, balcón");
   }
-  if (!/reformad/i.test(b.notes ?? "")) {
-    next.notes = b.notes && b.notes.trim() ? `${b.notes.trim()} · ${REFORMADO_NOTE}` : REFORMADO_NOTE;
-    fills.push("nota: reformado");
-  }
+  // Notas: cada dato se añade solo si las notas no lo mencionan ya (sin cambios en el motor).
+  const add: string[] = [];
+  if (!/ideal/i.test(b.notes ?? "")) { add.push("Ideal ~4.000 €"); fills.push("nota: ideal ~4.000 €"); }
+  if (!/ba[ñn]os/i.test(b.notes ?? "")) { add.push("2-3 baños (máx. 3)"); fills.push("nota: 2-3 baños (máx. 3)"); }
+  if (!/reformad/i.test(b.notes ?? "")) { add.push(REFORMADO_NOTE); fills.push("nota: reformado"); }
+  if (add.length) next.notes = [b.notes?.trim(), ...add].filter(Boolean).join(" · ");
   return { brief: next, fills };
 }
 
@@ -108,18 +115,22 @@ export type SeedYeanetteResult = {
   created: string[];
   updated: string[];
   skipped: string[];
-  /** Un resultado por encargo creado al que se le lanzó el pase inicial. */
-  initialPasses: Array<{ label: string; inserted: number; notified: number }>;
+  /** Un resultado por pase inicial lanzado (encargos nuevos y la Demanda 1 si se completó su brief). */
+  passes: Array<{ label: string; inserted: number; notified: number }>;
+  /** Pases que se lanzarían (solo en dry). */
+  plannedPasses: string[];
+  /** Pases que fallaron: repetir con --passes-only (las filas ya insertadas sin avisar las reintenta el cron). */
+  failedPasses: Array<{ label: string; id: string; error: string }>;
 };
 
 /** Con dryRun, `created`/`updated` dicen lo que SE HARÍA (no se escribe nada). */
 export async function seedYeanetteEncargos(
   clientId: string = YEANETTE_CLIENT_ID,
-  opts: { dryRun?: boolean; notify?: boolean } = {},
+  opts: { dryRun?: boolean; notify?: boolean; passesOnly?: boolean } = {},
 ): Promise<SeedYeanetteResult> {
   const dry = !!opts.dryRun;
   const notify = opts.notify !== false;
-  const out: SeedYeanetteResult = { primaryFills: [], created: [], updated: [], skipped: [], initialPasses: [] };
+  const out: SeedYeanetteResult = { primaryFills: [], created: [], updated: [], skipped: [], passes: [], plannedPasses: [], failedPasses: [] };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
@@ -129,29 +140,44 @@ export async function seedYeanetteEncargos(
 
   const existing = await listEncargos(clientId);
   const primary = existing.find((e) => e.isPrimary);
+  const runPass = async (id: string, label: string) => {
+    try { out.passes.push({ label, ...(await runEncargoInitialPass(id)) }); }
+    catch (e) { out.failedPasses.push({ label, id, error: e instanceof Error ? e.message : String(e) }); }
+  };
 
-  // 1) La fila principal pasa a ser la Demanda 1 (solo se rellenan campos vacíos del brief), salvo nombre editado.
+  // Reintento de pases iniciales (idempotente: encargo_matches deduplica, solo se avisa de lo no visto).
+  if (opts.passesOnly) {
+    if (!notify) return out;
+    const names = [DEMANDA_1.label, DEMANDA_2.label, DEMANDA_3.label];
+    for (const e of existing.filter((x) => names.includes(x.label))) {
+      if (dry) out.plannedPasses.push(e.label); else await runPass(e.id, e.label);
+    }
+    return out;
+  }
+
+  // 1) La fila principal pasa a ser la Demanda 1: nombre solo si es el de por defecto; etiqueta del cliente final
+  //    solo si está vacía; del brief solo se rellenan campos vacíos.
   if (!primary) {
     out.skipped.push("sin encargo principal: no se crean Demanda 2 ni Demanda 3");
     return out;
   }
   const renamed = primary.label === DEFAULT_PRIMARY_LABEL;
+  const setEnd = primary.endClientLabel === null;
   const { data: primaryRow } = await db.from("client_preferences").select("*").eq("id", primary.id).maybeSingle();
   const completion = completeDemanda1(briefFromRow(primaryRow));
   out.primaryFills = completion.fills;
-  if (renamed || completion.fills.length) {
+  if (renamed || setEnd || completion.fills.length) {
     if (!dry) {
       const r = await updateEncargo(primary.id, {
-        ...(renamed ? { label: DEMANDA_1.label, endClientLabel: DEMANDA_1.endClientLabel } : {}),
+        ...(renamed ? { label: DEMANDA_1.label } : {}),
+        ...(setEnd ? { endClientLabel: DEMANDA_1.endClientLabel } : {}),
         ...(completion.fills.length ? { brief: completion.brief } : {}),
       });
       if (!r.ok) throw new Error(`No se pudo actualizar la Demanda 1: ${r.error}`);
     }
-    out.updated.push(primary.label === DEFAULT_PRIMARY_LABEL ? DEMANDA_1.label : primary.label);
+    out.updated.push(renamed ? DEMANDA_1.label : primary.label);
   }
-  if (!renamed) {
-    out.skipped.push(`${primary.label} (principal, nombre ya editado)`);
-  }
+  if (!renamed) out.skipped.push(`${primary.label} (principal, nombre ya editado)`);
 
   // 2) Demanda 2 y 3, si no existen ya por nombre.
   const createdIds: Array<{ id: string; label: string }> = [];
@@ -164,9 +190,13 @@ export async function seedYeanetteEncargos(
     createdIds.push({ id: r.encargo.id, label: d.label });
   }
 
-  // 3) Pase inicial solo de los encargos NUEVOS: un aviso agrupado por encargo.
-  if (!dry && notify) {
-    for (const c of createdIds) out.initialPasses.push({ label: c.label, ...(await runEncargoInitialPass(c.id)) });
+  // 3) Pase inicial de los encargos NUEVOS y de la Demanda 1 si se tocó su brief (editar un brief reinicia
+  //    baseline_at). Cada pase va en su try/catch: un fallo no impide los demás ni se pierde (ver --passes-only).
+  if (notify) {
+    const todo = [...createdIds];
+    if (completion.fills.length) todo.unshift({ id: primary.id, label: renamed ? DEMANDA_1.label : primary.label });
+    if (dry) out.plannedPasses.push(...todo.map((t) => t.label), ...out.created.filter((l) => !createdIds.some((c) => c.label === l)));
+    else for (const t of todo) await runPass(t.id, t.label);
   }
   return out;
 }
@@ -178,6 +208,7 @@ if (isMain) {
   const dry = args.has("--dry");
   const yes = args.has("--yes");
   const notify = !args.has("--no-notify");
+  const passesOnly = args.has("--passes-only");
   let host: string;
   try { host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").host || "(desconocido)"; }
   catch { host = "(NEXT_PUBLIC_SUPABASE_URL ausente o no válida)"; }
@@ -191,12 +222,18 @@ if (isMain) {
     console.error("Me niego a escribir sin confirmación explícita: relanza con --yes (o con --dry para ver qué haría).");
     process.exit(2);
   }
-  const r = await seedYeanetteEncargos(YEANETTE_CLIENT_ID, { dryRun: dry, notify });
+  const r = await seedYeanetteEncargos(YEANETTE_CLIENT_ID, { dryRun: dry, notify, passesOnly });
   const p = dry ? "[dry] " : "";
   console.log(`${p}${dry ? "se crearían" : "creados"}: ${r.created.join(", ") || "(ninguno)"}`);
   console.log(`${p}${dry ? "se renombrarían" : "renombrados"}: ${r.updated.join(", ") || "(ninguno)"}`);
   console.log(`${p}${dry ? "completará" : "completado"} en la Demanda 1: ${r.primaryFills.join("; ") || "(nada)"}`);
   console.log(`${p}saltados: ${r.skipped.join(" | ") || "(ninguno)"}`);
-  for (const i of r.initialPasses) console.log(`pase inicial ${i.label}: ${i.inserted} coincidencias, ${i.notified} avisadas`);
+  if (dry) console.log(`[dry] pases iniciales que se lanzarían: ${r.plannedPasses.join(", ") || "(ninguno)"}`);
+  for (const i of r.passes) console.log(`pase inicial ${i.label}: ${i.inserted} coincidencias, ${i.notified} avisadas`);
   if (!dry && !notify && r.created.length) console.log("Pases iniciales NO lanzados (--no-notify).");
+  for (const f of r.failedPasses) {
+    console.error(`PASE INICIAL PENDIENTE: ${f.label} (${f.id}) — ${f.error}`);
+    console.error("  (si ya se insertaron filas, el cron las avisará solo; si el fallo fue antes, repite el pase con:)\n  ejecutar: node --env-file=.env.local scripts/seed-yeanette-encargos.bundle.mjs --yes --passes-only");
+  }
+  if (r.failedPasses.length) process.exit(1);
 }
