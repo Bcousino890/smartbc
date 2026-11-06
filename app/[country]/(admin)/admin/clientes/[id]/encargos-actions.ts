@@ -5,6 +5,7 @@
 // además, alcance sobre ESE cliente (un asesor solo toca lo suyo).
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { assertPermission } from "@/lib/auth/guard";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import {
@@ -23,6 +24,27 @@ async function allowed(clientId: string): Promise<{ ok: true } | { ok: false; er
     return { ok: false, error: "No tienes acceso a este cliente." };
   }
   return { ok: true };
+}
+
+/**
+ * Pase inicial del encargo sobre todo el stock actual (un único aviso agrupado), DESPUÉS de responder
+ * y sin que un fallo rompa la acción. El runner se importa al ejecutarse para no cargar el motor de
+ * matching en cada acción. La elegibilidad (activo, brief suficiente, cliente de España) la decide
+ * el propio pase.
+ */
+function scheduleInitialPass(encargoId: string): void {
+  try {
+    after(async () => {
+      try {
+        const { runEncargoInitialPass } = await import("@/lib/encargos/runner");
+        await runEncargoInitialPass(encargoId);
+      } catch (e) {
+        console.error(`[encargos] pase inicial del encargo ${encargoId} falló`, e);
+      }
+    });
+  } catch (e) {
+    console.error("[encargos] no se pudo programar el pase inicial", e);
+  }
 }
 
 const refresh = (clientId: string) => revalidatePath(`/es/admin/clientes/${clientId}`);
@@ -52,7 +74,10 @@ export async function createEncargoAction(
   const gate = await allowed(clientId);
   if (!gate.ok) return gate;
   const r = await createEncargo(clientId, input);
-  if (r.ok) refresh(clientId);
+  if (r.ok) {
+    refresh(clientId);
+    scheduleInitialPass(r.encargo.id);
+  }
   return r;
 }
 
@@ -63,11 +88,18 @@ export async function updateEncargoAction(
   if (!patch || typeof patch !== "object" || (patch.brief !== undefined && (!patch.brief || typeof patch.brief !== "object"))) {
     return { ok: false, error: "Datos del encargo no válidos." };
   }
-  return onEncargo(encargoId, () => updateEncargo(encargoId, patch));
+  const r = await onEncargo(encargoId, () => updateEncargo(encargoId, patch));
+  // Editar el brief reinicia baseline_at: se vuelve a evaluar el stock (solo si el brief cambió).
+  if (r.ok && patch.brief !== undefined) scheduleInitialPass(encargoId);
+  return r;
 }
 
 export async function setEncargoStatusAction(encargoId: string, next: EncargoStatus): Promise<EncargoResult> {
-  return onEncargo(encargoId, () => setEncargoStatus(encargoId, next));
+  const before = await getEncargo(encargoId);
+  const r = await onEncargo(encargoId, () => setEncargoStatus(encargoId, next));
+  // Reactivar (de pausado/cerrado a activo) reinicia baseline_at: pase inicial.
+  if (r.ok && next === "active" && before && before.status !== "active") scheduleInitialPass(encargoId);
+  return r;
 }
 
 export async function makePrimaryAction(encargoId: string): Promise<EncargoResult> {

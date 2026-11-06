@@ -62,6 +62,7 @@
     "test:import-operation": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-import-operation.mts",
     "test:encargos-actions": "bash scripts/test-encargos-actions.sh",
     "test:encargos-sources": "bash scripts/test-encargos-sources.sh",
+    "test:encargos-runner": "bash scripts/test-encargos-runner.sh",
     "test:encargos-notice": "bash scripts/test-encargos-notice.sh",
     "test:encargos-sources-pure": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs --import ./scripts/shims/test-loader-encargos-sources.mjs scripts/test-encargos-sources.mts",
     "test:encargos-usage": "node scripts/check-client-preferences-usage.mjs",

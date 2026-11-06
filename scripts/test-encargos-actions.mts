@@ -8,8 +8,9 @@ import {
   createEncargoAction, makePrimaryAction, setEncargoStatusAction, updateEncargoAction,
 } from "../app/[country]/(admin)/admin/clientes/[id]/encargos-actions.ts";
 
-const g = globalThis as unknown as { __encargosProfile: { id: string; role: string } | null; __revalidated: string[] };
+const g = globalThis as unknown as { __encargosProfile: { id: string; role: string } | null; __revalidated: string[]; __afterTasks: unknown[] };
 g.__revalidated = [];
+g.__afterTasks = [];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = createAdminClient() as any;
 
@@ -110,11 +111,20 @@ ok((await listEncargos(C_ES)).length === 2 && (await getEncargo(second.encargo.i
 
 g.__encargosProfile = { id: JUNIOR_OWN, role: "agent_junior" };
 g.__revalidated = [];
+g.__afterTasks = [];
 const viaAction = must(await createEncargoAction(C_ES, { label: "Vía acción", brief: brief() }));
 ok(viaAction.encargo.isPrimary === false, "asesor con alcance: crea el encargo");
 ok(g.__revalidated.includes(`/es/admin/clientes/${C_ES}`), "la acción revalida la ficha en es");
+ok(g.__afterTasks.length === 1, "crear programa el pase inicial (after) una vez");
 must(await setEncargoStatusAction(viaAction.encargo.id, "paused"));
 must(await updateEncargoAction(viaAction.encargo.id, { label: "Vía acción 2" }));
+ok(g.__afterTasks.length === 1, "pausar y cambiar solo la etiqueta no programan pase inicial");
+must(await updateEncargoAction(viaAction.encargo.id, { brief: brief({ maxPrice: 450000 }) }));
+ok(g.__afterTasks.length === 2, "editar el brief programa el pase inicial");
+must(await setEncargoStatusAction(viaAction.encargo.id, "active"));
+ok(g.__afterTasks.length === 3, "reactivar programa el pase inicial");
+must(await setEncargoStatusAction(viaAction.encargo.id, "active"));
+ok(g.__afterTasks.length === 3, "«reactivar» uno ya activo no lo programa");
 must(await makePrimaryAction(prim.id));
 ok((await getEncargo(prim.id))?.isPrimary === true, "asesor con alcance: setEstado, editar y makePrimary");
 ok(!(await createEncargoAction(C_CL, { label: "No", brief: brief() })).ok, "acción sobre cliente de Chile: ok:false");

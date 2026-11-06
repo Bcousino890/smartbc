@@ -22,9 +22,11 @@ register(
   "data:text/javascript," +
     encodeURIComponent(`
       const MAP = ${JSON.stringify(MAP)};
+      const SERVER = ${JSON.stringify(u("scripts/shims/encargos-actions/next-server.mts"))};
       const CACHE = ${JSON.stringify(u("scripts/shims/encargos-actions/next-cache.mts"))};
       export async function resolve(specifier, context, next) {
         if (specifier === "next/cache") return { url: CACHE, shortCircuit: true };
+        if (specifier === "next/server") return { url: SERVER, shortCircuit: true };
         if (specifier === "next/navigation") specifier = "next/navigation.js";
         const r = await next(specifier, context);
         return MAP[r.url] ? { url: MAP[r.url], shortCircuit: true } : r;
