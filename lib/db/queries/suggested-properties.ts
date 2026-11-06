@@ -108,6 +108,76 @@ export function proxyPhotoUrls(prop: PropertyRow): string[] {
 const CANDIDATE_LIMIT = 400;
 
 /**
+ * Prefiltro SQL de propiedades para un encargo: operación + precio, estancia, zona/barrio y
+ * dormitorios (la comparación exacta la hace `evaluateMatch`). Compartido con los avisos por
+ * encargo (lib/encargos/sources.ts) para que ambos traigan las mismas candidatas.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyPropertyPrefilter(query: any, brief: ReturnType<typeof briefFromRow>) {
+  const op = brief.operation;
+  // Todas las condiciones con OR van en UN solo filtro lógico,
+  // `or=(and(or(…),or(…)))`, en vez de encadenar varios `.or()`.
+  const groups: string[] = [];
+
+  // Operación + precio. En las duales (0085) `price` es el de venta y el de
+  // alquiler va en `rent_price`: para un inquilino hay que mirar ese.
+  const ceiling = sqlPriceCeiling(brief);
+  const range = (col: string) =>
+    [
+      brief.minPrice !== null ? `${col}.gte.${brief.minPrice}` : null,
+      ceiling !== null ? `${col}.lte.${ceiling}` : null,
+    ].filter(Boolean) as string[];
+  if (op === "rent") {
+    groups.push(
+      `or(and(${["operation.eq.rent", ...range("price")].join(",")}),` +
+        `and(${["operation.eq.sale", "operations.cs.{rent}", ...range("rent_price")].join(",")}))`,
+    );
+    // La estancia solo existe en alquiler. Una propiedad sin estancia
+    // cargada no se descarta: no saberlo no es decir que no.
+    if (brief.stay) groups.push(`or(stay.eq.${brief.stay},stay.is.null)`);
+  } else {
+    groups.push("or(operation.eq.sale,operations.cs.{sale})");
+    const r = range("price");
+    if (r.length) groups.push(`and(${r.join(",")})`);
+  }
+
+  // Zona o barrio. Los nombres se buscan en las DOS columnas: los encargos
+  // viejos guardaban los barrios dentro de `zones`, y hay barrios que en
+  // unas fichas vienen como zona y en otras como subzona (Recoletos,
+  // Almagro…). Si el cliente está abierto a otras zonas, no se filtra aquí:
+  // se puntúa en `evaluateMatch`.
+  //
+  // `ilike` y no igualdad: las zonas escritas a mano llegan sin tildes o en
+  // minúsculas ("chamberi"). El patrón es permisivo a propósito; la
+  // comparación exacta la hace `evaluateMatch` justo después.
+  const patterns = [...new Set([...brief.zones, ...brief.subzones].map(zoneLikePattern))].filter(Boolean);
+  if (brief.polygons.length && !brief.zonesFlexible) {
+    // Zona dibujada: se trae lo que cae en su caja envolvente (el recorte
+    // exacto lo hace `evaluateMatch`) y lo que no tiene ubicación, que se
+    // compara por nombre. Sustituye al filtro por nombre de zona.
+    const pts = brief.polygons.flat();
+    const lats = pts.map((q) => q[1]);
+    const lngs = pts.map((q) => q[0]);
+    const pad = 0.0005;
+    groups.push(
+      `or(latitude.is.null,and(latitude.gte.${Math.min(...lats) - pad},latitude.lte.${Math.max(...lats) + pad},` +
+        `longitude.gte.${Math.min(...lngs) - pad},longitude.lte.${Math.max(...lngs) + pad}))`,
+    );
+  } else if (patterns.length && !brief.zonesFlexible) {
+    groups.push(
+      `or(${patterns.flatMap((p) => [`zone.ilike."${p}"`, `subzone.ilike."${p}"`]).join(",")})`,
+    );
+  }
+
+  query = query.or(`and(${groups.join(",")})`);
+
+  if (brief.minBedrooms !== null) query = query.gte("bedrooms", brief.minBedrooms);
+  if (brief.maxBedrooms !== null) query = query.lte("bedrooms", brief.maxBedrooms);
+
+  return query;
+}
+
+/**
  * Propiedades sugeridas para un cliente, a partir de su encargo
  * (`client_preferences`, ver lib/clients/brief.ts).
  *
@@ -213,64 +283,7 @@ export async function getSuggestedProperties(
   // «Enviar por correo» no lo pasan y no cambian.
   if (opts?.forAlerts) query = query.eq("new_listing_alerts_suppressed", false);
 
-  // Todas las condiciones con OR van en UN solo filtro lógico,
-  // `or=(and(or(…),or(…)))`, en vez de encadenar varios `.or()`.
-  const groups: string[] = [];
-
-  // Operación + precio. En las duales (0085) `price` es el de venta y el de
-  // alquiler va en `rent_price`: para un inquilino hay que mirar ese.
-  const ceiling = sqlPriceCeiling(brief);
-  const range = (col: string) =>
-    [
-      brief.minPrice !== null ? `${col}.gte.${brief.minPrice}` : null,
-      ceiling !== null ? `${col}.lte.${ceiling}` : null,
-    ].filter(Boolean) as string[];
-  if (op === "rent") {
-    groups.push(
-      `or(and(${["operation.eq.rent", ...range("price")].join(",")}),` +
-        `and(${["operation.eq.sale", "operations.cs.{rent}", ...range("rent_price")].join(",")}))`,
-    );
-    // La estancia solo existe en alquiler. Una propiedad sin estancia
-    // cargada no se descarta: no saberlo no es decir que no.
-    if (brief.stay) groups.push(`or(stay.eq.${brief.stay},stay.is.null)`);
-  } else {
-    groups.push("or(operation.eq.sale,operations.cs.{sale})");
-    const r = range("price");
-    if (r.length) groups.push(`and(${r.join(",")})`);
-  }
-
-  // Zona o barrio. Los nombres se buscan en las DOS columnas: los encargos
-  // viejos guardaban los barrios dentro de `zones`, y hay barrios que en
-  // unas fichas vienen como zona y en otras como subzona (Recoletos,
-  // Almagro…). Si el cliente está abierto a otras zonas, no se filtra aquí:
-  // se puntúa en `evaluateMatch`.
-  //
-  // `ilike` y no igualdad: las zonas escritas a mano llegan sin tildes o en
-  // minúsculas ("chamberi"). El patrón es permisivo a propósito; la
-  // comparación exacta la hace `evaluateMatch` justo después.
-  const patterns = [...new Set([...brief.zones, ...brief.subzones].map(zoneLikePattern))].filter(Boolean);
-  if (brief.polygons.length && !brief.zonesFlexible) {
-    // Zona dibujada: se trae lo que cae en su caja envolvente (el recorte
-    // exacto lo hace `evaluateMatch`) y lo que no tiene ubicación, que se
-    // compara por nombre. Sustituye al filtro por nombre de zona.
-    const pts = brief.polygons.flat();
-    const lats = pts.map((q) => q[1]);
-    const lngs = pts.map((q) => q[0]);
-    const pad = 0.0005;
-    groups.push(
-      `or(latitude.is.null,and(latitude.gte.${Math.min(...lats) - pad},latitude.lte.${Math.max(...lats) + pad},` +
-        `longitude.gte.${Math.min(...lngs) - pad},longitude.lte.${Math.max(...lngs) + pad}))`,
-    );
-  } else if (patterns.length && !brief.zonesFlexible) {
-    groups.push(
-      `or(${patterns.flatMap((p) => [`zone.ilike."${p}"`, `subzone.ilike."${p}"`]).join(",")})`,
-    );
-  }
-
-  query = query.or(`and(${groups.join(",")})`);
-
-  if (brief.minBedrooms !== null) query = query.gte("bedrooms", brief.minBedrooms);
-  if (brief.maxBedrooms !== null) query = query.lte("bedrooms", brief.maxBedrooms);
+  query = applyPropertyPrefilter(query, brief);
 
   const { data: propertiesData, error: propsError } = await query
     .order("created_at", { ascending: false })

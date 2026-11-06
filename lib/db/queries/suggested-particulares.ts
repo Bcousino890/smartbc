@@ -34,10 +34,13 @@ export type SuggestedParticularesResult =
   | { ok: false; reason: "insufficient_brief"; missing: string[]; brief: MapBrief }
   | { ok: false; reason: "error"; message: string };
 
+// `description` y `features` van en el SELECT: el matching lee el TEXTO del anuncio (descripción, título,
+// características), no solo los atributos normalizados. `created_at` y `duplicate_of` los usan los
+// avisos por encargo (lib/encargos/sources.ts).
 const COLUMNS =
-  "id, portal, source_url, title, address, zone, price, operation, bedrooms, bathrooms, square_meters, " +
+  "id, portal, source_url, title, description, features, address, zone, price, operation, bedrooms, bathrooms, square_meters, " +
   "cover_url, latitude, longitude, attrs, has_lift, condition, floor, floor_num, advertiser_type, price_drop_pct, detected_at, " +
-  "taken_down_at, fraud_status, municipality:scraper_extra->>municipality, portal_district:scraper_extra->>district";
+  "created_at, duplicate_of, taken_down_at, fraud_status, municipality:scraper_extra->>municipality, portal_district:scraper_extra->>district";
 
 const CANDIDATE_LIMIT = 1000;
 
@@ -75,11 +78,33 @@ function zoneSearchNames(names: string[]): string[] {
   return [...out];
 }
 
+/**
+ * `particulares.features` es jsonb: normalmente una lista de textos, pero se tolera un objeto
+ * (se aplanan sus valores de texto). Todo lo que no sea texto se ignora.
+ */
+export function particularFeatureList(raw: unknown): string[] {
+  const out: string[] = [];
+  const walk = (v: unknown, depth: number) => {
+    if (typeof v === "string") {
+      if (v.trim()) out.push(v.trim());
+    } else if (depth < 2 && Array.isArray(v)) {
+      for (const x of v) walk(x, depth + 1);
+    } else if (depth < 2 && v && typeof v === "object") {
+      for (const x of Object.values(v as Record<string, unknown>)) walk(x, depth + 1);
+    }
+  };
+  walk(raw, 0);
+  return out;
+}
+
 /** Una fila de `particulares` contra el encargo: el mismo cruce para la lista y para un anuncio suelto. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function evaluateParticularRow(brief: ReturnType<typeof briefFromRow>, r: any) {
+export function evaluateParticularRow(brief: ReturnType<typeof briefFromRow>, r: any) {
   // `has_lift` es un booleano tri-estado: se traduce al texto que entiende el detector.
-  const features: string[] = [...(Array.isArray(r.attrs) ? r.attrs : [])];
+  const features: string[] = [
+    ...(Array.isArray(r.attrs) ? r.attrs : []),
+    ...particularFeatureList(r.features),
+  ];
   if (r.has_lift === true) features.push("Ascensor");
   if (r.has_lift === false) features.push("Sin ascensor");
   if (r.condition) features.push(String(r.condition));
@@ -95,6 +120,8 @@ function evaluateParticularRow(brief: ReturnType<typeof briefFromRow>, r: any) {
     price: r.price ?? 0,
     operation: r.operation === "sale" ? "sale" : "rent",
     title: r.title ?? null,
+    // La descripción del anunciante: «exterior», «terraza», «reformado», «bajo interior»… cuentan.
+    description: typeof r.description === "string" ? r.description : null,
     features,
     floor_override: r.floor_num != null ? String(r.floor_num) : (r.floor ?? null),
     photoCount: r.cover_url ? 3 : 0,
@@ -127,38 +154,19 @@ export async function evaluateParticularForClient(clientId: string, particularId
 }
 
 /**
- * Anuncios de portales activos que encajan con el encargo. Mismo cruce
- * (`evaluateMatch`) que el catálogo propio, con dos matices propios de lo
- * scrapeado: no hay descripción larga (solo título, atributos normalizados y
- * `has_lift`), así que casi todo "falta el dato" se avisa y NO se descarta; y
- * las copias de un mismo inmueble (`duplicate_of`) no se repiten.
+ * Candidatas de `particulares` para un encargo: activas, sin copias (`duplicate_of`), sin baja, con
+ * precio y con el prefiltro SQL de operación, precio, dormitorios y zona (la comparación exacta la
+ * hace `evaluateMatch`). `createdAfter` / `createdBefore` acotan por `created_at` (los avisos de
+ * lo NUEVO); sin ellos es todo el stock. Siempre como mucho CANDIDATE_LIMIT filas.
  */
-export async function getSuggestedParticulares(
-  clientId: string,
-  opts?: { limit?: number; encargoId?: string },
-): Promise<SuggestedParticularesResult> {
+export function loadParticularCandidates(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-
-  let prefsQuery = supabase
-    .from("client_preferences")
-    .select("*")
-    .eq("client_id", clientId);
-  prefsQuery = opts?.encargoId
-    ? prefsQuery.eq("id", opts.encargoId)
-    : prefsQuery.eq("is_primary", true);
-  const { data: prefs, error: prefsError } = await prefsQuery.maybeSingle();
-  if (prefsError) return { ok: false, reason: "error", message: prefsError.message };
-  if (!prefs) return { ok: false, reason: "no_preferences" };
-
-  const brief = briefFromRow(prefs);
+  supabase: any,
+  brief: ReturnType<typeof briefFromRow>,
+  opts?: { createdAfter?: string; createdBefore?: string },
+) {
   const op = brief.operation;
-  const missing = briefSuggestMissing(brief);
-  // Resumen del encargo ya calculado: se devuelve sin consulta nueva.
-  const mapBrief = toMapBrief(brief);
-  if (missing.length) return { ok: false, reason: "insufficient_brief", missing, brief: mapBrief };
   const ceiling = sqlPriceCeiling(brief);
-
   let query = supabase
     .from("particulares")
     .select(COLUMNS)
@@ -197,7 +205,44 @@ export async function getSuggestedParticulares(
     }
   }
 
-  const { data, error } = await query.order("detected_at", { ascending: false }).limit(CANDIDATE_LIMIT);
+  if (opts?.createdAfter) query = query.gt("created_at", opts.createdAfter);
+  if (opts?.createdBefore) query = query.lte("created_at", opts.createdBefore);
+  return query.order(opts?.createdAfter ? "created_at" : "detected_at", { ascending: false }).limit(CANDIDATE_LIMIT);
+}
+
+/**
+ * Anuncios de portales activos que encajan con el encargo. Mismo cruce
+ * (`evaluateMatch`) que el catálogo propio, con dos matices propios de lo
+ * scrapeado: se lee el TEXTO del anuncio (título, descripción, características,
+ * atributos normalizados y `has_lift`); lo que el anuncio no dice se avisa y NO se descarta; y
+ * las copias de un mismo inmueble (`duplicate_of`) no se repiten.
+ */
+export async function getSuggestedParticulares(
+  clientId: string,
+  opts?: { limit?: number; encargoId?: string },
+): Promise<SuggestedParticularesResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+
+  let prefsQuery = supabase
+    .from("client_preferences")
+    .select("*")
+    .eq("client_id", clientId);
+  prefsQuery = opts?.encargoId
+    ? prefsQuery.eq("id", opts.encargoId)
+    : prefsQuery.eq("is_primary", true);
+  const { data: prefs, error: prefsError } = await prefsQuery.maybeSingle();
+  if (prefsError) return { ok: false, reason: "error", message: prefsError.message };
+  if (!prefs) return { ok: false, reason: "no_preferences" };
+
+  const brief = briefFromRow(prefs);
+  const op = brief.operation;
+  const missing = briefSuggestMissing(brief);
+  // Resumen del encargo ya calculado: se devuelve sin consulta nueva.
+  const mapBrief = toMapBrief(brief);
+  if (missing.length) return { ok: false, reason: "insufficient_brief", missing, brief: mapBrief };
+
+  const { data, error } = await loadParticularCandidates(supabase, brief);
   if (error) {
     console.error("getSuggestedParticulares: query failed:", error.message);
     return { ok: false, reason: "error", message: error.message };

@@ -299,6 +299,8 @@ console.log("\nMatch · planta");
   const b = brief({ minFloor: 2 });
   check("bajo para quien pide 2ª+", excludedBy(b, prop({ features: ["Bajo"] })) === "floor");
   check("1ª para quien pide 2ª+", excludedBy(b, prop({ features: ["Planta 1ª exterior"] })) === "floor");
+  check("«bajo interior» en la descripción: excluido por planta", excludedBy(b, prop({ description: "Bajo interior muy luminoso." })) === "floor");
+  check("«bajo» como preposición en la descripción no es planta", excludedBy(b, prop({ description: "Terraza bajo la pérgola." })) === null);
   check("override 'atico' siempre cumple", excludedBy(b, prop({ floor_override: "atico" })) === null);
   check("un chalet no tiene planta", excludedBy(b, prop({ property_type: "Chalet", features: ["Bajo"] })) === null);
   check("planta sin dato: aviso", ok(b, prop({})).warnings.some((w) => w.startsWith("Planta sin dato")));

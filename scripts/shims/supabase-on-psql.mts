@@ -59,6 +59,40 @@ export function runSql(sql: string): Promise<Res<string>> {
   });
 }
 
+// ── Filtros lógicos de PostgREST: .or("a.eq.1,and(b.gt.2,c.is.null)") ───────
+function splitTop(str: string): string[] {
+  const out: string[] = [];
+  let depth = 0, quote = false, cur = "";
+  for (const ch of str) {
+    if (ch === '"') quote = !quote;
+    if (!quote && ch === "(") depth++;
+    if (!quote && ch === ")") depth--;
+    if (!quote && depth === 0 && ch === ",") { out.push(cur); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+const colExpr = (c: string) => (c.includes("->>") ? c.split("->>").map((x, i) => (i === 0 ? ident(x) : lit(x))).join("->>") : ident(c));
+function logicSql(term: string, joiner: "AND" | "OR"): string {
+  const t = term.trim();
+  const g = t.match(/^(and|or)\((.*)\)$/s);
+  if (g) return `(${splitTop(g[2]).map((x) => logicSql(x, g[1] === "and" ? "AND" : "OR")).join(` ${g[1].toUpperCase()} `)})`;
+  void joiner;
+  const m = t.match(/^([^.]+)\.([a-z]+)\.(.*)$/s);
+  if (!m) throw new Error(`shim: filtro no soportado ${t}`);
+  const [, c, op, raw] = m;
+  const col = colExpr(c);
+  let v = raw;
+  if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+  const sqlOps: Record<string, string> = { eq: "=", neq: "<>", gt: ">", gte: ">=", lt: "<", lte: "<=" };
+  if (op === "is") return `${col} IS ${v === "null" ? "NULL" : v}`;
+  if (op === "ilike" || op === "like") return `${col} ${op.toUpperCase()} ${lit(v.replace(/\*/g, "%"))}`;
+  if (op === "cs") return `${col}::text[] @> ${lit(v)}::text[]`;
+  if (sqlOps[op]) return `${col} ${sqlOps[op]} ${lit(v)}`;
+  throw new Error(`shim: operador no soportado ${op}`);
+}
+
 class Query implements PromiseLike<Res> {
   private where: string[] = [];
   private orderBy = "";
@@ -130,6 +164,15 @@ class Query implements PromiseLike<Res> {
     this.where.push(`${ident(c)} <= ${lit(v)}`);
     return this;
   }
+  or(expr: string) {
+    this.where.push(`(${splitTop(expr).map((x) => logicSql(x, "OR")).join(" OR ")})`);
+    return this;
+  }
+  not(c: string, op: string, v: unknown) {
+    if (op !== "is" && op !== "eq") throw new Error(`shim: not.${op} no soportado`);
+    this.where.push(`NOT (${ident(c)} ${op === "is" ? "IS" : "="} ${v === null ? "NULL" : lit(v)})`);
+    return this;
+  }
   ilike(c: string, v: string) {
     this.where.push(`${ident(c)} ILIKE ${lit(v)}`);
     return this;
@@ -148,7 +191,19 @@ class Query implements PromiseLike<Res> {
   }
   private colList() {
     if (this.cols.trim() === "*") return "*";
-    return this.cols.split(",").map((c) => ident(c.trim())).join(", ");
+    return this.cols
+      .split(",")
+      .map((c) => {
+        const x = c.trim();
+        // Incrustación mínima: property_photos(id) → lista JSON de sus filas.
+        const emb = x.match(/^(property_photos)\(([a-z_]+)\)$/);
+        if (emb) return `(SELECT coalesce(json_agg(json_build_object('${emb[2]}', c.${ident(emb[2])})), '[]'::json) FROM ${ident(emb[1])} c WHERE c.property_id = ${ident(this.table)}.id) AS ${ident(emb[1])}`;
+        // Alias: nombre:columna->>clave
+        const al = x.match(/^([a-z_]+):(.+)$/);
+        if (al) return `${colExpr(al[2])} AS ${ident(al[1])}`;
+        return ident(x);
+      })
+      .join(", ");
   }
   private sql(): string {
     const t = ident(this.table);
