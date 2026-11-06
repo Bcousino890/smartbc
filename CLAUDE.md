@@ -1530,3 +1530,63 @@ Captaciones (lista / mapa / ficha del anuncio)
   Excepciones: «gestión» (contactados / sin gestionar) se remata en el cliente sobre la página ya traída; y la zona dibujada la
   recorta el mapa en Node (`polygons`).
 - Prueba: `npm run test:captaciones-filters`.
+
+## Encargos múltiples por cliente + matching con avisos (2026-11, migraciones 0243-0245)
+Spec: `docs/superpowers/specs/2026-11-06-encargos-matching-design.md`. Expediente (despliegue, rollback, checklist manual):
+`docs/changes/2026-11-06-encargos-matching/README.md`. **Solo España**: Chile no cambia (formulario, ficha y alertas de siempre).
+
+- **Qué es:** un cliente puede tener N «encargos» (filas de `client_preferences`: `label`, `status` active|paused|closed,
+  `is_primary`, `position`, `end_client_label`, `max_price_by_bedrooms` jsonb, `baseline_at`). Cada encargo tiene su
+  matching (propiedades del CRM + `particulares` del portal) y avisa por la campana (`crm_notifications`, tipo
+  `encargo_match`) al asesor asignado y a los administradores, UN aviso por encargo y pasada. Caso de uso: Yeanette
+  Rubertiello, colaboradora con UNA ficha y 3 encargos.
+- **Tablas/funciones:** `client_preferences` (PK `id`; `client_id` ya no es único), `encargo_matches` (única por
+  `(encargo_id, source, canonical_id)`, `reasons` jsonb, `notified_at`), `make_encargo_primary(uuid)` (0244, cambio de
+  principal atómico), `claim_and_notify_encargo_matches(...)` (0245, reclama filas y crea los avisos en una transacción;
+  nada si no hay destinatarios). Ambas funciones: `execute` solo `service_role`.
+- **Regla del principal:** índice único parcial `client_preferences_one_primary (client_id) WHERE is_primary`. Todo lo
+  «legacy» (brief, alertas por email, portal del cliente, command center) lee/escribe SOLO el principal. Cambiarlo: siempre
+  `make_encargo_primary` (rpc), nunca dos updates. Solo un encargo activo puede ser principal. Lint:
+  `npm run test:encargos-usage` (`scripts/check-client-preferences-usage.mjs`) falla si una consulta no filtra `is_primary` o
+  un embed no se normaliza.
+- **Cron:** `POST /api/cron/encargo-matches` (`?dry=1` = informe sin escribir; `Authorization: Bearer $CRON_SECRET`).
+  Crontab del VPS, cada 5 min: `*/5 * * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/encargo-matches`.
+- **Orden de puesta en marcha (importa):** merge (decide el dueño) → autodeploy aplica 0243-0245 →
+  `scripts/seed-encargo-baseline.mts --yes` (precarga el stock como visto, sin avisos, y fija la marca del cron en
+  «ahora − 15 min») → instalar la línea de crontab → `scripts/seed-yeanette-encargos.mts` con `--dry` y luego `--yes`
+  (`--no-notify` sin pases iniciales; `--passes-only` reintenta solo los pases iniciales fallidos). Ambos scripts se
+  empaquetan con esbuild y se lanzan con `node --env-file=.env.local` desde `/opt/smartbc-app` (instrucciones en la cabecera
+  de cada uno). Si el cron arranca antes del baseline, avisaría de todo el stock.
+- **Cómo lee el texto el matching:** `lib/encargos/sources.ts` evalúa título, descripción y `features` (además de campos
+  estructurados) con `evaluateMatch` (`lib/clients/brief-match.ts`), que ya entiende `maxPriceByBedrooms`. Dos fuentes:
+  `property` y `particular`. Los candidatos se paginan (tope duro 30000 con `console.warn`; depende de que PostgREST devuelva
+  ≥1000 filas por página: confirmar `db-max-rows`).
+- **Dónde vive:** `lib/encargos/*` (`model` estado/enlaces, `sources` candidatos y matching, `plan`/`runner` pasada del
+  cron, `notice` y `recipients` aviso y destinatarios, `rescan`/`schedule` pase inicial al guardar, `pin` parámetros
+  `?encargo=`/`?incluir=`, `ui-state`), `lib/db/queries/encargos.ts`, acciones en
+  `app/[country]/(admin)/admin/clientes/[id]/encargos-actions.ts`, UI en `.../_components/encargos-section.tsx`,
+  `matches-card.tsx` y `components/admin/clientes/encargo/*`, campana `components/admin/notifications-bell.tsx` +
+  `lib/notifications/encargo-notice.ts`, Captaciones `lib/captaciones-map/brief-filters.ts` y
+  `app/[country]/(admin)/admin/particulares/*`. Tests: `npm run test:encargos` (agregado; ver README del expediente).
+- **Rollback:** `rollback-0245.sql` → `rollback-0244.sql` → `rollback-0243.sql` (en `docs/changes/2026-11-06-encargos-matching/`).
+  El de 0243 aborta sin tocar nada si algún cliente tiene más de un encargo (hay que cerrar/borrar los extra antes).
+
+**Gotchas aprendidas**
+- **Embed de PostgREST:** `client_preferences(*)` pasaba de objeto a ARRAY al dejar de ser `client_id` la PK. Se normaliza
+  con `withPrimaryPreference` (`lib/db/row-types.ts`); un embed nuevo sin normalizar rompe las fichas (el lint lo caza).
+- **Ventana del cron `(since, until]`:** `matchNewForEncargo(encargo, {sinceIso, untilIso})` es semiabierta; `untilIso` =
+  ahora − 15 min (deja asentar los duplicados gemelos) y se guarda DESPUÉS de una pasada correcta como cursor en
+  `app_settings` clave `encargo_matching_cursor`; el `since` de cada encargo es `max(baseline_at, cursor)`. Primera
+  ejecución sin cursor: lo inicializa sin avisar. Editar el brief reinicia `baseline_at`.
+- **Reclamo atómico:** los avisos van SIEMPRE por `claim_and_notify_encargo_matches`; las filas con `notified_at` nulo se
+  reintentan, pero solo las de más de 10 min (`first_seen_at < ahora − 10 min`) para no pisar una pasada en curso. El runner
+  exige 0245 aplicada.
+- **Enlace del aviso:** `encargoLink` → `/es/admin/clientes/<id>?encargo=<id>&destacar=<source>:<id>#matching`. Las rutas
+  `suggested-*` aceptan `?encargo=` e `?incluir=<id>`: evalúan ese anuncio para ese encargo y lo fijan el primero, o muestran
+  «ya no encaja: motivo» (así el aviso aterriza aunque quede fuera de las 12 sugerencias). `destacar` solo resalta.
+- **Filtros automáticos de Captaciones** (`briefToCaptacionesFilters`): deliberadamente NO rellenan baños, m² ni estancia
+  (venta/alquiler temporada): los filtros de la lista son más estrictos que el matching (descartan anuncios sin dato) y
+  esconderían anuncios que el matching sí enseña. Principio: un filtro autorrellenado nunca oculta lo que el matching muestra.
+  Los parámetros que no son filtros (p. ej. `ficha`) se conservan al autorrellenar.
+- Los tests con BD usan un Postgres desechable (`encargos-pg-test*`) con volcado SOLO LECTURA del esquema de `supabase-db`;
+  nunca crear BDs ni escribir en `supabase-db`.
