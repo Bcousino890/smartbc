@@ -38,6 +38,8 @@ import {
 } from "@/lib/client-command-center/derive";
 import { buildTimeline } from "@/lib/client-command-center/timeline";
 import { isCountry, type Country } from "@/lib/country-config";
+import { listEncargos } from "@/lib/db/queries/encargos";
+import { parseHighlight, resolveSelectedEncargo } from "@/lib/encargos/ui-state";
 import { ClientFichaView } from "./client-ficha-view";
 
 export const dynamic = "force-dynamic";
@@ -54,12 +56,18 @@ function maxDate(values: Array<string | null | undefined>): string | null {
   return best;
 }
 
+const firstParam = (v: string | string[] | undefined): string | null =>
+  typeof v === "string" ? v : Array.isArray(v) ? (v[0] ?? null) : null;
+
 export default async function ClientCommandCenterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; country: Country }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id, country: rawCountry } = await params;
+  const query = await searchParams;
   const country: Country = isCountry(rawCountry) ? rawCountry : "es";
   await guardPage("clientes", country);
 
@@ -123,6 +131,20 @@ export default async function ClientCommandCenterPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = rowData as any;
   const advisor = await getClientAdvisor(row.assigned_advisor_id ?? null);
+
+  // Encargos múltiples: SOLO clientes de España. Un cliente de Chile conserva
+  // su ficha de siempre (un único encargo, sin sección ni selector).
+  // `?encargo=` elige el del matching (si es de este cliente; si no, el
+  // principal) y `?destacar=` el elemento que llega desde un aviso.
+  const clientIsSpain = row.country === "es";
+  const encargoList = clientIsSpain
+    ? await listEncargos(id).catch((err) => {
+        console.warn("[clientes] encargos:", err instanceof Error ? err.message : err);
+        return [];
+      })
+    : [];
+  const selectedEncargo = resolveSelectedEncargo(encargoList, firstParam(query.encargo));
+  const highlight = parseHighlight(firstParam(query.destacar));
 
   type PropertyRef = { slug: string; title: string } | null;
   const rawFavorites =
@@ -329,6 +351,11 @@ export default async function ClientCommandCenterPage({
           : null
       }
       catalogFeedback={catalogFeedback}
+      encargos={
+        clientIsSpain
+          ? { list: encargoList, selectedId: selectedEncargo?.id ?? null, highlight }
+          : null
+      }
       viewingCollections={
         inScope
           ? {

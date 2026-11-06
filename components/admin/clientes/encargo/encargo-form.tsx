@@ -17,11 +17,16 @@
 // Controlado: el estado vive en el diálogo que lo usa.
 // ============================================================================
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ZoneFilter, type ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import { AreaPicker } from "./area-picker";
 import { AlertTriangle, Check, Plus, Star, X } from "lucide-react";
+import {
+  priceByBedroomsFromRows,
+  priceByBedroomsToRows,
+  type PriceByBedroomsRow,
+} from "@/lib/encargos/ui-state";
 import {
   briefGaps,
   briefSuggestMissing,
@@ -48,17 +53,36 @@ import {
 import { Labeled, Select, TextArea, TextInput } from "@/components/admin/ui/primitives";
 import { cn } from "@/lib/utils";
 
+/** Nombre del encargo y cliente final (solo encargos múltiples de España). */
+export type EncargoMeta = { label: string; endClientLabel: string };
+
 type Props = {
   value: BriefInput;
   onChange: (next: BriefInput) => void;
-  profile: BriefProfile | null;
-  onProfileChange: (p: BriefProfile) => void;
+  /**
+   * El perfil es del CLIENTE, no del encargo: sin `onProfileChange` (diálogo
+   * de encargos múltiples, que no lo guarda) no se pregunta.
+   */
+  profile?: BriefProfile | null;
+  onProfileChange?: (p: BriefProfile) => void;
+  /** Con `meta` se piden el nombre del encargo y el cliente final. "Nuevo cliente" no lo pasa. */
+  meta?: EncargoMeta;
+  onMetaChange?: (next: EncargoMeta) => void;
   /** "es" pinta las zonas de Madrid como chips; "cl" solo texto libre. */
   country: "es" | "cl";
   disabled?: boolean;
 };
 
-export function EncargoForm({ value: v, onChange, profile, onProfileChange, country, disabled }: Props) {
+export function EncargoForm({
+  value: v,
+  onChange,
+  profile = null,
+  onProfileChange,
+  meta,
+  onMetaChange,
+  country,
+  disabled,
+}: Props) {
   const set = <K extends keyof BriefInput>(k: K, val: BriefInput[K]) => onChange({ ...v, [k]: val });
   const rent = v.operation === "rent";
   const money = rent ? "€/mes" : "€";
@@ -67,12 +91,37 @@ export function EncargoForm({ value: v, onChange, profile, onProfileChange, coun
   const setOperation = (op: BriefOperation) => {
     if (op === v.operation) return;
     onChange({ ...v, operation: op, stay: op === "rent" ? (v.stay ?? "long") : v.stay });
-    onProfileChange(profileForOperation(profile, op));
+    onProfileChange?.(profileForOperation(profile, op));
   };
 
   return (
     <div className={cn("space-y-6", disabled && "pointer-events-none opacity-60")}>
       <Completeness brief={v} />
+
+      {meta && onMetaChange && (
+        <Section title="El encargo">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Labeled label="Nombre del encargo (obligatorio)">
+              <TextInput
+                value={meta.label}
+                onChange={(e) => onMetaChange({ ...meta, label: e.target.value })}
+                maxLength={80}
+                required
+                aria-required="true"
+                placeholder="Piso de estudiantes en Recoletos"
+              />
+            </Labeled>
+            <Labeled label="Cliente final o referencia (opcional)">
+              <TextInput
+                value={meta.endClientLabel}
+                onChange={(e) => onMetaChange({ ...meta, endClientLabel: e.target.value })}
+                maxLength={80}
+                placeholder="Demanda 2 · estudiantes"
+              />
+            </Labeled>
+          </div>
+        </Section>
+      )}
 
       {/* ── Qué busca ───────────────────────────────────── */}
       <Section title="Qué busca">
@@ -87,13 +136,15 @@ export function EncargoForm({ value: v, onChange, profile, onProfileChange, coun
               ]}
             />
           </Group>
-          <Group label="Perfil">
-            <Segmented
-              value={profile ?? ""}
-              onChange={(k) => onProfileChange(k as BriefProfile)}
-              options={PROFILES_BY_OPERATION[v.operation]}
-            />
-          </Group>
+          {onProfileChange && (
+            <Group label="Perfil">
+              <Segmented
+                value={profile ?? ""}
+                onChange={(k) => onProfileChange(k as BriefProfile)}
+                options={PROFILES_BY_OPERATION[v.operation]}
+              />
+            </Group>
+          )}
         </div>
 
         <Group label="Tipo de vivienda (vacío = cualquiera)">
@@ -175,6 +226,12 @@ export function EncargoForm({ value: v, onChange, profile, onProfileChange, coun
             </Select>
           </Labeled>
         </div>
+
+        <PriceByBedroomsEditor
+          value={v.maxPriceByBedrooms}
+          onChange={(next) => set("maxPriceByBedrooms", next)}
+          unit={money}
+        />
 
         {!rent && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -545,6 +602,103 @@ function NumField({
         onChange(digits ? Number(digits) : null);
       }}
     />
+  );
+}
+
+/**
+ * Tope de precio según los dormitorios («3 dorm. hasta 5.200 €, 4 dorm. hasta
+ * 6.300 €»). Para cada nº de dormitorios manda sobre «Hasta»; sin filas, no hay
+ * tope propio. Vale para alquiler y para venta: el match lo aplica a las dos.
+ * Las filas viven aquí (para poder escribir una a medias) y al padre solo le
+ * llega lo que se va a guardar; lo que no se guardará se dice debajo.
+ */
+function PriceByBedroomsEditor({
+  value,
+  onChange,
+  unit,
+}: {
+  value: Record<string, number> | null;
+  onChange: (next: Record<string, number> | null) => void;
+  unit: string;
+}) {
+  const titleId = useId();
+  const [rows, setRows] = useState<PriceByBedroomsRow[]>(() => priceByBedroomsToRows(value));
+  const { issues } = priceByBedroomsFromRows(rows);
+  const update = (next: PriceByBedroomsRow[]) => {
+    setRows(next);
+    onChange(priceByBedroomsFromRows(next).value);
+  };
+  const setRow = (i: number, patch: Partial<PriceByBedroomsRow>) =>
+    update(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const fmt = (s: string) => {
+    const d = s.replace(/[^\d]/g, "");
+    return d ? new Intl.NumberFormat("es-ES").format(Number(d)) : "";
+  };
+
+  return (
+    <div role="group" aria-labelledby={titleId} className="space-y-2">
+      <div>
+        <span id={titleId} className="crm-label-sm block text-ink/45">
+          Tope de precio por dormitorios (opcional)
+        </span>
+        <p className="mt-0.5 text-xs text-ink/45">
+          Para cada número de dormitorios, este importe manda sobre «Hasta». Déjalo vacío si no hace falta.
+        </p>
+      </div>
+      {rows.length > 0 && (
+        <ul className="space-y-2">
+          {rows.map((r, i) => {
+            const issue = issues.find((x) => x.row === i);
+            const n = r.bedrooms.replace(/[^\d]/g, "");
+            return (
+              <li key={i}>
+                <div className="grid grid-cols-[1fr_1.4fr_auto] items-end gap-2 sm:max-w-md">
+                  <Labeled label="Dormitorios">
+                    <TextInput
+                      inputMode="numeric"
+                      value={r.bedrooms}
+                      onChange={(e) => setRow(i, { bedrooms: e.target.value.replace(/[^\d]/g, "").slice(0, 2) })}
+                      aria-invalid={issue ? true : undefined}
+                      placeholder="3"
+                    />
+                  </Labeled>
+                  <Labeled label={`Hasta (${unit})`}>
+                    <TextInput
+                      inputMode="numeric"
+                      value={fmt(r.maxPrice)}
+                      onChange={(e) => setRow(i, { maxPrice: e.target.value.replace(/[^\d]/g, "") })}
+                      aria-invalid={issue ? true : undefined}
+                      placeholder="5.200"
+                    />
+                  </Labeled>
+                  <button
+                    type="button"
+                    onClick={() => update(rows.filter((_, j) => j !== i))}
+                    aria-label={n ? `Quitar el tope de ${n} dormitorios` : "Quitar esta fila"}
+                    className="mb-px inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink/55 transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+                  >
+                    <X size={14} aria-hidden />
+                  </button>
+                </div>
+                {issue && (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-amber-800">
+                    <AlertTriangle size={12} aria-hidden className="shrink-0" />
+                    {issue.message}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={() => setRows([...rows, { bedrooms: "", maxPrice: "" }])}
+        className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs text-ink/70 transition hover:border-gold/50 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+      >
+        <Plus size={12} aria-hidden /> Añadir tope por dormitorios
+      </button>
+    </div>
   );
 }
 

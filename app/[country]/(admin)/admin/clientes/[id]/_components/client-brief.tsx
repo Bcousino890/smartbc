@@ -44,11 +44,14 @@ export function ClientBrief({
   country,
   canEdit,
   onEdit,
+  title,
 }: {
   prefs: ClientPreferencesFull | null;
   country: Country;
   canEdit: boolean;
   onEdit: () => void;
+  /** Con varios encargos (España), deja claro que este es el principal. */
+  title?: string;
 }) {
   const t = useT();
   const tn = useTn();
@@ -63,7 +66,7 @@ export function ClientBrief({
 
   if (!prefs) {
     return (
-      <Panel title={t("cc.brief.title")} action={edit}>
+      <Panel title={title ?? t("cc.brief.title")} action={edit}>
         <Empty
           action={
             canEdit ? (
@@ -211,7 +214,7 @@ export function ClientBrief({
   const recommended = gaps.filter((g) => !(g.level === "essential" && blockingLabels.has(g.label)));
 
   return (
-    <Panel title={t("cc.brief.title")} action={edit}>
+    <Panel title={title ?? t("cc.brief.title")} action={edit}>
       {(essential.length > 0 || recommended.length > 0) && (
         <div
           className={

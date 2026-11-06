@@ -6,8 +6,10 @@ import { canActOnClient } from "@/lib/db/queries/view-scope";
 
 export const dynamic = "force-dynamic";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ clientId: string }> },
 ) {
   try {
@@ -41,8 +43,13 @@ export async function GET(
       .maybeSingle();
     const alertsEnabled = Boolean(prefs?.new_listing_alerts_enabled);
 
+    // `?encargo=` elige uno de los encargos del cliente (España). La consulta
+    // filtra por client_id Y id: un encargo de otro cliente no devuelve nada.
+    // Sin él (o mal formado), el principal, como siempre.
+    const encargo = req.nextUrl.searchParams.get("encargo");
     const result = await getSuggestedProperties(clientId, {
       country: client.country ?? undefined,
+      ...(encargo && UUID.test(encargo) ? { encargoId: encargo } : {}),
     });
 
     if (!result.ok) {

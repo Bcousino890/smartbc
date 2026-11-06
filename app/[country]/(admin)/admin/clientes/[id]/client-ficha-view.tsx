@@ -17,7 +17,7 @@
 // haga lo que uno espera.
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ClientMetrics,
@@ -70,6 +70,9 @@ import { PortalLinksCard } from "./_components/portal-links-card";
 import { CatalogFeedbackBlock, CatalogFeedbackCard } from "@/components/admin/clientes/catalog-feedback-block";
 import type { ClientCatalogFeedback } from "@/lib/catalogs/feedback-rules";
 import { PropertiesJumpBar } from "./_components/properties-jump-bar";
+import { EncargoSelector, EncargosSection } from "./_components/encargos-section";
+import type { Encargo, EncargoSource } from "@/lib/encargos/model";
+import { hrefForEncargo, initialTabFor } from "@/lib/encargos/ui-state";
 import {
   FavoritesBlock,
   VisitsBlock,
@@ -96,6 +99,15 @@ export type ViewingCollectionsProps = {
   canCreate: boolean;
   canDelete: boolean;
   canPublish: boolean;
+};
+
+/** Encargos múltiples (solo España; null para Chile, cuya ficha no cambia). */
+export type EncargosProps = {
+  list: Encargo[];
+  /** El encargo del matching: `?encargo=` si es de este cliente, si no el principal. */
+  selectedId: string | null;
+  /** Elemento que llega destacado desde un aviso (`?destacar=`). */
+  highlight: { source: EncargoSource; id: string } | null;
 };
 
 export type CommandCenterProps = {
@@ -127,6 +139,7 @@ export function ClientFichaView({
   portalLinks,
   viewingCollections,
   catalogFeedback = null,
+  encargos = null,
   cc,
 }: {
   client: AdminClient;
@@ -139,6 +152,8 @@ export function ClientFichaView({
   viewingCollections: ViewingCollectionsProps | null;
   /** 0218 · opiniones de catálogos y enlaces personales (null: no disponible). */
   catalogFeedback?: ClientCatalogFeedback | null;
+  /** Encargos múltiples (solo clientes de España). */
+  encargos?: EncargosProps | null;
   cc: CommandCenterProps;
 }) {
   const t = useT();
@@ -148,7 +163,9 @@ export function ClientFichaView({
   const config = getCountryConfig(country);
 
   const urlTab = params?.get("tab");
-  const tab: CommandTab = isCommandTab(urlTab) ? urlTab : "overview";
+  // Sin `?tab=`, un enlace de aviso (`?encargo=…&destacar=…#matching`) abre
+  // Propiedades, donde está el matching.
+  const tab: CommandTab = isCommandTab(urlTab) ? urlTab : initialTabFor(params ?? new URLSearchParams());
 
   const [editClient, setEditClient] = useState(false);
   // `?encargo=editar` abre el encargo directamente: es a donde lleva el
@@ -156,7 +173,8 @@ export function ClientFichaView({
   const [editPrefs, setEditPrefs] = useState(params?.get("encargo") === "editar");
   const closePrefs = useCallback(() => {
     setEditPrefs(false);
-    if (params?.get("encargo")) {
+    // Solo se limpia `?encargo=editar`: un `?encargo=<id>` elige el encargo del matching.
+    if (params?.get("encargo") === "editar") {
       const qs = new URLSearchParams(params.toString());
       qs.delete("encargo");
       const q = qs.toString();
@@ -167,8 +185,14 @@ export function ClientFichaView({
   const goTab = useCallback(
     (next: CommandTab, anchor?: string) => {
       const qs = new URLSearchParams(params?.toString() ?? "");
-      if (next === "overview") qs.delete("tab");
-      else qs.set("tab", next);
+      qs.set("tab", next);
+      // Resumen es la pestaña por defecto y no necesita `tab`… salvo que la URL
+      // lleve un encargo, que sin `tab` abriría Propiedades.
+      if (next === "overview") {
+        const rest = new URLSearchParams(qs);
+        rest.delete("tab");
+        if (initialTabFor(rest) === "overview") qs.delete("tab");
+      }
       const q = qs.toString();
       // `scroll: false`: cambiar de pestaña no debe saltar al principio.
       router.replace(q ? `?${q}` : "?", { scroll: false });
@@ -180,6 +204,24 @@ export function ClientFichaView({
             behavior: "smooth",
             block: "start",
           });
+        });
+      }
+    },
+    [params, router],
+  );
+
+  // Cambiar el encargo del matching: va por la URL (`?encargo=`), así que el
+  // servidor vuelve a pintar la ficha con ese encargo. `toMatching` (desde la
+  // sección Encargos) además lleva a Propiedades y baja al matching.
+  const [encargoPending, startEncargo] = useTransition();
+  const selectEncargo = useCallback(
+    (encargoId: string, toMatching: boolean) => {
+      const qs = new URLSearchParams(hrefForEncargo(params?.toString() ?? "", encargoId).slice(1));
+      if (toMatching) qs.set("tab", "properties");
+      startEncargo(() => router.replace(`?${qs.toString()}`, { scroll: false }));
+      if (toMatching) {
+        requestAnimationFrame(() => {
+          document.getElementById("matching")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
     },
@@ -209,6 +251,32 @@ export function ClientFichaView({
   );
 
   const clientName = `${client.firstName} ${client.lastName}`.trim();
+  const encargoList = encargos?.list ?? [];
+  const severalEncargos = encargoList.length > 1;
+  const selectedEncargo = encargos ? (encargoList.find((e) => e.id === encargos.selectedId) ?? null) : null;
+  // Los bloques dicen para qué encargo buscan solo si hay más de uno: con uno,
+  // la ficha se ve como siempre.
+  const matchingEncargo =
+    selectedEncargo && (severalEncargos || selectedEncargo.status !== "active")
+      ? {
+          id: selectedEncargo.id,
+          label: selectedEncargo.label,
+          status: selectedEncargo.status,
+          isPrimary: selectedEncargo.isPrimary,
+        }
+      : null;
+  const highlight = encargos?.highlight ?? null;
+  const highlightKey = highlight ? `${highlight.source}:${highlight.id}` : null;
+
+  // Pinchar otro aviso con la ficha ya abierta no vuelve a montar la vista
+  // (misma ruta, otros parámetros): se baja al matching también entonces.
+  useEffect(() => {
+    if (!highlightKey) return;
+    const raf = requestAnimationFrame(() => {
+      document.getElementById("matching")?.scrollIntoView({ block: "start" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [highlightKey]);
   const portalUrlKeys = useMemo(() => new Set(links.map((l) => l.url_key)), [links]);
   // Lo que falta pero NO impide sugerir (dormitorios): zona y presupuesto, si
   // faltan, ya los dice la tarjeta con lo que devuelve el servidor.
@@ -319,11 +387,25 @@ export function ClientFichaView({
                   onEditBrief={() => setEditPrefs(true)}
                   onGo={(anchor) => goTab("properties", anchor)}
                 />
+                {encargoList.length > 0 && (
+                  <EncargosSection
+                    clientId={client.id}
+                    encargos={encargoList}
+                    selectedId={encargos?.selectedId ?? null}
+                    canEdit={cc.canEditClient}
+                    onShowMatching={(id) => selectEncargo(id, true)}
+                  />
+                )}
                 <ClientBrief
                   prefs={cc.prefs}
                   country={country}
                   canEdit={cc.canEditClient}
                   onEdit={() => setEditPrefs(true)}
+                  title={
+                    severalEncargos
+                      ? `Encargo principal: ${encargoList.find((e) => e.isPrimary)?.label ?? ""}`
+                      : undefined
+                  }
                 />
               </div>
 
@@ -469,22 +551,40 @@ export function ClientFichaView({
               <CatalogFeedbackBlock data={catalogFeedback} locale={config.locale} />
             ) : null}
 
-            <div id="cc-suggested" className="scroll-mt-28">
-              <SuggestedPropertiesBlock
-                clientId={client.id}
-                clientName={clientName}
-                selectedPropertyIds={selectedPropertyIds}
-                canAddToSelection={Boolean(viewingCollections?.canCreate)}
-              />
-            </div>
+            {/* El matching: ancla de los avisos de la campanita
+                (`?encargo=…&destacar=…#matching`). Con varios encargos,
+                arriba se elige para cuál se busca. */}
+            <div id="matching" className="scroll-mt-28 space-y-5">
+              {severalEncargos && (
+                <EncargoSelector
+                  encargos={encargoList}
+                  selectedId={encargos?.selectedId ?? null}
+                  pending={encargoPending}
+                  onSelect={(id) => selectEncargo(id, false)}
+                />
+              )}
 
-            <div id="cc-suggested-portales" className="scroll-mt-28">
-              <SuggestedParticularesBlock
-                clientId={client.id}
-                clientName={clientName}
-                existingUrlKeys={portalUrlKeys}
-                canAdd={Boolean(portalLinks?.canCreate)}
-              />
+              <div id="cc-suggested" className="scroll-mt-28">
+                <SuggestedPropertiesBlock
+                  clientId={client.id}
+                  clientName={clientName}
+                  selectedPropertyIds={selectedPropertyIds}
+                  canAddToSelection={Boolean(viewingCollections?.canCreate)}
+                  encargo={matchingEncargo}
+                  highlightId={highlight?.source === "property" ? highlight.id : null}
+                />
+              </div>
+
+              <div id="cc-suggested-portales" className="scroll-mt-28">
+                <SuggestedParticularesBlock
+                  clientId={client.id}
+                  clientName={clientName}
+                  existingUrlKeys={portalUrlKeys}
+                  canAdd={Boolean(portalLinks?.canCreate)}
+                  encargo={matchingEncargo}
+                  highlightId={highlight?.source === "particular" ? highlight.id : null}
+                />
+              </div>
             </div>
 
             <div id="cc-favorites" className="scroll-mt-28">

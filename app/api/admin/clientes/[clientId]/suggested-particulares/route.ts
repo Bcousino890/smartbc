@@ -6,6 +6,8 @@ import { canActOnClient } from "@/lib/db/queries/view-scope";
 
 export const dynamic = "force-dynamic";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Anuncios de portales (tabla `particulares`) que encajan con el encargo del
  * cliente. Exige poder ver clientes Y particulares: esos anuncios llevan
@@ -43,7 +45,14 @@ export async function GET(
     // para pintar los pines: pide `?limit=` (con tope en el techo de candidatos).
     const rawLimit = Number(req.nextUrl.searchParams.get("limit"));
     const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 1000) : undefined;
-    const result = await getSuggestedParticulares(clientId, limit ? { limit } : undefined);
+    // `?encargo=` elige uno de los encargos del cliente; la consulta filtra por
+    // client_id Y id, así que uno ajeno no devuelve nada. Sin él, el principal.
+    const encargo = req.nextUrl.searchParams.get("encargo");
+    const encargoId = encargo && UUID.test(encargo) ? encargo : undefined;
+    const result = await getSuggestedParticulares(
+      clientId,
+      limit || encargoId ? { ...(limit ? { limit } : {}), ...(encargoId ? { encargoId } : {}) } : undefined,
+    );
 
     if (!result.ok) {
       if (result.reason === "insufficient_brief") {
