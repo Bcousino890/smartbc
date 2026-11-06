@@ -220,6 +220,8 @@ export type ParticularesFilters = {
   /** Por defecto se ocultan los anuncios FUERA DE ZONA (`scraper_extra.fuera_de_zona`):
    *  su zona ya no está marcada en Sindicación y el crawler dejó de rastrearlos. `true` los incluye. */
   showOutOfZone?: boolean;
+  /** `true` = incluye también Ukio, Única y Safestays (ver AGENCIAS_EXCLUIDAS_POR_DEFECTO). */
+  showExcludedAgencies?: boolean;
 };
 
 /** Excluye los marcados `scraper_extra.fuera_de_zona = true` (los NULL pasan: `neq` solo los descartaría). */
@@ -395,7 +397,7 @@ export function applyParticularesFilters(
   const agencyKeys = (f.agencyKeys ?? []).filter(okAgencyKey);
   if (agencyKeys.length) q = q.in("agency_key", agencyKeys);
   // Exclusión por defecto (Ukio, Única, Safestays) salvo que se pida una agencia concreta.
-  if (!agencyKeys.length) q = q.or(EXCLUYE_AGENCIAS_POR_DEFECTO);
+  if (!agencyKeys.length && !f.showExcludedAgencies) q = q.or(EXCLUYE_AGENCIAS_POR_DEFECTO);
   const noAgency = (f.excludeAgencyKeys ?? []).filter(okAgencyKey);
   // `not.in` descartaría también los NULL (particulares): se dejan pasar a propósito.
   if (noAgency.length) q = q.or(`agency_key.is.null,agency_key.not.in.(${noAgency.map(quoteKey).join(",")})`);

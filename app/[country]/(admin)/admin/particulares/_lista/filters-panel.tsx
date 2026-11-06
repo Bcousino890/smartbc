@@ -401,6 +401,12 @@ export function FiltersPanel({
               checked={f.showOutOfZone}
               onChange={f.setShowOutOfZone}
             />
+            <SwitchRow
+              label="Incluir Ukio, Única y Safestays"
+              description="Por defecto no salen en el listado. Actívalo para verlas también."
+              checked={f.showExcludedAgencies}
+              onChange={f.setShowExcludedAgencies}
+            />
           </div>
         </div>
 

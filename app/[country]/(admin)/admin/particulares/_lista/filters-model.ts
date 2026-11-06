@@ -276,6 +276,12 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
   }
   if (f.since) chips.push({ id: "since", label: SINCE_LABEL[f.since] ?? `Últimos ${f.since} días`, onRemove: () => f.setSince("") });
   if (f.showLinked) chips.push({ id: "linked", label: "Con anuncios enlazados", onRemove: () => f.setShowLinked(false) });
+  // Por defecto Ukio, Única y Safestays no salen: chip «scope» (visible, no cuenta como filtro) para poder incluirlas.
+  chips.push(
+    f.showExcludedAgencies
+      ? { id: "excl-agencies", label: "Incluye Ukio, Única y Safestays", onRemove: () => f.setShowExcludedAgencies(false) }
+      : { id: "excl-agencies", label: "Sin Ukio, Única y Safestays", tone: "scope", onRemove: () => f.setShowExcludedAgencies(true) },
+  );
   if (f.showOutOfZone) chips.push({ id: "out-of-zone", label: "Con anuncios fuera de zona", onRemove: () => f.setShowOutOfZone(false) });
 
   return chips;
@@ -306,6 +312,7 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   if (f.yearMin || f.yearMax) n++;
   if (f.showLinked) n++;
   if (f.showOutOfZone) n++;
+  if (f.showExcludedAgencies) n++;
   if (f.agencies) n++;
   if (f.excludeAgencies) n++;
   if (splitCsv(f.types).length) n++;

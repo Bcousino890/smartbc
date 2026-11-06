@@ -81,6 +81,7 @@ export function parseParticularesParams(sp: SP, currentUserId?: string): ParsedP
     last24h: one(sp.last24h) === "1",
     showDuplicates: one(sp.enlazados) === "1",
     showOutOfZone,
+    showExcludedAgencies: one(sp.conExcluidas) === "1",
     phoneFilter: pick(one(sp.phone), ["no_phone", "with_phone"] as const),
     gestion: pick(one(sp.gestion), ["unmanaged", "contacted", "assigned", "mine"] as const),
     currentUserId,
