@@ -168,6 +168,7 @@ export function propertyComesFromAd(r: any, adKeys: ReadonlySet<string>): boolea
 
 const SAFE_REF = /^[A-Za-z0-9_-]+$/;
 const OR_CHUNK = 20;
+const EXACT_URL_CHUNK = 15;
 
 /** Claves `urlKey` de los anuncios de `particulares` que coinciden con los `source_url` de estas propiedades. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -200,8 +201,10 @@ async function particularAdKeys(supabase: any, rows: any[]): Promise<Set<string>
     collect(data);
   }
   const exactList = [...exact];
-  for (let i = 0; i < exactList.length; i += ID_CHUNK) {
-    const { data, error } = await supabase.from("particulares").select("source_url").in("source_url", exactList.slice(i, i + ID_CHUNK)).limit(1000);
+  // Las URL completas son largas: con ID_CHUNK (pensado para uuids) la petición revienta con «URI too long»
+  // sobre datos reales. 15 URL de ~120 caracteres caben de sobra en el límite del proxy.
+  for (let i = 0; i < exactList.length; i += EXACT_URL_CHUNK) {
+    const { data, error } = await supabase.from("particulares").select("source_url").in("source_url", exactList.slice(i, i + EXACT_URL_CHUNK)).limit(1000);
     if (error) throw new Error(`particulares (origen de propiedades): ${error.message}`);
     collect(data);
   }
