@@ -135,7 +135,7 @@ ok(!br.ok && br.error === "image_too_large", `bomba de descompresión (${(bomb.l
   });
   const fake = {
     from(t: string) {
-      if (t === "client_preferences") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { client_id: "c", operation: "rent", max_price: 3000, zones: ["Salamanca"] }, error: null }) }) }) };
+      if (t === "client_preferences") return { select: () => { const q: any = { eq: () => q, maybeSingle: async () => ({ data: { client_id: "c", operation: "rent", max_price: 3000, zones: ["Salamanca"] }, error: null }) }; return q; } };
       return builder;
     },
   };
