@@ -2,7 +2,7 @@
 //
 // Hoy su ficha tiene UNA fila de client_preferences: la Demanda 1 (principal). Este script:
 //  1. renombra esa fila a «Demanda 1» y le pone `end_client_label` «Demanda 1 · lado Recoletos», SOLO si su
-//     nombre sigue siendo el de por defecto («Encargo 1»): no pisa ediciones manuales. NO toca su brief.
+//     nombre sigue siendo el de por defecto («Encargo 1»): no pisa ediciones manuales. Además completa SOLO lo vacío de su brief (completeDemanda1): minFloor 1 («no bajo»), imprescindible exterior, deseables terraza y balcón, y la nota «Reformado (leer descripción)» (en alquiler «reformado» no se puede exigir).
 //  2. crea «Demanda 2» (estudiantes, enero–junio) y «Demanda 3» (larga estancia), no principales.
 //  3. lanza el pase inicial (UN aviso agrupado por encargo al asesor asignado y a los admins) solo de los encargos
 //     NUEVOS, salvo --no-notify.
@@ -32,7 +32,7 @@
 // Sin --yes (ni --dry) se niega a escribir.
 import { pathToFileURL } from "node:url";
 import { createAdminClient } from "../lib/db/admin.ts";
-import { EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
+import { briefFromRow, EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
 import { createEncargo, listEncargos, updateEncargo } from "../lib/db/queries/encargos.ts";
 import { runEncargoInitialPass } from "../lib/encargos/runner.ts";
 
@@ -78,7 +78,33 @@ export const DEMANDA_3: { label: string; endClientLabel: string; brief: BriefInp
   },
 };
 
+const REFORMADO_NOTE = "Reformado (leer descripción)";
+
+/**
+ * Lo que falta en el brief de la Demanda 1 y se puede leer en el texto de los anuncios: «no bajo» (minFloor 1),
+ * «exterior» (imprescindible) y «balcón o terraza» (deseables, no imprescindibles: vale una u otra). Solo rellena
+ * lo que está vacío; nunca pisa una edición manual. «Reformado» NO se puede exigir en alquiler (conditionPref es
+ * solo de venta y no se guarda), así que va en las notas: el asesor lo lee en la descripción.
+ */
+export function completeDemanda1(b: BriefInput): { brief: BriefInput; fills: string[] } {
+  const next: BriefInput = { ...b };
+  const fills: string[] = [];
+  if (b.minFloor === null) { next.minFloor = 1; fills.push("minFloor=1 (no bajo)"); }
+  if (b.mustHave.length === 0) { next.mustHave = ["exterior"]; fills.push("imprescindible: exterior"); }
+  if (b.niceToHave.length === 0) {
+    next.niceToHave = ["terraza", "balcon"].filter((k) => !next.mustHave.includes(k));
+    if (next.niceToHave.length) fills.push("deseable: terraza, balcón");
+  }
+  if (!/reformad/i.test(b.notes ?? "")) {
+    next.notes = b.notes && b.notes.trim() ? `${b.notes.trim()} · ${REFORMADO_NOTE}` : REFORMADO_NOTE;
+    fills.push("nota: reformado");
+  }
+  return { brief: next, fills };
+}
+
 export type SeedYeanetteResult = {
+  /** Campos del brief de la Demanda 1 que se completan (o completarían, en dry). */
+  primaryFills: string[];
   created: string[];
   updated: string[];
   skipped: string[];
@@ -93,7 +119,7 @@ export async function seedYeanetteEncargos(
 ): Promise<SeedYeanetteResult> {
   const dry = !!opts.dryRun;
   const notify = opts.notify !== false;
-  const out: SeedYeanetteResult = { created: [], updated: [], skipped: [], initialPasses: [] };
+  const out: SeedYeanetteResult = { primaryFills: [], created: [], updated: [], skipped: [], initialPasses: [] };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
@@ -104,18 +130,26 @@ export async function seedYeanetteEncargos(
   const existing = await listEncargos(clientId);
   const primary = existing.find((e) => e.isPrimary);
 
-  // 1) La fila principal pasa a ser la Demanda 1 (sin tocar su brief), salvo que ya se haya renombrado a mano.
+  // 1) La fila principal pasa a ser la Demanda 1 (solo se rellenan campos vacíos del brief), salvo nombre editado.
   if (!primary) {
     out.skipped.push("sin encargo principal: no se crean Demanda 2 ni Demanda 3");
     return out;
   }
-  if (primary.label === DEFAULT_PRIMARY_LABEL) {
+  const renamed = primary.label === DEFAULT_PRIMARY_LABEL;
+  const { data: primaryRow } = await db.from("client_preferences").select("*").eq("id", primary.id).maybeSingle();
+  const completion = completeDemanda1(briefFromRow(primaryRow));
+  out.primaryFills = completion.fills;
+  if (renamed || completion.fills.length) {
     if (!dry) {
-      const r = await updateEncargo(primary.id, { label: DEMANDA_1.label, endClientLabel: DEMANDA_1.endClientLabel });
-      if (!r.ok) throw new Error(`No se pudo renombrar la Demanda 1: ${r.error}`);
+      const r = await updateEncargo(primary.id, {
+        ...(renamed ? { label: DEMANDA_1.label, endClientLabel: DEMANDA_1.endClientLabel } : {}),
+        ...(completion.fills.length ? { brief: completion.brief } : {}),
+      });
+      if (!r.ok) throw new Error(`No se pudo actualizar la Demanda 1: ${r.error}`);
     }
-    out.updated.push(DEMANDA_1.label);
-  } else {
+    out.updated.push(primary.label === DEFAULT_PRIMARY_LABEL ? DEMANDA_1.label : primary.label);
+  }
+  if (!renamed) {
     out.skipped.push(`${primary.label} (principal, nombre ya editado)`);
   }
 
@@ -161,6 +195,7 @@ if (isMain) {
   const p = dry ? "[dry] " : "";
   console.log(`${p}${dry ? "se crearían" : "creados"}: ${r.created.join(", ") || "(ninguno)"}`);
   console.log(`${p}${dry ? "se renombrarían" : "renombrados"}: ${r.updated.join(", ") || "(ninguno)"}`);
+  console.log(`${p}${dry ? "completará" : "completado"} en la Demanda 1: ${r.primaryFills.join("; ") || "(nada)"}`);
   console.log(`${p}saltados: ${r.skipped.join(" | ") || "(ninguno)"}`);
   for (const i of r.initialPasses) console.log(`pase inicial ${i.label}: ${i.inserted} coincidencias, ${i.notified} avisadas`);
   if (!dry && !notify && r.created.length) console.log("Pases iniciales NO lanzados (--no-notify).");
