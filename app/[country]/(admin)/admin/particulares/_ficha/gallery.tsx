@@ -98,7 +98,7 @@ function EmptyGallery({ sourceUrl, portal }: { sourceUrl: string; portal: string
         <p className="text-base font-bold text-ink">Sin fotos en el anuncio</p>
         <p className="mt-1 text-sm text-ink/60">El anunciante no ha subido imágenes. Puedes comprobarlo en el portal.</p>
       </div>
-      <a
+      {sourceUrl && <a
         href={sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
@@ -106,7 +106,7 @@ function EmptyGallery({ sourceUrl, portal }: { sourceUrl: string; portal: string
       >
         <ExternalLink size={14} strokeWidth={1.75} />
         Abrir en {portal}
-      </a>
+      </a>}
     </div>
   );
 }
@@ -345,7 +345,7 @@ export function Gallery({
         {/* Etiquetas */}
         <div className="pointer-events-none absolute left-3 top-3 z-[3] flex flex-wrap items-center gap-1.5">
           <span className="rounded-md bg-ink/85 px-2.5 py-1 crm-label-sm text-cream-50 backdrop-blur">{operationLabel}</span>
-          <span className="rounded-md bg-gold px-2.5 py-1 crm-label-sm text-fixed-ink">{portalLabel}</span>
+          {portalLabel && <span className="rounded-md bg-gold px-2.5 py-1 crm-label-sm text-fixed-ink">{portalLabel}</span>}
           {retired && <span className="rounded-md bg-red-600 px-2.5 py-1 crm-label-sm text-white">Retirado</span>}
         </div>
 

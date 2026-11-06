@@ -130,6 +130,8 @@ type CardProps = {
   onToggleSelect?: (id: string) => void;
   /** Dónde está ya este anuncio respecto a la ficha del cliente elegido. */
   flow?: "pending" | "property" | "book";
+  /** Modo cliente (pantalla compartida): sin origen ni datos de contacto; solo un punto privado. */
+  clientMode?: boolean;
 };
 
 const KIND_ICON_TONE: Record<SourceKind, string> = {
@@ -146,7 +148,7 @@ const FLOW_BADGE = {
   book: { text: "En su book", title: "Está en el book de este cliente.", tone: "bg-emerald-700 text-white" },
 } as const;
 
-function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone, score, selected, onToggleSelect, flow }: CardProps) {
+function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone, score, selected, onToggleSelect, flow, clientMode = false }: CardProps) {
   const retired = !row.is_active;
   const cover = row.cover_url ?? row.photos?.[0]?.url ?? null;
   const op = opLabel(row);
@@ -245,13 +247,20 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             <span className="absolute left-2.5 top-2.5 rounded-md bg-ink/90 px-2 py-1 text-xs font-bold uppercase leading-none tracking-wider text-cream-50">
               {op}
             </span>
-            <span
-              title={KIND_META[rowKind].description}
-              className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-bold leading-none text-ink shadow-sm"
-            >
-              <SourceKindIcon kind={rowKind} size={12} className={KIND_ICON_TONE[rowKind]} />
-              {sourceLabel({ kind: rowKind, portal: row.portal })}
-            </span>
+            {clientMode ? (
+              <span
+                aria-hidden="true"
+                className={cn("absolute right-3 top-3 h-3 w-3 rounded-full ring-2 ring-white/90", rowKind === "particular" ? "bg-emerald-500" : "bg-orange-500")}
+              />
+            ) : (
+              <span
+                title={KIND_META[rowKind].description}
+                className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-bold leading-none text-ink shadow-sm"
+              >
+                <SourceKindIcon kind={rowKind} size={12} className={KIND_ICON_TONE[rowKind]} />
+                {sourceLabel({ kind: rowKind, portal: row.portal })}
+              </span>
+            )}
           </div>
 
           {/* Nuevo / Bajó de precio: lo que más pesa para captar, siempre sobre la foto. */}
@@ -357,7 +366,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             {street && zone && <p className="truncate pl-[21px] text-xs text-ink/60">{zone}</p>}
           </div>
 
-          {sources && (
+          {sources && !clientMode && (
             <div className={cn("min-w-0 rounded-lg border border-ink/10 bg-cream-50/70 px-2.5 py-1.5", L.linked[layout])}>
               <ul className="space-y-0.5" aria-label="Fuentes del inmueble">
                 {sources.shown.map((o, i) => (
@@ -388,7 +397,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
 
           {/* Estado del contacto y gestión interna: pastillas, no párrafos. */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {row.phone ? (
+            {clientMode ? null : row.phone ? (
               <button
                 type="button"
                 onClick={() => onCopyPhone(row.phone!, row.id)}
@@ -414,12 +423,12 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
                 Sin teléfono
               </Pill>
             )}
-            {row.assigned_name && (
+            {!clientMode && row.assigned_name && (
               <Pill tone="blue" icon={<UserCheck size={12} strokeWidth={2} />}>
                 {row.assigned_name}
               </Pill>
             )}
-            {row.last_contact_by && (
+            {!clientMode && row.last_contact_by && (
               <Pill tone="violet" icon={<ClipboardList size={12} strokeWidth={2} />}>
                 Contactado · {row.last_contact_by}
                 {row.last_contact_at && ` · ${SHORT_DATE.format(new Date(row.last_contact_at))}`}
@@ -428,7 +437,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             {retired && row.taken_down_at && (
               <Pill tone="red">Retirado · {SHORT_DATE.format(new Date(row.taken_down_at))}</Pill>
             )}
-            {row.fuera_de_zona === "true" && (
+            {!clientMode && row.fuera_de_zona === "true" && (
               <Pill tone="grey" title="Ya no se rastrea: su zona no está marcada en Sindicación">
                 Fuera de zona
               </Pill>
@@ -450,13 +459,17 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             <span className={cn("font-semibold text-ink/75", L.metaPrefix[layout])}>
               {op}
               <span aria-hidden="true"> · </span>
-              {portal}
-              <span aria-hidden="true"> · </span>
+              {clientMode ? null : (
+                <>
+                  {portal}
+                  <span aria-hidden="true"> · </span>
+                </>
+              )}
             </span>
             <span title={absolute ? `Detectado el ${absolute}` : undefined}>
               {ago ?? (absolute ? `Detectado el ${absolute}` : "")}
             </span>
-            {row.particular_reference && (
+            {!clientMode && row.particular_reference && (
               <span className="ml-auto hidden font-mono text-xs text-ink/55 sm:inline">{row.particular_reference}</span>
             )}
           </p>
@@ -470,7 +483,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
           L.actions[layout],
         )}
       >
-        {row.phone ? (
+        {clientMode ? null : row.phone ? (
           <>
             <a
               href={telHref(row.phone)}

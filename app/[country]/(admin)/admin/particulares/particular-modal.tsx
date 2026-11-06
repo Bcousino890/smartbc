@@ -754,6 +754,7 @@ export function ParticularModal({
   canCreateProperty = true,
   staffOptions = [],
   clientFlow,
+  clientMode = false,
 }: {
   row: ParticularRow;
   onClose: () => void;
@@ -762,6 +763,8 @@ export function ParticularModal({
   onActiveChanged?: (active: boolean, takenDownAt: string | null) => void;
   canCreateProperty?: boolean;
   staffOptions?: StaffOption[];
+  /** Modo cliente (pantalla compartida): sin origen ni datos de contacto del anunciante. */
+  clientMode?: boolean;
   /** Cliente para el que se capta (lo gobierna la página de Captaciones): activa la tarjeta «Para el encargo de…». */
   clientFlow?: {
     client: PickedClient | null;
@@ -808,7 +811,7 @@ export function ParticularModal({
     // La galería completa de la ficha abierta viene del detalle (puede traer más que el grupo).
     return list.map((s) => (s.id === currentRow.id && ownPhotos.length > s.photos.length ? { ...s, photos: ownPhotos } : s));
   }, [groupMembers, agencyWebs, currentRow.id, ownPhotos]);
-  const pickerOn = photoSources.length > 1;
+  const pickerOn = photoSources.length > 1 && !clientMode;
   const activeSource =
     (pickerOn && pickedSource?.rowId === row.id ? photoSources.find((s) => s.id === pickedSource.sourceId) : undefined) ??
     photoSources.find((s) => s.id === currentRow.id);
@@ -996,7 +999,11 @@ export function ParticularModal({
     {districtText && <p className="ml-[22px] text-sm text-ink/70">Distrito {districtText}</p>}
     <div className="mt-3 flex flex-wrap gap-1.5">
       <span className="rounded-md bg-ink px-2 py-0.5 text-xs font-semibold text-cream-50">{operationLabel}</span>
-      <span className="rounded-md bg-gold/30 px-2 py-0.5 text-xs font-semibold text-ink">{portalLabel}</span>
+      {clientMode ? (
+        <span aria-hidden="true" className={cn("my-auto h-3 w-3 rounded-full", currentRow.advertiser_type === "professional" ? "bg-orange-500" : "bg-emerald-500")} />
+      ) : (
+        <span className="rounded-md bg-gold/30 px-2 py-0.5 text-xs font-semibold text-ink">{portalLabel}</span>
+      )}
     </div>
   </div>
   );
@@ -1163,12 +1170,14 @@ export function ParticularModal({
         >
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-4 py-3 sm:px-6">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              {currentRow.particular_reference && (
+              {!clientMode && currentRow.particular_reference && (
                 <span className="rounded-md border border-gold-dark/30 bg-gold/10 px-2 py-0.5 font-mono text-xs font-semibold text-ink">{currentRow.particular_reference}</span>
               )}
+              {!clientMode && (
               <span className="rounded-md border border-ink/15 bg-ink/5 px-2 py-0.5 font-mono text-xs text-ink/70">
                 {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
+              )}
               {relativeTime(currentRow.detected_at ?? currentRow.created_at) && <span className="text-xs text-ink/65">Detectado {relativeTime(currentRow.detected_at ?? currentRow.created_at)}</span>}
             </div>
             <button type="button" onClick={onClose} aria-label="Cerrar ficha" className="rounded-full p-2 text-ink hover:bg-ink/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink">
@@ -1186,9 +1195,9 @@ export function ParticularModal({
                   loadingMore={detailLoading}
                   title={title}
                   operationLabel={operationLabel}
-                  portalLabel={portalLabel}
+                  portalLabel={clientMode ? "" : portalLabel}
                   retired={!currentRow.is_active}
-                  sourceUrl={currentRow.source_url}
+                  sourceUrl={clientMode ? "" : currentRow.source_url}
                   hasPlan={Boolean(currentRow.floor_plan_url)}
                   hasVideo={Boolean(currentRow.video_url)}
                   onOpenViewer={openViewer}
@@ -1234,9 +1243,9 @@ export function ParticularModal({
 
                 <div role="tablist" aria-label="Secciones de la ficha" className="flex border-b border-ink/10">
                   {tabBtn("detalles", "Detalles")}
-                  {tabBtn("fuentes", sourcesCount != null ? `Fuentes (${sourcesCount})` : "Fuentes")}
+                  {!clientMode && tabBtn("fuentes", sourcesCount != null ? `Fuentes (${sourcesCount})` : "Fuentes")}
                   {tabBtn("historico", "Histórico")}
-                  {tabBtn("contactos", "Contactos")}
+                  {!clientMode && tabBtn("contactos", "Contactos")}
                 </div>
 
                 {tab === "detalles" && (
@@ -1252,7 +1261,7 @@ export function ParticularModal({
                         )}
                       </section>
                     )}
-                    <EnrichmentSection rowId={currentRow.id} onChanged={() => router.refresh()} />
+                    {!clientMode && <EnrichmentSection rowId={currentRow.id} onChanged={() => router.refresh()} />}
                     {features.length > 0 && (
                       <section>
                         <h3 className="mb-2 text-sm font-semibold text-ink">Características</h3>
@@ -1300,7 +1309,7 @@ export function ParticularModal({
                         />
                       </section>
                     )}
-                    {(currentRow.source_update_text || currentRow.advertiser_profile_url) && (
+                    {!clientMode && (currentRow.source_update_text || currentRow.advertiser_profile_url) && (
                       <div className="space-y-1 text-xs text-ink/65">
                         {currentRow.source_update_text && <p>{esText(currentRow.source_update_text)}</p>}
                         {currentRow.advertiser_profile_url && (
@@ -1313,7 +1322,7 @@ export function ParticularModal({
                   </div>
                 )}
 
-                {tab === "fuentes" && (
+                {tab === "fuentes" && !clientMode && (
                   <div className="space-y-6">
                     <SourcesTab rowId={currentRow.id} currentOp={currentRow.operation} onCount={setSourcesCount} />
                     <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />
@@ -1326,7 +1335,7 @@ export function ParticularModal({
                   </HistoryTab>
                 )}
 
-                {tab === "contactos" && (
+                {tab === "contactos" && !clientMode && (
                   <div className="rounded-xl border border-ink/10 bg-white p-4">
                     <ContactLog particularId={currentRow.id} />
                   </div>
@@ -1358,16 +1367,16 @@ export function ParticularModal({
                 )}
                 <div className="hidden lg:block">{priceBlock}</div>
                 {clientCard && <div className="hidden lg:block">{clientCard}</div>}
-                {contactCard}
-                {assignCard}
-                {actions}
+                {!clientMode && contactCard}
+                {!clientMode && assignCard}
+                {!clientMode && actions}
               </aside>
             </div>
           </div>
 
           {/* Barra inferior móvil: llamar / WhatsApp siempre al alcance del pulgar */}
           <div className="absolute inset-x-0 bottom-0 z-10 flex gap-2 border-t border-ink/10 bg-white p-3 lg:hidden">
-            {hasPhone ? (
+            {clientMode ? null : hasPhone ? (
               <>
                 <a href={`tel:${currentRow.phone}`} className={cn(btnPrimary, "flex-1 bg-emerald-700 text-white")}>
                   <Phone size={16} /> Llamar
