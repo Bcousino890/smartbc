@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Prueba el CRUD de encargos y las acciones contra un Postgres REAL desechable
+# (nunca `supabase-db`, salvo el volcado de esquema en solo lectura).
+#   bash scripts/test-encargos-actions.sh
+set -uo pipefail
+cd "$(dirname "$0")/.."
+export PATH=/opt/node22-standalone/bin:$PATH
+NAME=encargos-pg-test-t4
+source scripts/lib-encargos-testdb.sh
+trap 'encargos_testdb_down "$NAME"' EXIT
+encargos_testdb_up "$NAME" 54998 || exit 1
+docker exec -i "$NAME" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q < supabase/migrations/0243_encargos_multiples.sql >/dev/null || { echo "FAIL: migración 0243"; exit 1; }
+ENCARGOS_PG_CONTAINER="$NAME" node --experimental-strip-types --import ./scripts/node-ts-loader.mjs \
+  --import ./scripts/shims/test-loader-encargos-actions.mjs scripts/test-encargos-actions.mts

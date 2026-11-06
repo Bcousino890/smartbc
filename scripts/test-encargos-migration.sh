@@ -19,25 +19,11 @@ cleanup
 [ -f "$MIG" ] || { echo "FAIL: falta $MIG"; exit 1; }
 [ -f "$ROLLBACK" ] || { echo "FAIL: falta $ROLLBACK"; exit 1; }
 
-docker run -d --name "$NAME" -e POSTGRES_PASSWORD=test -p 54999:5432 "$IMAGE" >/dev/null || { echo "FAIL: no arranca el contenedor"; exit 1; }
-for _ in $(seq 1 60); do
-  docker exec "$NAME" pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1 && break
-  sleep 1
-done
-sleep 3
+# shellcheck source=scripts/lib-encargos-testdb.sh
+source scripts/lib-encargos-testdb.sh
+encargos_testdb_up "$NAME" 54999 || exit 1
 psq() { docker exec -i "$NAME" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -qtA "$@"; }
 psq_loose() { docker exec -i "$NAME" psql -U postgres -d postgres -qtA "$@"; }
-
-# Roles de Supabase y esquema (volcado de solo lectura del real).
-psq_loose -c "DO \$\$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role NOLOGIN; END IF;
-END \$\$;" >/dev/null 2>&1
-docker exec supabase-db pg_dump -U postgres --schema-only --schema=public postgres 2>/dev/null \
-  | docker exec -i "$NAME" psql -U postgres -d postgres -q >/dev/null 2>&1
-n=$(psq -c "select count(*) from information_schema.tables where table_name='client_preferences'")
-[ "$n" = "1" ] || { echo "FAIL: el esquema no se cargó (client_preferences ausente)"; exit 1; }
 
 check() { # descripción, esperado, obtenido
   if [ "$2" = "$3" ]; then echo "ok   - $1"; else echo "FAIL - $1 (esperado '$2', obtenido '$3')"; FAILS=$((FAILS+1)); fi
@@ -46,8 +32,7 @@ expect_fail() { # descripción, sql
   if psq -c "$2" >/dev/null 2>&1; then echo "FAIL - $1 (debía fallar)"; FAILS=$((FAILS+1)); else echo "ok   - $1"; fi
 }
 
-# Datos previos: 2 clientes con preferencias. Sin FK a auth.users para no depender de ella.
-psq_loose -c "ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey" >/dev/null 2>&1
+# Datos previos: 2 clientes con preferencias.
 A=11111111-1111-1111-1111-111111111111
 B=22222222-2222-2222-2222-222222222222
 psq -c "INSERT INTO profiles(id, email) VALUES ('$A','a@test.local'),('$B','b@test.local')" >/dev/null || { echo "FAIL: no se pudieron crear perfiles de prueba"; exit 1; }

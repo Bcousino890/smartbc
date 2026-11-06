@@ -20,6 +20,12 @@ const ENV: Record<string, string> = {
   PGUSER: "bcp_test",
   PGDATABASE: "bcp_test",
 };
+// Opt-in: sin psql local, ejecuta el mismo SQL dentro de un contenedor Postgres
+// DESECHABLE (solo nombres encargos-pg-test*; nunca `supabase-db`).
+const DOCKER = process.env.ENCARGOS_PG_CONTAINER ?? "";
+if (DOCKER && !/^encargos-pg-test[a-z0-9-]*$/.test(DOCKER)) throw new Error("shim: contenedor no permitido");
+const PSQL_CMD = DOCKER ? "/usr/bin/docker" : PSQL;
+const PSQL_ARGS = DOCKER ? ["exec", "-i", DOCKER, "psql", "-U", "postgres", "-d", "postgres"] : [];
 if (ENV.PGHOST !== "127.0.0.1" || ENV.PGPORT !== "54329" || ENV.PGDATABASE !== "bcp_test") throw new Error("shim: destino inesperado");
 
 type Err = { message: string; code: string };
@@ -42,7 +48,7 @@ export function runSql(sql: string): Promise<Res<string>> {
   sqlLog.push(sql);
   const input = `\\set ON_ERROR_STOP 1\n\\set VERBOSITY verbose\nSET ROLE service_role;\n${sql};\n`;
   return new Promise((resolve) => {
-    const p = execFile(PSQL, ["-X", "-q", "-tA", "-v", "ON_ERROR_STOP=1"], { env: ENV, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const p = execFile(PSQL_CMD, [...PSQL_ARGS, "-X", "-q", "-tA", "-v", "ON_ERROR_STOP=1"], { env: ENV, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
         const m = stderr.match(/ERROR:\s+([0-9A-Z]{5}):\s+([^\n]*)/);
         return resolve({ data: "", error: { code: m?.[1] ?? "XX000", message: m?.[2]?.trim() ?? stderr.trim() } });
