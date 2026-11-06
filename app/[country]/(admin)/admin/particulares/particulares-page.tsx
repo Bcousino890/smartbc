@@ -94,10 +94,12 @@ export default async function AdminParticularesPage({
     // Sin `min-h-screen` ni pie: tras la paginación solo queda el margen
     // inferior. El layout del CRM ya da la altura mínima de la página.
     <div className="mx-auto max-w-[1400px] px-4 pb-8 sm:px-6 lg:px-10">
-      <AdminPageHeader
-        titleKey="adminParticulares.title"
-        subtitleKey="adminParticulares.subtitle"
-      />
+      <div data-cm-header>
+        <AdminPageHeader
+          titleKey="adminParticulares.title"
+          subtitleKey="adminParticulares.subtitle"
+        />
+      </div>
 
       <ParticularesClient
         rows={rows}
