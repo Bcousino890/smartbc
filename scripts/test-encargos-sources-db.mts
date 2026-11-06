@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { createAdminClient } from "../lib/db/admin.ts";
 import { EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
 import type { Encargo } from "../lib/encargos/model.ts";
-import { matchNewForEncargo, matchStockForEncargo } from "../lib/encargos/sources.ts";
+import { matchNewForEncargo, matchStockForEncargo, propertyComesFromAd } from "../lib/encargos/sources.ts";
+import { __setDbMaxRows } from "./shims/supabase-on-psql.mts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = createAdminClient() as any;
@@ -41,9 +42,11 @@ await particular(P.TAKEN, { taken_down_at: ago(30) });
 await particular(P.ZONE, { zone: "Vallecas" });
 await particular(P.TEXT, { description: "Piso exterior con terraza, reformado.", features: ["Ascensor"] });
 await particular(P.INTERIOR, { description: "Bajo interior, reformado, con terraza." });
+// Anuncio de Idealista (fuera de zona: no entra él mismo) del que luego se importa una propiedad.
+await particular(12, { zone: "Vallecas", source_url: "https://www.idealista.com/inmueble/12345678/" });
 
 // ── Propiedades ─────────────────────────────────────────────────────────────
-const R = { OK: 21, YOUNG: 22, ARCHIVED: 23, SOLD: 24, CL: 25, OLD: 26, REAVAIL: 27, REAVAIL_YOUNG: 28 };
+const R = { OK: 21, YOUNG: 22, ARCHIVED: 23, SOLD: 24, CL: 25, OLD: 26, REAVAIL: 27, REAVAIL_YOUNG: 28, CAPTADA: 29, SUPPRESSED: 30, SRC_AD: 31, AGENCY: 32 };
 async function property(id: number, o: Record<string, unknown> = {}) {
   const { error } = await db.from("properties").insert({
     id: uuid(id), slug: `prop-${id}`, title: `Propiedad ${id}`, operation: "sale", price: 500000, zone: "Salamanca",
@@ -59,6 +62,14 @@ await property(R.CL, { country: "cl" });
 await property(R.OLD, { created_at: ago(10 * 24 * 60) });
 await property(R.REAVAIL, { created_at: ago(10 * 24 * 60) });
 await property(R.REAVAIL_YOUNG, { created_at: ago(10 * 24 * 60) });
+// Propiedades que nacen de un anuncio: «Captar para…»/«Crear propiedad» (external_id particular-<id>),
+// importada sin «Avisar por correo» (0214) e importada CON aviso desde el enlace de un anuncio que ya
+// está en Captaciones (misma referencia de Idealista, con basura de tracking en la URL).
+await property(R.CAPTADA, { external_id: `particular-${uuid(P.OK)}` });
+await property(R.SUPPRESSED, { new_listing_alerts_suppressed: true, source_url: "https://www.fotocasa.es/es/comprar/vivienda/madrid/1/999" });
+await property(R.SRC_AD, { source_url: "https://idealista.com/inmueble/12345678/?xtor=foo#fotos" });
+// Propiedad genuina de agencia con enlace a un anuncio que NO está en Captaciones: sí cuenta.
+await property(R.AGENCY, { source_url: "https://www.idealista.com/inmueble/87654321/" });
 for (const id of [R.REAVAIL, R.REAVAIL_YOUNG]) {
   assert.ifError((await db.from("properties").update({ status: "reserved" }).eq("id", uuid(id))).error);
   assert.ifError((await db.from("properties").update({ status: "available" }).eq("id", uuid(id))).error);
@@ -80,7 +91,7 @@ const win = (sinceIso: string, untilIso: string) => ({ sinceIso, untilIso });
 
 // ── Nuevo (since + 15 min de vida) ──────────────────────────────────────────
 const fresh = await matchNewForEncargo(encargo({}), win(since, ago(15)));
-ok(JSON.stringify(ids(fresh)) === JSON.stringify(want(P.OK, P.SUSPECT, P.TEXT, P.INTERIOR, R.OK, R.REAVAIL)),
+ok(JSON.stringify(ids(fresh)) === JSON.stringify(want(P.OK, P.TEXT, P.INTERIOR, R.OK, R.REAVAIL, R.AGENCY)),
   "matchNew: solo lo creado en (since, until] (+ propiedad re-disponible)", ids(fresh).map((i) => i.slice(-2)));
 ok(!ids(fresh).includes(uuid(P.DUP)), "matchNew: duplicate_of excluido");
 ok(!ids(fresh).includes(uuid(P.FRAUD)), "matchNew: fraude confirmado excluido");
@@ -95,8 +106,17 @@ ok(reavail?.item.source === "property" && reavail.item.canonicalId === uuid(R.RE
 const okP = fresh.find((m) => m.item.id === uuid(P.OK));
 ok(okP?.item.source === "particular" && okP.item.canonicalId === uuid(P.OK) && okP.item.price === 500000 && okP.item.zone === "Salamanca", "particular: SourceItem completo", okP?.item);
 ok(/Z$/.test(okP?.item.createdAt ?? ""), "createdAt en ISO UTC", okP?.item.createdAt);
-const susp = fresh.find((m) => m.item.id === uuid(P.SUSPECT));
-ok(!!susp && susp.warnings.some((w) => /fraude/i.test(w)), "fraude 'suspect': entra pero con aviso", susp?.warnings);
+ok(!ids(fresh).includes(uuid(P.SUSPECT)), "matchNew: fraude 'suspect' también excluido (como el bloque de matching)");
+for (const [k, name] of [[R.CAPTADA, "external_id particular-…"], [R.SUPPRESSED, "importada sin avisar (suppressed)"], [R.SRC_AD, "source_url = anuncio de Captaciones"]] as const) {
+  ok(!ids(fresh).includes(uuid(k)), `matchNew: propiedad que nace de un anuncio (${name}) excluida`);
+}
+ok(ids(fresh).includes(uuid(R.AGENCY)), "matchNew: propiedad de agencia con enlace a un anuncio que no está en Captaciones: entra");
+{
+  const none = new Set<string>();
+  ok(propertyComesFromAd({ external_id: "particular-x" }, none) && !propertyComesFromAd({ external_id: "idealista-1" }, none), "propertyComesFromAd: external_id");
+  ok(propertyComesFromAd({ source_url: "https://www.idealista.com/inmueble/1/" }, new Set(["idealista.com#1"])), "propertyComesFromAd: misma clave de portal");
+  ok(!propertyComesFromAd({ source_url: "https://www.idealista.com/inmueble/2/" }, new Set(["idealista.com#1"])) && !propertyComesFromAd({ source_url: null }, none), "propertyComesFromAd: otra referencia / sin enlace");
+}
 
 const untilNow = await matchNewForEncargo(encargo({}), win(since, new Date().toISOString()));
 ok(ids(untilNow).includes(uuid(P.YOUNG)) && ids(untilNow).includes(uuid(R.YOUNG)) && ids(untilNow).includes(uuid(R.REAVAIL_YOUNG)), "matchNew con until = ahora: entran los jóvenes");
@@ -105,8 +125,8 @@ ok(sinceNow.length === 0, "matchNew con ventana vacía: nada");
 
 // ── Stock ───────────────────────────────────────────────────────────────────
 const stock = await matchStockForEncargo(encargo({}));
-ok(JSON.stringify(ids(stock)) === JSON.stringify(want(P.OK, P.SUSPECT, P.YOUNG, P.OLD, P.TEXT, P.INTERIOR, R.OK, R.YOUNG, R.OLD, R.REAVAIL, R.REAVAIL_YOUNG)),
-  "matchStock: todo lo vigente (sin copias, fraude, inactivos, archivadas, otro país/zona)", ids(stock).map((i) => i.slice(-2)));
+ok(JSON.stringify(ids(stock)) === JSON.stringify(want(P.OK, P.YOUNG, P.OLD, P.TEXT, P.INTERIOR, R.OK, R.YOUNG, R.OLD, R.REAVAIL, R.REAVAIL_YOUNG, R.AGENCY)),
+  "matchStock: todo lo vigente (sin copias, fraude ni sospechoso, inactivos, archivadas, otro país/zona, ni propiedades que nacen de un anuncio)", ids(stock).map((i) => i.slice(-2)));
 
 // ── La descripción llega de la BD al motor ──────────────────────────────────
 const strict = encargo({ minFloor: 1, mustHave: ["exterior", "terraza"], conditionPref: "renovated" });
@@ -167,6 +187,13 @@ ok(cheap.length === 0, "presupuesto 100k: nada del stock (500k) pasa el prefiltr
   ok(allNew.length === 2300, "nuevo > 1000: también paginado", allNew.length);
   const small = await matchStockForEncargo(big, { pageSize: 100 });
   ok(small.length === 2300, "pageSize 100: mismo resultado", small.length);
+  // El servidor devuelve menos filas de las pedidas (db-max-rows < tamaño de página): no se trunca.
+  __setDbMaxRows(37);
+  const shortPages = await matchStockForEncargo(big);
+  const shortNew = await matchNewForEncargo(big, win(ago(24 * 60), ago(15)));
+  __setDbMaxRows(null);
+  ok(shortPages.length === 2300 && new Set(shortPages.map((m) => m.item.id)).size === 2300, "db-max-rows 37 < página 1000: stock completo igualmente", shortPages.length);
+  ok(shortNew.length === 2300, "db-max-rows 37: ventana completa igualmente", shortNew.length);
 
   // Tope duro con aviso (tope pequeño inyectado).
   const warns: string[] = [];
@@ -181,6 +208,11 @@ ok(cheap.length === 0, "presupuesto 100k: nada del stock (500k) pasa el prefiltr
   await matchStockForEncargo(big);
   console.warn = orig;
   ok(warns2.length === 0, "sin tope alcanzado: sin aviso", warns2);
+  const warns3: string[] = [];
+  console.warn = (...a: unknown[]) => { warns3.push(a.join(" ")); };
+  const exact = await matchStockForEncargo(big, { pageSize: 1000, maxRows: 2300 });
+  console.warn = orig;
+  ok(exact.length === 2300 && warns3.length === 0, "tope exactamente igual al total: sin aviso (no queda nada)", warns3);
 }
 
 console.log(`test-encargos-sources-db: ${n} comprobaciones OK`);

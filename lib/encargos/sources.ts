@@ -8,6 +8,7 @@ import {
   particularCandidateQuery,
   particularFeatureList,
 } from "@/lib/db/queries/suggested-particulares";
+import { parsePortalUrl } from "@/lib/portal-links/portals";
 import type { Encargo, EncargoSource } from "./model";
 
 // ============================================================================
@@ -36,7 +37,6 @@ export type SourceItem = {
 
 export type ItemMatch = { item: SourceItem; score: number; reasons: string[]; warnings: string[] };
 
-const SUSPECT_WARNING = "Anuncio marcado como sospechoso de fraude: verificar antes de contactar";
 /** Filas por página y tope de seguridad por fuente y llamada (no se trunca nunca en silencio). */
 export const PAGE_SIZE = 1000;
 export const MAX_ROWS_PER_SOURCE = 30000;
@@ -46,7 +46,9 @@ const ID_CHUNK = 100;
 
 /**
  * Recorre una consulta por páginas con clave `id` (keyset: `id > último`, orden por id) hasta
- * agotarla. Si se alcanza `maxRows` con más filas pendientes, avisa con console.warn y para.
+ * recibir una página VACÍA. No se fía de que una página corta sea la última: PostgREST puede
+ * devolver menos filas de las pedidas (`db-max-rows`) y eso no significa que no haya más.
+ * Si se alcanza `maxRows` y aún quedan filas, avisa con console.warn y para.
  */
 async function pageAll(
   label: string,
@@ -63,19 +65,24 @@ async function pageAll(
   let after: string | null = null;
   for (;;) {
     const room = max - scanned;
-    const { data, error } = await fetchPage(after, Math.min(size, room));
-    if (error) throw new Error(`${label}: ${error.message}`);
-    const rows = data ?? [];
-    scanned += rows.length;
-    if (rows.length) onPage(rows);
-    if (rows.length < Math.min(size, room)) return; // agotada
-    after = String(rows[rows.length - 1].id);
-    if (scanned >= max) {
-      console.warn(
-        `[encargos] matching truncado: encargo ${encargoId}, fuente ${label}: tope de ${max} filas alcanzado con más resultados pendientes`,
-      );
+    if (room <= 0) {
+      // Tope alcanzado: solo se avisa si de verdad queda algo por leer.
+      const { data, error } = await fetchPage(after, 1);
+      if (error) throw new Error(`${label}: ${error.message}`);
+      if ((data ?? []).length) {
+        console.warn(
+          `[encargos] matching truncado: encargo ${encargoId}, fuente ${label}: tope de ${max} filas alcanzado con más resultados pendientes`,
+        );
+      }
       return;
     }
+    const { data, error } = await fetchPage(after, Math.min(size, room));
+    if (error) throw new Error(`${label}: ${error.message}`);
+    const rows = (data ?? []).slice(0, room);
+    if (!rows.length) return; // agotada
+    scanned += rows.length;
+    onPage(rows);
+    after = String(rows[rows.length - 1].id);
   }
 }
 
@@ -120,7 +127,7 @@ export function sourceItemsFromRows(source: EncargoSource, rows: any[]): SourceI
 const PROPERTY_COLUMNS =
   "id, title, description, zone, subzone, latitude, longitude, bedrooms, bathrooms, square_meters, " +
   "price, rent_price, operation, operations, stay, property_type, features, features_manual, " +
-  "floor_override, available_from, created_at, property_photos(id)";
+  "floor_override, available_from, created_at, external_id, source_url, property_photos(id)";
 
 type Window = { since?: string; until?: string };
 
@@ -133,8 +140,81 @@ function propertyQuery(supabase: any, brief: Encargo["brief"]) {
     .is("archived_at", null)
     // Fichas de referencia de Idealista: nunca se sugieren.
     .not("reference_only", "is", true)
-    .eq("country", "es");
+    .eq("country", "es")
+    // Importadas de un anuncio sin «Avisar por correo» (0214): el anuncio ya se vio como anuncio.
+    .eq("new_listing_alerts_suppressed", false);
   return applyPropertyPrefilter(q, brief);
+}
+
+/** `external_id` que ponen «Crear propiedad» / «Captar para…» / la importación desde Captaciones. */
+const FROM_PARTICULAR_EXTERNAL_ID = /^particular-/;
+
+/**
+ * ¿La propiedad nace de un anuncio que ya está en Captaciones? Sin esto, el mismo piso avisaría dos
+ * veces: como anuncio y, al captarlo, como «Propiedad nueva». Regla:
+ *  · `external_id` «particular-<id>» (los dos caminos que crean la ficha desde un anuncio), o
+ *  · `source_url` que es el MISMO anuncio (misma clave `parsePortalUrl().urlKey`: mismo portal y
+ *    referencia) que el `source_url` de alguna fila de `particulares`.
+ * (Las importadas sin «Avisar por correo» ya las quita el filtro `new_listing_alerts_suppressed`.)
+ * `adKeys` = claves `urlKey` de los anuncios de particulares que coinciden (ver `particularAdKeys`).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function propertyComesFromAd(r: any, adKeys: ReadonlySet<string>): boolean {
+  if (typeof r.external_id === "string" && FROM_PARTICULAR_EXTERNAL_ID.test(r.external_id)) return true;
+  if (r.new_listing_alerts_suppressed === true) return true;
+  const key = typeof r.source_url === "string" && r.source_url ? parsePortalUrl(r.source_url)?.urlKey : null;
+  return !!key && adKeys.has(key);
+}
+
+const SAFE_REF = /^[A-Za-z0-9_-]+$/;
+const OR_CHUNK = 20;
+
+/** Claves `urlKey` de los anuncios de `particulares` que coinciden con los `source_url` de estas propiedades. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function particularAdKeys(supabase: any, rows: any[]): Promise<Set<string>> {
+  const refs = new Set<string>();
+  const exact = new Set<string>();
+  for (const r of rows) {
+    if (typeof r.source_url !== "string" || !r.source_url) continue;
+    const p = parsePortalUrl(r.source_url);
+    if (!p) continue;
+    if (p.externalRef && SAFE_REF.test(p.externalRef)) refs.add(p.externalRef);
+    else {
+      exact.add(r.source_url);
+      exact.add(p.url);
+    }
+  }
+  const keys = new Set<string>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const collect = (data: any[] | null) => {
+    for (const x of data ?? []) {
+      const k = x.source_url ? parsePortalUrl(String(x.source_url))?.urlKey : null;
+      if (k) keys.add(k);
+    }
+  };
+  const refList = [...refs];
+  for (let i = 0; i < refList.length; i += OR_CHUNK) {
+    const or = refList.slice(i, i + OR_CHUNK).map((ref) => `source_url.ilike.*${ref}*`).join(",");
+    const { data, error } = await supabase.from("particulares").select("source_url").or(or).limit(1000);
+    if (error) throw new Error(`particulares (origen de propiedades): ${error.message}`);
+    collect(data);
+  }
+  const exactList = [...exact];
+  for (let i = 0; i < exactList.length; i += ID_CHUNK) {
+    const { data, error } = await supabase.from("particulares").select("source_url").in("source_url", exactList.slice(i, i + ID_CHUNK)).limit(1000);
+    if (error) throw new Error(`particulares (origen de propiedades): ${error.message}`);
+    collect(data);
+  }
+  return keys;
+}
+
+/** Quita las propiedades que nacen de un anuncio de Captaciones (ver `propertyComesFromAd`). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function dropAdOriginProperties(supabase: any, rows: any[]): Promise<any[]> {
+  const rest = rows.filter((r) => !propertyComesFromAd(r, new Set()));
+  if (!rest.some((r) => r.source_url)) return rest;
+  const keys = await particularAdKeys(supabase, rest);
+  return rest.filter((r) => !propertyComesFromAd(r, keys));
 }
 
 async function loadProperties(
@@ -156,7 +236,7 @@ async function loadProperties(
   const keep = (rs: { id: string }[]) => rs.forEach((r) => rows.set(r.id, r));
   if (!w.since) {
     await pageAll("properties", encargo.id, lo, paged(() => propertyQuery(supabase, brief)), keep);
-    return [...rows.values()];
+    return dropAdOriginProperties(supabase, [...rows.values()]);
   }
   // «Nuevo» = creada en (since, until], o que pasó a «available» en esa ventana
   // (property_history, escrita por trigger desde la migración 0143: kind='status').
@@ -189,7 +269,7 @@ async function loadProperties(
     if (error) throw new Error(`properties: ${error.message}`);
     keep(data ?? []);
   }
-  return [...rows.values()];
+  return dropAdOriginProperties(supabase, [...rows.values()]);
 }
 
 function matchProperties(encargo: Encargo, rows: Record<string, unknown>[]): ItemMatch[] {
@@ -233,11 +313,12 @@ async function matchParticulares(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (rows: any[]) => {
       for (const r of rows) {
-        if (r.fraud_status === "confirmed") continue;
+        // Sospechoso o confirmado de fraude: fuera, igual que en el bloque de matching de la ficha
+        // (que lo descarta como «Posible fraude»); si no, el aviso llevaría a «ya no encaja».
+        if (r.fraud_status) continue;
         const outcome = evaluateParticularRow(encargo.brief, r);
         if (outcome.excluded) continue;
-        const warnings = r.fraud_status ? [...outcome.warnings, SUSPECT_WARNING] : outcome.warnings;
-        const m: ItemMatch = { item: toItem("particular", r), score: outcome.score, reasons: outcome.reasons, warnings };
+        const m: ItemMatch = { item: toItem("particular", r), score: outcome.score, reasons: outcome.reasons, warnings: outcome.warnings };
         const prev = best.get(m.item.canonicalId);
         if (!prev || prev.score < m.score) best.set(m.item.canonicalId, m);
       }
@@ -271,7 +352,8 @@ export async function matchStockForEncargo(encargo: Encargo, lo?: LoadOptions): 
  * CONTRATO para el llamador (el cron): calcula `untilIso = ahora − 15 min` UNA vez por pasada (así
  * el enlazador de duplicados `link-twins` ya ha corrido sobre todo lo incluido) y guarda `untilIso`
  * como `sinceIso` de la pasada siguiente. Las ventanas encajan sin huecos ni solapes. Sin copias
- * (`duplicate_of`), sin fraude confirmado, activo y sin baja.
+ * (`duplicate_of`), sin fraude (sospechoso ni confirmado), activo y sin baja; sin propiedades que nacen
+ * de un anuncio de Captaciones.
  */
 export async function matchNewForEncargo(
   encargo: Encargo,

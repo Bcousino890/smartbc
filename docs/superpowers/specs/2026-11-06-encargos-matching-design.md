@@ -103,7 +103,7 @@ Una tarea periódica (ruta de cron `/api/cron/encargo-matches`, protegida con `C
 demás, cada pocos minutos) que:
 
 1. Toma lo creado desde la última marca de agua en cada fuente: `properties` (nuevas o recién
-   disponibles), `particulares` (activos, no duplicados, sin fraude confirmado) y `captaciones`.
+   disponibles), `particulares` (activos, no duplicados, sin fraude, ni sospechoso ni confirmado) y `captaciones`.
 2. Evalúa cada elemento contra los encargos **activos** con `evaluateMatch`.
 3. Inserta las coincidencias en `encargo_matches` (idempotente) y crea las notificaciones.
 
