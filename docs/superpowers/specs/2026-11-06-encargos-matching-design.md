@@ -198,7 +198,7 @@ cada encargo muestra todo lo que encaja en este momento, avisado o no.
    («exterior, terraza, reformado») que salió del texto. Cobertura de tests: casos con la evidencia
    solo en la descripción, solo en las características y contradictoria.
 
-8. **Captaciones también elige encargo (petición del dueño, 2026-11-06).** En `/es/admin/captaciones?cliente=…` la barra «Captando para {cliente}» debe permitir elegir **cualquiera de los encargos del cliente** (no solo el principal) y todo lo que depende del encargo debe seguir al elegido: resumen y «Ver encargo», «Editar encargo», «Encaja N» y puntuaciones, brief y zona dibujada del mapa (se guarda en ese encargo), y la tarjeta «Para el encargo de X» de la ficha del anuncio. Captar para el cliente y añadir a su book sigue siendo del cliente. Plan: Task 11.
+8. **Captaciones también elige encargo (petición del dueño, 2026-11-06).** En `/es/admin/captaciones?cliente=…` la barra «Captando para {cliente}» debe permitir elegir **cualquiera de los encargos del cliente** (no solo el principal) y todo lo que depende del encargo debe seguir al elegido: resumen y «Ver encargo», «Editar encargo», «Encaja N» y puntuaciones, brief y zona dibujada del mapa (se guarda en ese encargo), y la tarjeta «Para el encargo de X» de la ficha del anuncio. Al elegir un encargo **los filtros de la pantalla se rellenan solos** a partir de su búsqueda (operación, estancia, precio, dormitorios, baños, m², zonas/barrios), retocables a mano. Captar para el cliente y añadir a su book sigue siendo del cliente. Plan: Task 11.
 
 ## Dejado al constructor
 
