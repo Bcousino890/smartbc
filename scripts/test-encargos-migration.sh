@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba la migración 0243 (varios encargos por cliente + encargo_matches) y su
+# Prueba las migraciones 0243-0246 (varios encargos por cliente + encargo_matches, RLS) y su
 # reversión en un contenedor Postgres DESECHABLE. Nunca toca `supabase-db` salvo
 # para volcar el esquema en solo lectura (pg_dump --schema-only).
 #   bash scripts/test-encargos-migration.sh
@@ -11,6 +11,8 @@ IMAGE="${PG_TEST_IMAGE:-supabase/postgres:15.8.1.085}"
 MIG=supabase/migrations/0243_encargos_multiples.sql
 MIG2=supabase/migrations/0244_make_encargo_primary.sql
 MIG3=supabase/migrations/0245_encargo_notify_atomic.sql
+MIG4=supabase/migrations/0246_encargos_rls_y_consentimiento.sql
+ROLLBACK4=docs/changes/2026-11-06-encargos-matching/rollback-0246.sql
 ROLLBACK3=docs/changes/2026-11-06-encargos-matching/rollback-0245.sql
 ROLLBACK2=docs/changes/2026-11-06-encargos-matching/rollback-0244.sql
 ROLLBACK=docs/changes/2026-11-06-encargos-matching/rollback-0243.sql
@@ -88,6 +90,39 @@ check "fallo del aviso: nada reclamado (todo o nada)" 1 "$(psq -c "select count(
 check "reclama y avisa: devuelve 1" 1 "$(psq -c "select claim_and_notify_encargo_matches(array['$M']::uuid[], array['$U']::uuid[], 't', 'b', '/l', '{}'::jsonb)")"
 check "aviso creado (tipo encargo_match)" 1 "$(psq -c "select count(*) from crm_notifications where user_id='$U' and type='encargo_match'")"
 check "segunda llamada: 0 reclamadas y sin aviso nuevo" "0|1" "$(psq -c "select claim_and_notify_encargo_matches(array['$M']::uuid[], array['$U']::uuid[], 't', 'b', '/l', '{}'::jsonb)")|$(psq -c "select count(*) from crm_notifications where user_id='$U'")"
+
+# ── 0246: RLS del cliente solo sobre su principal + CHECK + make_encargo_primary hereda las alertas ──
+check "precondición 0246: ningún principal no activo" 0 "$(psq -c "select count(*) from client_preferences where is_primary and status <> 'active'")"
+apply "$MIG4"; check "migración 0246 (1.ª vez)" 0 $?
+apply "$MIG4"; check "migración 0246 (2.ª vez, idempotente)" 0 $?
+check "make_encargo_primary (0246) solo ejecutable por service_role" "t|f|f" "$(psq -c "select has_function_privilege('service_role','make_encargo_primary(uuid)','execute') || '|' || has_function_privilege('anon','make_encargo_primary(uuid)','execute') || '|' || has_function_privilege('authenticated','make_encargo_primary(uuid)','execute')" | sed 's/true/t/g;s/false/f/g')"
+expect_fail "CHECK: un principal no puede quedar pausado" "UPDATE client_preferences SET status='paused' WHERE client_id='$B' AND is_primary"
+# Como cliente A del portal (rol authenticated + JWT con su id): auth.uid() = A.
+as_a() { psq -c "BEGIN; SET LOCAL ROLE authenticated; SET LOCAL \"request.jwt.claim.sub\" = '$A'; SET LOCAL \"request.jwt.claims\" = '{\"sub\":\"$A\",\"role\":\"authenticated\"}'; $1; COMMIT;"; }
+check "precondición: A tiene principal + 1 encargo no principal" "1|1" "$(psq -c "select count(*) filter (where is_primary) || '|' || count(*) filter (where not is_primary) from client_preferences where client_id='$A'")"
+check "cliente: auth.uid() simulado es A" "$A" "$(as_a "select auth.uid()")"
+check "cliente: solo VE su principal (no los otros encargos ni sus notas)" "1|t" "$(as_a "select count(*) || '|' || bool_and(is_primary) from client_preferences" | sed 's/true/t/g')"
+check "cliente: insertar un encargo no principal → denegado por RLS" 1 "$(as_a "INSERT INTO client_preferences(client_id, is_primary, label, position) VALUES ('$A', false, 'Mío', 9)" 2>&1 | grep -c 'row-level security')"
+check "cliente: actualizar su principal sí (sin tocar is_primary)" "777.00" "$(as_a "UPDATE client_preferences SET max_price=777 WHERE client_id='$A' AND is_primary" >/dev/null 2>&1; psq -c "select max_price from client_preferences where client_id='$A' and is_primary")"
+check "cliente: is_primary=false → denegado por RLS" 1 "$(as_a "UPDATE client_preferences SET is_primary=false WHERE client_id='$A' AND is_primary" 2>&1 | grep -c 'row-level security')"
+as_a "UPDATE client_preferences SET label='hackeado' WHERE NOT is_primary" >/dev/null 2>&1
+as_a "DELETE FROM client_preferences WHERE NOT is_primary" >/dev/null 2>&1
+check "cliente: no puede tocar ni borrar un encargo no principal" "1|0" "$(psq -c "select count(*) from client_preferences where client_id='$A' and not is_primary")|$(psq -c "select count(*) from client_preferences where label='hackeado'")"
+check "cliente: no ve filas de otro cliente" 0 "$(as_a "select count(*) from client_preferences where client_id='$B'")"
+# make_encargo_primary hereda las alertas del principal anterior.
+psq -c "UPDATE profiles SET country='es' WHERE id='$A'" >/dev/null
+psq -c "UPDATE client_preferences SET new_listing_alerts_enabled=true, new_listing_alerts_frequency='weekly', new_listing_alerts_last_sent_at='2026-01-02T03:04:05Z' WHERE client_id='$A' AND is_primary" >/dev/null
+E2=$(psq -c "select id from client_preferences where client_id='$A' and not is_primary limit 1")
+psq -c "select make_encargo_primary('$E2')" >/dev/null 2>&1; check "make_encargo_primary (0246) funciona" 0 $?
+check "el nuevo principal hereda enabled/frequency/last_sent_at" "t|t|weekly|2026-01-02 03:04:05+00" "$(psq -c "select is_primary || '|' || new_listing_alerts_enabled || '|' || new_listing_alerts_frequency || '|' || (new_listing_alerts_last_sent_at at time zone 'UTC') || '+00' from client_preferences where id='$E2'" | sed 's/true/t/g')"
+expect_fail "make_encargo_primary: errores de 0244 intactos (ENCARGO_NO_EXISTE)" "select make_encargo_primary('99999999-9999-9999-9999-999999999999')"
+
+apply "$ROLLBACK4"; check "rollback 0246" 0 $?
+check "rollback 0246: políticas de 0001 y sin CHECK" "0|0" "$(psq -c "select count(*) from pg_policies where tablename='client_preferences' and (qual like '%is_primary%' or with_check like '%is_primary%')")|$(psq -c "select count(*) from pg_constraint where conname='client_preferences_primary_active_check'")"
+check "rollback 0246: la función vuelve a 0244 (sin herencia de alertas)" 0 "$(psq -c "select count(*) from pg_proc where proname='make_encargo_primary' and prosrc like '%new_listing_alerts%'")"
+apply "$ROLLBACK4"; check "rollback 0246 idempotente" 0 $?
+apply "$MIG4"; check "0246 reaplicable tras rollback" 0 $?
+apply "$ROLLBACK4"
 
 apply "$ROLLBACK3"; check "rollback 0245" 0 $?
 check "rollback 0245: función y columna fuera" "|0" "$(psq -c "select to_regprocedure('public.$SIG')")|$(psq -c "select count(*) from information_schema.columns where table_name='encargo_matches' and column_name='reasons'")"

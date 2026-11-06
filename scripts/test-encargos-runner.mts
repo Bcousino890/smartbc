@@ -7,6 +7,8 @@ import { buildPreferencesPayload, EMPTY_BRIEF, type BriefInput } from "../lib/cl
 import { runEncargoInitialPass, runEncargoMatching } from "../lib/encargos/runner.ts";
 import { __failRpc, __setDbMaxRows } from "./shims/supabase-on-psql.mts";
 import { POST } from "../app/api/cron/encargo-matches/route.ts";
+import { GET as UNSUBSCRIBE } from "../app/api/public/property-alerts/unsubscribe/route.ts";
+import { signUnsubscribeToken } from "../lib/email/property-offer.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = createAdminClient() as any;
@@ -251,6 +253,34 @@ ok(none.data === 0 && (await matchRows(E_F1)).find((m) => m.canonical_id === "x"
   ok(stale.cursorAgeMinutes! > 3 * 24 * 60 && errs.some((e) => /marca del cron/.test(e)), "marca de hace > 3 días: console.error y se procesa igual", errs);
   const res2 = await POST(req("?dry=1", "Bearer test-cron-secret-0123456789"));
   ok(typeof (await res2.json()).cursorAgeMinutes === "number", "ruta: el JSON lleva cursorAgeMinutes");
+}
+
+// ── Fase 8: consentimiento de alertas al cambiar de principal (0246) y baja en todas las filas ──
+{
+  const [C_AL, E_AL1, E_AL2] = [30, 120, 121];
+  await profile(C_AL, "client");
+  await encargo(E_AL1, C_AL, brief("Goya"), {
+    is_primary: true, new_listing_alerts_enabled: true, new_listing_alerts_frequency: "immediate", new_listing_alerts_last_sent_at: iso(-100),
+  });
+  await encargo(E_AL2, C_AL, brief("Goya"));
+  const alerts = async () =>
+    ((await db.from("client_preferences").select("id, is_primary, new_listing_alerts_enabled, new_listing_alerts_frequency, new_listing_alerts_last_sent_at").eq("client_id", uuid(C_AL))).data ?? []) as Array<{
+      id: string; is_primary: boolean; new_listing_alerts_enabled: boolean; new_listing_alerts_frequency: string; new_listing_alerts_last_sent_at: string | null;
+    }>;
+  assert.ifError((await db.rpc("make_encargo_primary", { p_encargo_id: uuid(E_AL2) })).error);
+  const np = (await alerts()).find((x) => x.id === uuid(E_AL2))!;
+  ok(np.is_primary && np.new_listing_alerts_enabled === true && np.new_listing_alerts_frequency === "immediate"
+    && Date.parse(String(np.new_listing_alerts_last_sent_at)) === Date.parse(iso(-100)),
+    "make_encargo_primary: el nuevo principal hereda alertas activas, frecuencia y último envío", np);
+  const unsub = (action: string) => UNSUBSCRIBE(new Request(
+    `http://t.local/api/public/property-alerts/unsubscribe?client=${uuid(C_AL)}&token=${signUnsubscribeToken(uuid(C_AL))}&action=${action}`,
+  ));
+  eq((await unsub("reduce")).status, 200, "baja: «recibir menos» responde");
+  ok((await alerts()).every((x) => x.new_listing_alerts_frequency === "weekly"), "«recibir menos» pasa a semanal TODAS las filas del cliente", await alerts());
+  await unsub("unsubscribe");
+  ok((await alerts()).every((x) => x.new_listing_alerts_enabled === false), "baja: apaga las alertas en TODAS las filas del cliente", await alerts());
+  assert.ifError((await db.rpc("make_encargo_primary", { p_encargo_id: uuid(E_AL1) })).error);
+  ok((await alerts()).find((x) => x.id === uuid(E_AL1))!.new_listing_alerts_enabled === false, "volver al principal anterior: sigue de baja (no vuelven los correos)");
 }
 
 console.log(`PASS: ${n} comprobaciones (runner, BD real)`);

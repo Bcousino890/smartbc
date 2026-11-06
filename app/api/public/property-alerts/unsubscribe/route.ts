@@ -73,10 +73,10 @@ export async function GET(req: Request) {
 
   if (action === "reduce") {
     await db
+      // encargo-ok: consentimiento del CLIENTE → TODAS sus filas (solo el principal haría volver los correos al cambiarlo).
       .from("client_preferences")
       .update({ new_listing_alerts_frequency: "weekly" })
-      .eq("client_id", clientId)
-      .eq("is_primary", true);
+      .eq("client_id", clientId);
 
     return page(
       "Listo",
@@ -88,10 +88,10 @@ export async function GET(req: Request) {
 
   if (action === "unsubscribe") {
     await db
+      // encargo-ok: consentimiento del CLIENTE → TODAS sus filas (solo el principal haría volver los correos al cambiarlo).
       .from("client_preferences")
       .update({ new_listing_alerts_enabled: false })
-      .eq("client_id", clientId)
-      .eq("is_primary", true);
+      .eq("client_id", clientId);
 
     return page(
       "Baja confirmada",
