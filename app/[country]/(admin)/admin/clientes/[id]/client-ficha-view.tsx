@@ -17,7 +17,7 @@
 // haga lo que uno espera.
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ClientMetrics,
@@ -214,19 +214,28 @@ export function ClientFichaView({
   // servidor vuelve a pintar la ficha con ese encargo. `toMatching` (desde la
   // sección Encargos) además lleva a Propiedades y baja al matching.
   const [encargoPending, startEncargo] = useTransition();
+  // El matching se pinta cuando el servidor contesta: el salto espera a eso.
+  const scrollToMatching = useRef(false);
   const selectEncargo = useCallback(
     (encargoId: string, toMatching: boolean) => {
       const qs = new URLSearchParams(hrefForEncargo(params?.toString() ?? "", encargoId).slice(1));
-      if (toMatching) qs.set("tab", "properties");
-      startEncargo(() => router.replace(`?${qs.toString()}`, { scroll: false }));
       if (toMatching) {
-        requestAnimationFrame(() => {
-          document.getElementById("matching")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+        qs.set("tab", "properties");
+        scrollToMatching.current = true;
       }
+      startEncargo(() => router.replace(`?${qs.toString()}`, { scroll: false }));
     },
     [params, router],
   );
+  const selectedEncargoId = encargos?.selectedId ?? null;
+  useEffect(() => {
+    if (!scrollToMatching.current || tab !== "properties") return;
+    scrollToMatching.current = false;
+    requestAnimationFrame(() => {
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      document.getElementById("matching")?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+    });
+  }, [tab, selectedEncargoId]);
 
   // La extensión de Chrome, al enviar, deja un enlace a
   // `?tab=properties#portal-links`. El navegador intenta saltar al ancla antes

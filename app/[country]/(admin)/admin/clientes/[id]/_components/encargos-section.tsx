@@ -111,6 +111,7 @@ export function EncargosSection({
             key={e.id}
             encargo={e}
             selected={several && e.id === selectedId}
+            solo={!several}
             canEdit={canEdit}
             busy={busy === e.id}
             disabled={busy !== null}
@@ -174,6 +175,7 @@ export function EncargosSection({
 function EncargoRow({
   encargo: e,
   selected,
+  solo,
   canEdit,
   busy,
   disabled,
@@ -184,6 +186,8 @@ function EncargoRow({
 }: {
   encargo: Encargo;
   selected: boolean;
+  /** Único encargo (el principal): sin pausar/cerrar, que no se podría. */
+  solo: boolean;
   canEdit: boolean;
   busy: boolean;
   disabled: boolean;
@@ -234,7 +238,7 @@ function EncargoRow({
                 <Pencil size={11} aria-hidden />
                 Editar
               </Button>
-              {a.canReactivate ? (
+              {solo ? null : a.canReactivate ? (
                 <Button size="sm" variant="secondary" onClick={() => onStatus("active")} disabled={disabled}>
                   Reactivar
                 </Button>
@@ -249,15 +253,17 @@ function EncargoRow({
                   Pausar
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => onStatus("closed")}
-                disabled={disabled || !a.canClose}
-                aria-describedby={a.lockedReason ? lockedId : undefined}
-              >
-                Cerrar
-              </Button>
+              {!solo && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onStatus("closed")}
+                  disabled={disabled || !a.canClose}
+                  aria-describedby={a.lockedReason ? lockedId : undefined}
+                >
+                  Cerrar
+                </Button>
+              )}
               {!e.isPrimary && (
                 <Button
                   size="sm"
@@ -274,7 +280,7 @@ function EncargoRow({
           )}
         </div>
       </div>
-      {canEdit && a.lockedReason && (
+      {canEdit && !solo && a.lockedReason && (
         <p id={lockedId} className="mt-1.5 text-xs text-ink/45">
           {a.lockedReason}
         </p>
