@@ -20,10 +20,18 @@ import {
   type MatchingEncargo,
 } from "@/components/admin/clientes/encargo/matching-context";
 import { cn } from "@/lib/utils";
+import { highlightMissMessage } from "@/lib/encargos/pin";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; suggestions: SuggestedProperty[]; total: number; excluded: ExcludedSummary }
+  | {
+      kind: "ready";
+      suggestions: SuggestedProperty[];
+      total: number;
+      excluded: ExcludedSummary;
+      /** Por qué el elemento del aviso no sale (si se pidió y no encaja). */
+      highlightMiss: string | null;
+    }
   | { kind: "no_preferences" }
   | { kind: "insufficient"; missing: string[] }
   | { kind: "error"; message: string };
@@ -58,7 +66,12 @@ export function SuggestedPropertiesBlock({
     setState({ kind: "loading" });
     (async () => {
       try {
-        const qs = encargoId ? `?encargo=${encodeURIComponent(encargoId)}` : "";
+        const sp = new URLSearchParams();
+        if (encargoId) sp.set("encargo", encargoId);
+        // El elemento del aviso se pide aparte: aunque no esté entre las mejores,
+        // el servidor lo evalúa y lo pone el primero, o dice por qué ya no encaja.
+        if (highlightId) sp.set("incluir", highlightId);
+        const qs = sp.toString() ? `?${sp.toString()}` : "";
         const res = await fetch(
           `/api/admin/clientes/${clientId}/suggested-properties${qs}`,
         );
@@ -86,6 +99,10 @@ export function SuggestedPropertiesBlock({
           suggestions: json.suggestions ?? [],
           total: typeof json.total === "number" ? json.total : (json.suggestions ?? []).length,
           excluded: json.excluded ?? [],
+          highlightMiss:
+            json.highlight && json.highlight.found === false && typeof json.highlight.reason === "string"
+              ? highlightMissMessage(json.highlight.reason)
+              : null,
         });
       } catch (err) {
         if (!cancelled) {
@@ -100,7 +117,7 @@ export function SuggestedPropertiesBlock({
     return () => {
       cancelled = true;
     };
-  }, [clientId, encargoId, inactive]);
+  }, [clientId, encargoId, inactive, highlightId]);
 
   const count = !inactive && state.kind === "ready" ? state.total : 0;
   // El aviso por correo al cliente (digest) usa SOLO el encargo principal: en
@@ -185,6 +202,12 @@ export function SuggestedPropertiesBlock({
           <AlertCircle size={14} className="mt-0.5 shrink-0 text-rose-600" />
           <p className="text-xs text-rose-700">{state.message}</p>
         </div>
+      )}
+
+      {!inactive && state.kind === "ready" && state.highlightMiss && (
+        <p role="status" className="mt-3 rounded-lg border border-ink/15 bg-white/70 px-3 py-2 text-xs text-ink/70">
+          {state.highlightMiss}
+        </p>
       )}
 
       {!inactive && state.kind === "ready" && state.suggestions.length === 0 && (

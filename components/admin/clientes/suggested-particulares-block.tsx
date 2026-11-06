@@ -14,6 +14,7 @@ import {
   type MatchingEncargo,
 } from "@/components/admin/clientes/encargo/matching-context";
 import { cn } from "@/lib/utils";
+import { highlightMissMessage } from "@/lib/encargos/pin";
 
 type State =
   | { kind: "loading" }
@@ -22,7 +23,11 @@ type State =
       suggestions: SuggestedParticular[];
       total: number;
       excluded: Array<{ label: string; count: number }>;
+      /** Por qué el anuncio del aviso no sale (si se pidió y no encaja). */
+      highlightMiss: string | null;
     }
+  /** Encargo (no el único) al que le falta lo esencial: se dice, no se oculta el bloque. */
+  | { kind: "insufficient"; missing: string[] }
   | { kind: "hidden" };
 
 const PORTAL: Record<string, string> = { idealista: "Idealista", fotocasa: "Fotocasa", pisos: "pisos.com", habitaclia: "Habitaclia" };
@@ -108,10 +113,20 @@ export function SuggestedParticularesBlock({
     setState({ kind: "loading" });
     (async () => {
       try {
-        const qs = encargoId ? `?encargo=${encodeURIComponent(encargoId)}` : "";
+        const sp = new URLSearchParams();
+        if (encargoId) sp.set("encargo", encargoId);
+        // El anuncio del aviso se pide aparte: aunque no esté entre los mejores,
+        // el servidor lo evalúa y lo pone el primero, o dice por qué ya no encaja.
+        if (highlightId) sp.set("incluir", highlightId);
+        const qs = sp.toString() ? `?${sp.toString()}` : "";
         const res = await fetch(`/api/admin/clientes/${clientId}/suggested-particulares${qs}`);
         const json = await res.json().catch(() => ({}));
         if (cancelled) return;
+        // Con varios encargos el bloque dice para cuál busca: si a ESE le falta
+        // algo, se dice (como en «Propiedades sugeridas») en vez de desaparecer.
+        if (res.ok && json.reason === "insufficient_brief" && encargoId) {
+          return setState({ kind: "insufficient", missing: Array.isArray(json.missing) ? json.missing : [] });
+        }
         if (!res.ok || json.reason === "no_preferences" || json.reason === "not_available" || json.reason === "insufficient_brief") {
           return setState({ kind: "hidden" });
         }
@@ -121,6 +136,10 @@ export function SuggestedParticularesBlock({
           suggestions,
           total: typeof json.total === "number" ? json.total : suggestions.length,
           excluded: json.excluded ?? [],
+          highlightMiss:
+            json.highlight && json.highlight.found === false && typeof json.highlight.reason === "string"
+              ? highlightMissMessage(json.highlight.reason)
+              : null,
         });
       } catch {
         if (!cancelled) setState({ kind: "hidden" });
@@ -129,7 +148,7 @@ export function SuggestedParticularesBlock({
     return () => {
       cancelled = true;
     };
-  }, [clientId, encargoId, inactive]);
+  }, [clientId, encargoId, inactive, highlightId]);
 
   // La lista tiene scroll propio: el destacado se trae a la vista dentro de ella.
   const highlightShown = state.kind === "ready" && Boolean(highlightId) && state.suggestions.some((p) => p.id === highlightId);
@@ -182,6 +201,19 @@ export function SuggestedParticularesBlock({
           <Loader2 size={15} className="mr-2 animate-spin" />
           <span className="text-xs">Buscando en portales…</span>
         </div>
+      )}
+
+      {!inactive && state.kind === "insufficient" && (
+        <p className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 px-4 py-6 text-center text-xs text-amber-900">
+          Para buscarle anuncios falta en el encargo:{" "}
+          <strong>{state.missing.join(", ").toLowerCase() || "zona y presupuesto"}</strong>.
+        </p>
+      )}
+
+      {!inactive && state.kind === "ready" && state.highlightMiss && (
+        <p role="status" className="mt-3 rounded-lg border border-ink/15 bg-white/70 px-3 py-2 text-xs text-ink/70">
+          {state.highlightMiss}
+        </p>
       )}
 
       {!inactive && state.kind === "ready" && state.suggestions.length === 0 && (

@@ -302,6 +302,7 @@ function EncargoDialog({
   const router = useRouter();
   const [saving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [valid, setValid] = useState(true);
   const [brief, setBrief] = useState<BriefInput>(() =>
     encargo ? encargo.brief : { ...EMPTY_BRIEF, operation: "rent", stay: "long" },
   );
@@ -321,13 +322,9 @@ function EncargoDialog({
     startSave(async () => {
       try {
         const r = encargo
-          ? await updateEncargoAction(encargo.id, {
-              label,
-              endClientLabel,
-              // Solo si cambió: editar el brief vuelve a mirar todo el stock
-              // (pase inicial); renombrar no debe dispararlo.
-              ...(JSON.stringify(brief) !== JSON.stringify(encargo.brief) ? { brief } : {}),
-            })
+          ? // El servidor compara el brief con el guardado (normalizado): solo si
+            // cambió vuelve a mirar el stock; renombrar no lo dispara.
+            await updateEncargoAction(encargo.id, { label, endClientLabel, brief })
           : await createEncargoAction(clientId, { label, endClientLabel, brief });
         if (!r.ok) {
           setError(r.error);
@@ -341,11 +338,16 @@ function EncargoDialog({
     });
   };
 
+  // Mientras guarda no se cierra (Esc, Cancelar o fondo): el resultado se perdería.
+  const close = () => {
+    if (!saving) onClose();
+  };
+
   return (
     <Modal
       open
       wide
-      onClose={onClose}
+      onClose={close}
       title={encargo ? `Editar «${encargo.label}»` : "Nuevo encargo"}
       footer={
         <>
@@ -354,10 +356,13 @@ function EncargoDialog({
               {error}
             </p>
           )}
-          <Button onClick={onClose} disabled={saving}>
+          {!error && !valid && (
+            <p className="me-auto text-xs text-amber-800">Revisa el tope por dormitorios para poder guardar.</p>
+          )}
+          <Button onClick={close} disabled={saving}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
+          <Button variant="primary" onClick={save} disabled={saving || !valid}>
             {saving ? "Guardando…" : encargo ? "Guardar cambios" : "Crear encargo"}
           </Button>
         </>
@@ -368,6 +373,7 @@ function EncargoDialog({
         onChange={setBrief}
         meta={meta}
         onMetaChange={setMeta}
+        onValidityChange={setValid}
         country="es"
         disabled={saving}
       />

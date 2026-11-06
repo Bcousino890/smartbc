@@ -3,10 +3,9 @@ import { getSuggestedProperties } from "@/lib/db/queries/suggested-properties";
 import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
+import { parseSuggestionQuery } from "@/lib/encargos/pin";
 
 export const dynamic = "force-dynamic";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(
   req: NextRequest,
@@ -43,13 +42,15 @@ export async function GET(
       .maybeSingle();
     const alertsEnabled = Boolean(prefs?.new_listing_alerts_enabled);
 
-    // `?encargo=` elige uno de los encargos del cliente (España). La consulta
-    // filtra por client_id Y id: un encargo de otro cliente no devuelve nada.
-    // Sin él (o mal formado), el principal, como siempre.
-    const encargo = req.nextUrl.searchParams.get("encargo");
+    // `?encargo=` elige uno de los encargos del cliente (España) e `?incluir=`
+    // la propiedad de un aviso, evaluada contra ese encargo aunque no esté entre
+    // las mejores. Solo uuid (basura → se ignora); la consulta filtra por
+    // client_id Y id, así que un encargo de otro cliente no devuelve nada.
+    const { encargoId, includeId } = parseSuggestionQuery(req.nextUrl.searchParams);
     const result = await getSuggestedProperties(clientId, {
       country: client.country ?? undefined,
-      ...(encargo && UUID.test(encargo) ? { encargoId: encargo } : {}),
+      ...(encargoId ? { encargoId } : {}),
+      ...(includeId ? { includeId } : {}),
     });
 
     if (!result.ok) {
@@ -84,6 +85,7 @@ export async function GET(
       suggestions: result.suggestions,
       total: result.total ?? result.suggestions.length,
       excluded: result.excluded ?? [],
+      ...(result.highlight ? { highlight: result.highlight } : {}),
       alertsEnabled,
     });
   } catch (error) {

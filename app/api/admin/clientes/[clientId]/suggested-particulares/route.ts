@@ -3,10 +3,9 @@ import { getSuggestedParticulares } from "@/lib/db/queries/suggested-particulare
 import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
+import { parseSuggestionQuery } from "@/lib/encargos/pin";
 
 export const dynamic = "force-dynamic";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Anuncios de portales (tabla `particulares`) que encajan con el encargo del
@@ -43,16 +42,11 @@ export async function GET(
     // La ficha del cliente enseña las 12 mejores (por defecto). El mapa de
     // captaciones necesita la puntuación de TODOS los candidatos de la zona
     // para pintar los pines: pide `?limit=` (con tope en el techo de candidatos).
-    const rawLimit = Number(req.nextUrl.searchParams.get("limit"));
-    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 1000) : undefined;
-    // `?encargo=` elige uno de los encargos del cliente; la consulta filtra por
-    // client_id Y id, así que uno ajeno no devuelve nada. Sin él, el principal.
-    const encargo = req.nextUrl.searchParams.get("encargo");
-    const encargoId = encargo && UUID.test(encargo) ? encargo : undefined;
-    const result = await getSuggestedParticulares(
-      clientId,
-      limit || encargoId ? { ...(limit ? { limit } : {}), ...(encargoId ? { encargoId } : {}) } : undefined,
-    );
+    // `?encargo=` elige uno de los encargos del cliente e `?incluir=` el anuncio
+    // de un aviso (solo uuid; basura → se ignora). La consulta filtra por
+    // client_id Y id, así que un encargo ajeno no devuelve nada.
+    const q = parseSuggestionQuery(req.nextUrl.searchParams, { maxLimit: 1000 });
+    const result = await getSuggestedParticulares(clientId, Object.keys(q).length ? q : undefined);
 
     if (!result.ok) {
       if (result.reason === "insufficient_brief") {
@@ -63,7 +57,14 @@ export async function GET(
       }
       return NextResponse.json({ error: result.message, reason: "error" }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, suggestions: result.suggestions, total: result.total, excluded: result.excluded, brief: result.brief });
+    return NextResponse.json({
+      ok: true,
+      suggestions: result.suggestions,
+      total: result.total,
+      excluded: result.excluded,
+      brief: result.brief,
+      ...(result.highlight ? { highlight: result.highlight } : {}),
+    });
   } catch (error) {
     console.error("Error in suggested particulares endpoint:", error);
     return NextResponse.json(

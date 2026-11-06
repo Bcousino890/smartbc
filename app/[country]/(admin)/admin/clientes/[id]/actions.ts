@@ -22,12 +22,15 @@ import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { isCountry } from "@/lib/country-config";
 import {
+  briefFromRow,
   buildPreferencesPayload,
   validateBrief,
   type BriefInput,
   type BriefProfile,
 } from "@/lib/clients/brief";
 import { setClientProfileTag } from "@/lib/clients/profile-tag";
+import { shouldRescan } from "@/lib/encargos/rescan";
+import { scheduleInitialPass } from "@/lib/encargos/schedule";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -197,22 +200,40 @@ export async function saveClientPreferencesFull(
     });
   }
 
-  const { data: existing } = await db()
-    .from("client_preferences")
-    .select("client_id")
-    .eq("client_id", input.clientId)
-    .eq("is_primary", true)
-    .maybeSingle();
+  const [{ data: existing }, { data: owner }] = await Promise.all([
+    db()
+      .from("client_preferences")
+      .select("*")
+      .eq("client_id", input.clientId)
+      .eq("is_primary", true)
+      .maybeSingle(),
+    db().from("profiles").select("country").eq("id", input.clientId).maybeSingle(),
+  ]);
 
-  const { error } = existing
+  // Mismo comportamiento que «Editar» en la sección Encargos (Decisión 3 del
+  // diseño): si cambian los criterios de un cliente de ESPAÑA, se reinicia
+  // `baseline_at` y se vuelve a mirar todo el stock con un único aviso
+  // agrupado. Chile: nada cambia.
+  const rescan = shouldRescan({
+    clientCountry: (owner as { country?: string | null } | null)?.country,
+    prev: existing ? briefFromRow(existing as Record<string, unknown>) : null,
+    next: input.brief,
+  });
+  if (rescan) payload.baseline_at = new Date().toISOString();
+
+  const { data: saved, error } = existing
     ? await db()
         .from("client_preferences")
         .update(payload)
         .eq("client_id", input.clientId)
         .eq("is_primary", true)
-    : await db().from("client_preferences").insert({ ...payload, is_primary: true });
+        .select("id")
+        .maybeSingle()
+    : await db().from("client_preferences").insert({ ...payload, is_primary: true }).select("id").maybeSingle();
 
   if (error) return { ok: false, error: error.message };
+  const savedId = (saved as { id?: string } | null)?.id;
+  if (rescan && savedId) scheduleInitialPass(savedId);
 
   if (input.profile) {
     const tag = await setClientProfileTag(db(), input.clientId, input.profile, staffId);

@@ -97,6 +97,11 @@ export function encargoActions(e: Pick<Encargo, "isPrimary" | "status">): Encarg
 
 // ─── Tope de precio por dormitorios ──────────────────────────────────────────
 
+/** El editor del tope por dormitorios es solo de España: Chile conserva su formulario de siempre. */
+export function hasPriceByBedrooms(country: string): boolean {
+  return country === "es";
+}
+
 export type PriceByBedroomsRow = { bedrooms: string; maxPrice: string };
 export type PriceByBedroomsIssue = { row: number; message: string };
 
@@ -113,9 +118,9 @@ export function priceByBedroomsToRows(v: Record<string, number> | null): PriceBy
 
 /**
  * Filas del editor → `maxPriceByBedrooms`. Una fila vacía no cuenta; una fila a
- * medias o inválida NO se guarda y se dice por qué (así nunca se guarda en
- * silencio algo distinto de lo que se ve). Con dormitorios repetidos manda la
- * primera fila.
+ * medias o inválida queda fuera del valor y se dice por qué en `issues`. Con
+ * `issues` el diálogo no deja guardar (así nunca se guarda en silencio algo
+ * distinto de lo que se ve). Con dormitorios repetidos manda la primera fila.
  */
 export function priceByBedroomsFromRows(rows: PriceByBedroomsRow[]): {
   value: Record<string, number> | null;
@@ -127,7 +132,7 @@ export function priceByBedroomsFromRows(rows: PriceByBedroomsRow[]): {
     const b = digits(r.bedrooms);
     const p = digits(r.maxPrice);
     if (!b && !p) return;
-    const skip = (message: string) => issues.push({ row, message: `${message}: esta fila no se guardará.` });
+    const skip = (message: string) => issues.push({ row, message: `${message}: corrígela o quítala.` });
     if (!b) return skip("Faltan los dormitorios");
     if (!p) return skip("Falta el importe");
     const n = Number(b);

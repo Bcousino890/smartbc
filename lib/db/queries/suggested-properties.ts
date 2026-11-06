@@ -8,6 +8,7 @@ import {
   exclusionLabel,
   zoneLikePattern,
 } from "@/lib/clients/brief-match";
+import { pinHighlight, type HighlightLookup, type HighlightResult } from "@/lib/encargos/pin";
 
 export type SuggestedProperty = {
   id: string;
@@ -32,6 +33,8 @@ export type SuggestedProperty = {
    * la ruta del portal del cliente las quita antes de responder.
    */
   matchWarnings: string[];
+  /** El elemento de un aviso (`incluir`), puesto el primero aunque no esté entre las mejores. */
+  pinned?: true;
 };
 
 /** Fuera de la lista por chocar con el encargo, contado por motivo. */
@@ -41,7 +44,14 @@ export type ExcludedSummary = Array<{ label: string; count: number }>;
 // dos ramas devolvían [] y por eso un error de relación pasó meses sin que
 // nadie lo notara: el bloque de la ficha simplemente decía "no hay resultados".
 export type SuggestedPropertiesResult =
-  | { ok: true; suggestions: SuggestedProperty[]; total?: number; excluded?: ExcludedSummary }
+  | {
+      ok: true;
+      suggestions: SuggestedProperty[];
+      total?: number;
+      excluded?: ExcludedSummary;
+      /** Solo con `includeId`: si el elemento del aviso encaja o por qué no. */
+      highlight?: HighlightResult;
+    }
   | { ok: false; reason: "no_preferences" }
   | { ok: false; reason: "insufficient_brief"; missing: string[] }
   | { ok: false; reason: "error"; message: string };
@@ -76,6 +86,35 @@ type PropertyRow = {
   updated_at: string | null;
   property_photos: PhotoRow[] | null;
 };
+
+const PROPERTY_COLUMNS = `
+      id,
+      slug,
+      title,
+      description,
+      zone,
+      subzone,
+      latitude,
+      longitude,
+      bedrooms,
+      bathrooms,
+      square_meters,
+      price,
+      rent_price,
+      currency,
+      operation,
+      operations,
+      stay,
+      property_type,
+      features,
+      features_manual,
+      floor_override,
+      available_from,
+      bc_reference,
+      last_synced_at,
+      updated_at,
+      property_photos(url, position, is_cover)
+    `;
 
 // Hash corto y estable — mismo criterio que lib/db/adapters.ts, para que la
 // URL del proxy cambie cuando cambian las fotos y no se sirva caché vieja.
@@ -207,6 +246,11 @@ export async function getSuggestedProperties(
     forAlerts?: boolean;
     /** Un encargo concreto (client_preferences.id); sin él, el principal. */
     encargoId?: string;
+    /**
+     * Elemento de un aviso (`?destacar=`): se evalúa SUELTO aunque no esté entre
+     * las mejores y, si encaja, va el primero (`pinned`); si no, `highlight` dice por qué.
+     */
+    includeId?: string;
     supabase?: any;
   },
 ): Promise<SuggestedPropertiesResult> {
@@ -240,34 +284,7 @@ export async function getSuggestedProperties(
   if (missing.length) return { ok: false, reason: "insufficient_brief", missing };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase.from("properties").select(`
-      id,
-      slug,
-      title,
-      description,
-      zone,
-      subzone,
-      latitude,
-      longitude,
-      bedrooms,
-      bathrooms,
-      square_meters,
-      price,
-      rent_price,
-      currency,
-      operation,
-      operations,
-      stay,
-      property_type,
-      features,
-      features_manual,
-      floor_override,
-      available_from,
-      bc_reference,
-      last_synced_at,
-      updated_at,
-      property_photos(url, position, is_cover)
-    `) as any)
+  let query = (supabase.from("properties").select(PROPERTY_COLUMNS) as any)
     .eq("status", "available")
     .is("archived_at", null)
     // Fichas de referencia de Idealista (0232): solo se comparten por SmartLink,
@@ -301,16 +318,12 @@ export async function getSuggestedProperties(
   const excludedCounts = new Map<string, number>();
   const suggestions: SuggestedProperty[] = [];
 
-  for (const prop of properties) {
-    const photos = proxyPhotoUrls(prop);
-    const outcome = evaluateMatch(brief, { ...prop, photoCount: photos.length });
-    if (outcome.excluded) {
-      const label = exclusionLabel(outcome.reason);
-      excludedCounts.set(label, (excludedCounts.get(label) ?? 0) + 1);
-      continue;
-    }
+  const includeId = opts?.includeId ?? null;
+  let includeLookup: HighlightLookup<SuggestedProperty> | null = null;
+
+  const toSuggestion = (prop: PropertyRow, photos: string[], outcome: { score: number; reasons: string[]; warnings: string[] }): SuggestedProperty => {
     const price = effectivePrice(prop, op) ?? Number(prop.price);
-    suggestions.push({
+    return {
       id: prop.id,
       slug: prop.slug,
       title: prop.title,
@@ -330,14 +343,54 @@ export async function getSuggestedProperties(
       matchScore: outcome.score,
       matchReasons: outcome.reasons,
       matchWarnings: outcome.warnings,
-    });
+    };
+  };
+
+  for (const prop of properties) {
+    const photos = proxyPhotoUrls(prop);
+    const outcome = evaluateMatch(brief, { ...prop, photoCount: photos.length });
+    if (outcome.excluded) {
+      const label = exclusionLabel(outcome.reason);
+      excludedCounts.set(label, (excludedCounts.get(label) ?? 0) + 1);
+      if (prop.id === includeId) includeLookup = { kind: "excluded", reason: label };
+      continue;
+    }
+    const suggestion = toSuggestion(prop, photos, outcome);
+    if (prop.id === includeId) includeLookup = { kind: "fits", item: suggestion };
+    suggestions.push(suggestion);
   }
 
   suggestions.sort((a, b) => b.matchScore - a.matchScore);
 
+  // El elemento del aviso fuera de las candidatas (prefiltro SQL o tope de
+  // candidatas): se lee suelto, con las mismas barreras de disponibilidad.
+  if (includeId && !includeLookup) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let one = (supabase.from("properties").select(PROPERTY_COLUMNS) as any)
+      .eq("id", includeId)
+      .eq("status", "available")
+      .is("archived_at", null)
+      .not("reference_only", "is", true);
+    if (opts?.country) one = one.eq("country", opts.country);
+    const { data: row } = await one.maybeSingle();
+    if (!row) includeLookup = { kind: "unavailable" };
+    else {
+      const prop = row as PropertyRow;
+      const photos = proxyPhotoUrls(prop);
+      const outcome = evaluateMatch(brief, { ...prop, photoCount: photos.length });
+      includeLookup = outcome.excluded
+        ? { kind: "excluded", reason: exclusionLabel(outcome.reason) }
+        : { kind: "fits", item: toSuggestion(prop, photos, outcome) };
+    }
+  }
+
+  const shown = suggestions.slice(0, opts?.limit ?? 10);
+  const pinned = includeLookup ? pinHighlight(shown, includeLookup) : null;
+
   return {
     ok: true,
-    suggestions: suggestions.slice(0, opts?.limit ?? 10),
+    suggestions: pinned ? pinned.items : shown,
+    ...(pinned ? { highlight: pinned.highlight } : {}),
     total: suggestions.length,
     excluded: [...excludedCounts.entries()]
       .map(([label, count]) => ({ label, count }))

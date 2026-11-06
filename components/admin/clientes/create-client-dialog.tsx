@@ -36,9 +36,12 @@ export function CreateClientDialog() {
   const [profile, setProfile] = useState<BriefProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmGaps, setConfirmGaps] = useState(false);
+  // Filas del tope por dormitorios a medias (solo España): no se crea hasta corregirlas.
+  const [valid, setValid] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const reset = () => {
+    setValid(true);
     setContact(EMPTY_CONTACT);
     setBrief({ ...EMPTY_BRIEF });
     setProfile(null);
@@ -115,7 +118,7 @@ export function CreateClientDialog() {
             <Button onClick={close} disabled={pending}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={submit} disabled={pending}>
+            <Button variant="primary" onClick={submit} disabled={pending || !valid}>
               {pending ? "Creando…" : confirmGaps && essentialGaps.length ? "Crear igualmente" : "Crear cliente"}
             </Button>
           </>
@@ -160,6 +163,7 @@ export function CreateClientDialog() {
               onProfileChange={setProfile}
               country={country}
               disabled={pending}
+              onValidityChange={setValid}
             />
           </div>
         </div>

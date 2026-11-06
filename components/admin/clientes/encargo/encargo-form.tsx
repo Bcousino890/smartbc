@@ -23,6 +23,7 @@ import { useZoneCatalog } from "@/components/admin/use-zone-catalog";
 import { AreaPicker } from "./area-picker";
 import { AlertTriangle, Check, Plus, Star, X } from "lucide-react";
 import {
+  hasPriceByBedrooms,
   priceByBedroomsFromRows,
   priceByBedroomsToRows,
   type PriceByBedroomsRow,
@@ -68,6 +69,11 @@ type Props = {
   /** Con `meta` se piden el nombre del encargo y el cliente final. "Nuevo cliente" no lo pasa. */
   meta?: EncargoMeta;
   onMetaChange?: (next: EncargoMeta) => void;
+  /**
+   * `false` mientras haya filas del tope por dormitorios a medias o inválidas:
+   * el diálogo deshabilita «Guardar» para no guardar algo distinto de lo que se ve.
+   */
+  onValidityChange?: (valid: boolean) => void;
   /** "es" pinta las zonas de Madrid como chips; "cl" solo texto libre. */
   country: "es" | "cl";
   disabled?: boolean;
@@ -80,6 +86,7 @@ export function EncargoForm({
   onProfileChange,
   meta,
   onMetaChange,
+  onValidityChange,
   country,
   disabled,
 }: Props) {
@@ -227,11 +234,15 @@ export function EncargoForm({
           </Labeled>
         </div>
 
-        <PriceByBedroomsEditor
-          value={v.maxPriceByBedrooms}
-          onChange={(next) => set("maxPriceByBedrooms", next)}
-          unit={money}
-        />
+        {/* Solo España: la ficha y el alta de Chile no cambian. */}
+        {hasPriceByBedrooms(country) && (
+          <PriceByBedroomsEditor
+            value={v.maxPriceByBedrooms}
+            onChange={(next) => set("maxPriceByBedrooms", next)}
+            onValidityChange={onValidityChange}
+            unit={money}
+          />
+        )}
 
         {!rent && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -615,10 +626,12 @@ function NumField({
 function PriceByBedroomsEditor({
   value,
   onChange,
+  onValidityChange,
   unit,
 }: {
   value: Record<string, number> | null;
   onChange: (next: Record<string, number> | null) => void;
+  onValidityChange?: (valid: boolean) => void;
   unit: string;
 }) {
   const titleId = useId();
@@ -626,7 +639,9 @@ function PriceByBedroomsEditor({
   const { issues } = priceByBedroomsFromRows(rows);
   const update = (next: PriceByBedroomsRow[]) => {
     setRows(next);
-    onChange(priceByBedroomsFromRows(next).value);
+    const r = priceByBedroomsFromRows(next);
+    onChange(r.value);
+    onValidityChange?.(r.issues.length === 0);
   };
   const setRow = (i: number, patch: Partial<PriceByBedroomsRow>) =>
     update(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -655,6 +670,7 @@ function PriceByBedroomsEditor({
                 <div className="grid grid-cols-[1fr_1.4fr_auto] items-end gap-2 sm:max-w-md">
                   <Labeled label="Dormitorios">
                     <TextInput
+                      aria-label={`Dormitorios, tope ${i + 1}`}
                       inputMode="numeric"
                       value={r.bedrooms}
                       onChange={(e) => setRow(i, { bedrooms: e.target.value.replace(/[^\d]/g, "").slice(0, 2) })}
@@ -664,6 +680,7 @@ function PriceByBedroomsEditor({
                   </Labeled>
                   <Labeled label={`Hasta (${unit})`}>
                     <TextInput
+                      aria-label={`Hasta (${unit}), tope ${i + 1}`}
                       inputMode="numeric"
                       value={fmt(r.maxPrice)}
                       onChange={(e) => setRow(i, { maxPrice: e.target.value.replace(/[^\d]/g, "") })}
@@ -674,14 +691,14 @@ function PriceByBedroomsEditor({
                   <button
                     type="button"
                     onClick={() => update(rows.filter((_, j) => j !== i))}
-                    aria-label={n ? `Quitar el tope de ${n} dormitorios` : "Quitar esta fila"}
+                    aria-label={n ? `Quitar el tope de ${n} dormitorios` : `Quitar el tope ${i + 1}`}
                     className="mb-px inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/15 bg-white text-ink/55 transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
                   >
                     <X size={14} aria-hidden />
                   </button>
                 </div>
                 {issue && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-amber-800">
+                  <p role="status" className="mt-1 flex items-center gap-1 text-xs text-amber-800">
                     <AlertTriangle size={12} aria-hidden className="shrink-0" />
                     {issue.message}
                   </p>
@@ -693,7 +710,7 @@ function PriceByBedroomsEditor({
       )}
       <button
         type="button"
-        onClick={() => setRows([...rows, { bedrooms: "", maxPrice: "" }])}
+        onClick={() => update([...rows, { bedrooms: "", maxPrice: "" }])}
         className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs text-ink/70 transition hover:border-gold/50 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
       >
         <Plus size={12} aria-hidden /> Añadir tope por dormitorios

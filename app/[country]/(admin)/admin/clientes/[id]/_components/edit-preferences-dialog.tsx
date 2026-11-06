@@ -61,6 +61,8 @@ export function EditPreferencesDialog({
   const router = useRouter();
   const [saving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Filas del tope por dormitorios a medias (solo España): no se guarda hasta corregirlas.
+  const [valid, setValid] = useState(true);
 
   const [brief, setBrief] = useState<BriefInput>(prefs?.brief ?? { ...EMPTY_BRIEF });
   const [profile, setProfile] = useState<BriefProfile | null>(initialProfile);
@@ -136,7 +138,7 @@ export function EditPreferencesDialog({
           <Button onClick={onClose} disabled={saving}>
             {t("cc.cancel")}
           </Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
+          <Button variant="primary" onClick={save} disabled={saving || !valid}>
             {saving ? t("cc.saving") : t("cc.save")}
           </Button>
         </>
@@ -153,6 +155,7 @@ export function EditPreferencesDialog({
           }}
           country={country}
           disabled={saving}
+          onValidityChange={setValid}
         />
 
         {country === "cl" && (

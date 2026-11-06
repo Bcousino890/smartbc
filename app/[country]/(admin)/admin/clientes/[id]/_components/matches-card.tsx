@@ -68,6 +68,7 @@ export function MatchesCard({
   canEdit,
   onEditBrief,
   onGo,
+  primaryLabel = null,
 }: {
   clientId: string;
   clientName: string;
@@ -77,6 +78,8 @@ export function MatchesCard({
   canEdit: boolean;
   onEditBrief: () => void;
   onGo: (anchor: string) => void;
+  /** Con varios encargos (España): estas cifras son SOLO del principal y se dice. */
+  primaryLabel?: string | null;
 }) {
   const config = getCountryConfig(country);
   const [catalog, setCatalog] = useState<Side | null>(null);
@@ -138,7 +141,9 @@ export function MatchesCard({
     };
   }, [clientId, hasPreferences]);
 
-  const title = `Propiedades para ${clientName || "el cliente"}`;
+  const title = primaryLabel
+    ? `Propiedades para ${clientName || "el cliente"} · encargo principal «${primaryLabel}»`
+    : `Propiedades para ${clientName || "el cliente"}`;
 
   if (!hasPreferences) {
     return (

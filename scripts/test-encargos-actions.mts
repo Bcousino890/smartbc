@@ -121,6 +121,8 @@ must(await updateEncargoAction(viaAction.encargo.id, { label: "Vía acción 2" }
 ok(g.__afterTasks.length === 1, "pausar y cambiar solo la etiqueta no programan pase inicial");
 must(await updateEncargoAction(viaAction.encargo.id, { brief: brief({ maxPrice: 450000 }) }));
 ok(g.__afterTasks.length === 2, "editar el brief programa el pase inicial");
+must(await updateEncargoAction(viaAction.encargo.id, { label: "Vía acción 3", brief: brief({ maxPrice: 450000 }) }));
+ok(g.__afterTasks.length === 2, "guardar el MISMO brief (y renombrar) no programa el pase inicial");
 must(await setEncargoStatusAction(viaAction.encargo.id, "active"));
 ok(g.__afterTasks.length === 3, "reactivar programa el pase inicial");
 must(await setEncargoStatusAction(viaAction.encargo.id, "active"));

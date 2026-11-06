@@ -10,6 +10,7 @@
  *   npm run test:encargos-ui-state
  */
 import {
+  hasPriceByBedrooms,
   encargoActions,
   encargoSummary,
   hrefForEncargo,
@@ -19,7 +20,15 @@ import {
   priceByBedroomsToRows,
   resolveSelectedEncargo,
 } from "../lib/encargos/ui-state.ts";
-import { EMPTY_BRIEF } from "../lib/clients/brief.ts";
+import { EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
+import {
+  highlightMissMessage,
+  parseIncludeParam,
+  parseSuggestionQuery,
+  pinHighlight,
+  UNAVAILABLE_REASON,
+} from "../lib/encargos/pin.ts";
+import { briefChanged, shouldRescan } from "../lib/encargos/rescan.ts";
 import type { Encargo } from "../lib/encargos/model.ts";
 
 let failed = 0;
@@ -108,17 +117,17 @@ eq(
     { bedrooms: "3", maxPrice: "" },
     { bedrooms: "4", maxPrice: "6300" },
   ]),
-  { value: { "4": 6300 }, issues: [{ row: 0, message: "Falta el importe: esta fila no se guardará." }] },
+  { value: { "4": 6300 }, issues: [{ row: 0, message: "Falta el importe: corrígela o quítala." }] },
 );
 eq(
   "dormitorios a medias",
   priceByBedroomsFromRows([{ bedrooms: "", maxPrice: "5000" }]),
-  { value: null, issues: [{ row: 0, message: "Faltan los dormitorios: esta fila no se guardará." }] },
+  { value: null, issues: [{ row: 0, message: "Faltan los dormitorios: corrígela o quítala." }] },
 );
 eq(
   "dormitorios 0 no valen",
   priceByBedroomsFromRows([{ bedrooms: "0", maxPrice: "5000" }]),
-  { value: null, issues: [{ row: 0, message: "Los dormitorios van de 1 a 20: esta fila no se guardará." }] },
+  { value: null, issues: [{ row: 0, message: "Los dormitorios van de 1 a 20: corrígela o quítala." }] },
 );
 eq(
   "dormitorios repetidos: manda la primera",
@@ -126,12 +135,12 @@ eq(
     { bedrooms: "3", maxPrice: "5200" },
     { bedrooms: "3", maxPrice: "9000" },
   ]),
-  { value: { "3": 5200 }, issues: [{ row: 1, message: "3 dormitorios ya tiene tope: esta fila no se guardará." }] },
+  { value: { "3": 5200 }, issues: [{ row: 1, message: "3 dormitorios ya tiene tope: corrígela o quítala." }] },
 );
 eq(
   "importe 0 no vale",
   priceByBedroomsFromRows([{ bedrooms: "2", maxPrice: "0" }]),
-  { value: null, issues: [{ row: 0, message: "El importe tiene que ser mayor que 0: esta fila no se guardará." }] },
+  { value: null, issues: [{ row: 0, message: "El importe tiene que ser mayor que 0: corrígela o quítala." }] },
 );
 eq(
   "ida y vuelta",
@@ -200,6 +209,89 @@ eq(
   "Alquiler · hasta 5.900 €/mes · 3–4 dorm. · Retiro, Jerónimos · tope: 3 dorm. 5.200 €/mes, 4 dorm. 6.300 €/mes",
 );
 eq("resumen vacío", encargoSummary({ ...EMPTY_BRIEF, operation: "sale" }), "Venta");
+
+
+// ─── el tope por dormitorios es solo de España ──────────────────────────────
+eq("es pinta el tope por dormitorios", hasPriceByBedrooms("es"), true);
+eq("cl NO lo pinta (ficha y alta de Chile como siempre)", hasPriceByBedrooms("cl"), false);
+
+// ─── elemento del aviso: fijado arriba o motivo ─────────────────────────────
+const a = { id: "a", s: 90 };
+const b = { id: "b", s: 80 };
+const c = { id: "c", s: 40 };
+eq(
+  "encaja fuera de las que se ven → primero y fijado",
+  pinHighlight([a, b], { kind: "fits", item: c }),
+  { items: [{ ...c, pinned: true }, a, b], highlight: { found: true } },
+);
+eq(
+  "ya estaba entre las que se ven → primero, sin repetirlo",
+  pinHighlight([a, b], { kind: "fits", item: b }),
+  { items: [{ ...b, pinned: true }, a], highlight: { found: true } },
+);
+eq(
+  "no encaja → lista igual y el motivo",
+  pinHighlight([a, b], { kind: "excluded", reason: "Fuera de presupuesto" }),
+  { items: [a, b], highlight: { found: false, reason: "Fuera de presupuesto" } },
+);
+eq(
+  "ya no está → «ya no está disponible»",
+  pinHighlight([a], { kind: "unavailable" }),
+  { items: [a], highlight: { found: false, reason: UNAVAILABLE_REASON } },
+);
+eq(
+  "mensaje del bloque",
+  highlightMissMessage("Fuera de presupuesto"),
+  "El elemento del aviso ya no encaja con este encargo: fuera de presupuesto.",
+);
+eq(
+  "mensaje no disponible",
+  highlightMissMessage(UNAVAILABLE_REASON),
+  "El elemento del aviso ya no encaja con este encargo: ya no está disponible.",
+);
+
+// ─── parámetros de las rutas de sugerencias ─────────────────────────────────
+const U1 = "3f1c2a9e-0b6d-4e57-9a8c-1d2e3f4a5b6c";
+const U2 = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+eq("incluir uuid", parseIncludeParam(U1), U1);
+eq("incluir basura → null", parseIncludeParam("p9"), null);
+eq("incluir inyección → null", parseIncludeParam(`${U1},id.neq.x`), null);
+eq("incluir null → null", parseIncludeParam(null), null);
+eq(
+  "ruta: encargo e incluir válidos",
+  parseSuggestionQuery(new URLSearchParams(`encargo=${U1}&incluir=${U2}`)),
+  { encargoId: U1, includeId: U2 },
+);
+eq(
+  "ruta: basura se ignora (principal, sin elemento)",
+  parseSuggestionQuery(new URLSearchParams("encargo=editar&incluir=particular:p9")),
+  {},
+);
+eq(
+  "ruta: limit con tope solo donde se admite",
+  parseSuggestionQuery(new URLSearchParams("limit=5000"), { maxLimit: 1000 }),
+  { limit: 1000 },
+);
+eq("ruta: limit ignorado sin maxLimit", parseSuggestionQuery(new URLSearchParams("limit=5")), {});
+eq("ruta: limit negativo", parseSuggestionQuery(new URLSearchParams("limit=-1"), { maxLimit: 1000 }), {});
+
+// ─── ¿volver a mirar el stock tras guardar? ─────────────────────────────────
+const base: BriefInput = { ...EMPTY_BRIEF, operation: "rent", zones: ["Retiro"], maxPrice: 3000, minBedrooms: 2 };
+const reordered = Object.fromEntries(Object.entries(base).reverse()) as BriefInput;
+eq("mismo brief → sin cambio", briefChanged(base, { ...base }), false);
+eq("mismas claves en otro orden → sin cambio", briefChanged(base, reordered), false);
+eq("cambia el presupuesto → cambio", briefChanged(base, { ...base, maxPrice: 3200 }), true);
+eq(
+  "lo que no aplica a la operación no cuenta (venta en un alquiler)",
+  briefChanged(base, { ...base, downPayment: 50000 }),
+  false,
+);
+eq("tope por dormitorios cuenta", briefChanged(base, { ...base, maxPriceByBedrooms: { "3": 3500 } }), true);
+eq("alta (sin brief previo) → cambio", briefChanged(null, base), true);
+eq("España + cambio → volver a mirar", shouldRescan({ clientCountry: "es", prev: base, next: { ...base, maxPrice: 1 } }), true);
+eq("España sin cambio → nada", shouldRescan({ clientCountry: "es", prev: base, next: reordered }), false);
+eq("Chile + cambio → nada", shouldRescan({ clientCountry: "cl", prev: base, next: { ...base, maxPrice: 1 } }), false);
+eq("país desconocido → nada", shouldRescan({ clientCountry: null, prev: null, next: base }), false);
 
 console.log(`\n${passed} OK, ${failed} fallos`);
 if (failed) process.exit(1);

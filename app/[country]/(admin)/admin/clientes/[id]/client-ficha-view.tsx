@@ -277,10 +277,13 @@ export function ClientFichaView({
   const highlight = encargos?.highlight ?? null;
   const highlightKey = highlight ? `${highlight.source}:${highlight.id}` : null;
 
-  // Pinchar otro aviso con la ficha ya abierta no vuelve a montar la vista
-  // (misma ruta, otros parámetros): se baja al matching también entonces.
+  // Al abrir la ficha desde un aviso, el salto a `#matching` lo hace el efecto
+  // del ancla (arriba). Este solo cubre pinchar OTRO aviso con la ficha ya
+  // abierta (misma ruta, otros parámetros: la vista no se vuelve a montar).
+  const seenHighlight = useRef(highlightKey);
   useEffect(() => {
-    if (!highlightKey) return;
+    if (!highlightKey || highlightKey === seenHighlight.current) return;
+    seenHighlight.current = highlightKey;
     const raf = requestAnimationFrame(() => {
       document.getElementById("matching")?.scrollIntoView({ block: "start" });
     });
@@ -395,6 +398,9 @@ export function ClientFichaView({
                   canEdit={cc.canEditClient}
                   onEditBrief={() => setEditPrefs(true)}
                   onGo={(anchor) => goTab("properties", anchor)}
+                  primaryLabel={
+                    severalEncargos ? (encargoList.find((e) => e.isPrimary)?.label ?? null) : null
+                  }
                 />
                 {encargoList.length > 0 && (
                   <EncargosSection

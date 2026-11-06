@@ -5,6 +5,7 @@ import { evaluateMatch, exclusionLabel, sqlPriceCeiling, fold, zoneLikePattern }
 import { MADRID_DISTRICTS, normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import type { ExcludedSummary } from "@/lib/db/queries/suggested-properties";
 import { toMapBrief, type MapBrief } from "@/lib/captaciones-map/brief-summary";
+import { pinHighlight, type HighlightLookup, type HighlightResult } from "@/lib/encargos/pin";
 
 /** Anuncio de portal (tabla `particulares`) que encaja con el encargo de un cliente. */
 export type SuggestedParticular = {
@@ -25,11 +26,21 @@ export type SuggestedParticular = {
   matchScore: number;
   matchReasons: string[];
   matchWarnings: string[];
+  /** El anuncio de un aviso (`incluir`), puesto el primero aunque no esté entre los mejores. */
+  pinned?: true;
 };
 
 export type SuggestedParticularesResult =
   // `brief` es ADITIVO (lo usa el mapa de captaciones): los consumidores previos lo ignoran.
-  | { ok: true; suggestions: SuggestedParticular[]; total: number; excluded: ExcludedSummary; brief: MapBrief }
+  | {
+      ok: true;
+      suggestions: SuggestedParticular[];
+      total: number;
+      excluded: ExcludedSummary;
+      brief: MapBrief;
+      /** Solo con `includeId`: si el anuncio del aviso encaja o por qué no. */
+      highlight?: HighlightResult;
+    }
   | { ok: false; reason: "no_preferences" }
   | { ok: false; reason: "insufficient_brief"; missing: string[]; brief: MapBrief }
   | { ok: false; reason: "error"; message: string };
@@ -138,11 +149,17 @@ export type ParticularFit =
  * SQL de la lista (presupuesto, operación, zona): así se puede decir POR QUÉ no
  * encaja («Fuera de presupuesto», «Otra operación»…) en vez de un 0 mudo.
  */
-export async function evaluateParticularForClient(clientId: string, particularId: string): Promise<ParticularFit> {
+export async function evaluateParticularForClient(
+  clientId: string,
+  particularId: string,
+  /** Un encargo concreto del cliente; sin él, el principal (como siempre). */
+  opts?: { encargoId?: string },
+): Promise<ParticularFit> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
+  const prefsQuery = supabase.from("client_preferences").select("*").eq("client_id", clientId);
   const [{ data: prefs, error: pe }, { data: row, error: re }] = await Promise.all([
-    supabase.from("client_preferences").select("*").eq("client_id", clientId).eq("is_primary", true).maybeSingle(),
+    (opts?.encargoId ? prefsQuery.eq("id", opts.encargoId) : prefsQuery.eq("is_primary", true)).maybeSingle(),
     supabase.from("particulares").select(COLUMNS).eq("id", particularId).maybeSingle(),
   ]);
   if (pe || re) return { ok: false, reason: "error" };
@@ -234,7 +251,11 @@ export function particularCandidateQuery(
  */
 export async function getSuggestedParticulares(
   clientId: string,
-  opts?: { limit?: number; encargoId?: string },
+  /**
+   * `includeId`: anuncio de un aviso (`?destacar=`). Se evalúa SUELTO aunque no esté entre los
+   * mejores y, si encaja, va el primero (`pinned`); si no, `highlight` dice por qué.
+   */
+  opts?: { limit?: number; encargoId?: string; includeId?: string },
 ): Promise<SuggestedParticularesResult> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -265,48 +286,88 @@ export async function getSuggestedParticulares(
 
   const excludedCounts = new Map<string, number>();
   const suggestions: SuggestedParticular[] = [];
+  const includeId = opts?.includeId ?? null;
+  let includeLookup: HighlightLookup<SuggestedParticular> | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const judge = (r: any): { excluded: string } | { item: SuggestedParticular } => {
+    // Sospechoso o confirmado de fraude (migración 0191): nunca se sugiere.
+    if (r.fraud_status) return { excluded: "Posible fraude" };
+    const outcome = evaluateParticularRow(brief, r);
+    if (outcome.excluded) return { excluded: exclusionLabel(outcome.reason) };
+    return { item: toSuggestedParticular(r, op, outcome) };
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of (data ?? []) as any[]) {
-    // Sospechoso o confirmado de fraude (migración 0191): nunca se sugiere.
-    if (r.fraud_status) {
-      excludedCounts.set("Posible fraude", (excludedCounts.get("Posible fraude") ?? 0) + 1);
+    const verdict = judge(r);
+    if ("excluded" in verdict) {
+      excludedCounts.set(verdict.excluded, (excludedCounts.get(verdict.excluded) ?? 0) + 1);
+      if (r.id === includeId) includeLookup = { kind: "excluded", reason: verdict.excluded };
       continue;
     }
-    const outcome = evaluateParticularRow(brief, r);
-    if (outcome.excluded) {
-      const label = exclusionLabel(outcome.reason);
-      excludedCounts.set(label, (excludedCounts.get(label) ?? 0) + 1);
-      continue;
-    }
-    suggestions.push({
-      id: r.id,
-      portal: r.portal ?? null,
-      sourceUrl: r.source_url ?? null,
-      title: r.title || [r.address, r.zone].filter(Boolean).join(", ") || "Anuncio",
-      zone: r.zone ?? null,
-      address: r.address ?? null,
-      bedrooms: r.bedrooms ?? null,
-      bathrooms: r.bathrooms ?? null,
-      squareMeters: r.square_meters ?? null,
-      price: Number(r.price ?? 0),
-      operation: op,
-      coverUrl: r.cover_url ?? null,
-      advertiser: r.advertiser_type ?? null,
-      priceDropPct: r.price_drop_pct != null ? Number(r.price_drop_pct) : null,
-      matchScore: outcome.score,
-      matchReasons: outcome.reasons,
-      matchWarnings: outcome.warnings,
-    });
+    if (r.id === includeId) includeLookup = { kind: "fits", item: verdict.item };
+    suggestions.push(verdict.item);
   }
 
   suggestions.sort((a, b) => b.matchScore - a.matchScore);
+
+  // El anuncio del aviso fuera de las candidatas (prefiltro SQL o tope): se lee suelto con las
+  // mismas barreras de la lista (activo, sin baja, sin copia, con precio). Si ya no las pasa, «ya
+  // no está disponible».
+  if (includeId && !includeLookup) {
+    const { data: row } = await supabase
+      .from("particulares")
+      .select(COLUMNS)
+      .eq("id", includeId)
+      .eq("is_active", true)
+      .is("duplicate_of", null)
+      .is("taken_down_at", null)
+      .gt("price", 0)
+      .maybeSingle();
+    if (!row) includeLookup = { kind: "unavailable" };
+    else {
+      const verdict = judge(row);
+      includeLookup = "excluded" in verdict ? { kind: "excluded", reason: verdict.excluded } : { kind: "fits", item: verdict.item };
+    }
+  }
+
+  const shown = suggestions.slice(0, opts?.limit ?? 12);
+  const pinned = includeLookup ? pinHighlight(shown, includeLookup) : null;
   return {
     ok: true,
-    suggestions: suggestions.slice(0, opts?.limit ?? 12),
+    suggestions: pinned ? pinned.items : shown,
+    ...(pinned ? { highlight: pinned.highlight } : {}),
     total: suggestions.length,
     excluded: [...excludedCounts.entries()]
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),
     brief: mapBrief,
+  };
+}
+
+/** Una fila de `particulares` que encaja → la tarjeta de la ficha. */
+function toSuggestedParticular(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  r: any,
+  op: "rent" | "sale",
+  outcome: { score: number; reasons: string[]; warnings: string[] },
+): SuggestedParticular {
+  return {
+    id: r.id,
+    portal: r.portal ?? null,
+    sourceUrl: r.source_url ?? null,
+    title: r.title || [r.address, r.zone].filter(Boolean).join(", ") || "Anuncio",
+    zone: r.zone ?? null,
+    address: r.address ?? null,
+    bedrooms: r.bedrooms ?? null,
+    bathrooms: r.bathrooms ?? null,
+    squareMeters: r.square_meters ?? null,
+    price: Number(r.price ?? 0),
+    operation: op,
+    coverUrl: r.cover_url ?? null,
+    advertiser: r.advertiser_type ?? null,
+    priceDropPct: r.price_drop_pct != null ? Number(r.price_drop_pct) : null,
+    matchScore: outcome.score,
+    matchReasons: outcome.reasons,
+    matchWarnings: outcome.warnings,
   };
 }
