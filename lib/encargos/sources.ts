@@ -5,7 +5,7 @@ import { effectivePrice, evaluateMatch } from "@/lib/clients/brief-match";
 import { applyPropertyPrefilter } from "@/lib/db/queries/suggested-properties";
 import {
   evaluateParticularRow,
-  loadParticularCandidates,
+  particularCandidateQuery,
   particularFeatureList,
 } from "@/lib/db/queries/suggested-particulares";
 import type { Encargo, EncargoSource } from "./model";
@@ -37,15 +37,58 @@ export type SourceItem = {
 export type ItemMatch = { item: SourceItem; score: number; reasons: string[]; warnings: string[] };
 
 const SUSPECT_WARNING = "Anuncio marcado como sospechoso de fraude: verificar antes de contactar";
-const CANDIDATE_LIMIT = 1000;
+/** Filas por página y tope de seguridad por fuente y llamada (no se trunca nunca en silencio). */
+export const PAGE_SIZE = 1000;
+export const MAX_ROWS_PER_SOURCE = 30000;
+export type LoadOptions = { pageSize?: number; maxRows?: number };
 // `.in("id", …)` va por la URL: se trocea.
 const ID_CHUNK = 100;
 
-/** `timestamp` de Postgres (con o sin zona) → ISO UTC. Sin zona se entiende UTC (así guarda la BD). */
+/**
+ * Recorre una consulta por páginas con clave `id` (keyset: `id > último`, orden por id) hasta
+ * agotarla. Si se alcanza `maxRows` con más filas pendientes, avisa con console.warn y para.
+ */
+async function pageAll(
+  label: string,
+  encargoId: string,
+  opts: LoadOptions | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fetchPage: (afterId: string | null, size: number) => PromiseLike<{ data: any[] | null; error: { message: string } | null }>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onPage: (rows: any[]) => void,
+): Promise<void> {
+  const size = opts?.pageSize ?? PAGE_SIZE;
+  const max = opts?.maxRows ?? MAX_ROWS_PER_SOURCE;
+  let scanned = 0;
+  let after: string | null = null;
+  for (;;) {
+    const room = max - scanned;
+    const { data, error } = await fetchPage(after, Math.min(size, room));
+    if (error) throw new Error(`${label}: ${error.message}`);
+    const rows = data ?? [];
+    scanned += rows.length;
+    if (rows.length) onPage(rows);
+    if (rows.length < Math.min(size, room)) return; // agotada
+    after = String(rows[rows.length - 1].id);
+    if (scanned >= max) {
+      console.warn(
+        `[encargos] matching truncado: encargo ${encargoId}, fuente ${label}: tope de ${max} filas alcanzado con más resultados pendientes`,
+      );
+      return;
+    }
+  }
+}
+
+/** `timestamp` de Postgres (con o sin zona, o solo fecha) → ISO UTC. Sin zona se entiende UTC (así guarda la BD). */
 function toIso(v: unknown): string {
-  const s = String(v ?? "");
+  const s = String(v ?? "").trim();
   if (!s) return "";
-  const withZone = /(Z|[+-]\d{2}(:?\d{2})?)$/.test(s) ? s : `${s.replace(" ", "T")}Z`;
+  const t = s.replace(" ", "T");
+  const withZone = /^\d{4}-\d{2}-\d{2}$/.test(t)
+    ? `${t}T00:00:00Z`
+    : /T.*(Z|[+-]\d{2}(:?\d{2})?)$/.test(t)
+      ? t
+      : `${t}Z`;
   const d = new Date(withZone);
   return Number.isNaN(d.getTime()) ? s : d.toISOString();
 }
@@ -79,7 +122,7 @@ const PROPERTY_COLUMNS =
   "price, rent_price, operation, operations, stay, property_type, features, features_manual, " +
   "floor_override, available_from, created_at, property_photos(id)";
 
-type Window = { since?: string; cutoff?: string };
+type Window = { since?: string; until?: string };
 
 /** Propiedades candidatas: solo publicadas/disponibles, de España, con el prefiltro del encargo. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,38 +137,59 @@ function propertyQuery(supabase: any, brief: Encargo["brief"]) {
   return applyPropertyPrefilter(q, brief);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadProperties(supabase: any, brief: Encargo["brief"], w: Window): Promise<any[]> {
-  if (!w.since) {
-    const { data, error } = await propertyQuery(supabase, brief)
-      .order("created_at", { ascending: false })
-      .limit(CANDIDATE_LIMIT);
-    if (error) throw new Error(`properties: ${error.message}`);
-    return data ?? [];
-  }
-  // «Nuevo» = creada después de `since`, o que pasó a «available» después de `since`
-  // (property_history, escrita por trigger desde la migración 0143: kind='status').
-  const byCreation = propertyQuery(supabase, brief).gt("created_at", w.since).lte("created_at", w.cutoff);
-  const hist = await supabase
-    .from("property_history")
-    .select("property_id")
-    .eq("kind", "status")
-    .eq("new_value", "available")
-    .gt("created_at", w.since)
-    .lte("created_at", w.cutoff)
-    .limit(CANDIDATE_LIMIT);
-  if (hist.error) throw new Error(`property_history: ${hist.error.message}`);
-  const created = await byCreation.order("created_at", { ascending: false }).limit(CANDIDATE_LIMIT);
-  if (created.error) throw new Error(`properties: ${created.error.message}`);
-  const rows = new Map<string, unknown>((created.data ?? []).map((r: { id: string }) => [r.id, r]));
-  const ids = [...new Set<string>((hist.data ?? []).map((h: { property_id: string }) => h.property_id))].filter((id) => !rows.has(id));
-  for (let i = 0; i < ids.length; i += ID_CHUNK) {
-    const { data, error } = await propertyQuery(supabase, brief).in("id", ids.slice(i, i + ID_CHUNK));
-    if (error) throw new Error(`properties: ${error.message}`);
-    for (const r of data ?? []) rows.set(r.id, r);
-  }
+async function loadProperties(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return [...rows.values()] as any[];
+  supabase: any,
+  encargo: Encargo,
+  w: Window,
+  lo?: LoadOptions,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any[]> {
+  const brief = encargo.brief;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = new Map<string, any>();
+  const paged = (q: any) => (after: string | null, size: number) => {
+    let qq = q();
+    if (after) qq = qq.gt("id", after);
+    return qq.order("id", { ascending: true }).limit(size);
+  };
+  const keep = (rs: { id: string }[]) => rs.forEach((r) => rows.set(r.id, r));
+  if (!w.since) {
+    await pageAll("properties", encargo.id, lo, paged(() => propertyQuery(supabase, brief)), keep);
+    return [...rows.values()];
+  }
+  // «Nuevo» = creada en (since, until], o que pasó a «available» en esa ventana
+  // (property_history, escrita por trigger desde la migración 0143: kind='status').
+  await pageAll(
+    "properties",
+    encargo.id,
+    lo,
+    paged(() => propertyQuery(supabase, brief).gt("created_at", w.since).lte("created_at", w.until)),
+    keep,
+  );
+  const ids = new Set<string>();
+  await pageAll(
+    "property_history",
+    encargo.id,
+    lo,
+    paged(() =>
+      supabase
+        .from("property_history")
+        .select("id, property_id")
+        .eq("kind", "status")
+        .eq("new_value", "available")
+        .gt("created_at", w.since)
+        .lte("created_at", w.until),
+    ),
+    (hs) => hs.forEach((h: { property_id: string }) => !rows.has(h.property_id) && ids.add(h.property_id)),
+  );
+  const list = [...ids];
+  for (let i = 0; i < list.length; i += ID_CHUNK) {
+    const { data, error } = await propertyQuery(supabase, brief).in("id", list.slice(i, i + ID_CHUNK));
+    if (error) throw new Error(`properties: ${error.message}`);
+    keep(data ?? []);
+  }
+  return [...rows.values()];
 }
 
 function matchProperties(encargo: Encargo, rows: Record<string, unknown>[]): ItemMatch[] {
@@ -148,55 +212,71 @@ async function matchParticulares(
   supabase: any,
   encargo: Encargo,
   w: Window,
+  lo?: LoadOptions,
 ): Promise<ItemMatch[]> {
-  const { data, error } = await loadParticularCandidates(
-    supabase,
-    encargo.brief,
-    w.since ? { createdAfter: w.since, createdBefore: w.cutoff } : undefined,
-  );
-  if (error) throw new Error(`particulares: ${error.message}`);
-  // Una sola entrada por anuncio principal (la mejor puntuada).
+  // Defensivo: el cargador ya filtra `duplicate_of IS NULL`, así que normalmente cada anuncio es su
+  // propio principal; si llegase una copia, se queda una sola entrada por principal (la mejor).
   const best = new Map<string, ItemMatch>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of (data ?? []) as any[]) {
-    if (r.fraud_status === "confirmed") continue;
-    const outcome = evaluateParticularRow(encargo.brief, r);
-    if (outcome.excluded) continue;
-    const warnings = r.fraud_status ? [...outcome.warnings, SUSPECT_WARNING] : outcome.warnings;
-    const m: ItemMatch = { item: toItem("particular", r), score: outcome.score, reasons: outcome.reasons, warnings };
-    const prev = best.get(m.item.canonicalId);
-    if (!prev || prev.score < m.score) best.set(m.item.canonicalId, m);
-  }
+  await pageAll(
+    "particulares",
+    encargo.id,
+    lo,
+    (after, size) => {
+      let q = particularCandidateQuery(
+        supabase,
+        encargo.brief,
+        w.since ? { createdAfter: w.since, createdBefore: w.until } : undefined,
+      );
+      if (after) q = q.gt("id", after);
+      return q.order("id", { ascending: true }).limit(size);
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (rows: any[]) => {
+      for (const r of rows) {
+        if (r.fraud_status === "confirmed") continue;
+        const outcome = evaluateParticularRow(encargo.brief, r);
+        if (outcome.excluded) continue;
+        const warnings = r.fraud_status ? [...outcome.warnings, SUSPECT_WARNING] : outcome.warnings;
+        const m: ItemMatch = { item: toItem("particular", r), score: outcome.score, reasons: outcome.reasons, warnings };
+        const prev = best.get(m.item.canonicalId);
+        if (!prev || prev.score < m.score) best.set(m.item.canonicalId, m);
+      }
+    },
+  );
   return [...best.values()];
 }
 
-async function run(encargo: Encargo, w: Window): Promise<ItemMatch[]> {
+async function run(encargo: Encargo, w: Window, lo?: LoadOptions): Promise<ItemMatch[]> {
   // Un encargo pausado/cerrado o sin lo mínimo (zona y presupuesto) no cruza nada.
   if (encargo.status !== "active" || briefSuggestMissing(encargo.brief).length > 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
   const [props, parts] = await Promise.all([
-    loadProperties(supabase, encargo.brief, w).then((rows) => matchProperties(encargo, rows)),
-    matchParticulares(supabase, encargo, w),
+    loadProperties(supabase, encargo, w, lo).then((rows) => matchProperties(encargo, rows)),
+    matchParticulares(supabase, encargo, w, lo),
   ]);
   return [...props, ...parts].sort((a, b) => b.score - a.score);
 }
 
-/** Todo el stock actual de las dos fuentes que encaja con el encargo. */
-export async function matchStockForEncargo(encargo: Encargo): Promise<ItemMatch[]> {
-  return run(encargo, {});
+/** Todo el stock actual de las dos fuentes que encaja con el encargo (paginado, nunca truncado en silencio). */
+export async function matchStockForEncargo(encargo: Encargo, lo?: LoadOptions): Promise<ItemMatch[]> {
+  return run(encargo, {}, lo);
 }
 
 /**
- * Lo creado después de `sinceIso` (propiedades: o que pasó a «available» después) y con al menos
- * `notYoungerThanMin` minutos de vida, para que el enlazador de duplicados (`link-twins`) ya haya
- * corrido. Sin copias (`duplicate_of`), sin fraude confirmado, activo y sin baja.
+ * Lo nuevo en la ventana semiabierta (sinceIso, untilIso]: creado en ella (propiedades: o que pasó a
+ * «available» en ella). Un elemento creado exactamente en `untilIso` pertenece a ESTA ventana y no
+ * a la siguiente.
+ *
+ * CONTRATO para el llamador (el cron): calcula `untilIso = ahora − 15 min` UNA vez por pasada (así
+ * el enlazador de duplicados `link-twins` ya ha corrido sobre todo lo incluido) y guarda `untilIso`
+ * como `sinceIso` de la pasada siguiente. Las ventanas encajan sin huecos ni solapes. Sin copias
+ * (`duplicate_of`), sin fraude confirmado, activo y sin baja.
  */
 export async function matchNewForEncargo(
   encargo: Encargo,
-  sinceIso: string,
-  notYoungerThanMin: number,
+  window: { sinceIso: string; untilIso: string },
+  lo?: LoadOptions,
 ): Promise<ItemMatch[]> {
-  const cutoff = new Date(Date.now() - Math.max(0, notYoungerThanMin) * 60_000).toISOString();
-  return run(encargo, { since: sinceIso, cutoff });
+  return run(encargo, { since: window.sinceIso, until: window.untilIso }, lo);
 }

@@ -165,6 +165,21 @@ export function loadParticularCandidates(
   brief: ReturnType<typeof briefFromRow>,
   opts?: { createdAfter?: string; createdBefore?: string },
 ) {
+  return particularCandidateQuery(supabase, brief, opts)
+    .order(opts?.createdAfter ? "created_at" : "detected_at", { ascending: false })
+    .limit(CANDIDATE_LIMIT);
+}
+
+/**
+ * Mismo filtro que `loadParticularCandidates` pero SIN orden ni límite: lo pagina quien lo llama
+ * (lib/encargos/sources.ts, por clave `id`). `createdAfter` es exclusivo y `createdBefore` inclusivo.
+ */
+export function particularCandidateQuery(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  brief: ReturnType<typeof briefFromRow>,
+  opts?: { createdAfter?: string; createdBefore?: string },
+) {
   const op = brief.operation;
   const ceiling = sqlPriceCeiling(brief);
   let query = supabase
@@ -207,7 +222,7 @@ export function loadParticularCandidates(
 
   if (opts?.createdAfter) query = query.gt("created_at", opts.createdAfter);
   if (opts?.createdBefore) query = query.lte("created_at", opts.createdBefore);
-  return query.order(opts?.createdAfter ? "created_at" : "detected_at", { ascending: false }).limit(CANDIDATE_LIMIT);
+  return query;
 }
 
 /**

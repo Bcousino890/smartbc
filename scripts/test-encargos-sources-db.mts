@@ -76,11 +76,12 @@ ok(JSON.stringify((fr.data ?? []).map((r: { id: string; fraud_status: string }) 
 const ids = (ms: { item: { id: string } }[]) => ms.map((m) => m.item.id).sort();
 const want = (...xs: number[]) => xs.map(uuid).sort();
 const since = ago(24 * 60);
+const win = (sinceIso: string, untilIso: string) => ({ sinceIso, untilIso });
 
 // ── Nuevo (since + 15 min de vida) ──────────────────────────────────────────
-const fresh = await matchNewForEncargo(encargo({}), since, 15);
+const fresh = await matchNewForEncargo(encargo({}), win(since, ago(15)));
 ok(JSON.stringify(ids(fresh)) === JSON.stringify(want(P.OK, P.SUSPECT, P.TEXT, P.INTERIOR, R.OK, R.REAVAIL)),
-  "matchNew: solo lo creado tras since y con ≥15 min (+ propiedad re-disponible)", ids(fresh).map((i) => i.slice(-2)));
+  "matchNew: solo lo creado en (since, until] (+ propiedad re-disponible)", ids(fresh).map((i) => i.slice(-2)));
 ok(!ids(fresh).includes(uuid(P.DUP)), "matchNew: duplicate_of excluido");
 ok(!ids(fresh).includes(uuid(P.FRAUD)), "matchNew: fraude confirmado excluido");
 ok(!ids(fresh).includes(uuid(P.YOUNG)) && !ids(fresh).includes(uuid(R.YOUNG)), "matchNew: más joven que 15 min excluido");
@@ -97,10 +98,10 @@ ok(/Z$/.test(okP?.item.createdAt ?? ""), "createdAt en ISO UTC", okP?.item.creat
 const susp = fresh.find((m) => m.item.id === uuid(P.SUSPECT));
 ok(!!susp && susp.warnings.some((w) => /fraude/i.test(w)), "fraude 'suspect': entra pero con aviso", susp?.warnings);
 
-const ageZero = await matchNewForEncargo(encargo({}), since, 0);
-ok(ids(ageZero).includes(uuid(P.YOUNG)) && ids(ageZero).includes(uuid(R.YOUNG)) && ids(ageZero).includes(uuid(R.REAVAIL_YOUNG)), "matchNew con 0 min: entran los jóvenes");
-const sinceNow = await matchNewForEncargo(encargo({}), ago(0), 0);
-ok(sinceNow.length === 0, "matchNew con since = ahora: nada");
+const untilNow = await matchNewForEncargo(encargo({}), win(since, new Date().toISOString()));
+ok(ids(untilNow).includes(uuid(P.YOUNG)) && ids(untilNow).includes(uuid(R.YOUNG)) && ids(untilNow).includes(uuid(R.REAVAIL_YOUNG)), "matchNew con until = ahora: entran los jóvenes");
+const sinceNow = await matchNewForEncargo(encargo({}), win(new Date().toISOString(), new Date().toISOString()));
+ok(sinceNow.length === 0, "matchNew con ventana vacía: nada");
 
 // ── Stock ───────────────────────────────────────────────────────────────────
 const stock = await matchStockForEncargo(encargo({}));
@@ -120,12 +121,66 @@ ok(!!propFeat && propFeat.reasons.includes("Exterior"), "propiedad: la caracter�
 
 // ── Encargo no evaluable ────────────────────────────────────────────────────
 ok((await matchStockForEncargo(encargo({ zones: [], maxPrice: null }))).length === 0, "brief insuficiente → [] (stock)");
-ok((await matchNewForEncargo(encargo({ zones: [], maxPrice: null }), since, 15)).length === 0, "brief insuficiente → [] (nuevo)");
+ok((await matchNewForEncargo(encargo({ zones: [], maxPrice: null }), win(since, ago(15)))).length === 0, "brief insuficiente → [] (nuevo)");
 ok((await matchStockForEncargo(encargo({}, { status: "paused" }))).length === 0, "encargo pausado → []");
-ok((await matchNewForEncargo(encargo({}, { status: "closed" }), since, 15)).length === 0, "encargo cerrado → []");
+ok((await matchNewForEncargo(encargo({}, { status: "closed" }), win(since, ago(15)))).length === 0, "encargo cerrado → []");
 
 // ── Tope por dormitorios y presupuesto ──────────────────────────────────────
 const cheap = await matchStockForEncargo(encargo({ maxPrice: 100000 }));
 ok(cheap.length === 0, "presupuesto 100k: nada del stock (500k) pasa el prefiltro");
+
+// ── Ventanas contiguas (a,b] y (b,c]: cada elemento sale una sola vez ───────
+{
+  const a = ago(5 * 24 * 60), b = ago(120), c = ago(30);
+  // Uno exactamente en b (solo en la primera ventana), uno justo después, uno justo antes.
+  await particular(40, { created_at: b, detected_at: b, title: "En b" });
+  await particular(41, { created_at: new Date(Date.parse(b) + 1).toISOString(), title: "Tras b" });
+  await particular(42, { created_at: new Date(Date.parse(b) - 1).toISOString(), title: "Antes de b" });
+  const w1 = await matchNewForEncargo(encargo({}), win(a, b));
+  const w2 = await matchNewForEncargo(encargo({}), win(b, c));
+  const i1 = ids(w1), i2 = ids(w2);
+  ok(i1.includes(uuid(40)) && !i2.includes(uuid(40)), "item creado exactamente en b: solo en la primera ventana");
+  ok(i1.includes(uuid(42)) && !i2.includes(uuid(42)), "item justo antes de b: primera ventana");
+  ok(i2.includes(uuid(41)) && !i1.includes(uuid(41)), "item justo después de b: segunda ventana");
+  ok(i1.filter((x) => i2.includes(x)).length === 0, "ventanas contiguas: sin solapes");
+  const whole = await matchNewForEncargo(encargo({}), win(a, c));
+  ok(JSON.stringify([...i1, ...i2].sort()) === JSON.stringify(ids(whole)), "ventanas contiguas: sin huecos (unión = ventana entera)");
+  // El elemento re-disponible en el histórico (hace 60 min) cae en (b, c] y no en (a, b].
+  ok(i2.includes(uuid(R.REAVAIL)) && !i1.includes(uuid(R.REAVAIL)), "transición a available: solo en la ventana donde ocurrió");
+}
+
+// ── Paginación: más filas que el tamaño de página ───────────────────────────
+{
+  const BIG = "Chamartin";
+  const { error: e } = await db.from("particulares").insert(
+    Array.from({ length: 2300 }, (_, i) => ({
+      id: `eeeeeeee-0000-0000-0000-${String(i + 1).padStart(12, "0")}`, portal: "idealista", external_id: `bulk-${i}`,
+      source_url: `https://t.local/bulk/${i}`, zone: BIG, price: 400000 + i, operation: "sale", bedrooms: 2, bathrooms: 1,
+      square_meters: 80, is_active: true, created_at: ago(90), detected_at: ago(90 + (i % 50)), title: `Bulk ${i}`,
+    })),
+  );
+  assert.ifError(e);
+  const big = encargo({ zones: [BIG] });
+  const all = await matchStockForEncargo(big);
+  ok(all.length === 2300 && new Set(all.map((m) => m.item.id)).size === 2300, "stock > 1000 (2300 particulares): se devuelven TODOS, sin duplicados", all.length);
+  const allNew = await matchNewForEncargo(big, win(ago(24 * 60), ago(15)));
+  ok(allNew.length === 2300, "nuevo > 1000: también paginado", allNew.length);
+  const small = await matchStockForEncargo(big, { pageSize: 100 });
+  ok(small.length === 2300, "pageSize 100: mismo resultado", small.length);
+
+  // Tope duro con aviso (tope pequeño inyectado).
+  const warns: string[] = [];
+  const orig = console.warn;
+  console.warn = (...a: unknown[]) => { warns.push(a.join(" ")); };
+  const capped = await matchStockForEncargo(big, { pageSize: 50, maxRows: 120 });
+  console.warn = orig;
+  ok(capped.length === 120, "tope: se leen exactamente maxRows filas", capped.length);
+  ok(warns.length === 1 && warns[0].includes(big.id) && warns[0].includes("particulares") && /tope/.test(warns[0]), "tope: console.warn con encargo y fuente", warns);
+  const warns2: string[] = [];
+  console.warn = (...a: unknown[]) => { warns2.push(a.join(" ")); };
+  await matchStockForEncargo(big);
+  console.warn = orig;
+  ok(warns2.length === 0, "sin tope alcanzado: sin aviso", warns2);
+}
 
 console.log(`test-encargos-sources-db: ${n} comprobaciones OK`);

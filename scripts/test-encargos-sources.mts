@@ -7,6 +7,7 @@ import { EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
 import { evaluateMatch, type MatchProperty } from "../lib/clients/brief-match.ts";
 import { evaluateParticularRow } from "../lib/db/queries/suggested-particulares.ts";
 import { briefSuggestMissing } from "../lib/clients/brief.ts";
+import { extractFloor } from "../lib/floor.ts";
 import { sourceItemsFromRows, particularFeatureList } from "../lib/encargos/sources.ts";
 
 let n = 0;
@@ -105,6 +106,22 @@ const warningsOf = (o: ReturnType<typeof evaluateMatch>) => (o.excluded ? [] : o
   const props = sourceItemsFromRows("property", [{ id: "pp", title: "Ático", zone: "Centro", price: 5, created_at: "2026-01-01T00:00:00Z" }]);
   ok(props[0].canonicalId === "pp" && props[0].source === "property", "propiedad: canonicalId = id");
   ok(items[0].createdAt.endsWith("Z"), "createdAt de timestamp sin zona se normaliza a UTC (Z)", items[0].createdAt);
+}
+
+// ── extractFloor: «bajo» + palabra ───────────────────────────────────────────
+{
+  ok(extractFloor([], "Bajo interior luminoso.") === 0, "extractFloor: «bajo interior» → 0");
+  ok(extractFloor([], "Bajo exterior con patio.") === 0, "extractFloor: «bajo exterior» → 0");
+  ok(extractFloor([], "Bajo izquierda, reformado.") === 0, "extractFloor: «bajo izquierda» → 0");
+  for (const t of ["Precio bajo para la zona.", "Temperaturas bajo cero.", "Terraza bajo la pérgola.", "Visitas bajo petición.", "Junto al bajo centro comercial."]) {
+    ok(extractFloor([], t) === null, `extractFloor: «${t}» no es planta`, extractFloor([], t));
+  }
+}
+
+// toIso robusto con solo fecha
+{
+  const it = sourceItemsFromRows("property", [{ id: "d", title: "x", zone: "z", price: 1, created_at: "2026-03-05" }])[0];
+  ok(it.createdAt === "2026-03-05T00:00:00.000Z", "createdAt de solo fecha → medianoche UTC", it.createdAt);
 }
 
 ok(briefSuggestMissing({ ...EMPTY_BRIEF }).length > 0, "sanity: brief vacío es insuficiente");

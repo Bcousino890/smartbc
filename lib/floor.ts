@@ -58,7 +58,7 @@ function parseFloorText(raw: string, loose: boolean): number | null {
   if (/planta baja|\bentreplanta\b/.test(s)) return 0;
   // «Bajo interior», «Bajo exterior», «Bajo izquierda»… es la planta (como la escriben los
   // portales y muchos anunciantes en la descripción). «bajo» a secas NO: es también la preposición.
-  if (/\bbajo\s+(interior|exterior|izq(uierda)?|dcha|derecha|centro)\b/.test(s)) return 0;
+  if (/\bbajo\s+(interior|exterior|izq(uierda)?|dcha|derecha)\b/.test(s)) return 0;
   if (/\b(semisotano|sotano)\b/.test(s)) return -1;
 
   if (loose) {
