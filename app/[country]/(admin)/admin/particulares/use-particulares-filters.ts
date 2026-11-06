@@ -78,6 +78,8 @@ type FilterValues = {
   showLinked: boolean;
   /** Incluir los anuncios fuera de zona (su zona ya no está marcada en Sindicación; no se rastrean). */
   showOutOfZone: boolean;
+  /** Incluir Ukio, Única y Safestays (excluidas por defecto). */
+  showExcludedAgencies: boolean;
   phoneFilter: PhoneFilterValue;
   gestion: GestionFilter;
   advertiser: AdvertiserFilter;
@@ -161,6 +163,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   last24h: "last24h",
   showLinked: "enlazados",
   showOutOfZone: "fuera_zona",
+  showExcludedAgencies: "conExcluidas",
   phoneFilter: "phone",
   gestion: "gestion",
   advertiser: "advertiser",
@@ -256,6 +259,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
   const [last24h, setLast24h] = useState(() => searchParams.get(PARAM_KEYS.last24h) === "1");
   const [showLinked, setShowLinked] = useState(() => searchParams.get(PARAM_KEYS.showLinked) === "1");
   const [showOutOfZone, setShowOutOfZone] = useState(() => searchParams.get(PARAM_KEYS.showOutOfZone) === "1");
+  const [showExcludedAgencies, setShowExcludedAgencies] = useState(() => searchParams.get(PARAM_KEYS.showExcludedAgencies) === "1");
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilterValue>(() =>
     readEnum<PhoneFilterValue>(searchParams.get(PARAM_KEYS.phoneFilter), PHONE_VALUES),
   );
@@ -358,6 +362,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     last24h,
     showLinked,
     showOutOfZone,
+    showExcludedAgencies,
     phoneFilter,
     gestion,
     advertiser,
@@ -468,6 +473,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     last24h,
     showLinked,
     showOutOfZone,
+    showExcludedAgencies,
     phoneFilter,
     gestion,
     advertiser,
@@ -529,6 +535,7 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setLast24h(false);
     setShowLinked(false);
     setShowOutOfZone(false);
+    setShowExcludedAgencies(false);
     setPhoneFilter("");
     setGestion("");
     setAdvertiser(DEFAULT_ADVERTISER);
@@ -610,6 +617,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setShowLinked,
     showOutOfZone,
     setShowOutOfZone,
+    showExcludedAgencies,
+    setShowExcludedAgencies,
     phoneFilter,
     setPhoneFilter,
     gestion,
