@@ -445,6 +445,8 @@ export function ParticularesClient({
 
   const chips = buildChips(f);
   const extraChips = chips.filter((c) => c.tone !== "scope");
+  /** Nombre del encargo cuyos filtros están puestos (marca `autofiltros` = el encargo elegido), o null. */
+  const autofilledFrom = selectedEncargo && f.autofill === selectedEncargo.id ? selectedEncargo.label : null;
   const panelCount = countPanelFilters(f);
   const busy = f.pending || f.settling || pageNavPending;
 
@@ -666,6 +668,12 @@ export function ParticularesClient({
             </button>
           )}
         </div>
+        {/* Filtros puestos por el encargo (también con un solo encargo): que se sepa de dónde salen. */}
+        <p aria-live="polite" className="mt-1.5 text-xs text-ink/75 empty:hidden">
+          {autofilledFrom && extraChips.length > 0
+            ? `Filtros rellenados desde el encargo «${autofilledFrom}»: puedes cambiarlos o pulsar «Limpiar todo».`
+            : ""}
+        </p>
         {searching && (
           <div role="status" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-gold-dark/50 bg-gold/15 px-3 py-2 text-sm text-ink">
             {searchAll ? (

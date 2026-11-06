@@ -46,12 +46,15 @@ export function EncargoInactive({ encargo }: { encargo: MatchingEncargo }) {
   );
 }
 
-/** Etiqueta del elemento que llega del aviso. Texto, no solo color. */
-export function NewBadge() {
+/**
+ * Etiqueta del elemento que llega del aviso. Texto, no solo color. Dice «Del aviso» y no «Nuevo»: un
+ * aviso del pase inicial trae stock que ya existía, no algo recién publicado.
+ */
+export function NoticeBadge() {
   return (
     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-cream-50">
       <Sparkles size={11} aria-hidden />
-      Nuevo
+      Del aviso
     </span>
   );
 }

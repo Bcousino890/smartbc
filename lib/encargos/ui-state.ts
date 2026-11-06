@@ -40,6 +40,34 @@ export function parseHighlight(param: string | null): { source: EncargoSource; i
 }
 
 /**
+ * El destacado del aviso solo vale para el encargo que nombra el enlace. Si `?encargo=` no es el que
+ * acabó elegido (id ajeno o borrado → se cae al principal), se descarta: si no, se resaltaría o se
+ * diría «ya no encaja» de un elemento contra un encargo que no es el del aviso.
+ */
+export function highlightForSelection(
+  encargoParam: string | null,
+  selected: Pick<Encargo, "id"> | null,
+  destacarParam: string | null,
+): { source: EncargoSource; id: string } | null {
+  const hl = parseHighlight(destacarParam);
+  if (!hl) return null;
+  if (encargoParam && encargoParam !== selected?.id) return null;
+  return hl;
+}
+
+/**
+ * ¿Cierra el selector de encargo un `blur`? Solo si el foco se va FUERA de verdad (Tab, clic en otra
+ * parte). En Safari / Firefox de Mac un botón no recibe el foco al pulsarlo: el `blur` llega con
+ * `relatedTarget = null` aunque el clic sea DENTRO del selector; si se cerrase ahí, el panel se
+ * desmontaría antes del `click` y no se podría cambiar de encargo. Con el puntero pulsado dentro, no se cierra.
+ */
+export function pickerBlurCloses(input: { open: boolean; focusStaysInside: boolean; relatedTargetIsNull: boolean; pointerDownInside: boolean }): boolean {
+  if (!input.open || input.focusStaysInside) return false;
+  if (input.relatedTargetIsNull && input.pointerDownInside) return false;
+  return true;
+}
+
+/**
  * La pestaña con la que se abre la ficha. Un aviso de la campanita enlaza a
  * `?encargo=…[&destacar=…]#matching` sin `tab`: el matching vive en
  * Propiedades, así que se abre ahí. `?encargo=editar` (abre el diálogo del

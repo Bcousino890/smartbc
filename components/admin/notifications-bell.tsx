@@ -60,11 +60,8 @@ const ICON_MAP: Record<NotificationItem["type"], React.ReactNode> = {
     </span>
   ),
   encargo_match: (
-    <span
-      role="img"
-      aria-label="Encargo"
-      className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/10"
-    >
+    // Decorativo: el texto «Encargo» de la fila ya lo nombra.
+    <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/10">
       <SearchCheck size={15} className="text-gold" strokeWidth={1.75} />
     </span>
   ),
@@ -215,7 +212,7 @@ export function NotificationsBell() {
                           {ICON_MAP[n.type]}
                           <div className="min-w-0 flex-1">
                             {label && (
-                              <p className="text-xs font-medium uppercase tracking-wide text-gold">
+                              <p className="text-xs font-medium uppercase tracking-wide text-gold-text">
                                 {label}
                               </p>
                             )}
