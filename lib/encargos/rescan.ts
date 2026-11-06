@@ -4,7 +4,7 @@
 // encargos y por el diálogo de siempre «Editar encargo» (saveClientPreferencesFull),
 // para que los dos caminos hagan lo mismo. Solo España.
 
-import { buildPreferencesPayload, type BriefInput } from "@/lib/clients/brief";
+import { briefSuggestMissing, buildPreferencesPayload, type BriefInput } from "@/lib/clients/brief";
 
 /** JSON con las claves ordenadas: dos objetos iguales dan el mismo texto aunque el orden de claves cambie. */
 function canonical(v: unknown): string {
@@ -38,4 +38,12 @@ export function shouldRescan(input: {
   next: BriefInput;
 }): boolean {
   return input.clientCountry === "es" && briefChanged(input.prev, input.next);
+}
+
+/**
+ * Alta de cliente con encargo («Nuevo cliente»): pase inicial solo en España y solo si el brief ya
+ * tiene lo mínimo para cruzar (zona y presupuesto). El propio pase lo vuelve a comprobar.
+ */
+export function shouldRunInitialPassOnCreate(input: { clientCountry: string | null | undefined; brief: BriefInput }): boolean {
+  return input.clientCountry === "es" && briefSuggestMissing(input.brief).length === 0;
 }

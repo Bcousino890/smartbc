@@ -28,7 +28,7 @@ import {
   pinHighlight,
   UNAVAILABLE_REASON,
 } from "../lib/encargos/pin.ts";
-import { briefChanged, shouldRescan } from "../lib/encargos/rescan.ts";
+import { briefChanged, shouldRescan, shouldRunInitialPassOnCreate } from "../lib/encargos/rescan.ts";
 import type { Encargo } from "../lib/encargos/model.ts";
 
 let failed = 0;
@@ -292,6 +292,10 @@ eq("España + cambio → volver a mirar", shouldRescan({ clientCountry: "es", pr
 eq("España sin cambio → nada", shouldRescan({ clientCountry: "es", prev: base, next: reordered }), false);
 eq("Chile + cambio → nada", shouldRescan({ clientCountry: "cl", prev: base, next: { ...base, maxPrice: 1 } }), false);
 eq("país desconocido → nada", shouldRescan({ clientCountry: null, prev: null, next: base }), false);
+// Alta «Nuevo cliente»: pase inicial solo España + brief suficiente.
+eq("alta España con brief suficiente → pase inicial", shouldRunInitialPassOnCreate({ clientCountry: "es", brief: { ...base, zones: ["Salamanca"], maxPrice: 900000 } }), true);
+eq("alta España sin zona → nada", shouldRunInitialPassOnCreate({ clientCountry: "es", brief: { ...base, zones: [], maxPrice: 900000 } }), false);
+eq("alta Chile → nada", shouldRunInitialPassOnCreate({ clientCountry: "cl", brief: { ...base, zones: ["Salamanca"], maxPrice: 900000 } }), false);
 
 console.log(`\n${passed} OK, ${failed} fallos`);
 if (failed) process.exit(1);

@@ -17,6 +17,8 @@ import {
 } from "@/lib/clients/brief";
 import { setClientProfileTag } from "@/lib/clients/profile-tag";
 import { loadZoneCatalog, type ZoneCatalog } from "@/lib/clients/zone-catalog";
+import { shouldRunInitialPassOnCreate } from "@/lib/encargos/rescan";
+import { scheduleInitialPass } from "@/lib/encargos/schedule";
 
 export type SaveClientPreferencesResult =
   | { ok: true }
@@ -318,13 +320,22 @@ export async function createClientWithBrief(
   if (profileError) return { ok: false, error: profileError.message };
   await assignToCreator(db, clientId, auth);
 
-  const { error: prefsError } = await db.from("client_preferences").insert({
-    client_id: clientId,
-    is_primary: true,
-    country: input.country,
-    ...buildPreferencesPayload(input.brief),
-  });
+  const { data: prefsRow, error: prefsError } = await db
+    .from("client_preferences")
+    .insert({
+      client_id: clientId,
+      is_primary: true,
+      country: input.country,
+      ...buildPreferencesPayload(input.brief),
+    })
+    .select("id")
+    .maybeSingle();
   if (prefsError) return { ok: false, error: prefsError.message };
+  // España con brief suficiente: pase inicial sobre el stock (un aviso agrupado), tras responder.
+  // scheduleInitialPass nunca lanza: un fallo no rompe el alta.
+  if (prefsRow?.id && shouldRunInitialPassOnCreate({ clientCountry: input.country, brief: input.brief })) {
+    scheduleInitialPass(String(prefsRow.id));
+  }
 
   // El usuario y el encargo ya existen: si la etiqueta falla no se deshace
   // nada, se avisa para que el perfil se elija desde la ficha.
