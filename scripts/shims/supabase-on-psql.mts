@@ -93,10 +93,16 @@ function logicSql(term: string, joiner: "AND" | "OR"): string {
   throw new Error(`shim: operador no soportado ${op}`);
 }
 
+// Simula `db-max-rows` de PostgREST (solo pruebas): ningún SELECT devuelve más de `n` filas.
+let dbMaxRows: number | null = null;
+export function __setDbMaxRows(n: number | null) {
+  dbMaxRows = n;
+}
+
 class Query implements PromiseLike<Res> {
   private where: string[] = [];
   private orderBy = "";
-  private lim = "";
+  private limN: number | null = null;
   private mode: "select" | "insert" | "update" | "delete" | "upsert" = "select";
   private cols = "*";
   private payload: any = null;
@@ -182,7 +188,7 @@ class Query implements PromiseLike<Res> {
     return this;
   }
   limit(n: number) {
-    this.lim = ` LIMIT ${Math.floor(n)}`;
+    this.limN = Math.floor(n);
     return this;
   }
   maybeSingle() {
@@ -209,7 +215,14 @@ class Query implements PromiseLike<Res> {
     const t = ident(this.table);
     const w = this.where.length ? ` WHERE ${this.where.join(" AND ")}` : "";
     const ret = this.returning || this.single ? " RETURNING *" : "";
-    if (this.mode === "select") return `SELECT coalesce(json_agg(x), '[]') FROM (SELECT ${this.colList()} FROM ${t}${w}${this.orderBy}${this.lim}) x`;
+    if (this.mode === "select") {
+      // Como `db-max-rows` de PostgREST: el servidor puede devolver MENOS filas de las pedidas. Solo
+      // se aplica a las consultas paginadas (con .limit()); las de `.in(id, trozo de ≤ 100)` quedan
+      // igual (en producción db-max-rows nunca baja de esos trozos).
+      const cap = this.limN == null ? Infinity : Math.min(this.limN, dbMaxRows ?? Infinity);
+      const lim = Number.isFinite(cap) ? ` LIMIT ${cap}` : "";
+      return `SELECT coalesce(json_agg(x), '[]') FROM (SELECT ${this.colList()} FROM ${t}${w}${this.orderBy}${lim}) x`;
+    }
     if (this.mode === "delete") return `WITH d AS (DELETE FROM ${t}${w} RETURNING *) SELECT coalesce(json_agg(d), '[]') FROM d`;
     const rows = Array.isArray(this.payload) ? this.payload : [this.payload];
     const keys = [...new Set(rows.flatMap((r: object) => Object.keys(r)))].map(ident);

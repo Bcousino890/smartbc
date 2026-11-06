@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { createAdminClient } from "../lib/db/admin.ts";
 import { buildPreferencesPayload, EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
 import { runEncargoInitialPass, runEncargoMatching } from "../lib/encargos/runner.ts";
-import { __failRpc } from "./shims/supabase-on-psql.mts";
+import { __failRpc, __setDbMaxRows } from "./shims/supabase-on-psql.mts";
 import { POST } from "../app/api/cron/encargo-matches/route.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -225,5 +225,32 @@ ok(!!bad.error, "rpc con aviso inválido: error", bad);
 ok((await matchRows(E_F1)).find((m) => m.canonical_id === "x")!.notified_at === null, "…y no reclama la fila");
 const none = await db.rpc("claim_and_notify_encargo_matches", { p_match_ids: [x.id], p_recipients: [], p_title: "t", p_body: "b", p_link: "/l", p_data: {} });
 ok(none.data === 0 && (await matchRows(E_F1)).find((m) => m.canonical_id === "x")!.notified_at === null, "sin destinatarios: no reclama nada", none);
+
+// ── Fase 7: páginas cortas (db-max-rows < 1000) y marca atascada ────────────
+{
+  const full = await runEncargoMatching({ now: at(170), dryRun: true });
+  __setDbMaxRows(2);
+  const short = await runEncargoMatching({ now: at(170), dryRun: true });
+  __setDbMaxRows(null);
+  ok(full.encargos > 2 && short.encargos === full.encargos, "páginas de 2 filas: se cargan TODOS los encargos activos", [full.encargos, short.encargos]);
+  // 5 filas pendientes de un encargo: con páginas de 2, se reintentan las 5 en un aviso.
+  assert.ifError((await db.from("encargo_matches").insert(Array.from({ length: 5 }, (_, i) => ({
+    encargo_id: uuid(E_F2), source: "particular", source_id: `pg-${i}`, canonical_id: `pg-${i}`, first_seen_at: iso(160),
+  })))).error);
+  __setDbMaxRows(2);
+  r = await runEncargoMatching({ now: at(180) });
+  __setDbMaxRows(null);
+  eq([r.ok, r.pending_retried], [true, 6], "páginas de 2 filas: se reintentan las 5 pendientes (+ la «x» que la fase 6 dejó sin reclamar)");
+  ok((await matchRows(E_F2)).every((x) => x.notified_at !== null), "…y quedan todas avisadas");
+  ok(typeof r.cursorAgeMinutes === "number" && r.cursorAgeMinutes >= 0 && r.cursorAgeMinutes < 60, "informe: cursorAgeMinutes", r.cursorAgeMinutes);
+  const errs: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => { errs.push(a.map(String).join(" ")); };
+  const stale = await runEncargoMatching({ now: at(180 + 4 * 24 * 60), dryRun: true });
+  console.error = orig;
+  ok(stale.cursorAgeMinutes! > 3 * 24 * 60 && errs.some((e) => /marca del cron/.test(e)), "marca de hace > 3 días: console.error y se procesa igual", errs);
+  const res2 = await POST(req("?dry=1", "Bearer test-cron-secret-0123456789"));
+  ok(typeof (await res2.json()).cursorAgeMinutes === "number", "ruta: el JSON lleva cursorAgeMinutes");
+}
 
 console.log(`PASS: ${n} comprobaciones (runner, BD real)`);

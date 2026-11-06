@@ -48,7 +48,15 @@ export type MatchingReport = {
   notices: number;
   pending_retried: number;
   skipped: Record<string, number>;
+  /**
+   * Antigüedad de la marca al empezar la pasada (minutos, respecto a «ahora − 15 min»). Normal: ~el
+   * intervalo del cron. Si crece, alguna pasada está fallando y la marca no avanza (ver los logs).
+   */
+  cursorAgeMinutes?: number;
 };
+
+/** A partir de esta antigüedad de la marca se deja un console.error en cada pasada. */
+export const STALE_CURSOR_MS = 3 * 24 * 60 * 60_000;
 
 function chunks<T>(xs: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -88,8 +96,9 @@ async function loadActiveTargets(db: Db): Promise<Target[]> {
     const { data, error } = await q;
     if (error) fail("client_preferences", error);
     const rows = (data ?? []) as Row[];
+    // Solo una página VACÍA es el final: PostgREST puede devolver menos de lo pedido (db-max-rows).
+    if (!rows.length) break;
     encargos.push(...rows.map(encargoFromRow));
-    if (rows.length < PAGE) break;
     after = String(rows[rows.length - 1].id);
   }
   const names = await clientNames(db, encargos.map((e) => e.clientId));
@@ -163,6 +172,7 @@ async function loadPending(db: Db, encargoIds: string[], olderThanIso: string): 
       const { data, error } = await q;
       if (error) fail("encargo_matches (pendientes)", error);
       const rows = (data ?? []) as Row[];
+      if (!rows.length) break; // solo una página vacía es el final (ver loadActiveTargets)
       for (const r of rows) {
         const p: Pending = {
           id: String(r.id), encargoId: String(r.encargo_id), source: r.source as Pending["source"],
@@ -173,7 +183,6 @@ async function loadPending(db: Db, encargoIds: string[], olderThanIso: string): 
         if (list) list.push(p);
         else byEncargo.set(p.encargoId, [p]);
       }
-      if (rows.length < PAGE) break;
       after = String(rows[rows.length - 1].id);
     }
   }
@@ -283,6 +292,15 @@ export async function runEncargoMatching(opts: { now?: Date; dryRun?: boolean } 
   if (cursorMs === null) {
     if (!dry) await writeCursor(db, untilMs);
     return { ...report, initialised: true };
+  }
+
+  report.cursorAgeMinutes = Math.max(0, Math.round((untilMs - cursorMs) / 60_000));
+  if (untilMs - cursorMs > STALE_CURSOR_MS) {
+    // Se sigue procesando la ventana entera (no se salta nada), pero que se vea: algún encargo falla
+    // en cada pasada y bloquea la marca de todos.
+    console.error(
+      `[encargos] la marca del cron lleva ${report.cursorAgeMinutes} min sin avanzar (desde ${new Date(cursorMs).toISOString()}): revisa los fallos de las pasadas`,
+    );
   }
 
   const targets = await loadActiveTargets(db);
