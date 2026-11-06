@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
+import { mapEncargoNoticeRow } from "@/lib/notifications/encargo-notice";
 import {
   getAssignedClientIds,
   resolveViewScope,
@@ -9,7 +10,7 @@ import {
 
 export type NotificationItem = {
   id: string;
-  type: "visit" | "message" | "catalog_feedback";
+  type: "visit" | "message" | "catalog_feedback" | "encargo_match";
   /** Solo los avisos guardados (crm_notifications): id para marcarlo leído. */
   noticeId?: string;
   title: string;
@@ -108,7 +109,24 @@ export async function GET() {
     .limit(20)
     .then((r: { data: unknown[] | null; error: unknown }) => (r.error ? { data: [] } : r), () => ({ data: [] }));
 
-  const [visits, messages, feedback] = await Promise.all([visitsQuery, messagesQuery, feedbackQuery]);
+  // Encargos de clientes: avisos del runner de coincidencias, dirigidos a ESTE
+  // usuario (asesor asignado o admin). Mismo patrón tolerante a errores.
+  const encargoQuery = db
+    .from("crm_notifications")
+    .select("id, title, body, link, created_at")
+    .eq("user_id", profile.id)
+    .eq("type", "encargo_match")
+    .eq("read", false)
+    .order("created_at", { ascending: false })
+    .limit(20)
+    .then((r: { data: unknown[] | null; error: unknown }) => (r.error ? { data: [] } : r), () => ({ data: [] }));
+
+  const [visits, messages, feedback, encargos] = await Promise.all([
+    visitsQuery,
+    messagesQuery,
+    feedbackQuery,
+    encargoQuery,
+  ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const notifications: NotificationItem[] = [
@@ -138,6 +156,7 @@ export async function GET() {
       created_at: n.created_at,
       href: typeof n.link === "string" && n.link.startsWith("/") ? n.link : "/admin/clientes",
     })),
+    ...((encargos.data ?? []) as any[]).map(mapEncargoNoticeRow),
   ].sort(
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -147,8 +166,8 @@ export async function GET() {
 }
 
 /**
- * Marcar como leídos avisos guardados de opiniones de catálogos (0218). Solo
- * los del propio usuario y solo de ese tipo: no toca los de Captaciones.
+ * Marcar como leídos avisos guardados (opiniones de catálogos 0218 y encargos). Solo
+ * los del propio usuario y solo de esos tipos: no toca los de Captaciones.
  */
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
@@ -164,7 +183,7 @@ export async function POST(request: Request) {
     .update({ read: true })
     .in("id", ids)
     .eq("user_id", profile.id)
-    .eq("type", "catalog_feedback");
+    .in("type", ["catalog_feedback", "encargo_match"]);
   if (error) return Response.json({ error: "unavailable" }, { status: 503 });
   return Response.json({ ok: true });
 }

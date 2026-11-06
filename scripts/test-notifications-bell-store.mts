@@ -2,6 +2,7 @@
 //   node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-notifications-bell-store.mts
 import assert from "node:assert/strict";
 import { bellContextKey, createBellStore, type BellResult } from "../lib/notifications/bell-store.ts";
+import { isSafeInternalHref, mapEncargoNoticeRow } from "../lib/notifications/encargo-notice.ts";
 
 let n = 0;
 const t = async (name: string, fn: () => Promise<void> | void) => {
@@ -190,6 +191,40 @@ await t("los suscriptores se enteran de cambios y de borrados", async () => {
   await tick();
   store.clear();
   assert.deepEqual(seen, [A_ES, "*"]);
+});
+
+console.log("Avisos de encargo (encargo_match)");
+type Bell = { id: string; type: string; noticeId?: string; created_at: string };
+await t("el store acepta un encargo_match junto a otros tipos y lo marca leído", async () => {
+  const s = fakeServer();
+  const store = createBellStore<Bell>({ fetcher: s.fetcher as never, now: () => 0 });
+  store.use(A_ES);
+  const p = store.load(A_ES);
+  s.reply(0, {
+    status: "ok",
+    items: [
+      { id: "visit-1", type: "visit", created_at: "2026-11-06T10:00:00Z" },
+      { id: "en-9", type: "encargo_match", noticeId: "n9", created_at: "2026-11-06T11:00:00Z" },
+    ],
+  } as never);
+  const items = (await p)!;
+  assert.deepEqual(items.map((i) => i.type), ["visit", "encargo_match"]);
+  store.remove(A_ES, (x) => x.id === "en-9");
+  assert.deepEqual(store.peek(A_ES)!.map((i) => i.id), ["visit-1"]);
+});
+await t("isSafeInternalHref: solo rutas relativas del mismo origen", () => {
+  assert.equal(isSafeInternalHref("/es/admin/clientes/abc?encargo=e1&destacar=idealista:5#matching"), true);
+  for (const bad of ["//evil.com", "https://x", "javascript:alert(1)", "", " /es/x", "/\\evil.com", "/a\nb", null, undefined, 5])
+    assert.equal(isSafeInternalHref(bad as never), false, String(bad));
+});
+await t("mapEncargoNoticeRow: mapea fila a ítem y neutraliza href inseguro", () => {
+  const row = { id: "n1", title: "Nuevo", body: "3 inmuebles", link: "/es/admin/clientes/c1?encargo=e1#matching", created_at: "2026-11-06T10:00:00Z" };
+  assert.deepEqual(mapEncargoNoticeRow(row), {
+    id: "en-n1", noticeId: "n1", type: "encargo_match", title: "Nuevo", subtitle: "3 inmuebles",
+    created_at: "2026-11-06T10:00:00Z", href: "/es/admin/clientes/c1?encargo=e1#matching",
+  });
+  assert.equal(mapEncargoNoticeRow({ ...row, link: "https://evil.com" }).href, "");
+  assert.equal(mapEncargoNoticeRow({ ...row, title: null, body: null, link: null }).title, "Encargo");
 });
 
 console.log(`\n${n} comprobaciones en verde`);

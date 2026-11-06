@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Bell, CalendarClock, MessageSquare, Star } from "lucide-react";
+import { Bell, CalendarClock, MessageSquare, SearchCheck, Star } from "lucide-react";
 import { useT } from "@/lib/i18n/provider";
 import type { NotificationItem } from "@/app/api/admin/notifications/route";
 import { useCrmTheme } from "@/components/admin/crm-theme";
+import { isSafeInternalHref } from "@/lib/notifications/encargo-notice";
 import { bellContextKey, createBellStore, type BellResult } from "@/lib/notifications/bell-store";
 
 async function fetchBell(): Promise<BellResult<NotificationItem>> {
@@ -58,7 +59,21 @@ const ICON_MAP: Record<NotificationItem["type"], React.ReactNode> = {
       <Star size={15} className="text-gold" strokeWidth={1.75} />
     </span>
   ),
+  encargo_match: (
+    <span
+      role="img"
+      aria-label="Encargo"
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/10"
+    >
+      <SearchCheck size={15} className="text-gold" strokeWidth={1.75} />
+    </span>
+  ),
 };
+
+/** Etiqueta corta del tipo (texto plano) para los avisos de encargo. */
+function typeLabel(type: NotificationItem["type"]): string | null {
+  return type === "encargo_match" ? "Encargo" : null;
+}
 
 /**
  * 0218 · al abrir un aviso de opinión se marca como leído (solo ese tipo).
@@ -193,31 +208,51 @@ export function NotificationsBell() {
               <ul className="divide-y divide-gold/8">
                 {notifications.map((n) => (
                   <li key={n.id}>
-                    <Link
-                      href={n.href}
-                      onClick={() => {
-                        setOpen(false);
-                        if (n.noticeId) {
-                          if (key) bellStore.remove(key, (x) => x.id === n.id);
-                          else setNotifications((all) => all.filter((x) => x.id !== n.id));
-                          markRead(n.noticeId, key);
-                        }
-                      }}
-                      className="flex items-start gap-3 px-4 py-3 transition hover:bg-gold/5"
-                    >
-                      {ICON_MAP[n.type]}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-ink">
-                          {n.title}
-                        </p>
-                        <p className="mt-0.5 line-clamp-2 text-xs text-ink/55">
-                          {n.subtitle}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs text-ink/35">
-                        {timeAgo(n.created_at)}
-                      </span>
-                    </Link>
+                    {(() => {
+                      const label = typeLabel(n.type);
+                      const body = (
+                        <>
+                          {ICON_MAP[n.type]}
+                          <div className="min-w-0 flex-1">
+                            {label && (
+                              <p className="text-xs font-medium uppercase tracking-wide text-gold">
+                                {label}
+                              </p>
+                            )}
+                            <p className="truncate text-sm font-semibold text-ink">
+                              {n.title}
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-ink/55">
+                              {n.subtitle}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-xs text-ink/35">
+                            {timeAgo(n.created_at)}
+                          </span>
+                        </>
+                      );
+                      const rowClass = "flex items-start gap-3 px-4 py-3 transition hover:bg-gold/5";
+                      // El enlace viene de la base de datos: solo rutas del mismo origen.
+                      if (!isSafeInternalHref(n.href)) {
+                        return <div className={rowClass}>{body}</div>;
+                      }
+                      return (
+                        <Link
+                          href={n.href}
+                          onClick={() => {
+                            setOpen(false);
+                            if (n.noticeId) {
+                              if (key) bellStore.remove(key, (x) => x.id === n.id);
+                              else setNotifications((all) => all.filter((x) => x.id !== n.id));
+                              markRead(n.noticeId, key);
+                            }
+                          }}
+                          className={rowClass}
+                        >
+                          {body}
+                        </Link>
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>
