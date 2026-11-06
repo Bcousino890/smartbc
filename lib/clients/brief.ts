@@ -471,11 +471,6 @@ const text = (v: string | null | undefined): string | null => v?.trim() || null;
 export const MAX_POLYGONS = 8;
 export const MAX_POLYGON_POINTS = 200;
 
-/**
- * Deja solo anillos válidos: ≥3 puntos finitos dentro de rango [lng, lat],
- * redondeados a 5 decimales (~1 m). Lo que llega de la BD o de un formulario
- * manipulado nunca debe romper el match.
- */
 /** Solo claves de dormitorios enteras (>0) con importe >0; vacío → null. */
 export function cleanPriceByBedrooms(v: unknown): Record<string, number> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -487,6 +482,11 @@ export function cleanPriceByBedrooms(v: unknown): Record<string, number> | null 
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * Deja solo anillos válidos: ≥3 puntos finitos dentro de rango [lng, lat],
+ * redondeados a 5 decimales (~1 m). Lo que llega de la BD o de un formulario
+ * manipulado nunca debe romper el match.
+ */
 export function cleanPolygons(v: unknown): ZonePolygon[] {
   if (!Array.isArray(v)) return [];
   const out: ZonePolygon[] = [];

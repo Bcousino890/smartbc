@@ -4,6 +4,7 @@ import { briefFromRow, briefSuggestMissing } from "@/lib/clients/brief";
 import {
   effectivePrice,
   evaluateMatch,
+  sqlPriceCeiling,
   exclusionLabel,
   zoneLikePattern,
 } from "@/lib/clients/brief-match";
@@ -207,8 +208,7 @@ export async function getSuggestedProperties(
 
   // Operación + precio. En las duales (0085) `price` es el de venta y el de
   // alquiler va en `rent_price`: para un inquilino hay que mirar ese.
-  const ceiling =
-    brief.maxPrice !== null ? brief.maxPrice * (1 + (brief.maxPriceFlexPct ?? 0) / 100) : null;
+  const ceiling = sqlPriceCeiling(brief);
   const range = (col: string) =>
     [
       brief.minPrice !== null ? `${col}.gte.${brief.minPrice}` : null,

@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { briefFromRow, briefSuggestMissing } from "@/lib/clients/brief";
-import { evaluateMatch, exclusionLabel, fold, zoneLikePattern } from "@/lib/clients/brief-match";
+import { evaluateMatch, exclusionLabel, sqlPriceCeiling, fold, zoneLikePattern } from "@/lib/clients/brief-match";
 import { MADRID_DISTRICTS, normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import type { ExcludedSummary } from "@/lib/db/queries/suggested-properties";
 import { toMapBrief, type MapBrief } from "@/lib/captaciones-map/brief-summary";
@@ -154,7 +154,7 @@ export async function getSuggestedParticulares(
   // Resumen del encargo ya calculado: se devuelve sin consulta nueva.
   const mapBrief = toMapBrief(brief);
   if (missing.length) return { ok: false, reason: "insufficient_brief", missing, brief: mapBrief };
-  const ceiling = brief.maxPrice !== null ? brief.maxPrice * (1 + (brief.maxPriceFlexPct ?? 0) / 100) : null;
+  const ceiling = sqlPriceCeiling(brief);
 
   let query = supabase
     .from("particulares")

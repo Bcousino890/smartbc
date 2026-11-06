@@ -215,6 +215,21 @@ export function detectPropertyType(p: MatchProperty): PropertyTypeKey | null {
  * `rent_price`: comparar el presupuesto de un inquilino con `price` las
  * descartaba todas.
  */
+/**
+ * Techo de precio para el prefiltro SQL: el mayor entre `maxPrice` y los topes
+ * por dormitorios (uno de ellos puede ampliarlo), por el mismo margen de
+ * flexibilidad. `evaluateMatch` es quien juzga con exactitud cada nº de
+ * dormitorios. null = sin techo (como antes, si no hay `maxPrice` ni topes).
+ */
+export function sqlPriceCeiling(
+  brief: Pick<BriefInput, "maxPrice" | "maxPriceFlexPct" | "maxPriceByBedrooms">,
+): number | null {
+  // Sin maxPrice general no hay techo (como antes): una propiedad con otro nº de dormitorios no tendría tope.
+  if (brief.maxPrice === null) return null;
+  const caps = Object.values(brief.maxPriceByBedrooms ?? {}).filter((v) => Number.isFinite(v) && v > 0);
+  return Math.max(brief.maxPrice, ...caps) * (1 + (brief.maxPriceFlexPct ?? 0) / 100);
+}
+
 export function effectivePrice(p: MatchProperty, operation: "rent" | "sale"): number | null {
   const ops = p.operations ?? [];
   if (operation === "rent") {

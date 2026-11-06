@@ -19,6 +19,7 @@ import {
   briefGaps,
   briefSuggestMissing,
   buildPreferencesPayload,
+  cleanPriceByBedrooms,
   EMPTY_BRIEF,
   profileForOperation,
   validateBrief,
@@ -29,6 +30,7 @@ import {
   effectivePrice,
   evaluateMatch,
   exclusionLabel,
+  sqlPriceCeiling,
   zoneLikePattern,
   type MatchProperty,
 } from "../lib/clients/brief-match.ts";
@@ -466,6 +468,30 @@ console.log("\nTope de precio por dormitorios");
     validateBrief(brief({ maxPriceByBedrooms: { "x": 100 } })).ok === false && validateBrief(brief({ maxPriceByBedrooms: { "3": 0 } })).ok === false,
   );
   check("validateBrief acepta un tope válido", validateBrief(b).ok === true);
+}
+
+console.log("\nTecho SQL y limpieza del tope por dormitorios");
+{
+  check("sin topes: maxPrice × flex", sqlPriceCeiling(brief({ maxPrice: 5000, maxPriceFlexPct: 10 })) === 5500);
+  check("sin topes ni flex: maxPrice", sqlPriceCeiling(brief({ maxPrice: 5000 })) === 5000);
+  check("un tope mayor amplía: mayor tope × flex", Math.abs(sqlPriceCeiling(brief({ maxPrice: 5000, maxPriceFlexPct: 10, maxPriceByBedrooms: { "3": 4000, "4": 6300 } }))! - 6930) < 1e-6);
+  check("un tope menor no reduce el techo", sqlPriceCeiling(brief({ maxPrice: 5000, maxPriceByBedrooms: { "3": 4000 } })) === 5000);
+  check("sin maxPrice ni topes: sin techo", sqlPriceCeiling(brief({})) === null);
+  check("sin maxPrice y con topes: sin techo (como hoy)", sqlPriceCeiling(brief({ maxPriceByBedrooms: { "3": 4000 } })) === null);
+  const w = brief({ operation: "rent", maxPrice: 5000, maxPriceByBedrooms: { "4": 6300 } });
+  check("4 dorm. a 6.300 € no se excluye (el tope amplía)", excludedBy(w, prop({ bedrooms: 4, price: 6300 })) === null);
+  check("3 dorm. a 5.500 € sí se excluye", excludedBy(w, prop({ bedrooms: 3, price: 5500 })) === "price");
+
+  const eq = (v: unknown, x: unknown) => JSON.stringify(v) === JSON.stringify(x);
+  check("clave '03' se descarta", cleanPriceByBedrooms({ "03": 100 }) === null);
+  check("clave '3 ' se descarta", cleanPriceByBedrooms({ "3 ": 100 }) === null);
+  check("clave '0' se descarta", cleanPriceByBedrooms({ "0": 100 }) === null);
+  check("importe negativo se descarta", cleanPriceByBedrooms({ "3": -5 }) === null);
+  check("importe NaN se descarta", cleanPriceByBedrooms({ "3": "abc" }) === null);
+  check("array → null", cleanPriceByBedrooms([5200]) === null);
+  check("string → null", cleanPriceByBedrooms("{\"3\":5200}") === null);
+  check("null/undefined → null", cleanPriceByBedrooms(null) === null && cleanPriceByBedrooms(undefined) === null);
+  check("mezcla: conserva solo lo válido", eq(cleanPriceByBedrooms({ "3": 5200, "x": 1, "4": -1, "5": "6000" }), { "3": 5200, "5": 6000 }));
 }
 
 console.log(failures ? `\n✗ ${failures} fallo(s)` : "\n✓ Todo en verde");
