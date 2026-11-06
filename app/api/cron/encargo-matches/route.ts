@@ -6,9 +6,11 @@ import { runEncargoMatching } from "@/lib/encargos/runner";
 // activo y avisa al asesor y a los administradores con UN aviso por encargo y pasada.
 // `?dry=1` calcula el informe sin escribir nada (ni filas, ni avisos, ni la marca).
 //
-// Añadir al crontab del VPS, cada 5 minutos:
-//   */5 * * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" \
-//     http://localhost:3000/api/cron/encargo-matches
+// Añadir al crontab del VPS, cada 5 minutos, CON log (una pasada con fallos responde 500 y la marca no avanza):
+//   */5 * * * * { date -u +\%FT\%TZ; curl -sS -X POST -w '\nHTTP \%{http_code}\n' \
+//     -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/encargo-matches; } \
+//     >> /var/log/encargo-matches.log 2>&1
+// El informe JSON trae `cursorAgeMinutes` (antigüedad de la marca): si crece, alguna pasada está fallando.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -14,11 +14,13 @@
 // desplegar; no lo lances contra producción desde una sesión de desarrollo.
 //
 // Vocabulario de zonas (el que ya entiende el matcher, ver lib/madrid-zones.ts y lib/clients/brief-match.ts): un
-// distrito en `zones` vale por todos sus barrios, y `subzones` marca los preferidos (el resto da un aviso «Fuera
-// de los barrios que marcó», no un descarte). Justicia es barrio del distrito Centro: los particulares llegan como
-// «Justicia - Chueca» (el alias lo reduce a «Justicia» vía normalizeZone) y las propiedades del CRM como zona
-// «Centro» + subzona «Justicia» o «Chueca-Justicia»; por eso Demanda 2 pide zonas ['Salamanca','Centro'] y
-// barrios ['Recoletos','Justicia']. Jerónimos es barrio del distrito Retiro → Demanda 3 usa ['Salamanca','Retiro'].
+// distrito en `zones` vale por TODOS sus barrios, así que las Demandas 2 y 3 NO llevan distritos (`zones: []`) y
+// piden solo barrios en `subzones` (la demanda es una lista explícita de barrios). Justicia es barrio del distrito
+// Centro: los particulares llegan como «Justicia - Chueca» (el alias lo reduce a «Justicia» vía normalizeZone) y las
+// propiedades del CRM como zona «Centro» + subzona «Justicia» o «Chueca-Justicia». Por eso:
+//   Demanda 2 → barrios ['Recoletos', 'Justicia', 'Chueca-Justicia'] (alquiler temporada, `stay: 'short'`: las
+//               propiedades del CRM marcadas de larga estancia quedan fuera — a confirmar por el dueño);
+//   Demanda 3 → barrios ['Recoletos', 'Jerónimos', 'Castellana'] (larga estancia).
 //
 // Conexión: igual que seed-encargo-baseline.mts: createAdminClient() con NEXT_PUBLIC_SUPABASE_URL y
 // SUPABASE_SERVICE_ROLE_KEY del entorno (en el VPS, `--env-file=.env.local` desde /opt/smartbc-app). Empaquetado:

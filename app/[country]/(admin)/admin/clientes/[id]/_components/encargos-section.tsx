@@ -239,18 +239,18 @@ function EncargoRow({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button size="sm" variant="secondary" onClick={onShowMatching} disabled={disabled}>
+          <Button size="sm" variant="secondary" onClick={onShowMatching} disabled={disabled} aria-label={`Ver matching de «${e.label}»`}>
             <Search size={12} aria-hidden />
             Ver matching
           </Button>
           {canEdit && (
             <>
-              <Button size="sm" variant="secondary" onClick={onEdit} disabled={disabled}>
+              <Button size="sm" variant="secondary" onClick={onEdit} disabled={disabled} aria-label={`Editar «${e.label}»`}>
                 <Pencil size={11} aria-hidden />
                 Editar
               </Button>
               {solo ? null : a.canReactivate ? (
-                <Button size="sm" variant="secondary" onClick={() => onStatus("active")} disabled={disabled}>
+                <Button size="sm" variant="secondary" onClick={() => onStatus("active")} disabled={disabled} aria-label={`Reactivar «${e.label}»`}>
                   Reactivar
                 </Button>
               ) : (
@@ -259,6 +259,7 @@ function EncargoRow({
                   variant="secondary"
                   onClick={() => onStatus("paused")}
                   disabled={disabled || !a.canPause}
+                  aria-label={`Pausar «${e.label}»`}
                   aria-describedby={a.lockedReason ? lockedId : undefined}
                 >
                   Pausar
@@ -270,6 +271,7 @@ function EncargoRow({
                   variant="secondary"
                   onClick={() => onStatus("closed")}
                   disabled={disabled || !a.canClose}
+                  aria-label={`Cerrar «${e.label}»`}
                   aria-describedby={a.lockedReason ? lockedId : undefined}
                 >
                   Cerrar
@@ -281,6 +283,7 @@ function EncargoRow({
                   variant="ghost"
                   onClick={onMakePrimary}
                   disabled={disabled || !a.canMakePrimary}
+                  aria-label={`Hacer principal «${e.label}»`}
                   title={a.canMakePrimary ? undefined : "Solo un encargo activo puede ser el principal"}
                 >
                   <Star size={11} aria-hidden />

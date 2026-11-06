@@ -16,7 +16,7 @@ import {
   EncargoInactive,
   HIGHLIGHT_RING,
   MatchingFor,
-  NewBadge,
+  NoticeBadge,
   type MatchingEncargo,
 } from "@/components/admin/clientes/encargo/matching-context";
 import { cn } from "@/lib/utils";
@@ -320,7 +320,7 @@ function SuggestionCard({
               </p>
             </div>
             <span className="flex shrink-0 items-center gap-1">
-              {highlighted && <NewBadge />}
+              {highlighted && <NoticeBadge />}
               <span className="text-xs font-semibold text-amber-700">
                 {property.matchScore}%
               </span>

@@ -13,8 +13,10 @@ import {
   hasPriceByBedrooms,
   encargoActions,
   encargoSummary,
+  highlightForSelection,
   hrefForEncargo,
   initialTabFor,
+  pickerBlurCloses,
   parseHighlight,
   priceByBedroomsFromRows,
   priceByBedroomsToRows,
@@ -296,6 +298,21 @@ eq("país desconocido → nada", shouldRescan({ clientCountry: null, prev: null,
 eq("alta España con brief suficiente → pase inicial", shouldRunInitialPassOnCreate({ clientCountry: "es", brief: { ...base, zones: ["Salamanca"], maxPrice: 900000 } }), true);
 eq("alta España sin zona → nada", shouldRunInitialPassOnCreate({ clientCountry: "es", brief: { ...base, zones: [], maxPrice: 900000 } }), false);
 eq("alta Chile → nada", shouldRunInitialPassOnCreate({ clientCountry: "cl", brief: { ...base, zones: ["Salamanca"], maxPrice: 900000 } }), false);
+
+// Destacado del aviso: solo si ?encargo= es el encargo que se acabó eligiendo.
+eq("destacar con su encargo → se mantiene", highlightForSelection("e2", { id: "e2" }, "particular:p9"), { source: "particular", id: "p9" });
+eq("destacar con encargo desconocido (cae al principal) → se descarta", highlightForSelection("ajeno", { id: "e1" }, "particular:p9"), null);
+eq("destacar sin ?encargo= → se mantiene (principal)", highlightForSelection(null, { id: "e1" }, "property:x1"), { source: "property", id: "x1" });
+eq("destacar inválido → null", highlightForSelection("e1", { id: "e1" }, "otro:x"), null);
+
+// Selector de encargo (Captaciones): blur en Safari/Firefox-mac.
+const blur = (o: Partial<Parameters<typeof pickerBlurCloses>[0]>) =>
+  pickerBlurCloses({ open: true, focusStaysInside: false, relatedTargetIsNull: false, pointerDownInside: false, ...o });
+eq("blur: cerrado → nada", blur({ open: false }), false);
+eq("blur: el foco sigue dentro → no cierra", blur({ focusStaysInside: true }), false);
+eq("blur: Safari, clic dentro (relatedTarget null + puntero dentro) → no cierra", blur({ relatedTargetIsNull: true, pointerDownInside: true }), false);
+eq("blur: Tab fuera → cierra", blur({}), true);
+eq("blur: foco al vacío sin puntero dentro → cierra", blur({ relatedTargetIsNull: true }), true);
 
 console.log(`\n${passed} OK, ${failed} fallos`);
 if (failed) process.exit(1);

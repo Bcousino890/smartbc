@@ -10,7 +10,7 @@ import {
   EncargoInactive,
   HIGHLIGHT_RING,
   MatchingFor,
-  NewBadge,
+  NoticeBadge,
   type MatchingEncargo,
 } from "@/components/admin/clientes/encargo/matching-context";
 import { cn } from "@/lib/utils";
@@ -256,7 +256,7 @@ export function SuggestedParticularesBlock({
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <p className="truncate text-sm font-medium text-ink">{p.title}</p>
-                  {p.id === highlightId && <NewBadge />}
+                  {p.id === highlightId && <NoticeBadge />}
                   <span className="shrink-0 rounded-full bg-gold/15 px-2 py-0.5 text-xs font-semibold text-gold-dark">
                     {p.matchScore}%
                   </span>

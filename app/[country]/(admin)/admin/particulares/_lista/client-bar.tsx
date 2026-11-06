@@ -3,7 +3,7 @@
 import { AlertTriangle, BookOpen, CheckCircle2, ChevronDown, CirclePause, CircleX, ExternalLink, Link2, Pencil, Star } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ClientPicker, { type PickedClient } from "@/components/admin/captaciones-map/client-picker";
-import { ENCARGO_STATUS_LABEL } from "@/lib/encargos/ui-state";
+import { ENCARGO_STATUS_LABEL, pickerBlurCloses } from "@/lib/encargos/ui-state";
 import { encargoEditHref } from "@/lib/encargos/links";
 import type { EncargoStatus } from "@/lib/encargos/model";
 import { cn } from "@/lib/utils";
@@ -73,6 +73,8 @@ function EncargoPicker({
 }) {
   const { open, setOpen, ref, trigger } = usePopover();
   const list = useRef<HTMLUListElement>(null);
+  // Puntero pulsado dentro del selector (ver pickerBlurCloses: Safari/Firefox-mac).
+  const pointerInside = useRef(false);
   const items = () => Array.from(list.current?.querySelectorAll<HTMLButtonElement>("button[data-encargo]") ?? []);
 
   useEffect(() => {
@@ -97,9 +99,24 @@ function EncargoPicker({
     <div
       ref={ref}
       className="relative"
-      // Salir con Tab (el foco se va fuera del selector) lo cierra.
+      onPointerDown={() => {
+        pointerInside.current = true;
+      }}
+      onPointerUp={() => {
+        pointerInside.current = false;
+      }}
+      onPointerLeave={() => {
+        pointerInside.current = false;
+      }}
+      // Salir con Tab (el foco se va fuera del selector) lo cierra; un clic dentro, no.
       onBlur={(e) => {
-        if (open && !ref.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+        const closes = pickerBlurCloses({
+          open,
+          focusStaysInside: !!e.relatedTarget && !!ref.current?.contains(e.relatedTarget as Node),
+          relatedTargetIsNull: e.relatedTarget === null,
+          pointerDownInside: pointerInside.current,
+        });
+        if (closes) setOpen(false);
       }}
     >
       <button
@@ -122,6 +139,9 @@ function EncargoPicker({
           id={`${listId}-panel`}
           role="dialog"
           aria-labelledby={`${listId}-t`}
+          // El ratón no roba el foco dentro del panel (Safari/Firefox-mac no enfocan botones al pulsar): el
+          // foco se queda en el encargo enfocado y el `click` llega. El teclado sigue igual.
+          onMouseDown={(e) => e.preventDefault()}
           className="absolute left-0 top-full z-40 mt-1 w-[min(92vw,480px)] rounded-xl border border-ink/10 bg-white p-1.5 shadow-xl"
         >
           <p id={`${listId}-t`} className="px-2.5 pb-1 pt-1.5 text-xs font-medium text-ink/65">

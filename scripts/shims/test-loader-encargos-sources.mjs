@@ -11,7 +11,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const u = (p) => pathToFileURL(join(ROOT, p)).href;
 const SHIM = u("scripts/shims/supabase-on-psql.mts");
-const MAP = { [u("lib/db/admin.ts")]: SHIM, [u("lib/db/server.ts")]: SHIM };
+// lib/email/send-email.ts usa require y AWS: un doble inerte (solo lo arrastra la ruta de baja de alertas).
+const MAP = { [u("lib/db/admin.ts")]: SHIM, [u("lib/db/server.ts")]: SHIM, [u("lib/email/send-email.ts")]: u("scripts/shims/encargos-runner/send-email.mts") };
 
 register(
   "data:text/javascript," +

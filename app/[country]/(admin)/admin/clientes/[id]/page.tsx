@@ -39,7 +39,7 @@ import {
 import { buildTimeline } from "@/lib/client-command-center/timeline";
 import { isCountry, type Country } from "@/lib/country-config";
 import { listEncargos } from "@/lib/db/queries/encargos";
-import { parseHighlight, resolveSelectedEncargo } from "@/lib/encargos/ui-state";
+import { highlightForSelection, resolveSelectedEncargo } from "@/lib/encargos/ui-state";
 import { ClientFichaView } from "./client-ficha-view";
 
 export const dynamic = "force-dynamic";
@@ -144,7 +144,8 @@ export default async function ClientCommandCenterPage({
       })
     : [];
   const selectedEncargo = resolveSelectedEncargo(encargoList, firstParam(query.encargo));
-  const highlight = parseHighlight(firstParam(query.destacar));
+  // El destacado solo vale para el encargo del enlace (un id desconocido cae al principal: sin destacado).
+  const highlight = highlightForSelection(firstParam(query.encargo), selectedEncargo, firstParam(query.destacar));
 
   type PropertyRef = { slug: string; title: string } | null;
   const rawFavorites =

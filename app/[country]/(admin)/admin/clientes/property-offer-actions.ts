@@ -94,8 +94,11 @@ export async function setNewListingAlertsEnabled(
     ...(enabled ? { new_listing_alerts_last_sent_at: new Date().toISOString() } : {}),
   };
 
+  // Las alertas son del CLIENTE: el interruptor se aplica a TODAS sus filas (encargos), así cambiar de
+  // principal no las apaga en silencio ni las reactiva a quien las tenía apagadas.
   const { error } = existing.data
-    ? await db.from("client_preferences").update(payload).eq("client_id", clientId).eq("is_primary", true)
+    ? // encargo-ok: consentimiento del cliente, todas sus filas a la vez (ver arriba).
+      await db.from("client_preferences").update(payload).eq("client_id", clientId)
     : await db.from("client_preferences").insert({ client_id: clientId, is_primary: true, ...payload });
 
   if (error) return { ok: false, error: error.message };

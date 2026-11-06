@@ -19,6 +19,12 @@
 -- Aditiva e idempotente. Reversión: docs/changes/2026-11-06-encargos-matching/rollback-0243.sql
 -- ============================================================================
 
+-- Los ALTER TABLE piden un bloqueo exclusivo sobre client_preferences: si una consulta larga lo
+-- tiene cogido, mejor fallar a los 5 s (todo es idempotente: se relanza) que encolar detrás todas
+-- las lecturas de la app. El fichero NO va en una transacción (apply-migrations.sh lo pasa a psql
+-- tal cual, sentencia a sentencia), así que `SET LOCAL` no serviría: SET de sesión y RESET al final.
+SET lock_timeout = '5s';
+
 ALTER TABLE client_preferences
   ADD COLUMN IF NOT EXISTS id uuid NOT NULL DEFAULT gen_random_uuid(),
   ADD COLUMN IF NOT EXISTS label text NOT NULL DEFAULT 'Encargo 1',
@@ -81,3 +87,5 @@ DROP POLICY IF EXISTS "encargo_matches_staff_all" ON encargo_matches;
 CREATE POLICY "encargo_matches_staff_all" ON encargo_matches
   FOR ALL USING (is_staff()) WITH CHECK (is_staff());
 REVOKE ALL ON TABLE encargo_matches FROM anon;
+
+RESET lock_timeout;
