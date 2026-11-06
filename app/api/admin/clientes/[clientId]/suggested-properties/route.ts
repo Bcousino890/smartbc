@@ -37,6 +37,7 @@ export async function GET(
       .from("client_preferences")
       .select("new_listing_alerts_enabled")
       .eq("client_id", clientId)
+      .eq("is_primary", true)
       .maybeSingle();
     const alertsEnabled = Boolean(prefs?.new_listing_alerts_enabled);
 

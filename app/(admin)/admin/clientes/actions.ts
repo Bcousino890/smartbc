@@ -183,6 +183,7 @@ export async function createNewClient(
     .from("client_preferences")
     .insert({
       client_id: clientId,
+      is_primary: true,
       country: "cl",
       operation: input.operation === "alquiler" ? "rent" : "sale",
       stay: input.stayType === "corta" ? "short" : "long",
@@ -319,6 +320,7 @@ export async function createClientWithBrief(
 
   const { error: prefsError } = await db.from("client_preferences").insert({
     client_id: clientId,
+    is_primary: true,
     country: input.country,
     ...buildPreferencesPayload(input.brief),
   });
@@ -405,20 +407,24 @@ export async function saveClientPreferencesChile(
     .from("client_preferences")
     .select("client_id")
     .eq("client_id", input.clientId)
+    .eq("is_primary", true)
     .maybeSingle();
 
   const existingRow = existingResult.data as { client_id: string } | null;
 
+  // encargo-ok: solo tipado; el update/insert de abajo apunta a la fila principal (is_primary).
   const prefs = supabase.from("client_preferences") as unknown as {
     update: (payload: Record<string, unknown>) => {
-      eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+      eq: (col: string, val: string | boolean) => {
+        eq: (col: string, val: string | boolean) => Promise<{ error: { message: string } | null }>;
+      };
     };
     insert: (payload: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
   };
 
   const writeResult = existingRow
-    ? await prefs.update({ ...updateData, client_id: input.clientId }).eq("client_id", input.clientId)
-    : await prefs.insert({ ...updateData, client_id: input.clientId });
+    ? await prefs.update({ ...updateData, client_id: input.clientId }).eq("client_id", input.clientId).eq("is_primary", true)
+    : await prefs.insert({ ...updateData, client_id: input.clientId, is_primary: true });
 
   if (writeResult.error) {
     return { ok: false, error: writeResult.error.message };

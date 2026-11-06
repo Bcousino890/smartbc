@@ -130,7 +130,15 @@ const CANDIDATE_LIMIT = 400;
 export async function getSuggestedProperties(
   clientId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  opts?: { country?: string; limit?: number; createdAfter?: string; forAlerts?: boolean; supabase?: any },
+  opts?: {
+    country?: string;
+    limit?: number;
+    createdAfter?: string;
+    forAlerts?: boolean;
+    /** Un encargo concreto (client_preferences.id); sin él, el principal. */
+    encargoId?: string;
+    supabase?: any;
+  },
 ): Promise<SuggestedPropertiesResult> {
   // El cron de property-alerts no tiene sesión de usuario (server-to-server,
   // sin cookies) — con el cliente normal, RLS bloquea todo. Le pasa su propio
@@ -138,11 +146,14 @@ export async function getSuggestedProperties(
   // usando el cliente normal por defecto.
   const supabase = opts?.supabase ?? (await createClient());
 
-  const { data: prefsData, error: prefsError } = await supabase
+  let prefsQuery = supabase
     .from("client_preferences")
     .select("*")
-    .eq("client_id", clientId)
-    .maybeSingle();
+    .eq("client_id", clientId);
+  prefsQuery = opts?.encargoId
+    ? prefsQuery.eq("id", opts.encargoId)
+    : prefsQuery.eq("is_primary", true);
+  const { data: prefsData, error: prefsError } = await prefsQuery.maybeSingle();
 
   if (prefsError) {
     console.error(

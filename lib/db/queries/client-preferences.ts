@@ -28,6 +28,7 @@ export async function getClientPreferences(userId: string) {
     .from("client_preferences")
     .select("*")
     .eq("user_id", userId)
+    .eq("is_primary", true)
     .maybeSingle();
 
   if (error) throw error;
@@ -115,6 +116,7 @@ export async function updateClientPreferencesChile(
     .from("client_preferences")
     .update(updateData)
     .eq("user_id", userId)
+    .eq("is_primary", true)
     .select();
 
   if (error) throw error;
@@ -152,7 +154,7 @@ export async function createClientPreferencesChile(
 
   const { data, error } = await (supabase as any)
     .from("client_preferences")
-    .insert(insertData)
+    .insert({ ...insertData, is_primary: true })
     .select()
     .single();
 

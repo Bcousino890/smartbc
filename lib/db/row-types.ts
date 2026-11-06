@@ -61,3 +61,29 @@ export type VisitRequestWithRelations =
       external_id: string | null;
     } | null;
   };
+
+/**
+ * `profiles.select("client_preferences(*)")` devolvía un objeto mientras
+ * `client_id` era la PK; desde la migración 0243 (varios encargos por cliente)
+ * es to-many y devuelve un ARRAY. Esto deja la forma de siempre: la fila
+ * principal (o la primera si no hay marca), o null.
+ */
+export function primaryPreference(
+  embed: ClientPreferencesRow | ClientPreferencesRow[] | null | undefined,
+): ClientPreferencesRow | null {
+  if (!embed) return null;
+  if (!Array.isArray(embed)) return embed;
+  return (
+    embed.find((r) => (r as { is_primary?: boolean }).is_primary === true) ??
+    embed[0] ??
+    null
+  );
+}
+
+/** Normaliza el embed `client_preferences` de una fila de `profiles`. */
+export function withPrimaryPreference<T extends { client_preferences?: unknown }>(row: T): T {
+  return {
+    ...row,
+    client_preferences: primaryPreference(row.client_preferences as ClientPreferencesRow | ClientPreferencesRow[] | null),
+  };
+}

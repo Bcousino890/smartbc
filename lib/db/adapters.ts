@@ -34,6 +34,7 @@ import type {
   PropertyRow,
   VisitRequestWithRelations,
 } from "./row-types";
+import { primaryPreference } from "./row-types";
 
 export function minutesSince(iso: string | null | undefined): number {
   if (!iso) return 0;
@@ -185,7 +186,7 @@ export function clientRowToAdminClient(
   // la lista ponía "Trabajador" a todos los leads sin etiqueta.
   const profileType: ClientProfileType = taggedProfile ?? "worker";
 
-  const prefs = row.client_preferences;
+  const prefs = primaryPreference(row.client_preferences);
   const operation: Operation =
     prefs?.operation === "sale" ? "venta" : "alquiler";
   const stayType: StayType = prefs?.stay === "long" ? "larga" : "corta";

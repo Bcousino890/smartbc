@@ -201,6 +201,7 @@ export async function saveClientPreferencesFull(
     .from("client_preferences")
     .select("client_id")
     .eq("client_id", input.clientId)
+    .eq("is_primary", true)
     .maybeSingle();
 
   const { error } = existing
@@ -208,7 +209,8 @@ export async function saveClientPreferencesFull(
         .from("client_preferences")
         .update(payload)
         .eq("client_id", input.clientId)
-    : await db().from("client_preferences").insert(payload);
+        .eq("is_primary", true)
+    : await db().from("client_preferences").insert({ ...payload, is_primary: true });
 
   if (error) return { ok: false, error: error.message };
 

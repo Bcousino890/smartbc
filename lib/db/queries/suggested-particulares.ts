@@ -115,7 +115,7 @@ export async function evaluateParticularForClient(clientId: string, particularId
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
   const [{ data: prefs, error: pe }, { data: row, error: re }] = await Promise.all([
-    supabase.from("client_preferences").select("*").eq("client_id", clientId).maybeSingle(),
+    supabase.from("client_preferences").select("*").eq("client_id", clientId).eq("is_primary", true).maybeSingle(),
     supabase.from("particulares").select(COLUMNS).eq("id", particularId).maybeSingle(),
   ]);
   if (pe || re) return { ok: false, reason: "error" };
@@ -135,16 +135,19 @@ export async function evaluateParticularForClient(clientId: string, particularId
  */
 export async function getSuggestedParticulares(
   clientId: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; encargoId?: string },
 ): Promise<SuggestedParticularesResult> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
 
-  const { data: prefs, error: prefsError } = await supabase
+  let prefsQuery = supabase
     .from("client_preferences")
     .select("*")
-    .eq("client_id", clientId)
-    .maybeSingle();
+    .eq("client_id", clientId);
+  prefsQuery = opts?.encargoId
+    ? prefsQuery.eq("id", opts.encargoId)
+    : prefsQuery.eq("is_primary", true);
+  const { data: prefs, error: prefsError } = await prefsQuery.maybeSingle();
   if (prefsError) return { ok: false, reason: "error", message: prefsError.message };
   if (!prefs) return { ok: false, reason: "no_preferences" };
 

@@ -40,6 +40,7 @@ export default async function InicioPage() {
     .from("client_preferences")
     .select("*")
     .eq("client_id", user.id)
+    .eq("is_primary", true)
     .maybeSingle();
 
   const prefs = prefsData as any;

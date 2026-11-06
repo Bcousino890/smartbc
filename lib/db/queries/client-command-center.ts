@@ -453,6 +453,7 @@ export async function getClientPreferencesFull(
       .from("client_preferences")
       .select("*")
       .eq("client_id", clientId)
+      .eq("is_primary", true)
       .maybeSingle();
     if (!data) return null;
     const r = data as Record<string, any>;

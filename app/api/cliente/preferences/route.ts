@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       .from("client_preferences")
       .select("client_id")
       .eq("client_id", user.id)
+      .eq("is_primary", true)
       .maybeSingle();
 
     // Insert or update
@@ -68,9 +69,10 @@ export async function POST(req: NextRequest) {
           .from("client_preferences") as any)
           .update(payload)
           .eq("client_id", user.id)
+          .eq("is_primary", true)
       : await (supabase
           .from("client_preferences") as any)
-          .insert(payload);
+          .insert({ ...payload, is_primary: true });
 
     if (error) {
       console.error("Database error:", error);
@@ -110,6 +112,7 @@ export async function GET() {
       .from("client_preferences")
       .select("*")
       .eq("client_id", user.id)
+      .eq("is_primary", true)
       .maybeSingle();
 
     if (error) {

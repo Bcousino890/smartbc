@@ -8,6 +8,7 @@ import type {
   ClientWithRelations,
   VisitRequestWithRelations,
 } from "../row-types";
+import { withPrimaryPreference } from "../row-types";
 import { resolveViewScope, getAssignedClientIds } from "./view-scope";
 
 export type {
@@ -55,7 +56,8 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
   const { data, error } = await fullQ.order("created_at", { ascending: false });
 
   if (!error && data && data.length > 0) {
-    return data as unknown as ClientWithRelations[];
+    // encargo-ok: el embed es un array desde 0243; se normaliza a la principal.
+    return (data as unknown as ClientWithRelations[]).map(withPrimaryPreference);
   }
 
   // Fallback 1: simple query without potentially-missing joins (session client)
@@ -318,7 +320,8 @@ export async function getClientById(id: string) {
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  // encargo-ok: el embed es un array desde 0243; se normaliza a la principal.
+  return data ? withPrimaryPreference(data) : data;
 }
 
 export type ContactRequestRow = {

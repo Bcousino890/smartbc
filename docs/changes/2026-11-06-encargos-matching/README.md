@@ -29,6 +29,15 @@ sobre `client_preferences` deja de funcionar al desaparecer la PK/unique sobre
 `client_id`. Se adapta en las tareas siguientes del plan; no debe desplegarse la
 migración sin ellas.
 
+Embed `client_preferences(*)` de PostgREST: mientras `client_id` era la PK
+devolvía un objeto (to-one); tras 0243 es to-many y devuelve un ARRAY. Los dos
+sitios (`getClients` y `getClientById`, lib/db/queries/clients.ts) lo normalizan
+con `withPrimaryPreference` (lib/db/row-types.ts), que deja la fila principal
+como objeto, así que `ClientWithRelations.client_preferences` y el adaptador no
+cambian. `scripts/check-client-preferences-usage.mjs` (`npm run
+test:encargos-usage`) falla si hay una consulta sin `is_primary` o un embed sin
+normalizar. Las escrituras (update/insert/lookup) apuntan a la fila principal.
+
 ## Cómo verificar
 
 ```bash

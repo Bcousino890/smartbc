@@ -38,7 +38,8 @@ export async function POST(req: Request) {
     .select(
       "client_id, new_listing_alerts_last_sent_at, new_listing_alerts_frequency, profiles!inner(email, full_name, country)",
     )
-    .eq("new_listing_alerts_enabled", true);
+    .eq("new_listing_alerts_enabled", true)
+    .eq("is_primary", true);
 
   if (error) {
     console.error("[cron/property-alerts]", error);
@@ -92,7 +93,8 @@ export async function POST(req: Request) {
       await db
         .from("client_preferences")
         .update({ new_listing_alerts_last_sent_at: now })
-        .eq("client_id", row.client_id);
+        .eq("client_id", row.client_id)
+        .eq("is_primary", true);
     } catch (err) {
       errors.push(`${row.client_id}: ${err instanceof Error ? err.message : String(err)}`);
     }

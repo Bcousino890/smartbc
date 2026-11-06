@@ -22,6 +22,7 @@ export default async function PerfilPage() {
       .from("client_preferences")
       .select("*")
       .eq("client_id", user.id)
+      .eq("is_primary", true)
       .maybeSingle(),
     supabase
       .from("client_tag_assignments")

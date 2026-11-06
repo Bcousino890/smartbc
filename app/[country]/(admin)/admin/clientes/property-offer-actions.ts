@@ -78,11 +78,12 @@ export async function setNewListingAlertsEnabled(
   const db = createAdminClient() as any;
 
   // Mismo patrón que saveClientPreferencesFull: UPDATE si ya existe la fila de
-  // preferencias, INSERT si no (client_preferences tiene PK = client_id).
+  // preferencias, INSERT si no (client_preferences tiene PK = id; una fila principal por cliente).
   const existing = await db
     .from("client_preferences")
     .select("client_id")
     .eq("client_id", clientId)
+    .eq("is_primary", true)
     .maybeSingle();
 
   const payload = {
@@ -94,8 +95,8 @@ export async function setNewListingAlertsEnabled(
   };
 
   const { error } = existing.data
-    ? await db.from("client_preferences").update(payload).eq("client_id", clientId)
-    : await db.from("client_preferences").insert({ client_id: clientId, ...payload });
+    ? await db.from("client_preferences").update(payload).eq("client_id", clientId).eq("is_primary", true)
+    : await db.from("client_preferences").insert({ client_id: clientId, is_primary: true, ...payload });
 
   if (error) return { ok: false, error: error.message };
 

@@ -71,7 +71,7 @@ export async function getClientContext(clientId: string): Promise<{ ok: true; co
   if (!profile || profile.role !== "client") return { ok: false, error: "Cliente no válido." };
 
   const [{ data: prefs }, { data: links }, { data: its }] = await Promise.all([
-    d.from("client_preferences").select("*").eq("client_id", g.clientId).maybeSingle(),
+    d.from("client_preferences").select("*").eq("client_id", g.clientId).eq("is_primary", true).maybeSingle(),
     d.from("client_portal_links").select("status, property_id").eq("client_id", g.clientId).limit(2000),
     d
       .from("viewing_itineraries")

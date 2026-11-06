@@ -164,6 +164,7 @@ export async function saveClientZone(
     .from("client_preferences")
     .select("client_id")
     .eq("client_id", clientId)
+    .eq("is_primary", true)
     .maybeSingle();
   if (readErr) return { ok: false, error: readErr.message };
   if (!existing) return { ok: false, error: "El cliente no tiene encargo todavía" };
@@ -171,7 +172,8 @@ export async function saveClientZone(
   const { error } = await db
     .from("client_preferences")
     .update({ search_polygons: cleaned, updated_at: new Date().toISOString() })
-    .eq("client_id", clientId);
+    .eq("client_id", clientId)
+    .eq("is_primary", true);
   if (error) return { ok: false, error: error.message };
 
   for (const c of ["es", "cl"]) {

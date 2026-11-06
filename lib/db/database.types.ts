@@ -266,6 +266,14 @@ export type Database = {
       };
       client_preferences: {
         Row: {
+          id: string;
+          is_primary: boolean;
+          status: "active" | "paused" | "closed";
+          label: string;
+          position: number;
+          end_client_label: string | null;
+          max_price_by_bedrooms: Record<string, number> | null;
+          baseline_at: string;
           client_id: string;
           operation: PropertyOperation | null;
           stay: PropertyStay | null;
@@ -286,6 +294,14 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          id?: string;
+          is_primary?: boolean;
+          status?: "active" | "paused" | "closed";
+          label?: string;
+          position?: number;
+          end_client_label?: string | null;
+          max_price_by_bedrooms?: Record<string, number> | null;
+          baseline_at?: string;
           client_id: string;
           operation?: PropertyOperation | null;
           stay?: PropertyStay | null;

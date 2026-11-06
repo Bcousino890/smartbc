@@ -155,14 +155,21 @@ export async function updateClientOwnPreferences(
     .from("client_preferences")
     .select("client_id")
     .eq("client_id", userId)
+    .eq("is_primary", true)
     .maybeSingle();
 
+  // encargo-ok: solo tipado; el update/insert de abajo apunta a la fila principal (is_primary).
   const prefsTbl = supabase.from("client_preferences") as unknown as {
     update: (payload: Record<string, unknown>) => {
       eq: (
         column: string,
-        value: string,
-      ) => Promise<{ error: { message: string } | null }>;
+        value: string | boolean,
+      ) => {
+        eq: (
+          column: string,
+          value: string | boolean,
+        ) => Promise<{ error: { message: string } | null }>;
+      };
     };
     insert: (
       payload: Record<string, unknown>,
@@ -170,8 +177,8 @@ export async function updateClientOwnPreferences(
   };
 
   const writeResult = existingLookup.data
-    ? await prefsTbl.update(payload).eq("client_id", userId)
-    : await prefsTbl.insert(payload);
+    ? await prefsTbl.update(payload).eq("client_id", userId).eq("is_primary", true)
+    : await prefsTbl.insert({ ...payload, is_primary: true });
 
   if (writeResult.error) {
     return { ok: false, error: writeResult.error.message };

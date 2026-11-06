@@ -75,7 +75,8 @@ export async function GET(req: Request) {
     await db
       .from("client_preferences")
       .update({ new_listing_alerts_frequency: "weekly" })
-      .eq("client_id", clientId);
+      .eq("client_id", clientId)
+      .eq("is_primary", true);
 
     return page(
       "Listo",
@@ -89,7 +90,8 @@ export async function GET(req: Request) {
     await db
       .from("client_preferences")
       .update({ new_listing_alerts_enabled: false })
-      .eq("client_id", clientId);
+      .eq("client_id", clientId)
+      .eq("is_primary", true);
 
     return page(
       "Baja confirmada",
