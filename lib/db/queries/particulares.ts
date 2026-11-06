@@ -295,6 +295,18 @@ const quoteKey = (k: string) => `"${k}"`;
  */
 export const EXCLUYE_PROPIAS = "owner_name.is.null,owner_name.not.ilike.*cousi*";
 
+/**
+ * Agencias fuera del listado POR DEFECTO (alquiler de corta/media estancia y
+ * operadores que no interesan como competencia): Ukio (Madrid, Buy & Sell…),
+ * Única (Chamberí, Chamartín, Consultoría, Homes…) y Safestays. Se casa por
+ * PREFIJO de `agency_key` para cubrir también sucursales nuevas. NULL
+ * (particulares) pasa a propósito. Se desactiva al elegir «Con esta agencia».
+ */
+export const AGENCIAS_EXCLUIDAS_POR_DEFECTO = ["ukio", "unica ", "safestays"];
+export const EXCLUYE_AGENCIAS_POR_DEFECTO = `agency_key.is.null,and(${AGENCIAS_EXCLUIDAS_POR_DEFECTO.map(
+  (p) => `agency_key.not.ilike."${p}*"`,
+).join(",")})`;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyParticularesFilters(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -382,6 +394,8 @@ export function applyParticularesFilters(
 
   const agencyKeys = (f.agencyKeys ?? []).filter(okAgencyKey);
   if (agencyKeys.length) q = q.in("agency_key", agencyKeys);
+  // Exclusión por defecto (Ukio, Única, Safestays) salvo que se pida una agencia concreta.
+  if (!agencyKeys.length) q = q.or(EXCLUYE_AGENCIAS_POR_DEFECTO);
   const noAgency = (f.excludeAgencyKeys ?? []).filter(okAgencyKey);
   // `not.in` descartaría también los NULL (particulares): se dejan pasar a propósito.
   if (noAgency.length) q = q.or(`agency_key.is.null,agency_key.not.in.(${noAgency.map(quoteKey).join(",")})`);
