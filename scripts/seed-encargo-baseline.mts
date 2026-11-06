@@ -3,7 +3,8 @@
 // Para cada encargo ACTIVO de un cliente de España con brief suficiente, evalúa todo el stock actual
 // (propiedades y particulares) y registra lo que encaja en `encargo_matches` con notified_at = now().
 // NO crea ningún aviso: es para no avisar de lo que el equipo ya conocía. Idempotente (relanzarlo no
-// duplica ni cambia nada). Lo ejecuta el dueño UNA vez tras desplegar las migraciones 0243/0244.
+// duplica ni cambia nada). Lo ejecuta el dueño UNA vez tras desplegar las migraciones 0243-0246
+// (el runner exige 0245: claim_and_notify_encargo_matches).
 //
 // ORDEN DE PUESTA EN MARCHA: desplegar → ejecutar este script con --yes → instalar el crontab de
 // /api/cron/encargo-matches. Si no existe todavía la marca del cron (`app_settings.encargo_matching_cursor`),

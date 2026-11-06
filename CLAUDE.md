@@ -1531,7 +1531,7 @@ Captaciones (lista / mapa / ficha del anuncio)
   recorta el mapa en Node (`polygons`).
 - Prueba: `npm run test:captaciones-filters`.
 
-## Encargos múltiples por cliente + matching con avisos (2026-11, migraciones 0243-0245)
+## Encargos múltiples por cliente + matching con avisos (2026-11, migraciones 0243-0246)
 Spec: `docs/superpowers/specs/2026-11-06-encargos-matching-design.md`. Expediente (despliegue, rollback, checklist manual):
 `docs/changes/2026-11-06-encargos-matching/README.md`. **Solo España**: Chile no cambia (formulario, ficha y alertas de siempre).
 
@@ -1542,7 +1542,8 @@ Spec: `docs/superpowers/specs/2026-11-06-encargos-matching-design.md`. Expedient
   Rubertiello, colaboradora con UNA ficha y 3 encargos.
 - **Tablas/funciones:** `client_preferences` (PK `id`; `client_id` ya no es único), `encargo_matches` (única por
   `(encargo_id, source, canonical_id)`, `reasons` jsonb, `notified_at`), `make_encargo_primary(uuid)` (0244, cambio de
-  principal atómico), `claim_and_notify_encargo_matches(...)` (0245, reclama filas y crea los avisos en una transacción;
+  principal atómico; desde 0246 el nuevo principal hereda las columnas de alertas por correo),
+  `claim_and_notify_encargo_matches(...)` (0245, reclama filas y crea los avisos en una transacción;
   nada si no hay destinatarios). Ambas funciones: `execute` solo `service_role`.
 - **Regla del principal:** índice único parcial `client_preferences_one_primary (client_id) WHERE is_primary`. Todo lo
   «legacy» (brief, alertas por email, portal del cliente, command center) lee/escribe SOLO el principal. Cambiarlo: siempre
@@ -1550,17 +1551,24 @@ Spec: `docs/superpowers/specs/2026-11-06-encargos-matching-design.md`. Expedient
   `npm run test:encargos-usage` (`scripts/check-client-preferences-usage.mjs`) falla si una consulta no filtra `is_primary` o
   un embed no se normaliza.
 - **Cron:** `POST /api/cron/encargo-matches` (`?dry=1` = informe sin escribir; `Authorization: Bearer $CRON_SECRET`).
-  Crontab del VPS, cada 5 min: `*/5 * * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/encargo-matches`.
-- **Orden de puesta en marcha (importa):** merge (decide el dueño) → autodeploy aplica 0243-0245 →
+  Crontab del VPS, cada 5 min, CON log (una pasada con fallos da HTTP 500 y la marca no avanza; hay que verlo):
+  `*/5 * * * * { date -u +\%FT\%TZ; curl -sS -X POST -w '\nHTTP \%{http_code}\n' -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/encargo-matches; } >> /var/log/encargo-matches.log 2>&1`.
+  El JSON trae `cursorAgeMinutes`; con la marca parada > 3 días el servidor deja un `console.error` (un encargo que
+  falla siempre bloquea la marca de todos).
+- **Orden de puesta en marcha (importa):** merge (decide el dueño) → autodeploy aplica 0243-0246 (⚠️ NO usar
+  `scripts/deploy.sh`: reinicia PM2 antes de migrar) →
   `scripts/seed-encargo-baseline.mts --yes` (precarga el stock como visto, sin avisos, y fija la marca del cron en
   «ahora − 15 min») → instalar la línea de crontab → `scripts/seed-yeanette-encargos.mts` con `--dry` y luego `--yes`
   (`--no-notify` sin pases iniciales; `--passes-only` reintenta solo los pases iniciales fallidos). Ambos scripts se
   empaquetan con esbuild y se lanzan con `node --env-file=.env.local` desde `/opt/smartbc-app` (instrucciones en la cabecera
-  de cada uno). Si el cron arranca antes del baseline, avisaría de todo el stock.
+  de cada uno). Si el cron arranca antes del baseline no avisa de nada: su primera pasada solo inicializa la marca
+  (pero lo creado entre esa marca y el seed no se evalúa; por eso el seed va antes y fija él la marca).
 - **Cómo lee el texto el matching:** `lib/encargos/sources.ts` evalúa título, descripción y `features` (además de campos
   estructurados) con `evaluateMatch` (`lib/clients/brief-match.ts`), que ya entiende `maxPriceByBedrooms`. Dos fuentes:
-  `property` y `particular`. Los candidatos se paginan (tope duro 30000 con `console.warn`; depende de que PostgREST devuelva
-  ≥1000 filas por página: confirmar `db-max-rows`).
+  `property` y `particular`. Los candidatos se paginan hasta una página VACÍA (un `db-max-rows`
+  < 1000 no trunca; tope duro 30000 con `console.warn`). Fuera: particulares con fraude (sospechoso o confirmado, como el
+  bloque de matching) y propiedades que nacen de un anuncio (importadas sin avisar, `external_id` `particular-…` de
+  «Captar para…», o `source_url` del mismo anuncio que un particular): si no, el mismo piso avisaría dos veces.
 - **Dónde vive:** `lib/encargos/*` (`model` estado/enlaces, `sources` candidatos y matching, `plan`/`runner` pasada del
   cron, `notice` y `recipients` aviso y destinatarios, `rescan`/`schedule` pase inicial al guardar, `pin` parámetros
   `?encargo=`/`?incluir=`, `ui-state`), `lib/db/queries/encargos.ts`, acciones en
@@ -1568,7 +1576,11 @@ Spec: `docs/superpowers/specs/2026-11-06-encargos-matching-design.md`. Expedient
   `matches-card.tsx` y `components/admin/clientes/encargo/*`, campana `components/admin/notifications-bell.tsx` +
   `lib/notifications/encargo-notice.ts`, Captaciones `lib/captaciones-map/brief-filters.ts` y
   `app/[country]/(admin)/admin/particulares/*`. Tests: `npm run test:encargos` (agregado; ver README del expediente).
-- **Rollback:** `rollback-0245.sql` → `rollback-0244.sql` → `rollback-0243.sql` (en `docs/changes/2026-11-06-encargos-matching/`).
+- **RLS (0246):** las políticas del cliente (portal) solo alcanzan su fila principal; CHECK principal ⇒ activo. Las
+  alertas por correo son del CLIENTE: la baja y el interruptor escriben en todas sus filas.
+- **Rollback:** `rollback-0246.sql` → `rollback-0245.sql` → `rollback-0244.sql` → `rollback-0243.sql` (en `docs/changes/2026-11-06-encargos-matching/`).
+  ⚠️ El build anterior (incluida la vuelta automática del autodeploy a `.next.prev`) NO convive con clientes de 2+
+  encargos: `.maybeSingle()` por `client_id` falla y los embeds son arrays.
   El de 0243 aborta sin tocar nada si algún cliente tiene más de un encargo (hay que cerrar/borrar los extra antes).
 
 **Gotchas aprendidas**
