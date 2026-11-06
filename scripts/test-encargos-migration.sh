@@ -9,6 +9,8 @@ cd "$(dirname "$0")/.."
 NAME=encargos-pg-test
 IMAGE="${PG_TEST_IMAGE:-supabase/postgres:15.8.1.085}"
 MIG=supabase/migrations/0243_encargos_multiples.sql
+MIG2=supabase/migrations/0244_make_encargo_primary.sql
+ROLLBACK2=docs/changes/2026-11-06-encargos-matching/rollback-0244.sql
 ROLLBACK=docs/changes/2026-11-06-encargos-matching/rollback-0243.sql
 FAILS=0
 
@@ -43,6 +45,10 @@ apply() { docker exec -i "$NAME" psql -U postgres -d postgres -v ON_ERROR_STOP=1
 apply "$MIG"; check "migración 0243 (1.ª vez)" 0 $?
 apply "$MIG"; check "migración 0243 (2.ª vez, idempotente)" 0 $?
 
+apply "$MIG2"; check "migración 0244 (1.ª vez)" 0 $?
+apply "$MIG2"; check "migración 0244 (2.ª vez, idempotente)" 0 $?
+check "make_encargo_primary solo ejecutable por service_role" "t|f|f" "$(psq -c "select has_function_privilege('service_role','make_encargo_primary(uuid)','execute') || '|' || has_function_privilege('anon','make_encargo_primary(uuid)','execute') || '|' || has_function_privilege('authenticated','make_encargo_primary(uuid)','execute')" | sed 's/true/t/g;s/false/f/g')"
+
 check "filas previas intactas" 2 "$(psq -c "select count(*) from client_preferences")"
 check "filas previas: is_primary y active" 2 "$(psq -c "select count(*) from client_preferences where is_primary and status='active' and position=0 and label='Encargo 1' and id is not null and baseline_at is not null")"
 check "PK es id" "id" "$(psq -c "select string_agg(a.attname,',') from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey) where i.indrelid='client_preferences'::regclass and i.indisprimary")"
@@ -60,6 +66,11 @@ psq -c "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id,
 expect_fail "match duplicado (encargo, source, canonical_id) falla" "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id) VALUES ('$E','property','p9','c1')"
 expect_fail "source inválido falla" "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id) VALUES ('$E','otro','p9','c2')"
 psq -c "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id) VALUES ('$E','particular','l1','c1')" >/dev/null 2>&1; check "mismo canonical_id con otro source es válido" 0 $?
+
+apply "$ROLLBACK2"; check "rollback 0244" 0 $?
+check "rollback 0244: función borrada" "" "$(psq -c "select to_regprocedure('public.make_encargo_primary(uuid)')")"
+apply "$ROLLBACK2"; check "rollback 0244 idempotente" 0 $?
+apply "$MIG2"
 
 # Reversión: con 2 filas del cliente A debe abortar y no cambiar nada.
 docker exec -i "$NAME" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q < "$ROLLBACK" >/dev/null 2>&1

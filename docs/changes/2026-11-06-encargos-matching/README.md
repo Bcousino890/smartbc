@@ -38,6 +38,16 @@ cambian. `scripts/check-client-preferences-usage.mjs` (`npm run
 test:encargos-usage`) falla si hay una consulta sin `is_primary` o un embed sin
 normalizar. Las escrituras (update/insert/lookup) apuntan a la fila principal.
 
+## Migración 0244 (cambio de principal atómico)
+
+`supabase/migrations/0244_make_encargo_primary.sql`: función
+`make_encargo_primary(p_encargo_id uuid) returns uuid` (plpgsql, una
+transacción). Bloquea las filas del cliente, rechaza (`P0001`:
+`ENCARGO_NO_EXISTE`, `ENCARGO_NO_ACTIVO`, `CLIENTE_NO_ES`) si el encargo no
+existe, no está activo o el cliente no es de España, quita `is_primary` al
+actual y lo pone al nuevo. `execute` solo para `service_role`. Reversión:
+`rollback-0244.sql` (borra la función, sin pérdida de datos).
+
 ## Cómo verificar
 
 ```bash
@@ -45,7 +55,7 @@ PATH=/opt/node22-standalone/bin:$PATH bash scripts/test-encargos-migration.sh
 ```
 
 Levanta un Postgres desechable (`encargos-pg-test`, puerto 54999) con el esquema
-volcado en solo lectura de `supabase-db`, aplica 0243 dos veces, comprueba
+volcado en solo lectura de `supabase-db`, aplica 0243 y 0244 dos veces cada una, comprueba
 datos previos, PK, índice parcial, duplicados de `encargo_matches` y el
 rollback, y borra el contenedor al terminar. Nunca escribe en `supabase-db`.
 

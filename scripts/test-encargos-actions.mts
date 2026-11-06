@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { createAdminClient } from "../lib/db/admin.ts";
 import { EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
-import { createEncargo, getEncargo, listEncargos, makePrimary, setEncargoStatus, updateEncargo } from "../lib/db/queries/encargos.ts";
+import { applyEncargoStatus, createEncargo, getEncargo, listEncargos, makePrimary, setEncargoStatus, updateEncargo } from "../lib/db/queries/encargos.ts";
 import {
   createEncargoAction, makePrimaryAction, setEncargoStatusAction, updateEncargoAction,
 } from "../app/[country]/(admin)/admin/clientes/[id]/encargos-actions.ts";
@@ -28,6 +28,8 @@ const JUNIOR_OTHER = "aaaaaaaa-0000-0000-0000-000000000003";
 const C_ES = "cccccccc-0000-0000-0000-000000000001";
 const C_NEW = "cccccccc-0000-0000-0000-000000000002";
 const C_CL = "cccccccc-0000-0000-0000-000000000003";
+const C_ZERO = "cccccccc-0000-0000-0000-000000000004";
+const C_NULL = "cccccccc-0000-0000-0000-000000000005";
 
 async function seed() {
   const rows = [
@@ -37,6 +39,7 @@ async function seed() {
     { id: C_ES, email: "c1@t.local", role: "client", country: "es", assigned_advisor_id: JUNIOR_OWN },
     { id: C_NEW, email: "c2@t.local", role: "client", country: "es", assigned_advisor_id: JUNIOR_OWN },
     { id: C_CL, email: "c3@t.local", role: "client", country: "cl", assigned_advisor_id: JUNIOR_OWN },
+    { id: C_ZERO, email: "c4@t.local", role: "client", country: "es", assigned_advisor_id: JUNIOR_OWN },
   ];
   for (const r of rows) { const { error } = await db.from("profiles").insert(r); assert.ifError(error); }
   for (const c of [C_ES, C_CL]) {
@@ -118,5 +121,58 @@ ok(!(await createEncargoAction(C_CL, { label: "No", brief: brief() })).ok, "acci
 
 g.__encargosProfile = { id: ADMIN, role: "admin" };
 ok((await createEncargoAction(C_ES, { label: "Admin", brief: brief() })).ok, "admin: puede en cualquier cliente");
+
+// ── Endurecimiento (ronda 1) ────────────────────────────────────────────────
+g.__encargosProfile = { id: ADMIN, role: "admin" };
+const primaries = async (c: string) => (await listEncargos(c)).filter((e) => e.isPrimary);
+
+// Chile: update, estado y makePrimary también se rechazan (fila secundaria creada a mano).
+const { data: clRow, error: clErr } = await db.from("client_preferences")
+  .insert({ client_id: C_CL, is_primary: false, label: "Extra", position: 1 }).select("*").maybeSingle();
+assert.ifError(clErr);
+ok(!(await updateEncargo(clRow.id, { label: "x" })).ok, "Chile: updateEncargo ok:false");
+ok(!(await setEncargoStatus(clRow.id, "paused")).ok, "Chile: setEncargoStatus ok:false");
+ok(!(await makePrimary(clRow.id)).ok && (await primaries(C_CL)).length === 1 && (await primaries(C_CL))[0].id !== clRow.id, "Chile: makePrimary ok:false y el principal sigue igual");
+// Y a nivel SQL la función también rechaza a Chile.
+const rpcCl = await db.rpc("make_encargo_primary", { p_encargo_id: clRow.id });
+ok(!!rpcCl.error && String(rpcCl.error.message).includes("CLIENTE_NO_ES"), "make_encargo_primary rechaza Chile (CLIENTE_NO_ES)");
+
+// País distinto de 'es' (null) y perfil que no es cliente: createEncargo rechaza.
+ok(!(await createEncargo("cccccccc-0000-0000-0000-0000000000ff", { label: "x", brief: brief() })).ok, "createEncargo: cliente inexistente rechazado");
+ok(!(await createEncargo(ADMIN, { label: "x", brief: brief() })).ok, "createEncargo: perfil que no es cliente rechazado");
+
+// Atomicidad a nivel SQL: objetivo no activo -> error y el principal anterior intacto.
+const curPrim = (await primaries(C_ES))[0];
+const parked = must(await createEncargo(C_ES, { label: "Aparcado", brief: brief() }));
+must(await setEncargoStatus(parked.encargo.id, "paused"));
+const rpcBad = await db.rpc("make_encargo_primary", { p_encargo_id: parked.encargo.id });
+ok(!!rpcBad.error && String(rpcBad.error.message).includes("ENCARGO_NO_ACTIVO"), "make_encargo_primary: objetivo no activo -> ENCARGO_NO_ACTIVO");
+const p2 = await primaries(C_ES);
+ok(p2.length === 1 && p2[0].id === curPrim.id, "función fallida: el principal anterior sigue intacto (exactamente uno)");
+const rpcNone = await db.rpc("make_encargo_primary", { p_encargo_id: "00000000-0000-0000-0000-000000000000" });
+ok(!!rpcNone.error && String(rpcNone.error.message).includes("ENCARGO_NO_EXISTE"), "make_encargo_primary: inexistente -> ENCARGO_NO_EXISTE");
+ok(!(await makePrimary(parked.encargo.id)).ok && (await primaries(C_ES))[0].id === curPrim.id, "makePrimary de no activo: ok:false y nada cambia");
+const other = must(await createEncargo(C_ES, { label: "Otro", brief: brief() }));
+must(await makePrimary(other.encargo.id));
+ok((await primaries(C_ES)).length === 1 && (await primaries(C_ES))[0].id === other.encargo.id, "makePrimary deja exactamente un principal");
+
+// Carrera de estado: copia vieja que dice "no principal" de quien ya es principal.
+const stale = { id: other.encargo.id, isPrimary: false, status: "active" as const };
+const raced = await applyEncargoStatus(stale, "paused");
+ok(!raced.ok && (await getEncargo(other.encargo.id))?.status === "active" && (await getEncargo(other.encargo.id))?.isPrimary === true, "pausar con copia vieja: UPDATE condicionado lo rechaza");
+
+// Dos altas a la vez en un cliente sin filas: dos filas y un único principal, sin error crudo.
+const both = await Promise.all([
+  createEncargo(C_ZERO, { label: "A", brief: brief() }),
+  createEncargo(C_ZERO, { label: "B", brief: brief() }),
+]);
+ok(both.every((r) => r.ok), "altas concurrentes: ninguna falla");
+ok((await listEncargos(C_ZERO)).length === 2 && (await primaries(C_ZERO)).length === 1, "altas concurrentes: dos filas y un solo principal");
+
+// Entrada mal formada en las acciones: ok:false, sin excepción.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const anyAct = { c: createEncargoAction as any, u: updateEncargoAction as any, s: setEncargoStatusAction as any };
+ok(!(await anyAct.c(C_ES, { label: "x" })).ok && !(await anyAct.c(C_ES, undefined)).ok && !(await anyAct.c(C_ES, { brief: brief() })).ok, "acción crear con entrada incompleta: ok:false");
+ok(!(await anyAct.u(prim.id, { brief: null })).ok && !(await anyAct.u(prim.id, undefined)).ok && !(await anyAct.s(undefined, "paused")).ok, "acción editar/estado con entrada mala: ok:false");
 
 console.log(`PASS: ${n} comprobaciones`);

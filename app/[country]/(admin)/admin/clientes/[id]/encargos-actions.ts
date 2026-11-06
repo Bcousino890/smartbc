@@ -32,6 +32,7 @@ async function onEncargo(
   encargoId: string,
   run: () => Promise<EncargoResult>,
 ): Promise<EncargoResult> {
+  if (typeof encargoId !== "string") return { ok: false, error: "Encargo no válido." };
   const e = await getEncargo(encargoId);
   if (!e) return { ok: false, error: "El encargo no existe." };
   const gate = await allowed(e.clientId);
@@ -45,6 +46,9 @@ export async function createEncargoAction(
   clientId: string,
   input: { label: string; endClientLabel?: string | null; brief: BriefInput },
 ): Promise<EncargoResult> {
+  if (typeof clientId !== "string" || !input || typeof input.label !== "string" || !input.brief || typeof input.brief !== "object") {
+    return { ok: false, error: "Datos del encargo no válidos." };
+  }
   const gate = await allowed(clientId);
   if (!gate.ok) return gate;
   const r = await createEncargo(clientId, input);
@@ -56,6 +60,9 @@ export async function updateEncargoAction(
   encargoId: string,
   patch: { label?: string; endClientLabel?: string | null; brief?: BriefInput },
 ): Promise<EncargoResult> {
+  if (!patch || typeof patch !== "object" || (patch.brief !== undefined && (!patch.brief || typeof patch.brief !== "object"))) {
+    return { ok: false, error: "Datos del encargo no válidos." };
+  }
   return onEncargo(encargoId, () => updateEncargo(encargoId, patch));
 }
 
