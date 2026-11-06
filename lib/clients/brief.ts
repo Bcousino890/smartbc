@@ -310,6 +310,8 @@ export type BriefInput = {
   minPrice: number | null;
   maxPrice: number | null;
   maxPriceFlexPct: number | null;
+  /** Tope de precio por nº de dormitorios (clave = dormitorios). Manda sobre `maxPrice` para ese nº. */
+  maxPriceByBedrooms: Record<string, number> | null;
   minBedrooms: number | null;
   maxBedrooms: number | null;
   minBathrooms: number | null;
@@ -357,6 +359,7 @@ export const EMPTY_BRIEF: BriefInput = {
   minPrice: null,
   maxPrice: null,
   maxPriceFlexPct: null,
+  maxPriceByBedrooms: null,
   minBedrooms: null,
   maxBedrooms: null,
   minBathrooms: null,
@@ -473,6 +476,17 @@ export const MAX_POLYGON_POINTS = 200;
  * redondeados a 5 decimales (~1 m). Lo que llega de la BD o de un formulario
  * manipulado nunca debe romper el match.
  */
+/** Solo claves de dormitorios enteras (>0) con importe >0; vacío → null. */
+export function cleanPriceByBedrooms(v: unknown): Record<string, number> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, number> = {};
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    const x = Number(raw);
+    if (/^[1-9]\d*$/.test(k) && Number.isFinite(x) && x > 0) out[k] = x;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export function cleanPolygons(v: unknown): ZonePolygon[] {
   if (!Array.isArray(v)) return [];
   const out: ZonePolygon[] = [];
@@ -503,6 +517,13 @@ export function validateBrief(b: BriefInput): BriefValidation {
   ];
   for (const [min, max, error] of pairs) {
     if (min !== null && max !== null && min > max) return { ok: false, error };
+  }
+  if (b.maxPriceByBedrooms) {
+    for (const [k, v] of Object.entries(b.maxPriceByBedrooms)) {
+      if (!/^[1-9]\d*$/.test(k) || !Number.isFinite(v) || v <= 0) {
+        return { ok: false, error: "El tope por dormitorios necesita dormitorios enteros y un importe mayor que 0." };
+      }
+    }
   }
   const both = b.mustHave.filter((k) => b.niceToHave.includes(k));
   if (both.length) {
@@ -546,6 +567,7 @@ export function buildPreferencesPayload(b: BriefInput): Record<string, unknown> 
     min_price: num(b.minPrice),
     max_price: num(b.maxPrice),
     max_price_flex_pct: int(b.maxPriceFlexPct, 50),
+    max_price_by_bedrooms: cleanPriceByBedrooms(b.maxPriceByBedrooms),
     min_bedrooms: int(b.minBedrooms, 20),
     max_bedrooms: int(b.maxBedrooms, 20),
     min_bathrooms: int(b.minBathrooms, 20),
@@ -614,6 +636,7 @@ export function briefFromRow(r: Row | null | undefined): BriefInput {
     minPrice: positive(r.min_price),
     maxPrice: positive(r.max_price),
     maxPriceFlexPct: n(r.max_price_flex_pct),
+    maxPriceByBedrooms: cleanPriceByBedrooms(r.max_price_by_bedrooms),
     minBedrooms: n(r.min_bedrooms),
     maxBedrooms: n(r.max_bedrooms),
     minBathrooms: n(r.min_bathrooms),

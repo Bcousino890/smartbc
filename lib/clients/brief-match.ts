@@ -265,14 +265,17 @@ export function evaluateMatch(brief: BriefInput, p: MatchProperty, today = new D
   // Un precio de 0 o negativo es "sin precio" ("a consultar"), no una ganga.
   const rawPrice = effectivePrice(p, op);
   const price = rawPrice !== null && Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null;
-  if (brief.minPrice !== null || brief.maxPrice !== null) {
+  // Techo efectivo: el tope del nº de dormitorios de la propiedad, si lo hay; si no, el general.
+  const bedCap = p.bedrooms === null || p.bedrooms === undefined ? undefined : brief.maxPriceByBedrooms?.[String(p.bedrooms)];
+  const maxPrice = bedCap ?? brief.maxPrice;
+  if (brief.minPrice !== null || maxPrice !== null) {
     if (price === null) return { excluded: true, reason: "price" };
     const flex = brief.maxPriceFlexPct ?? 0;
-    const ceiling = brief.maxPrice !== null ? brief.maxPrice * (1 + flex / 100) : null;
+    const ceiling = maxPrice !== null ? maxPrice * (1 + flex / 100) : null;
     if (brief.minPrice !== null && price < brief.minPrice) return { excluded: true, reason: "price" };
     if (ceiling !== null && price > ceiling) return { excluded: true, reason: "price" };
-    if (brief.maxPrice !== null && price > brief.maxPrice) {
-      warnings.push(`Supera el presupuesto en ${fmtMoney(price - brief.maxPrice)}`);
+    if (maxPrice !== null && price > maxPrice) {
+      warnings.push(`Supera el presupuesto en ${fmtMoney(price - maxPrice)}`);
       component(20, 8);
     } else {
       reasons.push("Dentro del presupuesto");

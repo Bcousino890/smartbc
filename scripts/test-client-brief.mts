@@ -436,5 +436,37 @@ console.log("\nPrecio sin dato");
   check("precio 0 sin presupuesto: no rompe", evaluateMatch(brief({}), prop({ price: 0 })).excluded === false);
 }
 
+// ─── Tope de precio por dormitorios ──────────────────────────────────────────
+console.log("\nTope de precio por dormitorios");
+{
+  const b = brief({ operation: "rent", maxPrice: 6300, maxPriceByBedrooms: { "3": 5200, "4": 6300 } });
+  check("3 dorm. a 5.500 € se descarta por precio", excludedBy(b, prop({ bedrooms: 3, price: 5500 })) === "price");
+  check("4 dorm. a 5.500 € encaja", excludedBy(b, prop({ bedrooms: 4, price: 5500 })) === null);
+  check("3 dorm. a 5.200 € encaja", excludedBy(b, prop({ bedrooms: 3, price: 5200 })) === null);
+  check(
+    "dormitorios sin tope propio usan maxPrice",
+    excludedBy(b, prop({ bedrooms: 2, price: 6000 })) === null && excludedBy(b, prop({ bedrooms: 2, price: 7000 })) === "price",
+  );
+  const flex = brief({ operation: "rent", maxPrice: 6300, maxPriceFlexPct: 10, maxPriceByBedrooms: { "3": 5200 } });
+  check("el flex se aplica sobre el techo efectivo (5.200 +10% = 5.720)", excludedBy(flex, prop({ bedrooms: 3, price: 5700 })) === null);
+  check("y no más allá", excludedBy(flex, prop({ bedrooms: 3, price: 5800 })) === "price");
+  const r = ok(flex, prop({ bedrooms: 3, price: 5500 }));
+  check(
+    "el aviso de presupuesto usa el techo efectivo",
+    r.warnings.some((w) => w.includes("300")) && !r.reasons.includes("Dentro del presupuesto"),
+    r.warnings,
+  );
+  const reg = brief({ operation: "rent", maxPrice: 6300 });
+  check("sin tope por dormitorios, comportamiento de siempre", excludedBy(reg, prop({ bedrooms: 3, price: 5500 })) === null && excludedBy(reg, prop({ bedrooms: 3, price: 7000 })) === "price");
+  const rt = briefFromRow(buildPreferencesPayload(b));
+  check("round-trip conserva maxPriceByBedrooms", JSON.stringify(rt.maxPriceByBedrooms) === JSON.stringify({ "3": 5200, "4": 6300 }), rt.maxPriceByBedrooms);
+  check("sin dato el round-trip da null", briefFromRow(buildPreferencesPayload(reg)).maxPriceByBedrooms === null);
+  check(
+    "validateBrief rechaza claves o importes inválidos",
+    validateBrief(brief({ maxPriceByBedrooms: { "x": 100 } })).ok === false && validateBrief(brief({ maxPriceByBedrooms: { "3": 0 } })).ok === false,
+  );
+  check("validateBrief acepta un tope válido", validateBrief(b).ok === true);
+}
+
 console.log(failures ? `\n✗ ${failures} fallo(s)` : "\n✓ Todo en verde");
 process.exit(failures ? 1 : 0);
