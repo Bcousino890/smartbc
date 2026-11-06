@@ -10,6 +10,8 @@ NAME=encargos-pg-test
 IMAGE="${PG_TEST_IMAGE:-supabase/postgres:15.8.1.085}"
 MIG=supabase/migrations/0243_encargos_multiples.sql
 MIG2=supabase/migrations/0244_make_encargo_primary.sql
+MIG3=supabase/migrations/0245_encargo_notify_atomic.sql
+ROLLBACK3=docs/changes/2026-11-06-encargos-matching/rollback-0245.sql
 ROLLBACK2=docs/changes/2026-11-06-encargos-matching/rollback-0244.sql
 ROLLBACK=docs/changes/2026-11-06-encargos-matching/rollback-0243.sql
 FAILS=0
@@ -49,6 +51,12 @@ apply "$MIG2"; check "migración 0244 (1.ª vez)" 0 $?
 apply "$MIG2"; check "migración 0244 (2.ª vez, idempotente)" 0 $?
 check "make_encargo_primary solo ejecutable por service_role" "t|f|f" "$(psq -c "select has_function_privilege('service_role','make_encargo_primary(uuid)','execute') || '|' || has_function_privilege('anon','make_encargo_primary(uuid)','execute') || '|' || has_function_privilege('authenticated','make_encargo_primary(uuid)','execute')" | sed 's/true/t/g;s/false/f/g')"
 
+apply "$MIG3"; check "migración 0245 (1.ª vez)" 0 $?
+apply "$MIG3"; check "migración 0245 (2.ª vez, idempotente)" 0 $?
+SIG="claim_and_notify_encargo_matches(uuid[],uuid[],text,text,text,jsonb)"
+check "claim_and_notify solo ejecutable por service_role" "t|f|f" "$(psq -c "select has_function_privilege('service_role','$SIG','execute') || '|' || has_function_privilege('anon','$SIG','execute') || '|' || has_function_privilege('authenticated','$SIG','execute')" | sed 's/true/t/g;s/false/f/g')"
+check "encargo_matches.reasons existe (jsonb)" jsonb "$(psq -c "select data_type from information_schema.columns where table_name='encargo_matches' and column_name='reasons'")"
+
 check "filas previas intactas" 2 "$(psq -c "select count(*) from client_preferences")"
 check "filas previas: is_primary y active" 2 "$(psq -c "select count(*) from client_preferences where is_primary and status='active' and position=0 and label='Encargo 1' and id is not null and baseline_at is not null")"
 check "PK es id" "id" "$(psq -c "select string_agg(a.attname,',') from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey) where i.indrelid='client_preferences'::regclass and i.indisprimary")"
@@ -66,6 +74,25 @@ psq -c "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id,
 expect_fail "match duplicado (encargo, source, canonical_id) falla" "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id) VALUES ('$E','property','p9','c1')"
 expect_fail "source inválido falla" "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id) VALUES ('$E','otro','p9','c2')"
 psq -c "INSERT INTO encargo_matches(encargo_id, source, source_id, canonical_id) VALUES ('$E','particular','l1','c1')" >/dev/null 2>&1; check "mismo canonical_id con otro source es válido" 0 $?
+
+# claim_and_notify: atómica
+M=$(psq -c "select id from encargo_matches where encargo_id='$E' and source='property'")
+U=33333333-3333-3333-3333-333333333333
+GHOST=44444444-4444-4444-4444-444444444444
+psq -c "INSERT INTO auth.users(id) VALUES ('$U')" >/dev/null 2>&1; check "usuario de prueba en auth.users" 0 $?
+check "sin destinatarios: no reclama nada" 0 "$(psq -c "select claim_and_notify_encargo_matches(array['$M']::uuid[], array[]::uuid[], 't', 'b', '/l', '{}'::jsonb)")"
+check "sin destinatarios: notified_at sigue nulo" 1 "$(psq -c "select count(*) from encargo_matches where id='$M' and notified_at is null")"
+psq -c "select claim_and_notify_encargo_matches(array['$M']::uuid[], array['$GHOST']::uuid[], 't', 'b', '/l', '{}'::jsonb)" >/dev/null 2>&1
+check "destinatario inexistente: falla" 1 "$([ $? -ne 0 ] && echo 1 || echo 0)"
+check "fallo del aviso: nada reclamado (todo o nada)" 1 "$(psq -c "select count(*) from encargo_matches where id='$M' and notified_at is null")"
+check "reclama y avisa: devuelve 1" 1 "$(psq -c "select claim_and_notify_encargo_matches(array['$M']::uuid[], array['$U']::uuid[], 't', 'b', '/l', '{}'::jsonb)")"
+check "aviso creado (tipo encargo_match)" 1 "$(psq -c "select count(*) from crm_notifications where user_id='$U' and type='encargo_match'")"
+check "segunda llamada: 0 reclamadas y sin aviso nuevo" "0|1" "$(psq -c "select claim_and_notify_encargo_matches(array['$M']::uuid[], array['$U']::uuid[], 't', 'b', '/l', '{}'::jsonb)")|$(psq -c "select count(*) from crm_notifications where user_id='$U'")"
+
+apply "$ROLLBACK3"; check "rollback 0245" 0 $?
+check "rollback 0245: función y columna fuera" "|0" "$(psq -c "select to_regprocedure('public.$SIG')")|$(psq -c "select count(*) from information_schema.columns where table_name='encargo_matches' and column_name='reasons'")"
+apply "$ROLLBACK3"; check "rollback 0245 idempotente" 0 $?
+apply "$MIG3"; check "0245 reaplicable tras rollback" 0 $?
 
 apply "$ROLLBACK2"; check "rollback 0244" 0 $?
 check "rollback 0244: función borrada" "" "$(psq -c "select to_regprocedure('public.make_encargo_primary(uuid)')")"

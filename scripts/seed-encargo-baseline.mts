@@ -5,6 +5,12 @@
 // NO crea ningún aviso: es para no avisar de lo que el equipo ya conocía. Idempotente (relanzarlo no
 // duplica ni cambia nada). Lo ejecuta el dueño UNA vez tras desplegar las migraciones 0243/0244.
 //
+// ORDEN DE PUESTA EN MARCHA: desplegar → ejecutar este script con --yes → instalar el crontab de
+// /api/cron/encargo-matches. Si no existe todavía la marca del cron (`app_settings.encargo_matching_cursor`),
+// el script con --yes la fija en (hora del seed − 15 min) —nunca pisa una existente, y con --dry no
+// escribe nada—, de modo que la primera pasada del cron evalúa lo creado desde el seed. Sin esa marca,
+// la primera pasada del cron solo la inicializaría y lo creado entre el seed y el cron no se evaluaría.
+//
 // Conexión: igual que el resto de scripts/*.mts, usa createAdminClient() de lib/db/admin.ts, es decir
 // NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY del entorno (en el VPS, `--env-file=.env.local`
 // desde /opt/smartbc-app). Como lib/ importa "server-only", se empaqueta igual que backfill-idealista-pins:
@@ -47,4 +53,9 @@ const r = await seedEncargoBaseline({ dryRun: dry });
 console.log(
   `${dry ? "[dry] " : ""}encargos evaluados: ${r.encargos} · saltados por brief insuficiente: ${r.skipped_brief} · ` +
     `coincidencias en el stock: ${r.evaluated} · ${dry ? "se insertarían" : "insertadas"}: ${r.inserted}`,
+);
+console.log(
+  r.cursor_set
+    ? `Marca del cron ${dry ? "(no existe; con --yes se fijaría en hora actual − 15 min)" : "fijada en hora actual − 15 min"}.`
+    : "Marca del cron ya existente: no se toca.",
 );

@@ -234,7 +234,17 @@ class Query implements PromiseLike<Res> {
 }
 
 const argCache = new Map<string, { names: string[]; types: string[] }>();
+// Inyección de fallos (solo pruebas): las próximas `n` llamadas a `fn` devuelven error sin ejecutarse.
+const rpcFailures = new Map<string, number>();
+export function __failRpc(fn: string, n: number) {
+  rpcFailures.set(fn, n);
+}
 async function rpc(fn: string, args: Record<string, unknown>): Promise<Res> {
+  const left = rpcFailures.get(fn) ?? 0;
+  if (left > 0) {
+    rpcFailures.set(fn, left - 1);
+    return { data: null, error: { message: `rpc ${fn} caído (simulado)`, code: "XX000" } };
+  }
   if (!argCache.has(fn)) {
     const r = await runSql(`SELECT json_build_object('n', proargnames, 't', proargtypes::regtype[]::text[]) FROM pg_proc WHERE proname = ${lit(fn)} LIMIT 1`);
     if (r.error || !r.data) return { data: null, error: r.error ?? { message: `función ${fn} no existe`, code: "42883" } };

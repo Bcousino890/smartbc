@@ -48,6 +48,22 @@ existe, no está activo o el cliente no es de España, quita `is_primary` al
 actual y lo pone al nuevo. `execute` solo para `service_role`. Reversión:
 `rollback-0244.sql` (borra la función, sin pérdida de datos).
 
+## Migración 0245 (aviso atómico)
+
+`supabase/migrations/0245_encargo_notify_atomic.sql`: función
+`claim_and_notify_encargo_matches(match_ids, recipients, title, body, link, data) returns int`:
+en una transacción reclama las filas pendientes de `encargo_matches` y crea un aviso
+`encargo_match` por destinatario (o nada si falla algo o no hay destinatarios). Añade
+`encargo_matches.reasons jsonb`. `execute` solo para `service_role`. Reversión: `rollback-0245.sql`.
+
+## Orden de puesta en marcha (importante)
+
+1. Desplegar (migraciones 0243-0245).
+2. Ejecutar `scripts/seed-encargo-baseline.mts` con `--yes` (precarga el stock como visto, sin avisos,
+   y, si aún no existe, fija la marca del cron en «ahora − 15 min»).
+3. Solo entonces instalar el crontab de `/api/cron/encargo-matches`. Si el cron arrancara antes, su
+   primera ejecución solo inicializa la marca y lo creado entre medias no se evaluaría.
+
 ## Cómo verificar
 
 ```bash
@@ -55,7 +71,7 @@ PATH=/opt/node22-standalone/bin:$PATH bash scripts/test-encargos-migration.sh
 ```
 
 Levanta un Postgres desechable (`encargos-pg-test`, puerto 54999) con el esquema
-volcado en solo lectura de `supabase-db`, aplica 0243 y 0244 dos veces cada una, comprueba
+volcado en solo lectura de `supabase-db`, aplica 0243, 0244 y 0245 dos veces cada una, comprueba
 datos previos, PK, índice parcial, duplicados de `encargo_matches` y el
 rollback, y borra el contenedor al terminar. Nunca escribe en `supabase-db`.
 

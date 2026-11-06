@@ -24,6 +24,6 @@ export async function POST(req: Request) {
     return Response.json(report, { status: report.ok ? 200 : 500 });
   } catch (e) {
     console.error("[encargo-matches]", e);
-    return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
+    return Response.json({ ok: false, error: "Error interno" }, { status: 500 });
   }
 }

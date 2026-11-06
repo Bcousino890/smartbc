@@ -89,16 +89,22 @@ export async function updateEncargoAction(
     return { ok: false, error: "Datos del encargo no válidos." };
   }
   const r = await onEncargo(encargoId, () => updateEncargo(encargoId, patch));
-  // Editar el brief reinicia baseline_at: se vuelve a evaluar el stock (solo si el brief cambió).
+  // Editar el brief reinicia baseline_at: se vuelve a evaluar el stock (si el patch trae `brief`;
+  // una edición solo de etiqueta no lo programa).
   if (r.ok && patch.brief !== undefined) scheduleInitialPass(encargoId);
   return r;
 }
 
 export async function setEncargoStatusAction(encargoId: string, next: EncargoStatus): Promise<EncargoResult> {
-  const before = await getEncargo(encargoId);
-  const r = await onEncargo(encargoId, () => setEncargoStatus(encargoId, next));
+  if (typeof encargoId !== "string") return { ok: false, error: "Encargo no válido." };
+  const prev: { status: EncargoStatus | null } = { status: null };
+  const r = await onEncargo(encargoId, async () => {
+    // Ya autorizado por onEncargo: el estado previo se lee aquí, no antes del guard.
+    prev.status = (await getEncargo(encargoId))?.status ?? null;
+    return setEncargoStatus(encargoId, next);
+  });
   // Reactivar (de pausado/cerrado a activo) reinicia baseline_at: pase inicial.
-  if (r.ok && next === "active" && before && before.status !== "active") scheduleInitialPass(encargoId);
+  if (r.ok && next === "active" && prev.status !== null && prev.status !== "active") scheduleInitialPass(encargoId);
   return r;
 }
 

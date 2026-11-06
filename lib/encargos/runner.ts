@@ -15,10 +15,14 @@ import { matchNewForEncargo, matchStockForEncargo, type ItemMatch, type SourceIt
 //    sin fallos. Por encargo: sinceIso = max(baseline_at, marca); si sinceIso >= untilIso, se salta.
 //  · Sin marca previa (primera ejecución): se inicializa sin evaluar ni avisar.
 //  · Dedupe: `encargo_matches` con UNIQUE (encargo_id, source, canonical_id). Las filas se insertan
-//    siempre con notified_at nulo y se «reclaman» con un UPDATE … WHERE notified_at IS NULL
-//    RETURNING: solo quien reclama una fila la avisa, así dos pasadas solapadas nunca duplican.
+//    siempre con notified_at nulo y se «reclaman» Y avisan en una sola transacción SQL
+//    (`claim_and_notify_encargo_matches`, migración 0245): o se marca y se crea el aviso, o ninguna de
+//    las dos cosas. Solo quien reclama una fila la avisa, así dos pasadas solapadas nunca duplican, y
+//    un fallo o reinicio entre medias deja las filas pendientes (nunca «avisadas» sin aviso).
 //  · notified_at solo se pone si hay ≥ 1 destinatario; las pendientes (nulas) se reintentan al
-//    principio de cada pasada, agrupadas por encargo en el mismo aviso.
+//    principio de cada pasada, agrupadas por encargo en el mismo aviso. Solo se reintentan filas con
+//    first_seen_at de hace más de 10 min (PENDING_MIN_AGE_MS): así una pasada del cron no «roba» filas
+//    a un pase inicial que está entre su insert y su reclamo.
 // ============================================================================
 
 export const CURSOR_KEY = "encargo_matching_cursor";
@@ -26,11 +30,13 @@ export const LAG_MS = 15 * 60_000;
 const CHUNK = 100;
 const INSERT_CHUNK = 500;
 const PAGE = 1000;
+export const PENDING_MIN_AGE_MS = 10 * 60_000;
+const NOTIFY_RPC = "claim_and_notify_encargo_matches";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 type Row = Record<string, unknown>;
-type Pending = { id: string; encargoId: string; source: "property" | "particular"; sourceId: string; canonicalId: string; score: number };
+type Pending = { reasons: string[]; id: string; encargoId: string; source: "property" | "particular"; sourceId: string; canonicalId: string; score: number };
 type Target = { encargo: Encargo; clientName: string };
 
 export type MatchingReport = {
@@ -130,7 +136,7 @@ async function insertMatches(
       .upsert(
         ch.map((m) => ({
           encargo_id: encargoId, source: m.item.source, source_id: m.item.id, canonical_id: m.item.canonicalId,
-          score: Math.round(m.score), notified_at: notifiedAt,
+          score: Math.round(m.score), reasons: m.reasons, notified_at: notifiedAt,
         })),
         { onConflict: "encargo_id,source,canonical_id", ignoreDuplicates: true },
       )
@@ -144,44 +150,34 @@ async function insertMatches(
   return out;
 }
 
-async function loadPending(db: Db): Promise<Map<string, Pending[]>> {
+/** Pendientes (notified_at nulo) de los encargos dados con `first_seen_at` anterior a `olderThanIso`. */
+async function loadPending(db: Db, encargoIds: string[], olderThanIso: string): Promise<Map<string, Pending[]>> {
   const byEncargo = new Map<string, Pending[]>();
-  let after: string | null = null;
-  for (;;) {
-    let q = db.from("encargo_matches").select("id, encargo_id, source, source_id, canonical_id, score").is("notified_at", null).order("id").limit(PAGE);
-    if (after) q = q.gt("id", after);
-    const { data, error } = await q;
-    if (error) fail("encargo_matches (pendientes)", error);
-    const rows = (data ?? []) as Row[];
-    for (const r of rows) {
-      const p: Pending = {
-        id: String(r.id), encargoId: String(r.encargo_id), source: r.source as Pending["source"],
-        sourceId: String(r.source_id), canonicalId: String(r.canonical_id), score: Number(r.score ?? 0),
-      };
-      byEncargo.set(p.encargoId, [...(byEncargo.get(p.encargoId) ?? []), p]);
+  for (const ids of chunks(encargoIds, CHUNK)) {
+    let after: string | null = null;
+    for (;;) {
+      let q = db
+        .from("encargo_matches").select("id, encargo_id, source, source_id, canonical_id, score, reasons")
+        .is("notified_at", null).lt("first_seen_at", olderThanIso).in("encargo_id", ids).order("id").limit(PAGE);
+      if (after) q = q.gt("id", after);
+      const { data, error } = await q;
+      if (error) fail("encargo_matches (pendientes)", error);
+      const rows = (data ?? []) as Row[];
+      for (const r of rows) {
+        const p: Pending = {
+          id: String(r.id), encargoId: String(r.encargo_id), source: r.source as Pending["source"],
+          sourceId: String(r.source_id), canonicalId: String(r.canonical_id), score: Number(r.score ?? 0),
+          reasons: Array.isArray(r.reasons) ? (r.reasons as unknown[]).map(String) : [],
+        };
+        const list = byEncargo.get(p.encargoId);
+        if (list) list.push(p);
+        else byEncargo.set(p.encargoId, [p]);
+      }
+      if (rows.length < PAGE) break;
+      after = String(rows[rows.length - 1].id);
     }
-    if (rows.length < PAGE) break;
-    after = String(rows[rows.length - 1].id);
   }
   return byEncargo;
-}
-
-/** Marca como avisadas las filas que SIGUEN pendientes y devuelve cuáles ha reclamado esta llamada. */
-async function claim(db: Db, ids: string[], stamp: string): Promise<Set<string>> {
-  const claimed = new Set<string>();
-  for (const ch of chunks(ids, CHUNK)) {
-    const { data, error } = await db.from("encargo_matches").update({ notified_at: stamp }).in("id", ch).is("notified_at", null).select("id");
-    if (error) fail("encargo_matches (reclamar)", error);
-    for (const r of (data ?? []) as Row[]) claimed.add(String(r.id));
-  }
-  return claimed;
-}
-
-async function release(db: Db, ids: string[]): Promise<void> {
-  for (const ch of chunks(ids, CHUNK)) {
-    const { error } = await db.from("encargo_matches").update({ notified_at: null }).in("id", ch);
-    if (error) console.error("[encargos] no se pudo devolver a pendiente", error.message);
-  }
 }
 
 /** Reconstruye `ItemMatch` de filas pendientes leyendo el título/zona/precio de la fuente. */
@@ -205,32 +201,19 @@ async function itemsForPending(db: Db, rows: Pending[]): Promise<Map<string, Ite
       source: p.source, id: p.sourceId, canonicalId: p.canonicalId, title,
       zone: (r?.zone as string | null | undefined) ?? null, price: Number(r?.price ?? 0), createdAt: r?.created_at ? new Date(String(r.created_at)).toISOString() : "",
     };
-    out.set(p.id, { item, score: p.score, reasons: [], warnings: [] });
+    out.set(p.id, { item, score: p.score, reasons: p.reasons, warnings: [] });
   }
   return out;
 }
 
 // ── Aviso ───────────────────────────────────────────────────────────────────
 
-/** Un aviso agrupado (una fila de `crm_notifications` por destinatario). Nunca con lista vacía. */
-async function sendNotice(
-  db: Db, t: Target, kind: "initial" | "new", matches: ItemMatch[], recipients: string[],
-): Promise<void> {
-  if (matches.length === 0 || recipients.length === 0) return;
-  const notice = buildNotice({
-    kind, client: { id: t.encargo.clientId, name: t.clientName }, encargo: { id: t.encargo.id, label: t.encargo.label }, matches,
-  });
-  const { error } = await db.from("crm_notifications").insert(
-    recipients.map((user_id) => ({ user_id, type: notice.type, title: notice.title, body: notice.body, link: notice.link, data: notice.data })),
-  );
-  if (error) fail("crm_notifications", error);
-}
-
-type Outcome = { inserted: number; retried: number; notices: number; noRecipients: boolean };
+type Outcome = { inserted: number; retried: number; notices: number; claimed: number; noRecipients: boolean };
 
 /**
  * Registra lo encontrado y avisa. `pending`: filas pendientes del encargo a reintentar en el mismo
- * aviso. Con `dry` no escribe nada.
+ * aviso. Con `dry` no escribe nada. El aviso se construye ANTES (solo lecturas) y se entrega con
+ * una única llamada atómica; si falla, las filas siguen pendientes y se reintentan.
  */
 async function storeAndNotify(
   db: Db, t: Target, kind: "initial" | "new", found: ItemMatch[], pending: Pending[], recipients: string[], dry: boolean,
@@ -240,27 +223,26 @@ async function storeAndNotify(
   const has = recipients.length > 0;
   const anything = toInsert.length + pending.length > 0;
   if (dry) {
-    return { inserted: toInsert.length, retried: has ? pending.length : 0, notices: has && anything ? 1 : 0, noRecipients: !has && anything };
+    return { inserted: toInsert.length, retried: has ? pending.length : 0, notices: has && anything ? 1 : 0, claimed: 0, noRecipients: !has && anything };
   }
-  const stamp = new Date().toISOString();
   const newRows = await insertMatches(db, t.encargo.id, toInsert, null);
-  if (!has) return { inserted: newRows.length, retried: 0, notices: 0, noRecipients: newRows.length + pending.length > 0 };
+  if (!has) return { inserted: newRows.length, retried: 0, notices: 0, claimed: 0, noRecipients: newRows.length + pending.length > 0 };
+  if (newRows.length + pending.length === 0) return { inserted: 0, retried: 0, notices: 0, claimed: 0, noRecipients: false };
 
-  const claimed = await claim(db, [...pending.map((p) => p.id), ...newRows.map((r) => r.id)], stamp);
-  if (claimed.size === 0) return { inserted: newRows.length, retried: 0, notices: 0, noRecipients: false };
-  try {
-    const claimedPending = pending.filter((p) => claimed.has(p.id));
-    const items = claimedPending.length ? await itemsForPending(db, claimedPending) : new Map<string, ItemMatch>();
-    const matches = [
-      ...claimedPending.map((p) => items.get(p.id)!),
-      ...newRows.filter((r) => claimed.has(r.id)).map((r) => r.match),
-    ];
-    await sendNotice(db, t, kind, matches, recipients);
-    return { inserted: newRows.length, retried: claimedPending.length, notices: 1, noRecipients: false };
-  } catch (e) {
-    await release(db, [...claimed]); // sin aviso no hay «avisado»: se reintenta en la pasada siguiente
-    throw e;
-  }
+  const items = pending.length ? await itemsForPending(db, pending) : new Map<string, ItemMatch>();
+  const ids = [...pending.map((p) => p.id), ...newRows.map((r) => r.id)];
+  const matches = [...pending.map((p) => items.get(p.id)!), ...newRows.map((r) => r.match)];
+  const notice = buildNotice({
+    kind, client: { id: t.encargo.clientId, name: t.clientName }, encargo: { id: t.encargo.id, label: t.encargo.label }, matches,
+  });
+  const { data, error } = await db.rpc(NOTIFY_RPC, {
+    p_match_ids: ids, p_recipients: recipients, p_title: notice.title, p_body: notice.body, p_link: notice.link, p_data: notice.data,
+  });
+  if (error) fail("avisar (rpc)", error);
+  const claimed = Number(data ?? 0);
+  return {
+    inserted: newRows.length, retried: Math.min(pending.length, claimed), notices: claimed > 0 ? 1 : 0, claimed, noRecipients: false,
+  };
 }
 
 // ── Marca (cursor) ──────────────────────────────────────────────────────────
@@ -304,7 +286,9 @@ export async function runEncargoMatching(opts: { now?: Date; dryRun?: boolean } 
   }
 
   const targets = await loadActiveTargets(db);
-  const pending = await loadPending(db);
+  const pending = await loadPending(
+    db, targets.filter((t) => eligible(t.encargo)).map((t) => t.encargo.id), new Date(untilMs + LAG_MS - PENDING_MIN_AGE_MS).toISOString(),
+  );
   const recipientsByClient = new Map<string, string[]>();
   const recipientsOf = async (clientId: string) => {
     if (!recipientsByClient.has(clientId)) recipientsByClient.set(clientId, await resolveRecipients(clientId));
@@ -359,17 +343,23 @@ export async function runEncargoInitialPass(encargoId: string): Promise<{ insert
   const found = await matchStockForEncargo(t.encargo);
   const recipients = await resolveRecipients(t.encargo.clientId);
   const o = await storeAndNotify(db, t, "initial", found, [], recipients, false);
-  return { inserted: o.inserted, notified: o.notices ? o.inserted : 0 };
+  return { inserted: o.inserted, notified: o.claimed };
 }
 
 // ── Precarga «como visto» (migración de los encargos existentes) ────────────
 
-export type SeedReport = { encargos: number; skipped_brief: number; evaluated: number; inserted: number };
+export type SeedReport = { encargos: number; skipped_brief: number; evaluated: number; inserted: number; cursor_set: boolean };
 
-/** Registra el stock actual de cada encargo activo como ya visto (notified_at = now()), sin avisos. Idempotente. */
+/**
+ * Registra el stock actual de cada encargo activo como ya visto (notified_at = now()), sin avisos.
+ * Idempotente. Si todavía no existe la marca del cron, la fija en (inicio del seed − 15 min) —solo
+ * sin `dryRun`, y nunca pisa una existente—: así la primera pasada del cron evalúa lo creado entre
+ * el seed y su arranque en vez de limitarse a inicializar la marca.
+ */
 export async function seedEncargoBaseline(opts: { dryRun?: boolean } = {}): Promise<SeedReport> {
   const db = createAdminClient() as Db;
-  const rep: SeedReport = { encargos: 0, skipped_brief: 0, evaluated: 0, inserted: 0 };
+  const startMs = Date.now();
+  const rep: SeedReport = { encargos: 0, skipped_brief: 0, evaluated: 0, inserted: 0, cursor_set: false };
   for (const t of await loadActiveTargets(db)) {
     if (!eligible(t.encargo)) { rep.skipped_brief++; continue; }
     rep.encargos++;
@@ -378,6 +368,10 @@ export async function seedEncargoBaseline(opts: { dryRun?: boolean } = {}): Prom
     const { toInsert } = planEncargoRun({ found, alreadySeen: await loadSeen(db, t.encargo.id, found), kind: "initial" });
     if (opts.dryRun) rep.inserted += toInsert.length;
     else rep.inserted += (await insertMatches(db, t.encargo.id, toInsert, new Date().toISOString())).length;
+  }
+  if ((await readCursor(db)) === null) {
+    if (!opts.dryRun) await writeCursor(db, startMs - LAG_MS);
+    rep.cursor_set = true;
   }
   return rep;
 }

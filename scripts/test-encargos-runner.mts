@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { createAdminClient } from "../lib/db/admin.ts";
 import { buildPreferencesPayload, EMPTY_BRIEF, type BriefInput } from "../lib/clients/brief.ts";
 import { runEncargoInitialPass, runEncargoMatching } from "../lib/encargos/runner.ts";
+import { __failRpc } from "./shims/supabase-on-psql.mts";
 import { POST } from "../app/api/cron/encargo-matches/route.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,24 +75,29 @@ eq(await cursor(), iso(-15), "la marca avanza");
 
 await profile(ADMIN, "admin");
 r = await runEncargoMatching({ now: at(1) });
+eq([r.pending_retried, r.notices, r.inserted], [0, 0, 0], "pendientes de menos de 10 min: aún no se reintentan");
+r = await runEncargoMatching({ now: at(12) });
 eq([r.pending_retried, r.notices, r.inserted], [3, 1, 0], "al aparecer un admin, la pasada siguiente avisa lo pendiente");
 ok((await matchRows(E_NR)).every((x) => x.notified_at !== null), "notified_at puesto tras avisar");
 const nr = await notesFor(ADMIN, E_NR);
 ok(nr.length === 1 && nr[0].type === "encargo_match" && nr[0].data.totalItems === 3 && nr[0].data.kind === "new", "un aviso agrupado para el admin", nr);
-r = await runEncargoMatching({ now: at(2) });
+const rr = await matchRows(E_NR);
+ok(rr.every((x) => Array.isArray(x.reasons) && (x.reasons as unknown[]).length > 0), "las filas guardan los motivos del encaje", rr);
+ok(/Encaja:/.test((nr[0] as unknown as { body: string }).body), "el aviso de un reintento conserva la línea «Encaja:»", nr);
+r = await runEncargoMatching({ now: at(13) });
 eq([r.pending_retried, r.notices, r.inserted], [0, 0, 0], "nada pendiente: nada");
 
 // ── Fase 2: pasada normal, idempotencia, paralelo ───────────────────────────
 await profile(ADVISOR, "advisor");
 await profile(C_MAIN, "client", { assigned_advisor_id: uuid(ADVISOR) });
 await encargo(E_MAIN, C_MAIN, brief("Salamanca"));
-for (let i = 0; i < 3; i++) await particular("Salamanca", -8);
-await particular("Salamanca", -8, { zone: "Vallecas" });
-r = await runEncargoMatching({ now: at(10) });
+for (let i = 0; i < 3; i++) await particular("Salamanca", 0);
+await particular("Salamanca", 0, { zone: "Vallecas" });
+r = await runEncargoMatching({ now: at(20) });
 eq([r.inserted, r.notices], [3, 1], "3 particulares que encajan: inserted 3, notices 1");
 eq([(await notesFor(ADVISOR, E_MAIN)).length, (await notesFor(ADMIN, E_MAIN)).length], [1, 1], "un aviso por destinatario (asesor y admin)");
 const before = await countNotes();
-r = await runEncargoMatching({ now: at(10) });
+r = await runEncargoMatching({ now: at(20) });
 eq([r.inserted, r.notices], [0, 0], "segunda pasada idéntica: 0 / 0");
 r = await runEncargoMatching({ now: at(30) });
 eq([r.inserted, r.notices], [0, 0], "pasada posterior sin nada nuevo: 0 / 0");
@@ -153,6 +159,7 @@ ok(res.status === 200 && body.ok === true && typeof body.encargos === "number" &
 await profile(C_SEED, "client", { assigned_advisor_id: uuid(ADVISOR) });
 for (let i = 0; i < 3; i++) await particular("Chueca", -90);
 await encargo(E_SEED, C_SEED, brief("Chueca"));
+assert.ifError((await db.from("app_settings").delete().eq("key", "encargo_matching_cursor")).error);
 const notesBefore = await countNotes();
 const seed = (...args: string[]) => {
   try {
@@ -167,18 +174,56 @@ const seed = (...args: string[]) => {
 };
 let s = seed("--dry");
 ok(s.code === 0 && /db-de-prueba\.invalid/.test(s.out), "seed --dry: sale bien y dice la BD destino", s.out);
-eq((await matchRows(E_SEED)).length, 0, "seed --dry: no escribe");
+eq([(await matchRows(E_SEED)).length, await cursor()], [0, undefined], "seed --dry: no escribe ni fija la marca");
 s = seed();
 ok(s.code !== 0 && /--yes/.test(s.out), "seed sin --yes: se niega", s.out);
-eq((await matchRows(E_SEED)).length, 0, "seed sin --yes: no escribe");
+eq([(await matchRows(E_SEED)).length, await cursor()], [0, undefined], "seed sin --yes: no escribe");
 s = seed("--yes");
 ok(s.code === 0, "seed --yes: sale bien", s.out);
 const seeded = await matchRows(E_SEED);
 ok(seeded.length === 3 && seeded.every((x) => x.notified_at !== null), "seed --yes: 3 filas ya avisadas", seeded);
 eq(await countNotes(), notesBefore, "seed: sin avisos");
+const cur1 = await cursor();
+ok(!!cur1 && Math.abs(Date.parse(cur1) - (Date.now() - 15 * 60_000)) < 120_000, "seed --yes sin marca: la fija en ahora − 15 min", cur1);
 s = seed("--yes");
-eq([s.code, (await matchRows(E_SEED)).length, await countNotes()], [0, 3, notesBefore], "seed idempotente");
+eq([s.code, (await matchRows(E_SEED)).length, await countNotes(), await cursor()], [0, 3, notesBefore, cur1], "seed idempotente y con marca existente no la pisa");
+// lo creado entre el seed y el arranque del cron se evalúa en la primera pasada
+await particular("Chueca", 5);
+r = await runEncargoMatching({ now: at(30) });
+eq([r.initialised, r.inserted, r.notices], [undefined, 1, 1], "primera pasada tras el seed: evalúa lo creado entre medias");
+eq(await countNotes(), notesBefore + 2, "…y avisa a asesor y admin");
 r = await runEncargoMatching({ now: at(120) });
-eq(await countNotes(), notesBefore, "tras el seed, la pasada no avisa de lo ya visto");
+eq([r.inserted, r.notices], [0, 0], "después, nada más");
+
+// ── Fase 6: inyección de fallos ─────────────────────────────────────────────
+const [C_F1, C_F2, E_F1, E_F2] = [20, 21, 110, 111];
+await profile(C_F1, "client", { assigned_advisor_id: uuid(ADVISOR) });
+await profile(C_F2, "client", { assigned_advisor_id: uuid(ADVISOR) });
+await encargo(E_F1, C_F1, brief("Lavapiés"));
+await encargo(E_F2, C_F2, brief("Malasaña"));
+await particular("Lavapiés", 110);
+await particular("Lavapiés", 110);
+await particular("Malasaña", 110);
+const curBeforeFault = await cursor();
+__failRpc("claim_and_notify_encargo_matches", 1);
+r = await runEncargoMatching({ now: at(140) });
+eq([r.ok, r.skipped.error], [false, 1], "fallo del aviso en un encargo: informe ok:false");
+eq(await cursor(), curBeforeFault, "…la marca no avanza");
+eq([(await notesFor(ADVISOR, E_F2)).length, (await notesFor(ADVISOR, E_F1)).length], [1, 0], "…y el otro encargo sí se procesó y avisó");
+const f1 = await matchRows(E_F1);
+ok(f1.length === 2 && f1.every((x) => x.notified_at === null), "las filas del fallido quedan pendientes (notified_at nulo)", f1);
+r = await runEncargoMatching({ now: at(160) });
+eq([r.ok, r.pending_retried, r.notices, r.inserted], [true, 2, 1, 0], "la pasada siguiente reintenta y avisa lo pendiente");
+ok((await matchRows(E_F1)).every((x) => x.notified_at !== null) && (await cursor()) !== curBeforeFault, "…filas avisadas y la marca avanza");
+eq((await notesFor(ADVISOR, E_F1)).length, 1, "un único aviso (sin duplicado)");
+
+// todo o nada en la función: un fallo al crear el aviso (título nulo) no deja nada reclamado
+assert.ifError((await db.from("encargo_matches").insert({ encargo_id: uuid(E_F1), source: "particular", source_id: "x", canonical_id: "x" })).error);
+const x = (await matchRows(E_F1)).find((m) => m.canonical_id === "x")!;
+const bad = await db.rpc("claim_and_notify_encargo_matches", { p_match_ids: [x.id], p_recipients: [uuid(ADMIN)], p_title: null, p_body: "b", p_link: "/l", p_data: {} });
+ok(!!bad.error, "rpc con aviso inválido: error", bad);
+ok((await matchRows(E_F1)).find((m) => m.canonical_id === "x")!.notified_at === null, "…y no reclama la fila");
+const none = await db.rpc("claim_and_notify_encargo_matches", { p_match_ids: [x.id], p_recipients: [], p_title: "t", p_body: "b", p_link: "/l", p_data: {} });
+ok(none.data === 0 && (await matchRows(E_F1)).find((m) => m.canonical_id === "x")!.notified_at === null, "sin destinatarios: no reclama nada", none);
 
 console.log(`PASS: ${n} comprobaciones (runner, BD real)`);
