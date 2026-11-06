@@ -52,6 +52,8 @@ export function EncargosSection({
   selectedId,
   canEdit,
   onShowMatching,
+  initialEditId = null,
+  onEditClosed,
 }: {
   clientId: string;
   encargos: Encargo[];
@@ -59,12 +61,18 @@ export function EncargosSection({
   selectedId: string | null;
   canEdit: boolean;
   onShowMatching: (encargoId: string) => void;
+  /** `?editar=<id>` (desde Captaciones): abre directamente el diálogo de ese encargo. */
+  initialEditId?: string | null;
+  /** Al cerrar ese diálogo (la ficha quita `editar` de la URL). */
+  onEditClosed?: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Encargo | "new" | null>(null);
+  const [editing, setEditing] = useState<Encargo | "new" | null>(() =>
+    canEdit && initialEditId ? (encargos.find((e) => e.id === initialEditId) ?? null) : null,
+  );
   const [closing, setClosing] = useState<Encargo | null>(null);
 
   const run = (encargoId: string, action: () => Promise<{ ok: boolean; error?: string }>) => {
@@ -137,7 +145,10 @@ export function EncargosSection({
         <EncargoDialog
           clientId={clientId}
           encargo={editing === "new" ? null : editing}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            onEditClosed?.();
+          }}
         />
       )}
 

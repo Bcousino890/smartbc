@@ -28,6 +28,7 @@ import { useGroupLinks } from "./_ficha/use-group-links";
 import { HistoryTab } from "./_ficha/history-tab";
 import { SourcesTab } from "./_ficha/sources-tab";
 import { ClientFitCard } from "./_ficha/client-fit-card";
+import type { EncargoOption } from "./client-flow-actions";
 import type { PickedClient } from "@/components/admin/captaciones-map/client-picker";
 import { consumeTabIntent } from "./_ficha/tab-intent";
 import { formatEuros, formatPct, formatZone, groupThousands, mapPrecision, portalName, pricePerM2, priceVariation, relativeTime, whatsappUrl, zoneForMap } from "./_ficha/format";
@@ -768,6 +769,10 @@ export function ParticularModal({
     onClientChange: (c: PickedClient | null) => void;
     prefix: string;
     onChanged?: () => void;
+    /** El encargo elegido en Captaciones, si el cliente tiene varios (para el título y el aviso de pausa). */
+    encargo?: EncargoOption | null;
+    /** Encargo para calcular el encaje ("" = el principal). */
+    encargoId?: string;
   };
 }) {
   const router = useRouter();
@@ -1008,6 +1013,8 @@ export function ParticularModal({
       onClientChange={clientFlow.onClientChange}
       prefix={clientFlow.prefix}
       onChanged={clientFlow.onChanged}
+      encargo={clientFlow.encargo ?? null}
+      encargoId={clientFlow.encargoId ?? ""}
     />
   ) : null;
 

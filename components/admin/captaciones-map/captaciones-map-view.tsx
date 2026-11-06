@@ -28,6 +28,7 @@ import { encodeZonePolygons, isPointInAnyPolygon, type ZonePolygon } from "@/lib
 import { classifyPin, computeFunnel, type MapPin, type PinTier } from "@/lib/captaciones-map/pins";
 import { buildScoreMap } from "@/lib/captaciones-map/scores";
 import type { MapBrief } from "@/lib/captaciones-map/brief-summary";
+import { encargoEditHref } from "@/lib/encargos/links";
 import type { ListFilter } from "@/lib/captaciones-map/panels";
 import type { SuggestedParticular } from "@/lib/db/queries/suggested-particulares";
 import AiBar, { type AiBarResult } from "./ai-bar";
@@ -73,6 +74,10 @@ export interface CaptacionesMapViewProps {
    */
   client?: PickedClient | null;
   onClientChange?: (c: PickedClient | null) => void;
+  /** Encargo del cliente con el que se trabaja ("" o sin dar = el principal): puntuación, brief y zona guardada. */
+  encargoId?: string;
+  /** El encargo elegido está en pausa o cerrado: no hace matching (sin «Encaja»), pero el mapa funciona. */
+  matchingOff?: "paused" | "closed" | null;
   /**
    * Filtros de la lista tal como viajan en la URL (precio, dormitorios, zona, bajadas, búsqueda…), sin vista,
    * cliente, zona dibujada ni página: el mapa los manda al servidor para enseñar lo mismo que la lista.
@@ -112,6 +117,8 @@ export function CaptacionesMapView({
   onZoneChange,
   client: controlledClient,
   onClientChange,
+  encargoId = "",
+  matchingOff = null,
   filterQuery = "",
   onOpenFicha,
   actions = DEFAULT_ACTIONS,
@@ -258,14 +265,20 @@ export function CaptacionesMapView({
   const client = controlledClient !== undefined ? controlledClient : ownClient;
   const setClient = onClientChange ?? setOwnClient;
   const [clientState, setClientState] = useState<ClientState>({ status: "idle" });
+  // Cliente y encargo del último encargo cargado: al cambiar de ENCARGO del mismo cliente, su zona sustituye a la
+  // del anterior (si no, «Guardar zona» guardaría en el encargo nuevo la zona del otro).
+  const loadedFor = useRef<{ client: string; encargo: string } | null>(null);
   useEffect(() => {
     if (!client) {
       setClientState({ status: "idle" });
+      loadedFor.current = null;
       return;
     }
     const ctrl = new AbortController();
     setClientState({ status: "loading" });
-    fetch(`/api/admin/clientes/${encodeURIComponent(client.id)}/suggested-particulares?limit=1000`, { signal: ctrl.signal })
+    const enc = encargoId ? `&encargo=${encodeURIComponent(encargoId)}` : "";
+    const switchedEncargo = loadedFor.current?.client === client.id && loadedFor.current.encargo !== encargoId;
+    fetch(`/api/admin/clientes/${encodeURIComponent(client.id)}/suggested-particulares?limit=1000${enc}`, { signal: ctrl.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const j = (await res.json()) as {
@@ -274,9 +287,12 @@ export function CaptacionesMapView({
           brief?: MapBrief;
         };
         const brief = j.brief ?? null;
+        loadedFor.current = { client: client.id, encargo: encargoId };
         // La zona guardada del cliente solo entra si el mapa aún no tiene una:
-        // nunca se pisa lo que la captadora ya ha dibujado.
-        if (brief?.polygons?.length && editorRef.current.state.polygons.length === 0) {
+        // nunca se pisa lo que la captadora ya ha dibujado. Salvo al cambiar de
+        // encargo: entonces manda la zona del encargo elegido (o ninguna).
+        if (switchedEncargo && !brief?.polygons?.length) editorRef.current.setPolygons([]);
+        if (brief?.polygons?.length && (switchedEncargo || editorRef.current.state.polygons.length === 0)) {
           editorRef.current.setPolygons(brief.polygons);
           editorRef.current.setTool("edit");
           const b = polygonBounds(brief.polygons);
@@ -294,18 +310,19 @@ export function CaptacionesMapView({
     return () => ctrl.abort();
     // `map` no es dependencia: cambiar de mapa no debe volver a pedir el encargo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client?.id]);
+  }, [client?.id, encargoId]);
 
   const brief = clientState.status === "ok" || clientState.status === "insufficient" ? clientState.brief : null;
-  const hasScores = clientState.status === "ok";
+  // Un encargo en pausa o cerrado no hace matching: ni «Encaja» ni puntuación (el mapa sigue funcionando).
+  const hasScores = clientState.status === "ok" && !matchingOff;
   const suggestionById = useMemo(() => {
     const m = new Map<string, SuggestedParticular>();
-    if (clientState.status === "ok") for (const s of clientState.suggestions) m.set(s.id, s);
+    if (clientState.status === "ok" && !matchingOff) for (const s of clientState.suggestions) m.set(s.id, s);
     return m;
-  }, [clientState]);
+  }, [clientState, matchingOff]);
   const baseScores = useMemo(
-    () => (clientState.status === "ok" ? buildScoreMap(clientState.suggestions) : new Map<string, number>()),
-    [clientState],
+    () => (clientState.status === "ok" && !matchingOff ? buildScoreMap(clientState.suggestions) : new Map<string, number>()),
+    [clientState, matchingOff],
   );
   // Un cliente de otro país no puede recibir anuncios de España.
   const canActForClient = !!client && clientState.status !== "not_available" && clientState.status !== "loading";
@@ -500,7 +517,8 @@ export function CaptacionesMapView({
     setBusy("zone");
     setZoneMsg(null);
     try {
-      const r = await actions.saveClientZone(forClient, polygons);
+      // En el encargo elegido ("" = el principal, como siempre).
+      const r = await actions.saveClientZone(forClient, polygons, encargoId || null);
       if (clientIdRef.current !== forClient) return;
       setZoneMsg(r.ok ? { kind: "ok", text: "Zona guardada" } : { kind: "error", text: r.error });
     } catch {
@@ -522,7 +540,9 @@ export function CaptacionesMapView({
       ? "Este cliente no es de España"
       : clientState.status === "loading"
         ? "Cargando el encargo del cliente…"
-        : !hasScores
+        : matchingOff
+          ? matchingOff === "paused" ? "Encargo en pausa: no hace matching" : "Encargo cerrado: no hace matching"
+          : !hasScores
           ? "Completa el encargo del cliente para saber qué encaja"
           : nToCapture === 0
             ? "No hay anuncios nuevos que encajen en la zona"
@@ -544,7 +564,7 @@ export function CaptacionesMapView({
   // Prioridad: aviso puntual (máx. zonas) > cruce en vivo (persistente) > ayuda de la herramienta.
   const drawingInvalid = editor.state.tool === "draw" && editor.draftInvalid;
   const hint = notice ?? (drawingInvalid ? CROSS_TITLE : TOOL_HINTS[editor.state.tool]);
-  const fileHref = client ? `${prefix}/clientes/${client.id}?encargo=editar` : "#";
+  const fileHref = client ? encargoEditHref(`${prefix}/clientes/${client.id}`, encargoId || null) : "#";
 
   return (
     <section className="cmv font-crm-sans" aria-label="Mapa de captación">
@@ -588,6 +608,12 @@ export function CaptacionesMapView({
             ? `${clientLabel} aún no tiene encargo: el mapa funciona, pero sin puntuar los anuncios.`
             : `El encargo de ${clientLabel} está incompleto: el mapa funciona, pero sin puntuar los anuncios.`}{" "}
           <Link href={fileHref}>Completar el encargo</Link>
+        </p>
+      )}
+      {client && matchingOff && (
+        <p className="cmv-banner" role="status">
+          <AlertTriangle size={15} aria-hidden />
+          {matchingOff === "paused" ? "Encargo en pausa: no hace matching." : "Encargo cerrado: no hace matching."} El mapa funciona, pero sin puntuar los anuncios.
         </p>
       )}
       {client && clientState.status === "error" && (

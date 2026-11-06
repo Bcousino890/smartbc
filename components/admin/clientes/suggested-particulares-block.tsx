@@ -170,13 +170,13 @@ export function SuggestedParticularesBlock({
         )}
         <div className="ml-auto flex items-center gap-1.5">
           <a
-            href={`${prefix}/admin/captaciones?cliente=${clientId}&vista=map`}
+            href={`${prefix}/admin/captaciones?cliente=${clientId}${encargoId ? `&encargo=${encargoId}` : ""}&vista=map`}
             className="rounded-lg border border-gold/30 bg-white/70 px-2.5 py-1 text-xs font-semibold text-ink hover:border-gold/60"
           >
             Ver en el mapa
           </a>
           <a
-            href={`${prefix}/admin/captaciones?cliente=${clientId}`}
+            href={`${prefix}/admin/captaciones?cliente=${clientId}${encargoId ? `&encargo=${encargoId}` : ""}`}
             className="rounded-lg border border-gold/30 bg-white/70 px-2.5 py-1 text-xs font-semibold text-ink hover:border-gold/60"
           >
             Abrir en Captaciones

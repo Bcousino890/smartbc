@@ -182,6 +182,16 @@ export function ClientFichaView({
     }
   }, [params, router]);
 
+  // `?editar=<id>` (Captaciones → «Editar encargo» de un encargo que no es el principal) abre su diálogo en la
+  // sección Encargos; al cerrarlo se quita de la URL (el encargo del matching se conserva).
+  const clearEditParam = useCallback(() => {
+    if (!params?.get("editar")) return;
+    const qs = new URLSearchParams(params.toString());
+    qs.delete("editar");
+    const q = qs.toString();
+    router.replace(q ? `?${q}` : "?", { scroll: false });
+  }, [params, router]);
+
   const goTab = useCallback(
     (next: CommandTab, anchor?: string) => {
       const qs = new URLSearchParams(params?.toString() ?? "");
@@ -409,6 +419,8 @@ export function ClientFichaView({
                     selectedId={encargos?.selectedId ?? null}
                     canEdit={cc.canEditClient}
                     onShowMatching={(id) => selectEncargo(id, true)}
+                    initialEditId={params?.get("editar") ?? null}
+                    onEditClosed={clearEditParam}
                   />
                 )}
                 <ClientBrief

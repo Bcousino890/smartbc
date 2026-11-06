@@ -17,9 +17,9 @@ type State =
  * la cuadrícula y la lista (el Mapa tiene su propio cruce, más completo). Usa el
  * mismo endpoint que el mapa, así que las cifras coinciden entre vistas.
  *
- * `enabled=false` (vista Mapa) evita pedir lo mismo dos veces.
+ * `enabled=false` (vista Mapa, o un encargo en pausa/cerrado, que no hace matching) no pide nada.
  */
-export function useClientScores(client: PickedClient | null, enabled: boolean) {
+export function useClientScores(client: PickedClient | null, enabled: boolean, encargoId = "") {
   const [state, setState] = useState<State>({ status: "idle" });
   const clientId = client?.id ?? null;
 
@@ -30,7 +30,9 @@ export function useClientScores(client: PickedClient | null, enabled: boolean) {
     }
     const ctrl = new AbortController();
     setState({ status: "loading" });
-    fetch(`/api/admin/clientes/${encodeURIComponent(clientId)}/suggested-particulares?limit=1000`, { signal: ctrl.signal })
+    // `encargo`: el elegido en la barra (sin él, el principal). El endpoint filtra por cliente Y encargo.
+    const enc = encargoId ? `&encargo=${encodeURIComponent(encargoId)}` : "";
+    fetch(`/api/admin/clientes/${encodeURIComponent(clientId)}/suggested-particulares?limit=1000${enc}`, { signal: ctrl.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const j = (await res.json()) as {
@@ -46,7 +48,7 @@ export function useClientScores(client: PickedClient | null, enabled: boolean) {
         setState({ status: "error" });
       });
     return () => ctrl.abort();
-  }, [clientId, enabled]);
+  }, [clientId, enabled, encargoId]);
 
   const scores = useMemo(
     () => (state.status === "ok" ? buildScoreMap(state.suggestions) : new Map<string, number>()),

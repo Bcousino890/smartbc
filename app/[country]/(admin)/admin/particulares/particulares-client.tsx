@@ -28,6 +28,7 @@ import { FiltersPanel } from "./_lista/filters-panel";
 import { buildChips, countPanelFilters } from "./_lista/filters-model";
 import { fmtNum } from "./_lista/format";
 import { decodeZonePolygons, encodeZonePolygons, type ZonePolygon } from "@/lib/zone-polygon";
+import { briefToCaptacionesFilters, decideEncargoAutofill, hasEncargoFilters } from "@/lib/captaciones-map/brief-filters";
 
 // Vista Mapa: Leaflet toca `window` al importarse, así que solo se carga en
 // el navegador y solo cuando alguien elige «Mapa» (no pesa en cuadrícula/lista).
@@ -100,7 +101,7 @@ export function ParticularesClient({
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Cliente para el que se capta: vale para Mapa, Cuadrícula y Lista y viaja en la URL (?cliente=…),
   // así la ficha del cliente puede abrir Captaciones ya con él elegido.
-  const clientCtx = useClientContext(f.clientId);
+  const clientCtx = useClientContext(f.clientId, f.encargo);
   // useMemo: el mapa vuelve a pedir el encargo cada vez que cambia la IDENTIDAD de este objeto.
   const pickedName = clientCtx.context?.name ?? "Cliente";
   const pickedClient = useMemo<PickedClient | null>(
@@ -110,20 +111,54 @@ export function ParticularesClient({
   // Anuncios elegidos en la lista para captarlos de golpe (persisten al cambiar de página).
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [capturing, setCapturing] = useState(false);
+  // Elegir a mano un cliente o un encargo rellena los filtros con ese encargo (ver el efecto de abajo).
+  const explicitPick = useRef<string | null>(null);
   const setPickedClient = useCallback(
     (c: PickedClient | null) => {
+      // Volver a elegir el mismo cliente (con su principal) no cambia nada: no hay contexto nuevo que esperar.
+      const changed = (c?.id ?? "") !== f.clientId || f.encargo !== "";
       f.setClientId(c?.id ?? "");
+      // Otro cliente: su encargo por defecto (el principal). Sin cliente: fuera encargo y marca (los filtros se quedan).
+      f.setEncargo("");
+      if (!c) f.setAutofill("");
+      explicitPick.current = changed ? (c?.id ?? null) : null;
       setSelectedIds(new Set());
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [f.setClientId],
+    [f.clientId, f.encargo, f.setClientId, f.setEncargo, f.setAutofill],
+  );
+  // El contexto que se enseña es del cliente y del encargo actuales (no una respuesta vieja).
+  const ctx = clientCtx.context && clientCtx.context.id === f.clientId && clientCtx.forEncargo === f.encargo ? clientCtx.context : null;
+  const selectedEncargo = ctx?.selectedEncargo ?? null;
+  /** El encargo para las peticiones: "" = el principal. Antes de saberlo, el de la URL. */
+  // (La URL puede traer el id del principal, p. ej. desde la ficha: vale igual y no se vuelve a pedir nada.)
+  const encargoForRequests = ctx
+    ? selectedEncargo && (f.encargo === selectedEncargo.id || !selectedEncargo.isPrimary)
+      ? selectedEncargo.id
+      : ""
+    : f.encargo;
+  /** Un encargo en pausa o cerrado no hace matching: sin «Encaja» ni puntuación. */
+  const matchingOff = selectedEncargo && selectedEncargo.status !== "active" ? selectedEncargo.status : null;
+  const pickEncargo = useCallback(
+    (encargoId: string, isPrimary: boolean) => {
+      const next = isPrimary ? "" : encargoId;
+      // El mismo encargo otra vez: no hay contexto nuevo que esperar; se vuelven a poner sus filtros ya.
+      if (ctx?.brief && selectedEncargo?.id === encargoId) {
+        f.applyEncargoFilters(briefToCaptacionesFilters(ctx.brief, { zoneGroups }), encargoId);
+        return;
+      }
+      explicitPick.current = f.clientId;
+      f.setEncargo(next);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [f.clientId, f.encargo, f.setEncargo, f.applyEncargoFilters, ctx, selectedEncargo, zoneGroups],
   );
   const [toolsOpen, setToolsOpen] = useState(false);
   // La vista vive en la URL (`vista=list|map`) para que recargar o compartir
   // el enlace abra la misma; cuadrícula es el valor por defecto.
   const view = f.view;
   const isMap = view === "map";
-  const clientScores = useClientScores(pickedClient, !isMap);
+  const clientScores = useClientScores(pickedClient, !isMap && !matchingOff, encargoForRequests);
   const layout: CardLayout = view === "list" ? "list" : "grid";
   // Zona del mapa: la vigente en los filtros (la dibujada en el mapa o en el
   // modal «Ubicación en el mapa»). La vista solo la lee al montarse, así que
@@ -141,10 +176,38 @@ export function ParticularesClient({
   // Los filtros de la lista, tal cual están en la URL, para que el mapa enseñe lo mismo (sin vista, cliente, zona dibujada ni página).
   const mapFilterQuery = useMemo(() => {
     const p = new URLSearchParams(searchParams.toString());
-    for (const k of ["vista", "cliente", "zonePoly", "page", "ficha"]) p.delete(k);
+    for (const k of ["vista", "cliente", "encargo", "autofiltros", "zonePoly", "page", "ficha"]) p.delete(k);
     return p.toString();
   }, [searchParams]);
   const [pageNavPending, startPageNav] = useTransition();
+
+  // ── El encargo elegido rellena los filtros (una vez por cliente y encargo) ──
+  // La decisión es pura (decideEncargoAutofill): al elegir a mano siempre; al llegar solo si la URL no trae ya
+  // filtros del encargo; la marca `autofiltros` evita volver a rellenar al recargar o tras «Limpiar».
+  const handledEncargo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ctx || !selectedEncargo || !ctx.brief) return;
+    // `?encargo=` ajeno o basura: el servidor eligió el principal; la URL se corrige (sin volver a pedir nada).
+    if (f.encargo && f.encargo !== selectedEncargo.id) {
+      f.setEncargo(selectedEncargo.isPrimary ? "" : selectedEncargo.id);
+      return;
+    }
+    const key = `${ctx.id}:${selectedEncargo.id}`;
+    const explicit = explicitPick.current === ctx.id;
+    if (handledEncargo.current === key && !explicit) return;
+    handledEncargo.current = key;
+    explicitPick.current = null;
+    const d = decideEncargoAutofill({
+      encargoId: selectedEncargo.id,
+      marker: f.autofill || null,
+      explicit,
+      hasFilters: hasEncargoFilters(new URLSearchParams(window.location.search)),
+    });
+    if (d.apply) f.applyEncargoFilters(briefToCaptacionesFilters(ctx.brief, { zoneGroups }), selectedEncargo.id);
+    else if (d.marker) f.setAutofill(d.marker);
+    // Solo cuando cambia el contexto (cliente/encargo resueltos): `f` cambia en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx]);
 
   useEffect(() => setNow(Date.now()), [rows]);
   useEffect(() => setPageRows(rows), [rows]);
@@ -418,7 +481,14 @@ export function ParticularesClient({
           onActiveChanged={(active, takenDownAt) => patchRow(selected.id, { is_active: active, taken_down_at: takenDownAt })}
           staffOptions={staffOptions}
           canCreateProperty={!currentRole || canAccess(currentRole, "properties", "create")}
-          clientFlow={{ client: pickedClient, onClientChange: setPickedClient, prefix: countryPrefix, onChanged: () => { flow.refresh(); clientCtx.refresh(); } }}
+          clientFlow={{
+            client: pickedClient,
+            onClientChange: setPickedClient,
+            prefix: countryPrefix,
+            onChanged: () => { flow.refresh(); clientCtx.refresh(); },
+            encargo: ctx && ctx.encargos.length > 1 ? selectedEncargo : null,
+            encargoId: encargoForRequests,
+          }}
         />
       )}
 
@@ -531,10 +601,11 @@ export function ParticularesClient({
           prefix={countryPrefix}
           value={pickedClient}
           onChange={setPickedClient}
-          context={clientCtx.context}
+          context={ctx}
           loading={clientCtx.loading}
           error={clientCtx.error}
           fallbackSubtitle={clientScores.subtitle}
+          onPickEncargo={pickEncargo}
         />
 
         {isMap ? (
@@ -547,6 +618,8 @@ export function ParticularesClient({
             onZoneChange={onMapZoneChange}
             client={pickedClient}
             onClientChange={setPickedClient}
+            encargoId={encargoForRequests}
+            matchingOff={matchingOff}
             filterQuery={mapFilterQuery}
             onOpenFicha={openParticularById}
           />
@@ -650,7 +723,7 @@ export function ParticularesClient({
                   onPrefetch={prefetchParticularDetail}
                   copied={copiedPhoneId === r.id}
                   onCopyPhone={handleCopyPhone}
-                  score={clientScores.hasScores ? (clientScores.scores.get(r.id) ?? 0) : undefined}
+                  score={clientScores.hasScores && !matchingOff ? (clientScores.scores.get(r.id) ?? 0) : undefined}
                   selected={selectedIds.has(r.id)}
                   onToggleSelect={toggleSelected}
                   flow={flow.states[r.id] && flow.states[r.id] !== "none" ? (flow.states[r.id] as "pending" | "property" | "book") : undefined}

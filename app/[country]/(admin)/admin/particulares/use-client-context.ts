@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getClientContext, getParticularesFlowStates, type ClientContext, type FlowState } from "./client-flow-actions";
 
-/** Encargo, enlaces y book del cliente elegido (se vuelve a pedir con `refresh`). */
-export function useClientContext(clientId: string) {
+/**
+ * Encargo, enlaces y book del cliente elegido (se vuelve a pedir con `refresh`). `encargoId` es el de la URL
+ * ("" = el principal); el servidor lo valida y dice cuál quedó elegido (`context.selectedEncargo`).
+ * `forEncargo` es el `encargoId` con el que se pidió el contexto que se enseña (para no mezclar respuestas).
+ */
+export function useClientContext(clientId: string, encargoId = "") {
   const [context, setContext] = useState<ClientContext | null>(null);
+  const [forEncargo, setForEncargo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -19,11 +24,12 @@ export function useClientContext(clientId: string) {
     }
     let cancelled = false;
     setLoading(true);
-    getClientContext(clientId)
+    getClientContext(clientId, { encargoId: encargoId || null })
       .then((res) => {
         if (cancelled) return;
         if (res.ok) {
           setContext(res.context);
+          setForEncargo(encargoId);
           setError(null);
         } else {
           setContext(null);
@@ -35,10 +41,10 @@ export function useClientContext(clientId: string) {
     return () => {
       cancelled = true;
     };
-  }, [clientId, tick]);
+  }, [clientId, encargoId, tick]);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
-  return { context, loading, error, refresh };
+  return { context, forEncargo, loading, error, refresh };
 }
 
 const POLL_MS = 6000;

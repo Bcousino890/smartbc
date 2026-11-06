@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, BookOpen, Check, ExternalLink, Loader2, UserPlus } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, CirclePause, CircleX, ExternalLink, Loader2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import ClientPicker, { type PickedClient } from "@/components/admin/captaciones-map/client-picker";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import {
   captureParticularesForClient,
   getParticularFit,
   getParticularesFlowStates,
+  type EncargoOption,
   type FlowState,
 } from "../client-flow-actions";
 import type { ParticularFit } from "@/lib/db/queries/suggested-particulares";
@@ -27,6 +28,8 @@ export function ClientFitCard({
   onClientChange,
   prefix,
   onChanged,
+  encargo = null,
+  encargoId = "",
 }: {
   particularId: string;
   client: PickedClient | null;
@@ -35,6 +38,10 @@ export function ClientFitCard({
   prefix: string;
   /** Tras captar: la página refresca las etiquetas de la lista y las cifras del cliente. */
   onChanged?: () => void;
+  /** El encargo elegido en Captaciones cuando el cliente tiene varios (título y aviso de pausa). */
+  encargo?: EncargoOption | null;
+  /** Encargo con el que se calcula el encaje ("" = el principal). Captar sigue siendo del CLIENTE. */
+  encargoId?: string;
 }) {
   const [fit, setFit] = useState<ParticularFit | { ok: false; reason: "loading" } | null>(null);
   const [flow, setFlow] = useState<FlowState>("none");
@@ -50,13 +57,13 @@ export function ClientFitCard({
     }
     let cancelled = false;
     setFit({ ok: false, reason: "loading" });
-    getParticularFit(clientId, particularId)
+    getParticularFit(clientId, particularId, encargoId || null)
       .then((res) => !cancelled && setFit(res.ok ? res.fit : { ok: false, reason: "error" }))
       .catch(() => !cancelled && setFit({ ok: false, reason: "error" }));
     return () => {
       cancelled = true;
     };
-  }, [clientId, particularId]);
+  }, [clientId, particularId, encargoId]);
 
   useEffect(() => {
     if (!clientId) {
@@ -110,11 +117,13 @@ export function ClientFitCard({
 
   const base = client ? `${prefix}/admin/clientes/${client.id}` : "";
   const score = fit && "fits" in fit && fit.fits ? fit.score : null;
+  // Un encargo en pausa o cerrado no hace matching: se avisa en vez de puntuar.
+  const off = encargo && encargo.status !== "active" ? encargo.status : null;
 
   return (
     <div className="rounded-xl border border-gold/40 bg-gold/[0.07] p-4">
       <p className="mb-2.5 text-sm font-semibold text-ink">
-        {client ? `Para el encargo de ${client.name}` : "Captar para un cliente"}
+        {client ? (encargo ? `Para «${encargo.label}» de ${client.name}` : `Para el encargo de ${client.name}`) : "Captar para un cliente"}
       </p>
 
       <ClientPicker value={client} onChange={onClientChange} theme="light" />
@@ -127,12 +136,18 @@ export function ClientFitCard({
 
       {client && (
         <div className="mt-3 space-y-3">
-          {fit && "reason" in fit && fit.reason === "loading" && (
+          {off && (
+            <p role="status" className="flex items-start gap-1.5 text-sm text-amber-900">
+              {off === "paused" ? <CirclePause size={14} className="mt-0.5 shrink-0" aria-hidden /> : <CircleX size={14} className="mt-0.5 shrink-0" aria-hidden />}
+              <span>{off === "paused" ? "Encargo en pausa: no hace matching." : "Encargo cerrado: no hace matching."} Puedes captarlo igualmente para el cliente.</span>
+            </p>
+          )}
+          {!off && fit && "reason" in fit && fit.reason === "loading" && (
             <p className="flex items-center gap-2 text-sm text-ink/70">
               <Loader2 size={14} className="animate-spin" aria-hidden /> Calculando el encaje…
             </p>
           )}
-          {fit && "reason" in fit && fit.reason === "no_preferences" && (
+          {!off && fit && "reason" in fit && fit.reason === "no_preferences" && (
             <p className="flex items-start gap-1.5 text-sm text-amber-900">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
               <span>
@@ -141,9 +156,9 @@ export function ClientFitCard({
               </span>
             </p>
           )}
-          {fit && "reason" in fit && fit.reason === "error" && <p className="text-sm text-red-700">No se pudo calcular el encaje.</p>}
+          {!off && fit && "reason" in fit && fit.reason === "error" && <p className="text-sm text-red-700">No se pudo calcular el encaje.</p>}
 
-          {fit && "fits" in fit && !fit.fits && (
+          {!off && fit && "fits" in fit && !fit.fits && (
             <p className="flex items-start gap-1.5 text-sm text-ink">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
               <span>
@@ -152,7 +167,7 @@ export function ClientFitCard({
             </p>
           )}
 
-          {fit && "fits" in fit && fit.fits && (
+          {!off && fit && "fits" in fit && fit.fits && (
             <div>
               <div className="flex items-center gap-3">
                 <span

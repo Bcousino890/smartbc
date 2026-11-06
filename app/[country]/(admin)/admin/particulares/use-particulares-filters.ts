@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import type { CaptacionesFilterParams } from "@/lib/captaciones-map/brief-filters";
 
 export type OperationFilter = "" | "rent" | "sale";
 export type PhoneFilterValue = "" | "no_phone" | "with_phone";
@@ -131,7 +132,16 @@ type FilterValues = {
   view: ViewMode;
   /** Cliente para el que se capta (no es un filtro: el servidor lo ignora). Viaja en la URL para poder enlazar desde su ficha. */
   clientId: string;
+  /** Encargo del cliente con el que se trabaja ("" = el principal). No es un filtro: el servidor lo ignora. */
+  encargo: string;
+  /** Marca «los filtros de este encargo ya se rellenaron» (id del encargo). Ver lib/captaciones-map/brief-filters.ts. */
+  autofill: string;
 };
+
+/** Parámetros que no son filtros: cambiarlos solo reescribe la URL, sin pedir la página otra vez. */
+const NON_FILTER_KEYS = new Set<keyof FilterValues>(["view", "clientId", "encargo", "autofill"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const readUuid = (v: string | null) => (v && UUID_RE.test(v) ? v.toLowerCase() : "");
 
 /** Separador de claves de agencia en la URL (las claves no llevan «|» ni «,»). */
 export const AGENCY_SEP = "|";
@@ -185,6 +195,8 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   searchScoped: "soloFiltros",
   view: "vista",
   clientId: "cliente",
+  encargo: "encargo",
+  autofill: "autofiltros",
 };
 
 const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
@@ -299,10 +311,10 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
   const [view, setView] = useState<ViewMode>(
     () => readEnum<ViewMode>(searchParams.get(PARAM_KEYS.view), VIEW_VALUES) || "grid",
   );
-  const [clientId, setClientId] = useState(() => {
-    const v = searchParams.get(PARAM_KEYS.clientId) ?? "";
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v.toLowerCase() : "";
-  });
+  const [clientId, setClientId] = useState(() => readUuid(searchParams.get(PARAM_KEYS.clientId)));
+  // Un `?encargo=` que no es un uuid se ignora aquí mismo (= el principal); uno ajeno lo resuelve el servidor.
+  const [encargo, setEncargo] = useState(() => readUuid(searchParams.get(PARAM_KEYS.encargo)));
+  const [autofill, setAutofill] = useState(() => readUuid(searchParams.get(PARAM_KEYS.autofill)));
   // Nombre a mostrar de cada clave de agencia (no viaja en la URL: lo da el servidor al cargar y el autocompletado al elegir).
   const [agencyNames, setAgencyNames] = useState<Record<string, string>>(initialAgencyNames);
   const rememberAgency = useCallback((key: string, name: string) => setAgencyNames((p) => (p[key] === name ? p : { ...p, [key]: name })), []);
@@ -380,6 +392,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     searchScoped,
     view,
     clientId,
+    encargo,
+    autofill,
   };
 
   const prevValuesRef = useRef(values);
@@ -418,12 +432,14 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
       // Solo cambió la vista (cuadrícula/lista/mapa): el servidor no la usa,
       // así que no hace falta pedirle la página otra vez. replaceState nativo
       // (Next lo integra con useSearchParams) solo actualiza la URL.
-      if (!hadPending && changedKeys.every((k) => k === "view" || k === "clientId")) {
+      if (!hadPending && changedKeys.every((k) => NON_FILTER_KEYS.has(k))) {
         const keep = new URLSearchParams(searchParamsRef.current.toString());
         if (values.view === URL_DEFAULTS.view) keep.delete(PARAM_KEYS.view);
         else keep.set(PARAM_KEYS.view, values.view);
-        if (values.clientId) keep.set(PARAM_KEYS.clientId, values.clientId);
-        else keep.delete(PARAM_KEYS.clientId);
+        for (const k of ["clientId", "encargo", "autofill"] as const) {
+          if (values[k]) keep.set(PARAM_KEYS[k], values[k]);
+          else keep.delete(PARAM_KEYS[k]);
+        }
         const s = keep.toString();
         window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
         return;
@@ -489,6 +505,8 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     searchScoped,
     view,
     clientId,
+    encargo,
+    autofill,
   ]);
 
   useEffect(() => {
@@ -544,6 +562,28 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setAgenciesRaw("");
     setExcludeAgencies("");
     setSearchScoped(false);
+    // `autofill` (la marca del encargo) se conserva: «Limpiar» no vuelve a rellenar hasta elegir otro encargo.
+  }, []);
+
+  /**
+   * Rellena los filtros con los de un encargo (`briefToCaptacionesFilters`) y pone la marca. SUSTITUYE solo los
+   * filtros que vienen de un encargo (operación, estancia, precio, dormitorios, baños, m², zona): lo demás
+   * (búsqueda, portal, anunciante…) se queda como estaba.
+   */
+  const applyEncargoFilters = useCallback((p: CaptacionesFilterParams, encargoId: string) => {
+    setOperationRaw(p.operation === "rent" || p.operation === "sale" ? p.operation : "");
+    setRentalKind(p.alquiler === "larga" || p.alquiler === "temporada" ? p.alquiler : "");
+    setPriceMin(p.priceMin ?? "");
+    setPriceMax(p.priceMax ?? "");
+    setBedrooms(p.bedrooms ?? "");
+    setBedroomsExact(p.dormExacto === "1");
+    setBathrooms(p.banos ?? "");
+    setBathroomsExact(p.banosExacto === "1");
+    setAreaMin(p.areaMin ?? "");
+    setAreaMax(p.areaMax ?? "");
+    setZoneRaw(p.zone ?? "");
+    setDrawnZoneRaw(p.zonePoly ?? "");
+    setAutofill(encargoId);
   }, []);
 
   return {
@@ -644,6 +684,11 @@ export function useParticularesFilters(initialAgencyNames: Record<string, string
     setView,
     clientId,
     setClientId,
+    encargo,
+    setEncargo,
+    autofill,
+    setAutofill,
+    applyEncargoFilters,
     agencyNames,
     rememberAgency,
   };
