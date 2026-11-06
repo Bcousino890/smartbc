@@ -16,7 +16,10 @@ import { checkPermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { canActOnClient } from "@/lib/db/queries/view-scope";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
-import { briefFromRow, briefGaps } from "@/lib/clients/brief";
+import { briefFromRow, briefGaps, type BriefInput } from "@/lib/clients/brief";
+import { listEncargos } from "@/lib/db/queries/encargos";
+import type { Encargo, EncargoStatus } from "@/lib/encargos/model";
+import { encargoSummary, resolveSelectedEncargo } from "@/lib/encargos/ui-state";
 import { describeBrief, type BriefItem } from "@/lib/captaciones-map/brief-view";
 import { clientCountryError, normalizeUuid, validateClientAndPinIds } from "@/lib/captaciones-map/capture";
 import { evaluateParticularForClient, type ParticularFit } from "@/lib/db/queries/suggested-particulares";
@@ -57,9 +60,47 @@ export type ClientContext = {
   links: { total: number; withProperty: number };
   /** Su borrador de book más reciente (o publicado, si no hay borrador). */
   book: { itineraryId: string; status: string; stops: number } | null;
+  /** TODOS sus encargos (principal primero), para el selector. Vacío fuera de España (Chile no cambia). */
+  encargos: EncargoOption[];
+  /** El encargo con el que trabaja la pantalla: el de `?encargo=` si es suyo, si no el principal. null en Chile. */
+  selectedEncargo: EncargoOption | null;
+  /** El brief del encargo elegido (en Chile, el de siempre): de aquí salen los filtros que se rellenan solos. */
+  brief: BriefInput | null;
 };
 
-export async function getClientContext(clientId: string): Promise<{ ok: true; context: ClientContext } | Fail> {
+export type EncargoOption = {
+  id: string;
+  label: string;
+  endClientLabel: string | null;
+  status: EncargoStatus;
+  isPrimary: boolean;
+  /** Lo esencial en una línea (operación, presupuesto, dormitorios, zonas). */
+  summary: string;
+};
+
+const toOption = (e: Encargo): EncargoOption => ({
+  id: e.id,
+  label: e.label,
+  endClientLabel: e.endClientLabel,
+  status: e.status,
+  isPrimary: e.isPrimary,
+  summary: encargoSummary(e.brief) || "Sin criterios todavía",
+});
+
+/**
+ * El encargo de un cliente de España que pide la pantalla: el de `encargoId` si es SUYO (también en pausa o
+ * cerrado), si no el principal. Basura o un id de otro cliente no dan error: se cae al principal. null si no
+ * tiene encargos. No exportada: un fichero "use server" solo exporta acciones.
+ */
+async function selectEncargo(clientId: string, encargoId: unknown): Promise<{ list: Encargo[]; selected: Encargo | null }> {
+  const list = await listEncargos(clientId);
+  return { list, selected: resolveSelectedEncargo(list, normalizeUuid(encargoId)) };
+}
+
+export async function getClientContext(
+  clientId: string,
+  opts?: { encargoId?: string | null },
+): Promise<{ ok: true; context: ClientContext } | Fail> {
   const g = await gateClient(clientId);
   if (!g.ok) return g;
   const d = db();
@@ -70,8 +111,11 @@ export async function getClientContext(clientId: string): Promise<{ ok: true; co
     .maybeSingle();
   if (!profile || profile.role !== "client") return { ok: false, error: "Cliente no válido." };
 
-  const [{ data: prefs }, { data: links }, { data: its }] = await Promise.all([
-    d.from("client_preferences").select("*").eq("client_id", g.clientId).eq("is_primary", true).maybeSingle(),
+  const spain = !profile.country || profile.country === "es";
+  const [{ data: prefs }, encargoSel, { data: links }, { data: its }] = await Promise.all([
+    // Fuera de España: su única preferencia principal, como siempre.
+    spain ? Promise.resolve({ data: null }) : d.from("client_preferences").select("*").eq("client_id", g.clientId).eq("is_primary", true).maybeSingle(),
+    spain ? selectEncargo(g.clientId, opts?.encargoId) : Promise.resolve({ list: [] as Encargo[], selected: null }),
     d.from("client_portal_links").select("status, property_id").eq("client_id", g.clientId).limit(2000),
     d
       .from("viewing_itineraries")
@@ -82,7 +126,8 @@ export async function getClientContext(clientId: string): Promise<{ ok: true; co
       .limit(5),
   ]);
 
-  const brief = prefs ? briefFromRow(prefs) : null;
+  const selected = encargoSel.selected;
+  const brief = spain ? (selected?.brief ?? null) : prefs ? briefFromRow(prefs) : null;
   const linkRows = (links ?? []) as Array<{ status: string; property_id: string | null }>;
   const live = linkRows.filter((l) => l.status !== "discarded");
 
@@ -101,26 +146,39 @@ export async function getClientContext(clientId: string): Promise<{ ok: true; co
       id: g.clientId,
       name: (profile.full_name as string | null)?.trim() || (profile.email as string | null) || "Cliente",
       email: profile.email ?? null,
-      available: !profile.country || profile.country === "es",
+      available: spain,
       hasBrief: !!brief,
       items: brief ? describeBrief(brief) : [],
       gaps: brief ? briefGaps(brief).map((x) => ({ label: x.label, level: x.level })) : [],
       links: { total: live.length, withProperty: live.filter((l) => !!l.property_id).length },
       book,
+      encargos: encargoSel.list.map(toOption),
+      selectedEncargo: selected ? toOption(selected) : null,
+      brief,
     },
   };
 }
 
-/** Cómo encaja UN anuncio con el encargo del cliente, con el motivo si no encaja. */
+/**
+ * Cómo encaja UN anuncio con el encargo del cliente, con el motivo si no encaja. `encargoId` (el elegido en
+ * Captaciones) se valida contra los encargos del cliente: basura o uno ajeno → el principal, como siempre.
+ */
 export async function getParticularFit(
   clientId: string,
   particularId: string,
+  encargoId?: string | null,
 ): Promise<{ ok: true; fit: ParticularFit } | Fail> {
   const g = await gateClient(clientId);
   if (!g.ok) return g;
   const pid = normalizeUuid(particularId);
   if (!pid) return { ok: false, error: "Anuncio no válido." };
-  return { ok: true, fit: await evaluateParticularForClient(g.clientId, pid) };
+  let chosen: string | undefined;
+  if (encargoId) {
+    const { selected } = await selectEncargo(g.clientId, encargoId);
+    // El principal se pide como siempre (sin id): mismo resultado y mismo camino que antes.
+    if (selected && !selected.isPrimary) chosen = selected.id;
+  }
+  return { ok: true, fit: await evaluateParticularForClient(g.clientId, pid, chosen ? { encargoId: chosen } : undefined) };
 }
 
 /**

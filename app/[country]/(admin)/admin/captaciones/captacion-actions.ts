@@ -25,7 +25,9 @@ import {
 } from "@/lib/captaciones-map/capture";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
 import { parsePortalUrl } from "@/lib/portal-links/portals";
-import { cleanPolygons } from "@/lib/clients/brief";
+import { briefFromRow, cleanPolygons } from "@/lib/clients/brief";
+import { shouldRescan } from "@/lib/encargos/rescan";
+import { scheduleInitialPass } from "@/lib/encargos/schedule";
 import type { ZonePolygon } from "@/lib/zone-polygon";
 import { addPortalLinks } from "../clientes/portal-links-actions";
 
@@ -131,15 +133,25 @@ export async function captureForClient(
  * sobre el cliente). Actualiza SOLO `search_polygons` y `updated_at`: el resto
  * del encargo (presupuesto, operación…) no se toca. Si el cliente aún no tiene
  * encargo no se inventa uno (requeriría país, operación…): se avisa.
+ *
+ * `encargoId` (el encargo elegido en Captaciones) dice en QUÉ encargo se guarda;
+ * sin él, el principal (como siempre). Un id que no sea de este cliente (o
+ * basura) es un error: nunca se escribe en otro encargo «por defecto».
+ * Cambiar la zona cambia los criterios: como al editar el encargo
+ * (lib/encargos/rescan.ts), se reinicia `baseline_at` y se vuelve a mirar todo
+ * el stock con UN aviso agrupado; guardar la misma zona no lo repite.
  */
 export async function saveClientZone(
   clientId: string,
   polygons: ZonePolygon[],
+  encargoId?: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const cid = normalizeUuid(clientId);
   if (!cid) return { ok: false, error: "Cliente no válido." };
   clientId = cid;
   if (!Array.isArray(polygons)) return { ok: false, error: "Zona no válida" };
+  const eid = encargoId == null || encargoId === "" ? null : normalizeUuid(encargoId);
+  if (encargoId != null && encargoId !== "" && !eid) return { ok: false, error: "Encargo no válido." };
   try {
     await assertPermission("clientes", "edit");
   } catch (e) {
@@ -160,21 +172,22 @@ export async function saveClientZone(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
-  const { data: existing, error: readErr } = await db
-    .from("client_preferences")
-    .select("client_id")
-    .eq("client_id", clientId)
-    .eq("is_primary", true)
-    .maybeSingle();
+  // La fila del encargo: el pedido (filtrando también por cliente: uno ajeno no aparece) o el principal.
+  const base = db.from("client_preferences").select("*").eq("client_id", clientId);
+  const { data: existing, error: readErr } = await (eid ? base.eq("id", eid) : base.eq("is_primary", true)).maybeSingle();
   if (readErr) return { ok: false, error: readErr.message };
-  if (!existing) return { ok: false, error: "El cliente no tiene encargo todavía" };
+  if (!existing) return { ok: false, error: eid ? "Ese encargo no es de este cliente." : "El cliente no tiene encargo todavía" };
 
+  const prev = briefFromRow(existing);
+  const rescan = shouldRescan({ clientCountry: "es", prev, next: { ...prev, polygons: cleaned } });
+  const now = new Date().toISOString();
   const { error } = await db
     .from("client_preferences")
-    .update({ search_polygons: cleaned, updated_at: new Date().toISOString() })
+    .update({ search_polygons: cleaned, updated_at: now, ...(rescan ? { baseline_at: now } : {}) })
     .eq("client_id", clientId)
-    .eq("is_primary", true);
+    .eq("id", existing.id);
   if (error) return { ok: false, error: error.message };
+  if (rescan) scheduleInitialPass(String(existing.id));
 
   for (const c of ["es", "cl"]) {
     revalidatePath(`/${c}/admin/clientes/${clientId}`);
